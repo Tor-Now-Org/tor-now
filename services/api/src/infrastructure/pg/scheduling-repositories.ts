@@ -1,4 +1,4 @@
-import { notFound, type DateOverride } from "@tor-now/domain";
+import { instant, notFound, type DateOverride } from "@tor-now/domain";
 import type {
   BlockRepository,
   DateOverrideRepository,
@@ -219,6 +219,15 @@ export const dateOverrideRepository = (
 };
 
 export const blockRepository = (tx: Transaction): BlockRepository => ({
+  async blockedBetween(resourceId, from, to) {
+    const rows = await tx<Row[]>`
+      select * from app.blocked_spans(${resourceId}, ${new Date(from)}, ${new Date(to)})`;
+    return rows.map((row) => ({
+      startAt: instant(new Date(row["start_at"] as string).getTime()),
+      endAt: instant(new Date(row["end_at"] as string).getTime()),
+    }));
+  },
+
   async listForResourceBetween(resourceId, from, to) {
     const rows = await tx<Row[]>`
       select * from block

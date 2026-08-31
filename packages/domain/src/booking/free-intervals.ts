@@ -1,7 +1,7 @@
 import type { Business } from "../model/business.ts";
-import type { Appointment } from "../model/appointment.ts";
-import { isActive, occupiedInterval } from "../model/appointment.ts";
-import type { Block, DateOverride, WorkingHours } from "../model/schedule.ts";
+import type { OccupiedSpan } from "../model/appointment.ts";
+import { occupiedInterval } from "../model/appointment.ts";
+import type { BlockedSpan, DateOverride, WorkingHours } from "../model/schedule.ts";
 import { openIntervalsOn } from "../schedule/open-hours.ts";
 import type { Instant } from "../time/instant.ts";
 import { addMinutesToInstant } from "../time/instant.ts";
@@ -33,8 +33,9 @@ export type ScheduleInputs = {
   readonly timeZone: TimeZone;
   readonly workingHours: readonly WorkingHours[];
   readonly overrides: readonly DateOverride[];
-  readonly blocks: readonly Block[];
-  readonly appointments: readonly Appointment[];
+  readonly blocks: readonly BlockedSpan[];
+  /** Already filtered to the Appointments that actually occupy time. */
+  readonly occupied: readonly OccupiedSpan[];
   /** The Buffer of the Service being booked, resolved against the Business. */
   readonly bufferMinutes: number;
   readonly window: BookingWindow;
@@ -67,10 +68,10 @@ const openInstantsOn = (
  * widening: nothing is there to collide with, so a Buffer may run past it.
  */
 const deniedBy = (
-  appointment: Appointment,
+  span: OccupiedSpan,
   bufferMinutes: number,
 ): Interval<Instant> => {
-  const occupied = occupiedInterval(appointment);
+  const occupied = occupiedInterval(span);
   return interval(
     addMinutesToInstant(occupied.start, -bufferMinutes),
     occupied.end,
@@ -95,9 +96,9 @@ export const freeIntervalsOn = (inputs: ScheduleInputs): FreeInterval[] => {
     interval(block.startAt, block.endAt),
   );
 
-  const taken = inputs.appointments
-    .filter(isActive)
-    .map((appointment) => deniedBy(appointment, inputs.bufferMinutes));
+  const taken = inputs.occupied.map((span) =>
+    deniedBy(span, inputs.bufferMinutes),
+  );
 
   const unencumbered = subtractAll(normalize(open), [...blocked, ...taken]);
 

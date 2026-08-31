@@ -3,12 +3,14 @@ import { validateBooking, validateReschedule } from "./booking.ts";
 import {
   aBusiness,
   anAppointment,
+  anOccupiedSpan,
   aResource,
   aService,
   at,
   JERUSALEM,
   workingHours,
 } from "../testing/fixtures.ts";
+import { spanOf } from "../model/appointment.ts";
 import { asId } from "../model/ids.ts";
 import { DomainError } from "../shared/errors.ts";
 
@@ -18,7 +20,7 @@ const schedule = (overrides = {}) => ({
   workingHours: [workingHours(2, "09:00", "17:00")],
   overrides: [],
   blocks: [],
-  appointments: [],
+  occupied: [],
   ...overrides,
 });
 
@@ -70,7 +72,7 @@ describe("validateBooking", () => {
     expect(() =>
       validateBooking(
         bookingAt("09:00"),
-        schedule({ appointments: [anAppointment(TUESDAY, "09:00", 30)] }),
+        schedule({ occupied: [anOccupiedSpan(TUESDAY, "09:00", 30)] }),
       ),
     ).toThrow(DomainError);
   });
@@ -150,7 +152,7 @@ describe("validateReschedule", () => {
     const draft = validateReschedule(
       existing,
       bookingAt("09:00"),
-      schedule({ appointments: [existing] }),
+      schedule({ occupied: [spanOf(existing)] }),
     );
     expect(draft.startAt).toBe(at(TUESDAY, "09:00"));
   });
@@ -163,7 +165,7 @@ describe("validateReschedule", () => {
       validateReschedule(
         existing,
         bookingAt("10:00"),
-        schedule({ appointments: [existing, other] }),
+        schedule({ occupied: [spanOf(existing), spanOf(other)] }),
       ),
     ).toThrow(DomainError);
   });
@@ -173,7 +175,7 @@ describe("validateReschedule", () => {
       validateReschedule(
         { ...existing, status: "CANCELLED" },
         bookingAt("11:00"),
-        schedule({ appointments: [existing] }),
+        schedule({ occupied: [spanOf(existing)] }),
       ),
     ).toThrow(DomainError);
   });

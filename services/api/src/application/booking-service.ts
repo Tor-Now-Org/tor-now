@@ -50,18 +50,14 @@ const scheduleForDay = async (
   const dayStart = zonedToInstant(date, MIDNIGHT, context.business.timeZone);
   const dayEnd = zonedToInstant(date, END_OF_DAY, context.business.timeZone);
 
-  const [workingHours, overrides, blocks, appointments] = await Promise.all([
+  const [workingHours, overrides, blocks, occupied] = await Promise.all([
     repositories.workingHours.listForResource(context.resource.id),
     repositories.dateOverrides.listForResource(context.resource.id, date, date),
-    repositories.blocks.listForResourceBetween(context.resource.id, dayStart, dayEnd),
-    repositories.appointments.listForResourceBetween(
-      context.resource.id,
-      dayStart,
-      dayEnd,
-    ),
+    repositories.blocks.blockedBetween(context.resource.id, dayStart, dayEnd),
+    repositories.appointments.occupiedBetween(context.resource.id, dayStart, dayEnd),
   ]);
 
-  return { workingHours, overrides, blocks, appointments };
+  return { workingHours, overrides, blocks, occupied };
 };
 
 const notificationFor = (

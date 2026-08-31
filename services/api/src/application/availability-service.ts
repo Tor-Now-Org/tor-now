@@ -62,13 +62,9 @@ export const availabilityService = (dependencies: {
       const spanStart = context.dayBounds(dates[0] ?? query.from).start;
       const spanEnd = context.dayBounds(dates[dates.length - 1] ?? query.to).end;
 
-      const [blocks, appointments] = await Promise.all([
-        repositories.blocks.listForResourceBetween(query.resourceId, spanStart, spanEnd),
-        repositories.appointments.listForResourceBetween(
-          query.resourceId,
-          spanStart,
-          spanEnd,
-        ),
+      const [blocks, occupied] = await Promise.all([
+        repositories.blocks.blockedBetween(query.resourceId, spanStart, spanEnd),
+        repositories.appointments.occupiedBetween(query.resourceId, spanStart, spanEnd),
       ]);
 
       const [workingHours, overrides] = await Promise.all([
@@ -86,7 +82,7 @@ export const availabilityService = (dependencies: {
             workingHours,
             overrides,
             blocks,
-            appointments,
+            occupied,
             now,
           },
           dependencies.strategy,

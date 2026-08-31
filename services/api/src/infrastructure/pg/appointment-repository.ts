@@ -1,4 +1,4 @@
-import { DomainError, notFound } from "@tor-now/domain";
+import { asId, DomainError, instant, notFound } from "@tor-now/domain";
 import type { AppointmentRepository } from "../../ports/repositories.ts";
 import { errorCodeOf, PG_ERRORS, type Transaction } from "./client.ts";
 import { toAppointment, type Row } from "./mappers.ts";
@@ -18,6 +18,16 @@ export const appointmentRepository = (
     const rows = await tx<Row[]>`select * from appointment where id = ${id}`;
     const row = rows[0];
     return row === undefined ? null : toAppointment(row);
+  },
+
+  async occupiedBetween(resourceId, from, to) {
+    const rows = await tx<Row[]>`
+      select * from app.occupied_spans(${resourceId}, ${asDate(from)}, ${asDate(to)})`;
+    return rows.map((row) => ({
+      appointmentId: asId(String(row["appointment_id"])),
+      startAt: instant(new Date(row["start_at"] as string).getTime()),
+      occupiedUntil: instant(new Date(row["occupied_until"] as string).getTime()),
+    }));
   },
 
   async listForResourceBetween(resourceId, from, to) {

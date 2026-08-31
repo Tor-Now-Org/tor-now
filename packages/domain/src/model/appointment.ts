@@ -59,7 +59,31 @@ export type Appointment = {
 export const isActive = (appointment: Pick<Appointment, "status">): boolean =>
   appointment.status === "CONFIRMED";
 
+/**
+ * The only thing availability needs to know about an existing Appointment:
+ * which Resource it consumes and until when. Not who booked it, not what for.
+ *
+ * This is a smaller shape than an Appointment on purpose. ADR 0007 promises
+ * that only free start times cross the wire, and Row Level Security shows a
+ * customer only their *own* appointments — so a scheduler reading whole
+ * Appointment rows would either see too little to be correct or need to be
+ * given too much. Reading spans instead lets the database hand over exactly the
+ * facts the rules need, and nothing that identifies anybody.
+ */
+export type OccupiedSpan = {
+  readonly appointmentId: AppointmentId;
+  readonly startAt: Instant;
+  readonly occupiedUntil: Instant;
+};
+
 /** The interval an active Appointment denies to anyone else. */
-export const occupiedInterval = (
-  appointment: Pick<Appointment, "startAt" | "occupiedUntil">,
-) => ({ start: appointment.startAt, end: appointment.occupiedUntil });
+export const occupiedInterval = (span: OccupiedSpan) => ({
+  start: span.startAt,
+  end: span.occupiedUntil,
+});
+
+export const spanOf = (appointment: Appointment): OccupiedSpan => ({
+  appointmentId: appointment.id,
+  startAt: appointment.startAt,
+  occupiedUntil: appointment.occupiedUntil,
+});

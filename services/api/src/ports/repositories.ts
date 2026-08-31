@@ -3,6 +3,7 @@ import type {
   Appointment,
   AppointmentId,
   Block,
+  BlockedSpan,
   BlockId,
   Business,
   BusinessId,
@@ -13,6 +14,7 @@ import type {
   Membership,
   MembershipRole,
   Money,
+  OccupiedSpan,
   Payment,
   Resource,
   ResourceId,
@@ -168,6 +170,12 @@ export type DateOverrideRepository = {
 };
 
 export type BlockRepository = {
+  /** The interval only; the reason is the owner's business. */
+  blockedBetween(
+    resourceId: ResourceId,
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly BlockedSpan[]>;
   listForResourceBetween(
     resourceId: ResourceId,
     from: Instant,
@@ -190,6 +198,17 @@ export type AppointmentDraft = Omit<
 
 export type AppointmentRepository = {
   findById(id: AppointmentId): Promise<Appointment | null>;
+  /**
+   * When the Resource is busy, and nothing more. Availability uses this rather
+   * than reading Appointments, because RLS shows a customer only their own —
+   * whole rows would be either too little to be correct or more than anyone
+   * outside the business is entitled to see.
+   */
+  occupiedBetween(
+    resourceId: ResourceId,
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly OccupiedSpan[]>;
   listForResourceBetween(
     resourceId: ResourceId,
     from: Instant,

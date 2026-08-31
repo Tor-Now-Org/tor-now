@@ -147,8 +147,8 @@ export const validateReschedule = (
   // The appointment being moved must not block its own new time.
   const withoutItself = {
     ...schedule,
-    appointments: schedule.appointments.filter(
-      (candidate) => candidate.id !== appointment.id,
+    occupied: schedule.occupied.filter(
+      (span) => span.appointmentId !== appointment.id,
     ),
   };
   return validateBooking(request, withoutItself, strategy);

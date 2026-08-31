@@ -4,7 +4,7 @@ import { fixedGranularity } from "./slots.ts";
 import {
   aBlock,
   aBusiness,
-  anAppointment,
+  anOccupiedSpan,
   aResource,
   aService,
   at,
@@ -32,7 +32,7 @@ const request = (overrides: Partial<Parameters<typeof availableSlotsOn>[0]> = {}
   workingHours: [workingHours(2, "09:00", "17:00")],
   overrides: [],
   blocks: [],
-  appointments: [],
+  occupied: [],
   // Well before the day, so the booking window never interferes by accident.
   now: at("2026-08-25", "09:00"),
   ...overrides,
@@ -125,20 +125,19 @@ describe("availableSlotsOn — the schedule layers", () => {
     const result = availableSlotsOn(
       request({
         workingHours: [workingHours(2, "09:00", "11:00")],
-        appointments: [anAppointment(TUESDAY, "09:30", 30)],
+        occupied: [anOccupiedSpan(TUESDAY, "09:30", 30)],
       }),
     );
     expect(times(result)).toEqual(["09:00", "10:00", "10:30"]);
   });
 
-  it("ignores a cancelled appointment, so its slot is rebookable at once", () => {
+  it("is told only about time that is actually occupied", () => {
+    // Which Appointments occupy time is decided where they are read, using the
+    // same predicate ADR 0003 puts on the exclusion constraint — so a cancelled
+    // slot is rebookable at once. The engine never sees a status, and therefore
+    // cannot disagree with the database about which rows count.
     const result = availableSlotsOn(
-      request({
-        workingHours: [workingHours(2, "09:00", "11:00")],
-        appointments: [
-          anAppointment(TUESDAY, "09:30", 30, 0, { status: "CANCELLED" }),
-        ],
-      }),
+      request({ workingHours: [workingHours(2, "09:00", "11:00")], occupied: [] }),
     );
     expect(times(result)).toEqual(["09:00", "09:30", "10:00", "10:30"]);
   });
@@ -147,7 +146,7 @@ describe("availableSlotsOn — the schedule layers", () => {
     const result = availableSlotsOn(
       request({
         workingHours: [workingHours(2, "09:00", "10:00")],
-        appointments: [anAppointment(TUESDAY, "09:00", 60)],
+        occupied: [anOccupiedSpan(TUESDAY, "09:00", 60)],
       }),
     );
     expect(result.emptyReason).toBe("FULLY_BOOKED");
@@ -163,7 +162,7 @@ describe("availableSlotsOn — buffers never produce an unbookable slot", () => 
       request({
         workingHours: [workingHours(2, "09:00", "11:30")],
         service: aService({ durationMinutes: 30, bufferMinutes: 10 }),
-        appointments: [anAppointment(TUESDAY, "10:00", 30, 10)],
+        occupied: [anOccupiedSpan(TUESDAY, "10:00", 30, 10)],
       }),
     );
     // 09:30 is withheld — it would end where the appointment starts, leaving
@@ -177,7 +176,7 @@ describe("availableSlotsOn — buffers never produce an unbookable slot", () => 
       request({
         workingHours: [workingHours(2, "09:00", "11:00")],
         service: aService({ durationMinutes: 30, bufferMinutes: 0 }),
-        appointments: [anAppointment(TUESDAY, "10:00", 30)],
+        occupied: [anOccupiedSpan(TUESDAY, "10:00", 30)],
       }),
     );
     expect(times(result)).toContain("09:30");

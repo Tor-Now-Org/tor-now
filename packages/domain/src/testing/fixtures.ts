@@ -1,4 +1,4 @@
-import type { Appointment } from "../model/appointment.ts";
+import type { Appointment, OccupiedSpan } from "../model/appointment.ts";
 import type { Business, Resource, Service } from "../model/business.ts";
 import { BUSINESS_DEFAULTS } from "../model/business.ts";
 import { asId } from "../model/ids.ts";
@@ -138,3 +138,20 @@ export const anAppointment = (
 };
 
 export const onDate = (date: string): LocalDate => parseLocalDate(date);
+
+/** What availability actually consumes: when a Resource is busy, and nothing else. */
+export const anOccupiedSpan = (
+  date: string,
+  start: string,
+  durationMinutes: number,
+  bufferMinutes = 0,
+  overrides: Partial<OccupiedSpan> = {},
+): OccupiedSpan => {
+  const startAt = at(date, start);
+  return {
+    appointmentId: asId(`appointment-${date}-${start}`),
+    startAt,
+    occupiedUntil: instant(startAt + (durationMinutes + bufferMinutes) * 60_000),
+    ...overrides,
+  };
+};

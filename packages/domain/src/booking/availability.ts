@@ -1,7 +1,7 @@
-import type { Appointment } from "../model/appointment.ts";
+import type { OccupiedSpan } from "../model/appointment.ts";
 import type { Business, Resource, Service } from "../model/business.ts";
 import { occupiedMinutes } from "../model/business.ts";
-import type { Block, DateOverride, WorkingHours } from "../model/schedule.ts";
+import type { BlockedSpan, DateOverride, WorkingHours } from "../model/schedule.ts";
 import type { Instant } from "../time/instant.ts";
 import { addMinutesToInstant } from "../time/instant.ts";
 import type { LocalDate } from "../time/local-date.ts";
@@ -18,8 +18,8 @@ export type AvailabilityRequest = {
   readonly date: LocalDate;
   readonly workingHours: readonly WorkingHours[];
   readonly overrides: readonly DateOverride[];
-  readonly blocks: readonly Block[];
-  readonly appointments: readonly Appointment[];
+  readonly blocks: readonly BlockedSpan[];
+  readonly occupied: readonly OccupiedSpan[];
   readonly now: Instant;
 };
 
@@ -70,7 +70,7 @@ export const availableSlotsOn = (
     workingHours: request.workingHours,
     overrides: request.overrides,
     blocks: request.blocks,
-    appointments: request.appointments,
+    occupied: request.occupied,
     bufferMinutes,
     window,
   });
@@ -100,7 +100,7 @@ const emptyReasonFor = (
     workingHours: request.workingHours,
     overrides: request.overrides,
     blocks: [],
-    appointments: [],
+    occupied: [],
     bufferMinutes: 0,
     window: { start: dayStart, end: dayEnd },
   });

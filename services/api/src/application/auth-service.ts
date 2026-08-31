@@ -17,7 +17,7 @@ import type {
   VerificationCodeRepository,
   VerificationSender,
 } from "../ports/verification.ts";
-import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
+import { system, type Actor, type UnitOfWork } from "../ports/unit-of-work.ts";
 import { requireUser } from "./authorization.ts";
 
 /**
@@ -118,7 +118,13 @@ export const authService = (dependencies: AuthDependencies) => ({
     }
     await dependencies.codes.consume(record.id);
 
-    return dependencies.unitOfWork.run({ kind: "ANONYMOUS" }, async ({ repositories }) => {
+    // Sign-in runs as the platform, not as the caller. There is no session yet
+    // — that is what this call creates — so an anonymous connection could not
+    // create the User it is about to issue a token for, and Row Level Security
+    // correctly refuses it. The privilege is bounded by everything above: the
+    // phone has already been proven, and this block only finds or creates that
+    // one User and reads the allowlist.
+    return dependencies.unitOfWork.run(system(), async ({ repositories }) => {
       const existing = await repositories.users.findByPhone(phone);
 
       if (existing !== null && existing.deletedAt !== null) {

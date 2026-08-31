@@ -56,11 +56,19 @@ export const isClosedOverride = (override: DateOverride): boolean =>
  * above produced. Held as Instants because a Block is something that happens,
  * not a recurring rule.
  */
-export type Block = {
+/**
+ * The part of a Block that availability actually needs. The reason a Resource
+ * is unavailable is the owner's business, and never reaches a customer — the
+ * same separation OccupiedSpan makes for Appointments.
+ */
+export type BlockedSpan = {
+  readonly startAt: Instant;
+  readonly endAt: Instant;
+};
+
+export type Block = BlockedSpan & {
   readonly id: BlockId;
   readonly resourceId: ResourceId;
   readonly businessId: BusinessId;
-  readonly startAt: Instant;
-  readonly endAt: Instant;
   readonly reason: string;
 };
