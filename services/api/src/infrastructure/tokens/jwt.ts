@@ -1,4 +1,4 @@
-import { asId, type UserId } from "@tor-now/domain";
+import { asId } from "@tor-now/domain";
 import { jwtVerify, SignJWT } from "jose";
 import { SESSION_LIFETIME_SECONDS } from "../../config.ts";
 import type {
@@ -81,7 +81,7 @@ export const jwtVerifier = (secret: string): TokenVerifier => ({
         return null;
       }
       return {
-        userId: asId(payload.sub) as UserId,
+        userId: asId(payload.sub),
         phone: payload["phone"],
         isAdministrator: payload["is_administrator"] === true,
       };

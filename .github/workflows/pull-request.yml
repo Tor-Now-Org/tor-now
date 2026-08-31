@@ -1,0 +1,236 @@
+name: Pull request
+
+# Every job here is required to pass before a pull request can merge. They run
+# in parallel and each one owns a single question, so a red build names the
+# problem rather than sending someone to read a log.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  typecheck:
+    name: Types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # Four projects: the domain, the Edge Function, the end-to-end suite and
+      # the interface. They have different lib settings on purpose.
+      - run: npm run typecheck
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # This repository is TypeScript end to end; `npm run lint` is its
+      # equivalent. The step is here so that the day a Python script appears —
+      # a data migration, an ops tool — it is linted from its first commit
+      # rather than from whenever somebody remembers.
+      - id: find
+        run: |
+          if find . -name '*.py' -not -path './node_modules/*' | grep -q .; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No Python in this repository; TypeScript is linted by the lint job."
+          fi
+      - if: steps.find.outputs.present == 'true'
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: check --output-format github
+
+  unit:
+    name: Unit and integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports: ["5432:5432"]
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # The migrations are applied exactly as written, so a migration that only
+      # works on Supabase fails here rather than at deploy time.
+      - name: Apply the schema
+        run: ./scripts/apply-schema.sh "$TEST_DATABASE_URL"
+      # With a database reachable, the repository contract runs against both
+      # implementations rather than only against memory.
+      - run: npm test -- --coverage
+      - name: Prove the database invariants
+        run: |
+          output=$(psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=0 \
+            -f supabase/tests/invariants.sql 2>&1) || true
+          echo "$output"
+          echo "$output" | grep -q ALL_INVARIANTS_HELD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports: ["5432:5432"]
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      E2E_API_URL: http://127.0.0.1:8787/api
+      E2E_BASE_URL: http://127.0.0.1:3100
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8787/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: npx playwright install --with-deps chromium
+
+      - name: Apply the schema
+        run: ./scripts/apply-schema.sh "$TEST_DATABASE_URL"
+
+      - name: Build
+        run: |
+          npm run build:api
+          npm run build --workspace @tor-now/web
+
+      # The API is the same code the Edge Function runs, served by Node.
+      - name: Start the API
+        run: |
+          SUPABASE_DB_URL="$TEST_DATABASE_URL" \
+          SUPABASE_JWT_SECRET="continuous-integration-signing-secret-0" \
+          VERIFICATION_TRANSPORT=LOG NOTIFICATION_TRANSPORT=LOG PORT=8787 \
+            node services/api/dist/server.mjs > /tmp/api.log 2>&1 &
+          npx wait-on -t 60000 http://127.0.0.1:8787/api/health
+
+      - name: Start the interface
+        run: |
+          npx --workspace @tor-now/web next start -p 3100 -H 127.0.0.1 \
+            > /tmp/web.log 2>&1 &
+          npx wait-on -t 60000 http://127.0.0.1:3100
+
+      - run: npx playwright test
+
+      - if: failure()
+        run: |
+          echo "::group::api"; tail -100 /tmp/api.log; echo "::endgroup::"
+          echo "::group::web"; tail -100 /tmp/web.log; echo "::endgroup::"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            e2e/.results/
+          retention-days: 7
+
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+
+      # A dependency with a known high-severity advisory fails the build.
+      - name: Dependency advisories
+        run: npm audit --audit-level=high
+
+      # ADR 0004 makes a phone number the whole credential and the service role
+      # key the most dangerous thing in the project; neither belongs in git.
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check the deployed bundle matches its sources
+        run: |
+          npm run build:api
+          if ! git diff --quiet -- supabase/functions/api/index.js; then
+            echo "::error::supabase/functions/api/index.js is not the build of services/api/src."
+            echo "The Edge Function is deployed by pinning that file's commit, so a stale"
+            echo "artifact would deploy code that is not in this pull request."
+            git diff --stat -- supabase/functions/api/index.js
+            exit 1
+          fi
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

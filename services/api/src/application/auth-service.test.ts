@@ -95,7 +95,7 @@ describe("verification", () => {
     );
     const withFlagOnly = await signIn(test, phone);
     expect(withFlagOnly.user.isAdministrator).toBe(true);
-    expect(test.tokens.verify(withFlagOnly.token)).resolves.toMatchObject({
+    await expect(test.tokens.verify(withFlagOnly.token)).resolves.toMatchObject({
       isAdministrator: false,
     });
 

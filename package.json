@@ -17,16 +17,22 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc -p tsconfig.json && tsc -p services/api/tsconfig.json && tsc -p tsconfig.e2e.json && npm run typecheck --workspace @tor-now/web",
+    "typecheck": "tsc -p tsconfig.json && tsc -p services/api/tsconfig.json && tsc -p e2e/tsconfig.json && npm run typecheck --workspace @tor-now/web",
     "check": "npm run typecheck && npm run test",
     "test:db": "./scripts/with-test-database.sh npx vitest run",
     "db:apply": "./scripts/apply-schema.sh",
-    "test:e2e": "./scripts/e2e.sh"
+    "test:e2e": "./scripts/e2e.sh",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.62.1",
     "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^9.39.5",
+    "globals": "^17.11.0",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.11"
   }
 }

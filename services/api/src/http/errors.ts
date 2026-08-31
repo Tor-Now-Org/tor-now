@@ -1,5 +1,5 @@
 import { isDomainError, type DomainErrorCode } from "@tor-now/domain";
-import type { Context } from "hono";
+import type { Context, Env, Input } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 /**
@@ -34,8 +34,9 @@ export type ErrorBody = {
   };
 };
 
-export const toErrorResponse = (
-  context: Context,
+/** Generic over the app's Env, so it works for any router without `any`. */
+export const toErrorResponse = <E extends Env>(
+  context: Context<E, string, Input>,
   error: unknown,
   exposeInternalErrors = false,
 ): Response => {

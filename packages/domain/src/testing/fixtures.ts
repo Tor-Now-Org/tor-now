@@ -81,7 +81,7 @@ export const dateOverride = (
       end: parseLocalTime(end),
     })),
     ...overrides,
-  }) as DateOverride;
+  });
 
 /** An instant expressed in the fixture business's own wall clock. */
 export const at = (date: string, time: string): Instant =>
@@ -101,7 +101,7 @@ export const aBlock = (
     endAt: at(date, end),
     reason: "פגישה אישית",
     ...overrides,
-  }) as Block;
+  });
 
 export const anAppointment = (
   date: string,
@@ -134,7 +134,7 @@ export const anAppointment = (
     lateCancellation: false,
     createdAt: instant(startAt - minute * 60 * 24),
     ...overrides,
-  } as Appointment;
+  };
 };
 
 export const onDate = (date: string): LocalDate => parseLocalDate(date);

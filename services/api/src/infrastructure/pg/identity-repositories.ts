@@ -232,7 +232,7 @@ export const administratorAllowlistRepository = (
       select phone, note from administrator_allowlist order by added_at`;
     return rows.map((row) => ({
       phone: String(row["phone"]),
-      note: row["note"] === null ? null : String(row["note"]),
+      note: row["note"] === null ? null : String(row["note"] as string),
     }));
   },
 

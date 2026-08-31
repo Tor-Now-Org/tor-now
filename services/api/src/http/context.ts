@@ -1,5 +1,12 @@
 import { asId, validationFailed } from "@tor-now/domain";
-import type { Context } from "hono";
+import type { Context, Env, Input } from "hono";
+
+/**
+ * Hono parameterises a Context by the app's Env, the matched path and the
+ * route's input. These helpers care about none of the three, so they take all
+ * of them rather than pinning one and forcing a cast at every call site.
+ */
+type AnyContext<E extends Env> = Context<E, string, Input>;
 import type { z } from "zod";
 import type { TokenVerifier } from "../ports/tokens.ts";
 import type { Actor } from "../ports/unit-of-work.ts";
@@ -13,8 +20,8 @@ export type RequestActor = { actor: Actor };
 
 const BEARER = /^Bearer\s+(.+)$/i;
 
-export const readActor = async (
-  context: Context,
+export const readActor = async <E extends Env>(
+  context: AnyContext<E>,
   verifier: TokenVerifier,
 ): Promise<Actor> => {
   const header = context.req.header("Authorization");
@@ -23,7 +30,10 @@ export const readActor = async (
   const match = BEARER.exec(header);
   if (match === null) return { kind: "ANONYMOUS" };
 
-  const claims = await verifier.verify(match[1] as string);
+  const presented = match[1];
+  if (presented === undefined) return { kind: "ANONYMOUS" };
+
+  const claims = await verifier.verify(presented);
   if (claims === null) return { kind: "ANONYMOUS" };
 
   // ADR 0010's allowlist was checked when the token was issued; the claim is
@@ -54,26 +64,31 @@ export const parse = <T extends z.ZodTypeAny>(
       })),
     });
   }
-  return result.data;
+  return result.data as z.infer<T>;
 };
 
-export const parseBody = async <T extends z.ZodTypeAny>(
-  context: Context,
+export const parseBody = async <T extends z.ZodTypeAny, E extends Env>(
+  context: AnyContext<E>,
   schema: T,
 ): Promise<z.infer<T>> => {
-  const body = await context.req.json().catch(() => {
+  // Hono types a parsed body as `any`; it is unknown until the schema says
+  // otherwise, and saying so here keeps the assertion in one place.
+  const body: unknown = await context.req.json().catch(() => {
     throw validationFailed("A JSON body is required");
   });
   return parse(schema, body);
 };
 
-export const parseQuery = <T extends z.ZodTypeAny>(
-  context: Context,
+export const parseQuery = <T extends z.ZodTypeAny, E extends Env>(
+  context: AnyContext<E>,
   schema: T,
 ): z.infer<T> => parse(schema, context.req.query());
 
 /** Path parameters arrive as strings; branding them is a single cast site. */
-export const idParam = <T extends string>(context: Context, name: string) => {
+export const idParam = <T extends string, E extends Env>(
+  context: AnyContext<E>,
+  name: string,
+) => {
   const value = context.req.param(name);
   if (value === undefined || value.length === 0) {
     throw validationFailed(`${name} is required`);

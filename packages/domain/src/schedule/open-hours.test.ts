@@ -28,7 +28,7 @@ const override = (date: string, ranges: [string, string][]): DateOverride =>
     date: parseLocalDate(date),
     note: null,
     ranges: ranges.map(([start, end]) => ({ start: t(start), end: t(end) })),
-  }) as DateOverride;
+  });
 
 // 2026-09-01 is a Tuesday (day 2); 2026-09-02 a Wednesday (day 3).
 const tuesday = parseLocalDate("2026-09-01");

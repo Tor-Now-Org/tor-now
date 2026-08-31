@@ -44,10 +44,17 @@ export const createApp = (services: Services) => {
   );
 
   app.onError((error, context) =>
+    // Hono types the Context it hands an error handler with `any` for the
+    // route input, because an error can come from any route. The narrowing
+    // this rule wants is not available to us here.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     toErrorResponse(context, error, services.config.exposeInternalErrors),
   );
 
   app.use("*", async (context, next) => {
+    // Same reason as above: a wildcard middleware's Context is typed `any` for
+    // the matched path, since it matches every one of them.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     context.set("actor", await readActor(context, services.tokens));
     await next();
   });

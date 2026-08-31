@@ -22,6 +22,6 @@ const root = new Hono();
 root.route("/api", createApp(services));
 
 serve({ fetch: root.fetch, port: PORT }, (address) => {
-  // eslint-disable-next-line no-console -- the only line this process prints
+   
   console.log(`api listening on http://localhost:${address.port}/api`);
 });

@@ -31,7 +31,7 @@ describe("booking", () => {
     expect(appointment.serviceName).toBe(shop.service.name);
 
     // CONTEXT.md: "Customer" is a Membership, created by the act of booking.
-    const membership = await test.store.memberships.find(
+    const membership = test.store.memberships.find(
       (candidate) =>
         candidate.userId === customer.user.id && candidate.businessId === shop.business.id,
     );

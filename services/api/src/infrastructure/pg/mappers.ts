@@ -28,9 +28,20 @@ import {
 
 export type Row = Record<string, unknown>;
 
-const text = (value: unknown): string => String(value);
+/**
+ * A column value as text. Postgres hands back strings, numbers and Dates for
+ * the columns this module reads; anything else is a schema change nobody
+ * updated the mapper for, and failing here is better than storing "[object
+ * Object]" and discovering it later.
+ */
+const text = (value: unknown): string => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
+  if (value instanceof Date) return value.toISOString();
+  throw new Error(`Expected a text-like column value, got ${typeof value}`);
+};
 const nullableText = (value: unknown): string | null =>
-  value === null || value === undefined ? null : String(value);
+  value === null || value === undefined ? null : text(value);
 const int = (value: unknown): number => Number(value);
 const bool = (value: unknown): boolean => Boolean(value);
 const toInstant = (value: unknown) => instant(new Date(value as string).getTime());

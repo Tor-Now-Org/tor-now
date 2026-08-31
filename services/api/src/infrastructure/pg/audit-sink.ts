@@ -31,10 +31,10 @@ export const auditReader = (tx: Transaction): AuditReader => ({
       limit ${limit} offset ${offset}`;
     return rows.map((row) => ({
       id: String(row["id"]),
-      actorId: row["actor_id"] === null ? null : asId(String(row["actor_id"])),
+      actorId: row["actor_id"] === null ? null : asId(String(row["actor_id"] as string)),
       action: String(row["action"]),
       entityType: String(row["entity_type"]),
-      entityId: row["entity_id"] === null ? null : String(row["entity_id"]),
+      entityId: row["entity_id"] === null ? null : String(row["entity_id"] as string),
       before: row["before"] ?? null,
       after: row["after"] ?? null,
       occurredAt: instant(new Date(row["occurred_at"] as string).getTime()),

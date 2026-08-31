@@ -25,4 +25,4 @@ export const pruneAuditLog = async (sql: Sql): Promise<number> =>
       )
       select count(*)::int as removed from pruned`;
     return Number(row?.["removed"] ?? 0);
-  }) as Promise<number>;
+  });

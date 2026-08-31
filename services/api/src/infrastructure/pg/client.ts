@@ -64,7 +64,7 @@ export const PG_ERRORS = Object.freeze({
 
 export const errorCodeOf = (error: unknown): string | null => {
   if (typeof error === "object" && error !== null && "code" in error) {
-    const code = (error as { code: unknown }).code;
+    const code = (error).code;
     return typeof code === "string" ? code : null;
   }
   return null;

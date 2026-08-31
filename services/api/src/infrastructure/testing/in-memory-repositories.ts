@@ -170,7 +170,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           ...(changes.timeZone === undefined
             ? {}
             : { timeZone: timeZone(changes.timeZone) }),
-        } as Business;
+        };
         store.businesses = store.businesses.map((candidate) =>
           candidate.id === id ? updated : candidate,
         );
@@ -318,7 +318,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           ...Object.fromEntries(
             Object.entries(changes).filter(([, value]) => value !== undefined),
           ),
-        } as Service;
+        };
         store.services = store.services.map((candidate) =>
           candidate.id === id ? updated : candidate,
         );
@@ -527,7 +527,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           ...Object.fromEntries(
             Object.entries(changes).filter(([, value]) => value !== undefined),
           ),
-        } as Appointment;
+        };
         if (isActive(updated)) {
           assertNoOverlap(store, updated.resourceId, updated.startAt, updated.occupiedUntil, id);
         }
@@ -556,7 +556,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           ...Object.fromEntries(
             Object.entries(changes).filter(([, value]) => value !== undefined),
           ),
-        } as Subscription;
+        };
         store.subscriptions = store.subscriptions.map((subscription) =>
           subscription.businessId === businessId ? updated : subscription,
         );

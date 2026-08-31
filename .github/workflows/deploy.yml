@@ -1,0 +1,89 @@
+name: Deploy
+
+# The interface deploys itself: Vercel builds every push to main, configured by
+# vercel.json rather than by dashboard settings. This workflow covers the two
+# things Vercel does not — the database schema and the Edge Function.
+#
+# Both steps need a Supabase access token. Without one the workflow reports what
+# it would have done and succeeds, so a fork or a first-time contributor is not
+# blocked by a secret they cannot have.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  supabase:
+    name: Schema and Edge Function
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || 'boiqhhckvypicjfpeuem' }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+
+      - name: Rebuild the Edge Function bundle
+        run: npm run build:api
+
+      # The deployed artifact is committed, and the Edge Function is deployed by
+      # pinning its commit. A drift here means main would deploy code that is
+      # not in main.
+      - name: Refuse to deploy a stale bundle
+        run: |
+          if ! git diff --quiet -- supabase/functions/api/index.js; then
+            echo "::error::The committed bundle is not the build of services/api/src."
+            exit 1
+          fi
+
+      - name: Check for credentials
+        id: credentials
+        run: |
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No SUPABASE_ACCESS_TOKEN; skipping the Supabase deploy."
+          fi
+
+      - uses: supabase/setup-cli@v1
+        if: steps.credentials.outputs.present == 'true'
+        with:
+          version: latest
+
+      - name: Apply migrations
+        if: steps.credentials.outputs.present == 'true'
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase db push --include-all
+
+      - name: Deploy the Edge Function
+        if: steps.credentials.outputs.present == 'true'
+        # ADR 0004 and ADR 0007: the function authenticates its own callers, so
+        # the platform's JWT gate is off and this flag is deliberate.
+        run: supabase functions deploy api --no-verify-jwt
+
+      - name: Check it answers
+        if: steps.credentials.outputs.present == 'true'
+        run: |
+          for attempt in $(seq 1 20); do
+            if curl -sf "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/api/health"; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::The deployed function did not answer /health."
+          exit 1

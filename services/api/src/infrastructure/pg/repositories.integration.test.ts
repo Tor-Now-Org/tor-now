@@ -58,7 +58,9 @@ if (databaseUrl === undefined || databaseUrl === "") {
           throw new RollBack();
         })
         .catch((error: unknown) => {
-          if (!(error instanceof RollBack)) reject(error);
+          if (!(error instanceof RollBack)) {
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
         });
     });
 
