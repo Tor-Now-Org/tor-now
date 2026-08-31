@@ -38,7 +38,18 @@ export const Schedule = ({
   const errorText = useErrorText();
 
   const [layer, setLayer] = useState<Layer>("hours");
-  const [resource, setResource] = useState<ResourceDto | null>(resources[0] ?? null);
+  const [resource, setResource] = useState<ResourceDto | null>(null);
+
+  // Resources are fetched by the parent and arrive after this mounts, so the
+  // selection cannot come from the initial render alone — it has to follow the
+  // list. Without this the screen waits forever for a calendar it already has.
+  useEffect(() => {
+    setResource((current) =>
+      current !== null && resources.some((candidate) => candidate.id === current.id)
+        ? current
+        : (resources[0] ?? null),
+    );
+  }, [resources]);
   const [hours, setHours] = useState<WorkingHoursDto[] | null>(null);
   const [overrides, setOverrides] = useState<OverrideDto[]>([]);
   const [blocks, setBlocks] = useState<BlockDto[]>([]);

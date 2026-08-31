@@ -36,7 +36,18 @@ export const CalendarDay = ({
   const { language } = useLanguage();
   const errorText = useErrorText();
 
-  const [resource, setResource] = useState<ResourceDto | null>(resources[0] ?? null);
+  const [resource, setResource] = useState<ResourceDto | null>(null);
+
+  // Resources are fetched by the parent and arrive after this mounts, so the
+  // selection cannot come from the initial render alone — it has to follow the
+  // list. Without this the screen waits forever for a calendar it already has.
+  useEffect(() => {
+    setResource((current) =>
+      current !== null && resources.some((candidate) => candidate.id === current.id)
+        ? current
+        : (resources[0] ?? null),
+    );
+  }, [resources]);
   const [date, setDate] = useState(() => todayIn(business.timeZone));
   const [day, setDay] = useState<CalendarDayDto | null>(null);
   const [selected, setSelected] = useState<CalendarAppointmentDto | null>(null);
