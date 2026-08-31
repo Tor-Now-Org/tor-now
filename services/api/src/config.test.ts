@@ -1,0 +1,84 @@
+import { describe, expect, it } from "vitest";
+import { loadConfig, SESSION_LIFETIME_SECONDS } from "./config.ts";
+
+const secret = "x".repeat(32);
+const minimal = {
+  SUPABASE_DB_URL: "postgres://localhost/tor_now",
+  SUPABASE_JWT_SECRET: secret,
+};
+
+const twilio = {
+  TWILIO_ACCOUNT_SID: "AC123",
+  TWILIO_AUTH_TOKEN: "token",
+  TWILIO_WHATSAPP_FROM: "+972500000000",
+};
+
+describe("loadConfig", () => {
+  it("runs on the log transports with nothing but a database and a secret", () => {
+    const config = loadConfig(minimal);
+    expect(config.verificationTransport).toBe("LOG");
+    expect(config.notificationTransport).toBe("LOG");
+    expect(config.twilio).toBeNull();
+  });
+
+  it("refuses to boot without a database url", () => {
+    expect(() => loadConfig({ SUPABASE_JWT_SECRET: secret })).toThrow(
+      /SUPABASE_DB_URL/,
+    );
+  });
+
+  it("refuses a short signing secret", () => {
+    expect(() =>
+      loadConfig({ ...minimal, SUPABASE_JWT_SECRET: "too-short" }),
+    ).toThrow(/SUPABASE_JWT_SECRET must be at least 32/);
+  });
+
+  it("refuses a real transport with no credentials behind it", () => {
+    expect(() =>
+      loadConfig({ ...minimal, VERIFICATION_TRANSPORT: "WHATSAPP" }),
+    ).toThrow(/Twilio credentials are absent/);
+  });
+
+  it("accepts a real transport once credentials are present", () => {
+    const config = loadConfig({
+      ...minimal,
+      ...twilio,
+      VERIFICATION_TRANSPORT: "WHATSAPP",
+    });
+    expect(config.twilio?.accountSid).toBe("AC123");
+  });
+
+  it("refuses to expose verification codes alongside a real transport", () => {
+    expect(() =>
+      loadConfig({
+        ...minimal,
+        ...twilio,
+        VERIFICATION_TRANSPORT: "WHATSAPP",
+        EXPOSE_VERIFICATION_CODE: "true",
+      }),
+    ).toThrow(/development only/);
+  });
+
+  it("allows exposing codes while everything is on the log transport", () => {
+    const config = loadConfig({ ...minimal, EXPOSE_VERIFICATION_CODE: "true" });
+    expect(config.exposeVerificationCode).toBe(true);
+  });
+
+  it("refuses an SMS notification transport with no SMS sender", () => {
+    expect(() =>
+      loadConfig({ ...minimal, ...twilio, NOTIFICATION_TRANSPORT: "SMS" }),
+    ).toThrow(/TWILIO_SMS_FROM/);
+  });
+
+  it("reads a comma-separated CORS allowlist", () => {
+    const config = loadConfig({
+      ...minimal,
+      CORS_ORIGINS: "https://a.example, https://b.example ,",
+    });
+    expect(config.corsOrigins).toEqual(["https://a.example", "https://b.example"]);
+  });
+
+  it("fixes the session lifetime at thirty days, per ADR 0009", () => {
+    expect(SESSION_LIFETIME_SECONDS).toBe(30 * 24 * 60 * 60);
+  });
+});

@@ -1,0 +1,280 @@
+import type {
+  Appointment,
+  AppointmentId,
+  Block,
+  BlockId,
+  Business,
+  BusinessId,
+  DateOverride,
+  DateOverrideId,
+  Instant,
+  LocalDate,
+  Membership,
+  MembershipRole,
+  Money,
+  Payment,
+  Resource,
+  ResourceId,
+  Service,
+  ServiceId,
+  Subscription,
+  User,
+  UserId,
+  WorkingHours,
+  WorkingHoursId,
+} from "@tor-now/domain";
+
+/**
+ * The interfaces the application layer speaks through. Every one of them is
+ * implemented twice: once against Postgres, and once in memory for the tests.
+ *
+ * ADR 0006 makes keeping all writes behind these a standing constraint, not a
+ * preference — the auditing decorator wraps repositories, so a write that
+ * reaches the database another way produces no audit trail.
+ */
+
+export type Page = { readonly limit: number; readonly offset: number };
+
+export type UserRepository = {
+  findById(id: UserId): Promise<User | null>;
+  findByPhone(phone: string): Promise<User | null>;
+  create(user: {
+    phone: string;
+    name: string;
+    birthDate: LocalDate | null;
+  }): Promise<User>;
+  update(
+    id: UserId,
+    changes: Partial<Pick<User, "name" | "birthDate">>,
+  ): Promise<User>;
+  /** ADR 0008: marks the row deleted and hides it; personal data is retained. */
+  softDelete(id: UserId): Promise<User>;
+  restore(id: UserId): Promise<User>;
+  setAdministrator(id: UserId, isAdministrator: boolean): Promise<User>;
+  list(page: Page, query: string | null): Promise<readonly User[]>;
+};
+
+export type BusinessSearchResult = {
+  readonly business: Business;
+  readonly score: number;
+};
+
+export type BusinessRepository = {
+  findById(id: BusinessId): Promise<Business | null>;
+  /** ADR 0011: trigram similarity with a boost for prefix matches. */
+  search(query: string): Promise<readonly BusinessSearchResult[]>;
+  create(business: {
+    name: string;
+    phone: string;
+    timeZone: string;
+    description: string | null;
+    address: string | null;
+  }): Promise<Business>;
+  update(
+    id: BusinessId,
+    changes: Partial<
+      Omit<Business, "id" | "timeZone"> & { timeZone: string }
+    >,
+  ): Promise<Business>;
+  setActive(id: BusinessId, active: boolean): Promise<Business>;
+  list(page: Page, query: string | null): Promise<readonly Business[]>;
+};
+
+export type MembershipRepository = {
+  find(userId: UserId, businessId: BusinessId): Promise<Membership | null>;
+  listForUser(userId: UserId): Promise<readonly Membership[]>;
+  listForBusiness(
+    businessId: BusinessId,
+    role: MembershipRole,
+  ): Promise<readonly Membership[]>;
+  create(
+    userId: UserId,
+    businessId: BusinessId,
+    role: MembershipRole,
+  ): Promise<Membership>;
+  /** Creates a customer Membership only if one does not already exist. */
+  ensureCustomer(userId: UserId, businessId: BusinessId): Promise<Membership>;
+};
+
+export type ResourceRepository = {
+  findById(id: ResourceId): Promise<Resource | null>;
+  listForBusiness(businessId: BusinessId): Promise<readonly Resource[]>;
+  create(resource: {
+    businessId: BusinessId;
+    name: string;
+  }): Promise<Resource>;
+  update(
+    id: ResourceId,
+    changes: Partial<Pick<Resource, "name" | "active">>,
+  ): Promise<Resource>;
+  delete(id: ResourceId): Promise<void>;
+};
+
+export type ServiceRepository = {
+  findById(id: ServiceId): Promise<Service | null>;
+  listForBusiness(
+    businessId: BusinessId,
+    includeInactive: boolean,
+  ): Promise<readonly Service[]>;
+  create(service: {
+    businessId: BusinessId;
+    name: string;
+    durationMinutes: number;
+    price: Money;
+    bufferMinutes: number | null;
+  }): Promise<Service>;
+  update(
+    id: ServiceId,
+    changes: Partial<Omit<Service, "id" | "businessId">>,
+  ): Promise<Service>;
+  delete(id: ServiceId): Promise<void>;
+};
+
+export type WorkingHoursRepository = {
+  listForResource(resourceId: ResourceId): Promise<readonly WorkingHours[]>;
+  create(hours: {
+    resourceId: ResourceId;
+    businessId: BusinessId;
+    dayOfWeek: number;
+    startMinutes: number;
+    endMinutes: number;
+  }): Promise<WorkingHours>;
+  update(
+    id: WorkingHoursId,
+    changes: { startMinutes: number; endMinutes: number },
+  ): Promise<WorkingHours>;
+  delete(id: WorkingHoursId): Promise<void>;
+};
+
+export type DateOverrideRepository = {
+  listForResource(
+    resourceId: ResourceId,
+    from: LocalDate,
+    to: LocalDate,
+  ): Promise<readonly DateOverride[]>;
+  findByDate(
+    resourceId: ResourceId,
+    date: LocalDate,
+  ): Promise<DateOverride | null>;
+  /**
+   * Replaces the whole override for a date, ranges included. ADR 0002 makes an
+   * Override a replacement rather than an addition, so writing one is a single
+   * atomic act rather than a set of range edits.
+   */
+  put(override: {
+    resourceId: ResourceId;
+    businessId: BusinessId;
+    date: LocalDate;
+    note: string | null;
+    ranges: readonly { startMinutes: number; endMinutes: number }[];
+  }): Promise<DateOverride>;
+  delete(id: DateOverrideId): Promise<void>;
+};
+
+export type BlockRepository = {
+  listForResourceBetween(
+    resourceId: ResourceId,
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly Block[]>;
+  create(block: {
+    resourceId: ResourceId;
+    businessId: BusinessId;
+    startAt: Instant;
+    endAt: Instant;
+    reason: string;
+  }): Promise<Block>;
+  delete(id: BlockId): Promise<void>;
+};
+
+export type AppointmentDraft = Omit<
+  Appointment,
+  "id" | "cancelledAt" | "cancelledBy" | "lateCancellation" | "createdAt"
+>;
+
+export type AppointmentRepository = {
+  findById(id: AppointmentId): Promise<Appointment | null>;
+  listForResourceBetween(
+    resourceId: ResourceId,
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly Appointment[]>;
+  listForBusinessBetween(
+    businessId: BusinessId,
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly Appointment[]>;
+  listForCustomer(
+    customerId: UserId,
+    page: Page,
+  ): Promise<readonly Appointment[]>;
+  listForCustomerAtBusiness(
+    customerId: UserId,
+    businessId: BusinessId,
+  ): Promise<readonly Appointment[]>;
+  /**
+   * Throws a `SLOT_TAKEN` DomainError when ADR 0003's exclusion constraint
+   * refuses the insert. Translating it here means no caller has to know that
+   * the rule lives in the database.
+   */
+  create(draft: AppointmentDraft): Promise<Appointment>;
+  update(
+    id: AppointmentId,
+    changes: Partial<
+      Pick<
+        Appointment,
+        | "status"
+        | "startAt"
+        | "endAt"
+        | "occupiedUntil"
+        | "cancelledAt"
+        | "cancelledBy"
+        | "lateCancellation"
+      >
+    >,
+  ): Promise<Appointment>;
+};
+
+export type SubscriptionRepository = {
+  findByBusiness(businessId: BusinessId): Promise<Subscription | null>;
+  update(
+    businessId: BusinessId,
+    changes: Partial<Omit<Subscription, "id" | "businessId">>,
+  ): Promise<Subscription>;
+  /** Every Subscription whose grace period has elapsed, for the deactivation job. */
+  listLapsed(today: LocalDate): Promise<readonly Subscription[]>;
+};
+
+export type PaymentRepository = {
+  create(payment: {
+    subscriptionId: Subscription["id"];
+    businessId: BusinessId;
+    amount: Money;
+    paidOn: LocalDate;
+    recordedBy: UserId;
+    note: string | null;
+  }): Promise<Payment>;
+  listForBusiness(businessId: BusinessId): Promise<readonly Payment[]>;
+};
+
+export type AdministratorAllowlistRepository = {
+  contains(phone: string): Promise<boolean>;
+  list(): Promise<readonly { phone: string; note: string | null }[]>;
+  add(phone: string, note: string | null, addedBy: UserId): Promise<void>;
+  remove(phone: string): Promise<void>;
+};
+
+export type Repositories = {
+  readonly users: UserRepository;
+  readonly businesses: BusinessRepository;
+  readonly memberships: MembershipRepository;
+  readonly resources: ResourceRepository;
+  readonly services: ServiceRepository;
+  readonly workingHours: WorkingHoursRepository;
+  readonly dateOverrides: DateOverrideRepository;
+  readonly blocks: BlockRepository;
+  readonly appointments: AppointmentRepository;
+  readonly subscriptions: SubscriptionRepository;
+  readonly payments: PaymentRepository;
+  readonly administratorAllowlist: AdministratorAllowlistRepository;
+};
