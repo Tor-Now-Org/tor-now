@@ -11,6 +11,7 @@ import type {
   SlotDto,
 } from "@/lib/api/types.ts";
 import { formatPrice, timeIn, todayIn } from "@/lib/format.ts";
+import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { DateStrip } from "../date-strip.tsx";
@@ -140,7 +141,7 @@ export const CalendarDay = ({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <span className="label">
-            {day.appointments.length} {copy.appointmentsCount}
+            {countOf(language, day.appointments.length, copy.appointmentsCount)}
           </span>
 
           {day.appointments.map((appointment) => (
