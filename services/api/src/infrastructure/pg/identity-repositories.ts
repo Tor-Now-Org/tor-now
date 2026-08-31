@@ -190,16 +190,28 @@ export const membershipRepository = (tx: Transaction): MembershipRepository => (
 
   /**
    * Booking makes the customer relationship, and a customer who books twice
-   * must not create a second one. The unique pair constraint is what settles
-   * the race between two concurrent first bookings.
+   * must not create a second one. The unique pair constraint settles the race
+   * between two concurrent first bookings.
+   *
+   * `do nothing` rather than a no-op `do update`: an update would need an
+   * update policy on membership, and there is deliberately none — a role is
+   * granted or removed, never edited in place. It also means an owner booking
+   * at their own business keeps the OWNER role rather than being demoted by
+   * their own booking.
    */
   async ensureCustomer(userId, businessId) {
-    const rows = await tx<Row[]>`
+    const inserted = await tx<Row[]>`
       insert into membership (user_id, business_id, role)
       values (${userId}, ${businessId}, 'CUSTOMER')
-      on conflict (user_id, business_id) do update set role = membership.role
+      on conflict (user_id, business_id) do nothing
       returning *`;
-    return one(rows, toMembership, "Membership");
+    const created = inserted[0];
+    if (created !== undefined) return toMembership(created);
+
+    const existing = await tx<Row[]>`
+      select * from membership
+      where user_id = ${userId} and business_id = ${businessId}`;
+    return one(existing, toMembership, "Membership");
   },
 });
 
