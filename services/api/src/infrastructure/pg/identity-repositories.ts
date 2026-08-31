@@ -99,14 +99,17 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
    * the same in Hebrew and English.
    */
   async search(query): Promise<readonly BusinessSearchResult[]> {
+    // pg_trgm lives in `extensions`, not `public` — an extension does not
+    // belong in the schema PostgREST exposes — so its function and operator are
+    // schema-qualified rather than left to the connection's search_path.
     const rows = await tx<Row[]>`
       select *,
-             similarity(name, ${query})
+             extensions.similarity(name, ${query})
                + case when name ilike ${query + "%"} then ${SEARCH.prefixBoost} else 0 end
              as score
       from business
       where active
-        and (name % ${query} or name ilike ${"%" + query + "%"})
+        and (name operator(extensions.%) ${query} or name ilike ${"%" + query + "%"})
       order by score desc, name asc
       limit ${SEARCH.maxResults}`;
     return rows.map((row) => ({

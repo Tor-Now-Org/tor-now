@@ -37,12 +37,12 @@ var Ir=Object.defineProperty;var i=(e,n)=>Ir(e,"name",{value:n,configurable:!0})
       order by created_at desc
       limit ${n.limit} offset ${n.offset}`).map(K)}}),"userRepository"),yn=i(e=>({async findById(n){let t=(await e`select * from business where id = ${n}`)[0];return t===void 0?null:oe(t)},async search(n){return(await e`
       select *,
-             similarity(name, ${n})
+             extensions.similarity(name, ${n})
                + case when name ilike ${n+"%"} then ${me.prefixBoost} else 0 end
              as score
       from business
       where active
-        and (name % ${n} or name ilike ${"%"+n+"%"})
+        and (name operator(extensions.%) ${n} or name ilike ${"%"+n+"%"})
       order by score desc, name asc
       limit ${me.maxResults}`).map(t=>({business:oe(t),score:Number(t.score)}))},async create(n){let r=await e`
       insert into business (name, phone, time_zone, description, address)
