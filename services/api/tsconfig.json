@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The service runs on Deno's edge runtime, which provides the web
+    // platform globals — fetch, crypto, TextEncoder — but none of the DOM.
+    // WebWorker is exactly that surface, so referring to `document` here is a
+    // compile error rather than a runtime one.
+    "lib": ["ES2022", "WebWorker"]
+  },
+  "include": ["src/**/*"]
+}
