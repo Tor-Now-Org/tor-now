@@ -56,12 +56,6 @@ const schema = z.object({
   jwtSecret: z.string().min(32, "must be at least 32 characters"),
   /** Which secret the signing key was derived from, reported by /health. */
   jwtSecretSource: z.enum(["SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY"]),
-  /**
-   * Supabase Cron authenticates to an Edge Function with the project's service
-   * role key, which is how the scheduled endpoints are guarded — there is no
-   * separate secret to provision, and nothing but the platform holds this one.
-   */
-  serviceRoleKey: z.string().min(1).nullable().default(null),
   verificationTransport: transportSchema.default("LOG"),
   notificationTransport: transportSchema.default("LOG"),
   twilio: z
@@ -112,7 +106,6 @@ const ENVIRONMENT_VARIABLE: Readonly<Record<string, string>> = Object.freeze({
   exposeVerificationCode: "EXPOSE_VERIFICATION_CODE",
   exposeInternalErrors: "EXPOSE_INTERNAL_ERRORS",
   corsOrigins: "CORS_ORIGINS",
-  serviceRoleKey: "SUPABASE_SERVICE_ROLE_KEY",
 });
 
 /**
@@ -181,7 +174,6 @@ export const loadConfig = (env: Environment): Config => {
     databaseUrl: env["SUPABASE_DB_URL"],
     jwtSecret: signing.secret,
     jwtSecretSource: signing.source,
-    serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"] ?? null,
     verificationTransport: env["VERIFICATION_TRANSPORT"],
     notificationTransport: env["NOTIFICATION_TRANSPORT"],
     twilio: readTwilio(env),

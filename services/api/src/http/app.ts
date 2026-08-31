@@ -671,13 +671,13 @@ const jobRoutes = (services: Services) => {
   const jobs = new Hono<{ Variables: { actor: Actor } }>();
 
   jobs.use("*", async (context, next) => {
-    const expected = services.config.serviceRoleKey;
+    const expected = await services.jobCredential.read();
     const presented = (context.req.header("Authorization") ?? "").replace(
       /^Bearer\s+/i,
       "",
     );
-    // Compared in constant time: a timing oracle here would leak the project's
-    // service role key one byte at a time.
+    // Compared in constant time: a timing oracle here would leak the credential
+    // one byte at a time.
     if (expected === null || !equalsInConstantTime(presented, expected)) {
       throw forbidden("This endpoint is for scheduled work");
     }

@@ -11,6 +11,7 @@ import { outboxWorker } from "./application/outbox-worker.ts";
 import { pruneAuditLog } from "./application/retention-service.ts";
 import { createPool, type Sql } from "./infrastructure/pg/client.ts";
 import { postgresUnitOfWork } from "./infrastructure/pg/unit-of-work.ts";
+import { jobCredential } from "./infrastructure/pg/job-credential.ts";
 import { verificationCodeRepository } from "./infrastructure/pg/verification-repository.ts";
 import { logNotifier } from "./infrastructure/notifier/log-notifier.ts";
 import { twilioNotifier } from "./infrastructure/notifier/twilio-notifier.ts";
@@ -72,6 +73,7 @@ export const compose = (
   const services = {
     config,
     tokens,
+    jobCredential: jobCredential(sql),
 
     auth: authService({
       unitOfWork,
