@@ -1,7 +1,7 @@
 import { actorUserId, type Session, type UnitOfWork } from "../../ports/unit-of-work.ts";
 import type { Repositories } from "../../ports/repositories.ts";
 import { withAuditing } from "../auditing.ts";
-import { auditSink } from "./audit-sink.ts";
+import { auditReader, auditSink } from "./audit-sink.ts";
 import { assumeIdentity, type Sql, type Transaction } from "./client.ts";
 import {
   administratorAllowlistRepository,
@@ -55,6 +55,7 @@ export const postgresUnitOfWork = (sql: Sql): UnitOfWork => ({
           actorId: actorUserId(actor),
         }),
         audit: sink,
+        auditTrail: auditReader(transaction),
         outbox: outbox(transaction),
       });
     }) as Promise<T>;

@@ -1,6 +1,6 @@
 import type { UserId } from "@tor-now/domain";
 import type { Repositories } from "./repositories.ts";
-import type { AuditSink } from "./audit.ts";
+import type { AuditReader, AuditSink } from "./audit.ts";
 import type { Outbox } from "./notifier.ts";
 
 /**
@@ -15,12 +15,20 @@ export type Actor =
    * there is no database backstop on this path, only application code, which
    * is why every action taken as one is audited without exception.
    */
-  | { readonly kind: "ADMINISTRATOR"; readonly userId: UserId };
+  | { readonly kind: "ADMINISTRATOR"; readonly userId: UserId }
+  /**
+   * Scheduled work — draining the outbox, pruning the audit log. It has no
+   * human behind it, so the trail records no actor rather than attributing a
+   * cron run to whichever administrator happened to be last.
+   */
+  | { readonly kind: "SYSTEM" };
 
 export const anonymous = (): Actor => ({ kind: "ANONYMOUS" });
 
+export const system = (): Actor => ({ kind: "SYSTEM" });
+
 export const actorUserId = (actor: Actor): UserId | null =>
-  actor.kind === "ANONYMOUS" ? null : actor.userId;
+  actor.kind === "ANONYMOUS" || actor.kind === "SYSTEM" ? null : actor.userId;
 
 /**
  * A transaction, with repositories bound to it. Everything a request writes —
@@ -30,6 +38,8 @@ export const actorUserId = (actor: Actor): UserId | null =>
 export type Session = {
   readonly repositories: Repositories;
   readonly audit: AuditSink;
+  /** ADR 0010 gives administrators a read of the trail; nobody else has one. */
+  readonly auditTrail: AuditReader;
   readonly outbox: Outbox;
 };
 

@@ -3,7 +3,7 @@ import type {
   VerificationCodeRecord,
   VerificationCodeRepository,
 } from "../../ports/verification.ts";
-import type { Transaction } from "./client.ts";
+import type { Queryable } from "./client.ts";
 import type { Row } from "./mappers.ts";
 
 const toRecord = (row: Row): VerificationCodeRecord => ({
@@ -20,7 +20,7 @@ const toRecord = (row: Row): VerificationCodeRecord => ({
 });
 
 export const verificationCodeRepository = (
-  tx: Transaction,
+  tx: Queryable,
 ): VerificationCodeRepository => ({
   async issue({ phone, codeHash, expiresAt }) {
     const rows = await tx<Row[]>`

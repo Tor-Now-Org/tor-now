@@ -5,6 +5,13 @@ export type Sql = postgres.Sql;
 export type Transaction = postgres.TransactionSql;
 
 /**
+ * Anything a query can run on. The verification-code table carries no RLS
+ * policy — only the Edge Function may touch it — so its repository runs on the
+ * pool directly rather than inside a caller's transaction.
+ */
+export type Queryable = Sql | Transaction;
+
+/**
  * ADR 0007: `supabase-js` speaks to PostgREST and offers no transactions, so
  * the domain layer connects to Postgres directly through Supavisor.
  *
@@ -35,7 +42,7 @@ export const assumeIdentity = async (
   tx: Transaction,
   actor: Actor,
 ): Promise<void> => {
-  if (actor.kind === "ADMINISTRATOR") return;
+  if (actor.kind === "ADMINISTRATOR" || actor.kind === "SYSTEM") return;
 
   const role = actor.kind === "USER" ? "authenticated" : "anon";
   await tx`select set_config('role', ${role}, true)`;
