@@ -9,9 +9,11 @@ import type { Row } from "./mappers.ts";
  */
 export const auditSink = (tx: Transaction): AuditSink => ({
   async append(entry) {
+    // Through app.append_audit rather than the table: the mutation's own role
+    // writes this row, and no ordinary role may reach audit_log directly — a
+    // trail a caller can write to is a trail a caller can forge.
     await tx`
-      insert into audit_log (actor_id, action, entity_type, entity_id, before, after)
-      values (
+      select app.append_audit(
         ${entry.actorId},
         ${entry.action},
         ${entry.entityType},

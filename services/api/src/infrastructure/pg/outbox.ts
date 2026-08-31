@@ -17,9 +17,10 @@ import type { Row } from "./mappers.ts";
 export const outbox = (tx: Transaction): Outbox => ({
   async enqueue(message) {
     await tx`
-      insert into notification_outbox (recipient_phone, template, payload)
-      values (${message.recipientPhone}, ${message.template},
-              ${JSON.stringify(message.payload)}::jsonb)`;
+      select app.enqueue_notification(
+        ${message.recipientPhone},
+        ${message.template},
+        ${JSON.stringify(message.payload)}::jsonb)`;
   },
 
   /**
