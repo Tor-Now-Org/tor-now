@@ -87,6 +87,16 @@ const schema = z.object({
    * less deployment out of its own sign-in — correct if that is what is wanted.
    */
   exposeVerificationCode: z.boolean(),
+  /**
+   * Whether an unexpected failure reports what actually went wrong.
+   *
+   * A message from an unhandled error can name a table, a constraint or a
+   * column, so it is not something to return to the public. It follows the same
+   * signal as the code exposure above: a deployment with no delivery channel is
+   * a development one, and the operator of a development deployment is the only
+   * person using it. Configuring a real transport turns this off with it.
+   */
+  exposeInternalErrors: z.boolean(),
   corsOrigins: z.array(z.string()).default([]),
 });
 
@@ -100,9 +110,19 @@ const ENVIRONMENT_VARIABLE: Readonly<Record<string, string>> = Object.freeze({
   verificationTransport: "VERIFICATION_TRANSPORT",
   notificationTransport: "NOTIFICATION_TRANSPORT",
   exposeVerificationCode: "EXPOSE_VERIFICATION_CODE",
+  exposeInternalErrors: "EXPOSE_INTERNAL_ERRORS",
   corsOrigins: "CORS_ORIGINS",
   serviceRoleKey: "SUPABASE_SERVICE_ROLE_KEY",
 });
+
+/**
+ * A deployment that cannot deliver a verification code cannot serve a real
+ * customer, so it is a development one. Two behaviours that would be wrong in
+ * production follow from this single fact rather than from two flags an
+ * operator has to remember to set together.
+ */
+const isDevelopmentDeployment = (env: Environment): boolean =>
+  (env["VERIFICATION_TRANSPORT"] ?? "LOG") === "LOG";
 
 const readBoolean = (
   value: string | undefined,
@@ -167,7 +187,11 @@ export const loadConfig = (env: Environment): Config => {
     twilio: readTwilio(env),
     exposeVerificationCode: readBoolean(
       env["EXPOSE_VERIFICATION_CODE"],
-      (env["VERIFICATION_TRANSPORT"] ?? "LOG") === "LOG",
+      isDevelopmentDeployment(env),
+    ),
+    exposeInternalErrors: readBoolean(
+      env["EXPOSE_INTERNAL_ERRORS"],
+      isDevelopmentDeployment(env),
     ),
     corsOrigins: (env["CORS_ORIGINS"] ?? "")
       .split(",")

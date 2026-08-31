@@ -43,7 +43,9 @@ export const createApp = (services: Services) => {
     }),
   );
 
-  app.onError((error, context) => toErrorResponse(context, error));
+  app.onError((error, context) =>
+    toErrorResponse(context, error, services.config.exposeInternalErrors),
+  );
 
   app.use("*", async (context, next) => {
     context.set("actor", await readActor(context, services.tokens));

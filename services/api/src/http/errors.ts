@@ -37,6 +37,7 @@ export type ErrorBody = {
 export const toErrorResponse = (
   context: Context,
   error: unknown,
+  exposeInternalErrors = false,
 ): Response => {
   if (isDomainError(error)) {
     const status = STATUS_BY_CODE[error.code] ?? 400;
@@ -54,11 +55,24 @@ export const toErrorResponse = (
     );
   }
 
-  // Anything reaching here is a bug. The client learns nothing about it beyond
-  // that it happened; the log keeps the detail.
+  // Anything reaching here is a bug. In production the client learns nothing
+  // about it beyond that it happened — an unhandled message can name a table or
+  // a constraint — and the log keeps the detail.
   console.error("[unhandled]", error);
   return context.json<ErrorBody>(
-    { error: { code: "INTERNAL", message: "Something went wrong" } },
+    {
+      error: {
+        code: "INTERNAL",
+        message: "Something went wrong",
+        ...(exposeInternalErrors
+          ? {
+              details: {
+                cause: error instanceof Error ? error.message : String(error),
+              },
+            }
+          : {}),
+      },
+    },
     500,
   );
 };

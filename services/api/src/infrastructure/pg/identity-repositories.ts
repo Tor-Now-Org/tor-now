@@ -105,7 +105,7 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
     const rows = await tx<Row[]>`
       select *,
              extensions.similarity(name, ${query})
-               + case when name ilike ${query + "%"} then ${SEARCH.prefixBoost} else 0 end
+               + case when name ilike ${query + "%"} then ${SEARCH.prefixBoost}::real else 0 end
              as score
       from business
       where active
