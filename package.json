@@ -1,0 +1,28 @@
+{
+  "name": "tor-now",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace @tor-now/web",
+    "build": "npm run build --workspace @tor-now/web",
+    "build:api": "npm run build --workspace @tor-now/api",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json && npm run typecheck --workspace @tor-now/web",
+    "check": "npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
