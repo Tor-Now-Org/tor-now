@@ -1,0 +1,198 @@
+/*
+ * The design system, ported verbatim from the Tor-Now Screens canvas. The
+ * tokens, the one button system and the bottom navigation are the artboards'
+ * own — changing a value here changes it everywhere, which is the point of
+ * their being tokens rather than literals in components.
+ *
+ * Hebrew is the source language and the default direction is RTL; every rule
+ * below is written with logical properties so the same stylesheet serves both
+ * directions without a mirrored copy.
+ */
+
+:root{
+  /* Paper and ink, cooled to sit under the navy mark */
+  --paper:oklch(98.6% 0.004 240); --raised:oklch(100% 0 0); --sunken:oklch(96.3% 0.008 240);
+  --ink:oklch(25% 0.055 258); --muted:oklch(47% 0.035 252); --faint:oklch(64% 0.028 245);
+  --line:oklch(90% 0.012 240);
+
+  /* The logo's own blue is the accent; its cyan is the highlight */
+  --accent:oklch(52% 0.123 245); --accent-strong:oklch(43% 0.115 252);
+  --accent-soft:oklch(95% 0.028 235); --on-accent:oklch(99% 0.003 240);
+  --brand-navy:#0A2450; --brand-blue:#1470AA; --brand-cyan:#22BFD4;
+  --cyan:oklch(70% 0.122 209); --cyan-soft:oklch(94% 0.035 205);
+
+  --positive:oklch(58% 0.115 214); --positive-soft:oklch(94% 0.038 210);
+  --caution:oklch(63% 0.125 65); --caution-soft:oklch(95% 0.040 78);
+  --critical:oklch(55% 0.170 22); --critical-soft:oklch(95% 0.030 22);
+
+  --shadow:0 1px 2px oklch(25% 0.055 258/.05), 0 8px 24px -12px oklch(25% 0.055 258/.16);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Heebo",ui-sans-serif,system-ui,sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:"Rubik",ui-sans-serif,system-ui,sans-serif;font-weight:600;margin:0;letter-spacing:-.015em}
+a{color:var(--accent);text-decoration:none} a:hover{color:var(--accent-strong)}
+.tab{font-variant-numeric:tabular-nums;unicode-bidi:isolate}
+.card{background:var(--raised);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.scroll{overflow-y:auto;scrollbar-width:none} .scroll::-webkit-scrollbar{display:none}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0;
+  display:inline-flex;align-items:center;justify-content:center;text-align:center}
+input,select{font:inherit;color:inherit}
+.field{width:100%;min-height:48px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--raised);font-size:15px;outline:none}
+.field:focus{border-color:var(--accent)}
+.label{font-size:12.5px;font-weight:500;color:var(--muted)}
+.hint{font-size:12px;color:var(--faint);line-height:1.5}
+/* One button system. Weight, depth and a real pressed state — a 1px
+   outline on white reads as a label, not a control. */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;min-height:52px;padding:0 20px;border-radius:14px;
+  font-family:"Rubik",sans-serif;font-weight:600;font-size:15.5px;letter-spacing:-.01em;
+  transition:background .13s ease, border-color .13s ease, box-shadow .13s ease, transform .08s ease}
+.btn:active{transform:translateY(1px)}
+.primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;min-height:52px;padding:0 20px;border-radius:14px;
+  font-family:"Rubik",sans-serif;font-weight:600;font-size:15.5px;letter-spacing:-.01em;
+  background:var(--accent);color:var(--on-accent);
+  box-shadow:0 1px 1px oklch(25% 0.055 258/.16), 0 8px 18px -10px oklch(52% 0.123 245/.65);
+  transition:background .13s ease, box-shadow .13s ease, transform .08s ease}
+.primary:hover{background:var(--accent-strong);box-shadow:0 1px 1px oklch(25% 0.055 258/.2), 0 10px 22px -10px oklch(52% 0.123 245/.7)}
+.primary:active{transform:translateY(1px);box-shadow:0 1px 1px oklch(25% 0.055 258/.2)}
+.primary:disabled{background:var(--sunken);color:var(--faint);box-shadow:none;cursor:default}
+.quiet{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;min-height:52px;padding:0 20px;border-radius:14px;
+  font-family:"Rubik",sans-serif;font-weight:600;font-size:15.5px;letter-spacing:-.01em;
+  background:var(--sunken);border:1px solid var(--line);color:var(--ink);
+  transition:background .13s ease, border-color .13s ease, transform .08s ease}
+.quiet:hover{background:var(--raised);border-color:var(--accent)}
+.quiet:active{transform:translateY(1px)}
+.danger{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;min-height:52px;padding:0 20px;border-radius:14px;
+  font-family:"Rubik",sans-serif;font-weight:600;font-size:15.5px;letter-spacing:-.01em;
+  background:var(--critical-soft);border:1px solid oklch(55% 0.170 22/.3);color:var(--critical);
+  transition:background .13s ease, transform .08s ease}
+.danger:hover{background:oklch(93% 0.042 22)}
+.danger:active{transform:translateY(1px)}
+/* Compact controls stay pills; full-width actions do not. */
+.chip{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;
+  border-radius:999px;font-size:13.5px;font-weight:500;
+  transition:background .13s ease, border-color .13s ease, color .13s ease}
+.note{padding:13px 15px;border-radius:14px;background:var(--sunken);font-size:12.5px;line-height:1.6;color:var(--muted)}
+.warn{padding:13px 15px;border-radius:14px;background:var(--caution-soft);border:1px solid oklch(63% 0.125 65/.3);color:var(--caution);font-size:12.5px;line-height:1.6}
+.crit{padding:13px 15px;border-radius:14px;background:var(--critical-soft);border:1px solid oklch(55% 0.170 22/.3);color:var(--critical);font-size:12.5px;line-height:1.6}
+/* Bottom navigation reads as controls, not a row of words. */
+.navbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:9px 0 12px;min-height:60px;transition:color .13s ease}
+.navico{display:grid;place-items:center;width:46px;height:28px;border-radius:999px;
+  transition:background .16s ease}
+.navbtn.on .navico{background:var(--accent-soft)}
+.navbtn span.lbl{font-size:11px;font-weight:600;font-family:"Rubik",sans-serif;letter-spacing:-.01em}
+/* The wordmark keeps the logo's own direction whatever the UI is doing */
+.wordmark{display:inline-flex;align-items:baseline;gap:5px;direction:rtl;font-family:"Rubik",sans-serif;font-weight:600;letter-spacing:-.02em;line-height:1}
+.wordmark .he{color:#0A2450}
+.wordmark .now{background:linear-gradient(90deg,#1470AA,#22BFD4);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ---------------------------------------------------------------------------
+ * Additions the artboards imply but a static mockup never needs: the app shell
+ * that makes a phone-sized design work on a real viewport, and the states a
+ * live screen has that a drawn one does not.
+ * ------------------------------------------------------------------------- */
+
+html, body { height: 100%; }
+
+body {
+  /* The artboards are 390x844. On a wider screen the app keeps that measure and
+     centres it, rather than stretching a layout designed for a thumb. */
+  display: flex;
+  justify-content: center;
+  background: var(--sunken);
+}
+
+.app-shell {
+  width: 100%;
+  max-width: 430px;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  position: relative;
+  overflow-x: hidden;
+}
+
+@media (min-width: 460px) {
+  .app-shell {
+    box-shadow: 0 0 0 1px var(--line), 0 24px 60px -30px oklch(25% 0.055 258 / 0.35);
+  }
+}
+
+.stack { display: flex; flex-direction: column; }
+
+/* A control that is only a target for assistive tech and keyboards. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* Every interactive element gets a visible focus ring; the artboards show
+   hover and press states but a drawn screen has no keyboard. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.spinner {
+  width: 18px; height: 18px; border-radius: 999px;
+  border: 2px solid var(--line); border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.skeleton {
+  background: linear-gradient(90deg, var(--sunken), var(--raised), var(--sunken));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+  border-radius: 12px;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+.sheet-backdrop {
+  position: absolute; inset: 0; z-index: 20;
+  background: oklch(25% 0.055 258 / 0.35);
+  display: flex; align-items: flex-end;
+}
+
+.sheet {
+  width: 100%;
+  background: var(--raised);
+  border-start-start-radius: 22px;
+  border-start-end-radius: 22px;
+  padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+  max-height: 88%;
+  overflow-y: auto;
+}
+
+.toast {
+  position: fixed; inset-inline: 0; bottom: 84px; z-index: 30;
+  display: flex; justify-content: center; pointer-events: none;
+}
+.toast > span {
+  background: var(--ink); color: var(--paper);
+  padding: 11px 18px; border-radius: 999px;
+  font-size: 13.5px; max-width: 90%;
+  box-shadow: var(--shadow);
+}
+
+.bottom-nav {
+  display: flex;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+  padding-bottom: env(safe-area-inset-bottom);
+  flex-shrink: 0;
+}
+
