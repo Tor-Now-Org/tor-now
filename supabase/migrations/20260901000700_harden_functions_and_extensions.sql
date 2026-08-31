@@ -16,8 +16,21 @@ $$;
 -- `public.rls_auto_enable` is Supabase's own event trigger that enables RLS on
 -- newly created tables. It is never meant to be called directly, and being in
 -- `public` it is otherwise exposed over PostgREST as an RPC.
-revoke execute on function public.rls_auto_enable() from anon, authenticated, public;
+do $$
+begin
+  -- Supabase installs this event-trigger function; a plain Postgres has not.
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    revoke execute on function public.rls_auto_enable() from anon, authenticated, public;
+  end if;
+end $$;
 
 -- Extensions do not belong in the schema PostgREST exposes.
-alter extension pg_trgm set schema extensions;
-alter extension btree_gist set schema extensions;
+do $$
+begin
+  if to_regnamespace('extensions') is null then
+    raise notice 'no extensions schema: leaving extensions where they are';
+    return;
+  end if;
+  execute 'alter extension pg_trgm set schema extensions';
+  execute 'alter extension btree_gist set schema extensions';
+end $$;

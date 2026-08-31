@@ -25,6 +25,16 @@ export const requireAdministrator = (actor: Actor): UserId => {
   return actor.userId;
 };
 
+/**
+ * Work that either a person with the operator's authority or the scheduler may
+ * do. Billing deactivation is the case: an administrator can trigger it, and
+ * cron does trigger it nightly with no human behind the call.
+ */
+export const requireOperator = (actor: Actor): UserId | null => {
+  if (actor.kind === "SYSTEM") return null;
+  return requireAdministrator(actor);
+};
+
 export const requireOwnership = async (
   repositories: Repositories,
   actor: Actor,

@@ -11,8 +11,21 @@
 -- borrowing the service role key: the secret is generated here, never leaves
 -- the database, and is read by both sides from the same place — so there is no
 -- value for an operator to copy, paste or leak.
-create extension if not exists pg_cron;
-create extension if not exists pg_net;
+-- pg_cron and pg_net are Supabase platform extensions. Everything below is
+-- deployment configuration rather than schema, so on a plain Postgres — a CI
+-- service container, or a developer's laptop — this migration says so and
+-- stops, leaving the schema identical either way.
+do $$
+begin
+  if not exists (select 1 from pg_available_extensions where name = 'pg_cron')
+     or not exists (select 1 from pg_available_extensions where name = 'pg_net') then
+    raise notice 'pg_cron/pg_net unavailable: skipping scheduled work setup';
+    return;
+  end if;
+
+  execute 'create extension if not exists pg_cron';
+  execute 'create extension if not exists pg_net';
+end $$;
 
 create table if not exists app.job_credential (
   id      boolean primary key default true check (id),
@@ -24,7 +37,10 @@ comment on table app.job_credential is
   'The single credential scheduled work presents to the API. One row, enforced by the primary key.';
 
 insert into app.job_credential (secret)
-values (encode(extensions.gen_random_bytes(32), 'hex'))
+-- Unqualified: pgcrypto sits in `extensions` on Supabase and in `public`
+-- on a plain Postgres, and both are on the search path of the role applying
+-- this migration.
+values (encode(gen_random_bytes(32), 'hex'))
 on conflict (id) do nothing;
 
 create or replace function app.job_secret()
@@ -39,39 +55,48 @@ $$;
 
 revoke all on function app.job_secret() from public, anon, authenticated;
 
+-- Defined only where pg_net is, since it calls net.http_post by name.
 create or replace function app.run_scheduled_job(job_path text)
 returns bigint
-language sql
+language plpgsql
 security definer
 set search_path = app, net, pg_temp
 as $$
-  select net.http_post(
-    url := 'https://boiqhhckvypicjfpeuem.supabase.co/functions/v1/api/jobs/' || job_path,
-    headers := jsonb_build_object(
+declare
+  request_id bigint;
+begin
+  -- Late-bound so the function can exist on a Postgres without pg_net; calling
+  -- it there fails loudly rather than the migration failing to apply.
+  execute format(
+    'select net.http_post(url := %L, headers := %L::jsonb, body := %L::jsonb,'
+    || ' timeout_milliseconds := 20000)',
+    'https://boiqhhckvypicjfpeuem.supabase.co/functions/v1/api/jobs/' || job_path,
+    jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || app.job_secret()
     ),
-    body := '{}'::jsonb,
-    timeout_milliseconds := 20000
-  );
+    '{}'::jsonb
+  ) into request_id;
+  return request_id;
+end;
 $$;
 
 revoke all on function app.run_scheduled_job(text) from public, anon, authenticated;
 
-select cron.schedule(
-  'drain-notification-outbox',
-  '* * * * *',
-  $$select app.run_scheduled_job('outbox')$$
-);
+do $$
+begin
+  if to_regnamespace('cron') is null then
+    raise notice 'pg_cron unavailable: no jobs scheduled';
+    return;
+  end if;
 
-select cron.schedule(
-  'prune-audit-log',
-  '30 3 * * *',
-  $$select app.run_scheduled_job('audit-retention')$$
-);
-
-select cron.schedule(
-  'deactivate-lapsed-businesses',
-  '0 4 * * *',
-  $$select app.run_scheduled_job('billing-deactivation')$$
-);
+  perform cron.schedule(
+    'drain-notification-outbox', '* * * * *',
+    $job$select app.run_scheduled_job('outbox')$job$);
+  perform cron.schedule(
+    'prune-audit-log', '30 3 * * *',
+    $job$select app.run_scheduled_job('audit-retention')$job$);
+  perform cron.schedule(
+    'deactivate-lapsed-businesses', '0 4 * * *',
+    $job$select app.run_scheduled_job('billing-deactivation')$job$);
+end $$;

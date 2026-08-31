@@ -41,7 +41,7 @@ export const subscriptionRepository = (
       join business b on b.id = s.business_id
       where s.plan <> 'FREE'
         and b.active
-        and s.paid_through + ${GRACE_PERIOD_DAYS} < ${today}::date`;
+        and s.paid_through + ${GRACE_PERIOD_DAYS}::integer < ${today}::date`;
     return rows.map(toSubscription);
   },
 });

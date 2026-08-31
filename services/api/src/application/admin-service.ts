@@ -22,7 +22,7 @@ import { PAGINATION } from "../config.ts";
 import { AUDIT_ACTIONS, type AuditLogEntry } from "../ports/audit.ts";
 import type { Page } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
-import { requireAdministrator } from "./authorization.ts";
+import { requireAdministrator, requireOperator } from "./authorization.ts";
 
 /**
  * ADR 0010 fixes exactly what an administrator may do: read the list of
@@ -360,7 +360,9 @@ export const adminService = (dependencies: {
      * Existing Appointments are never affected.
      */
     async deactivateLapsedBusinesses(actor: Actor): Promise<readonly BusinessId[]> {
-      requireAdministrator(actor);
+      // Cron calls this with no human behind it, which is the normal case; an
+      // administrator may also run it by hand.
+      requireOperator(actor);
       return unitOfWork.run(actor, async ({ repositories }) => {
         const today = parseLocalDate(new Date(clock.now()).toISOString().slice(0, 10));
         const lapsed = await repositories.subscriptions.listLapsed(today);
