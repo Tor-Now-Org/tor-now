@@ -20,6 +20,15 @@ end $$;
 create schema if not exists extensions;
 grant usage on schema extensions to anon, authenticated;
 
+-- Supabase grants both roles table privileges and leaves Row Level Security to
+-- do the filtering. Without the same grants here the policies never get a say —
+-- the switch to `authenticated` is denied outright — and the tests would be
+-- exercising a permission model the deployed system does not have.
+grant usage on schema public to anon, authenticated;
+alter default privileges in schema public grant all on tables to anon, authenticated;
+alter default privileges in schema public grant all on sequences to anon, authenticated;
+alter default privileges in schema public grant execute on functions to anon, authenticated;
+
 -- The connecting role must be able to become either of the above, which is how
 -- ADR 0007 re-establishes the caller's identity per transaction.
 do $$
