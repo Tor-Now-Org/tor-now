@@ -54,6 +54,14 @@ const transportSchema = z.enum(["LOG", "WHATSAPP", "SMS"]);
 const schema = z.object({
   databaseUrl: z.string().min(1),
   jwtSecret: z.string().min(32, "must be at least 32 characters"),
+  /** Which secret the signing key was derived from, reported by /health. */
+  jwtSecretSource: z.enum(["SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY"]),
+  /**
+   * Supabase Cron authenticates to an Edge Function with the project's service
+   * role key, which is how the scheduled endpoints are guarded — there is no
+   * separate secret to provision, and nothing but the platform holds this one.
+   */
+  serviceRoleKey: z.string().min(1).nullable().default(null),
   verificationTransport: transportSchema.default("LOG"),
   notificationTransport: transportSchema.default("LOG"),
   twilio: z
@@ -86,6 +94,7 @@ const ENVIRONMENT_VARIABLE: Readonly<Record<string, string>> = Object.freeze({
   notificationTransport: "NOTIFICATION_TRANSPORT",
   exposeVerificationCode: "EXPOSE_VERIFICATION_CODE",
   corsOrigins: "CORS_ORIGINS",
+  serviceRoleKey: "SUPABASE_SERVICE_ROLE_KEY",
 });
 
 const readBoolean = (value: string | undefined): boolean => value === "true";
@@ -110,10 +119,39 @@ const readTwilio = (env: Environment): Config["twilio"] => {
   };
 };
 
+/**
+ * Supabase injects SUPABASE_DB_URL and SUPABASE_SERVICE_ROLE_KEY into every
+ * Edge Function, but not a JWT secret, and this deployment has no way to add
+ * one. Rather than invent a weak default, the signing key falls back to being
+ * derived from the service role key — which is high-entropy, already secret,
+ * and never leaves the function environment.
+ *
+ * The derivation itself lives in the token adapter, which runs HKDF over
+ * whatever it is given, so the raw input is never the signing key in either
+ * case. The consequence of the fallback is that rotating the service role key
+ * invalidates every live session; the source is reported by /health so that is
+ * visible rather than surprising.
+ */
+const signingSecretFrom = (
+  env: Environment,
+): { secret: string | undefined; source: Config["jwtSecretSource"] } => {
+  const explicit = env["SUPABASE_JWT_SECRET"];
+  if (explicit !== undefined && explicit.length > 0) {
+    return { secret: explicit, source: "SUPABASE_JWT_SECRET" };
+  }
+  return {
+    secret: env["SUPABASE_SERVICE_ROLE_KEY"],
+    source: "SUPABASE_SERVICE_ROLE_KEY",
+  };
+};
+
 export const loadConfig = (env: Environment): Config => {
+  const signing = signingSecretFrom(env);
   const parsed = schema.safeParse({
     databaseUrl: env["SUPABASE_DB_URL"],
-    jwtSecret: env["SUPABASE_JWT_SECRET"],
+    jwtSecret: signing.secret,
+    jwtSecretSource: signing.source,
+    serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"] ?? null,
     verificationTransport: env["VERIFICATION_TRANSPORT"],
     notificationTransport: env["NOTIFICATION_TRANSPORT"],
     twilio: readTwilio(env),

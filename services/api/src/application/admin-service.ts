@@ -11,6 +11,7 @@ import {
   type Business,
   type BusinessId,
   type Clock,
+  type Patch,
   type Payment,
   type Subscription,
   type SubscriptionState,
@@ -19,6 +20,7 @@ import {
 } from "@tor-now/domain";
 import { PAGINATION } from "../config.ts";
 import { AUDIT_ACTIONS, type AuditLogEntry } from "../ports/audit.ts";
+import type { Page } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { requireAdministrator } from "./authorization.ts";
 
@@ -54,7 +56,7 @@ export const adminService = (dependencies: {
     async listBusinesses(
       actor: Actor,
       query: string | null,
-      page = { limit: PAGINATION.defaultPageSize, offset: 0 },
+      page: Page = { limit: PAGINATION.defaultPageSize, offset: 0 },
     ): Promise<readonly BusinessSummary[]> {
       requireAdministrator(actor);
       return unitOfWork.run(actor, async ({ repositories }) => {
@@ -99,7 +101,7 @@ export const adminService = (dependencies: {
     async updateBusiness(
       actor: Actor,
       businessId: BusinessId,
-      changes: Partial<{
+      changes: Patch<{
         name: string;
         phone: string;
         timeZone: string;
@@ -135,7 +137,7 @@ export const adminService = (dependencies: {
     async listUsers(
       actor: Actor,
       query: string | null,
-      page = { limit: PAGINATION.defaultPageSize, offset: 0 },
+      page: Page = { limit: PAGINATION.defaultPageSize, offset: 0 },
     ): Promise<readonly User[]> {
       requireAdministrator(actor);
       return unitOfWork.run(actor, ({ repositories }) =>
@@ -325,7 +327,7 @@ export const adminService = (dependencies: {
     async updateSubscription(
       actor: Actor,
       businessId: BusinessId,
-      changes: Partial<{ plan: Subscription["plan"]; amountMinor: number; billingPeriod: Subscription["billingPeriod"] }>,
+      changes: Patch<{ plan: Subscription["plan"]; amountMinor: number; billingPeriod: Subscription["billingPeriod"] }>,
     ): Promise<Subscription> {
       requireAdministrator(actor);
       return unitOfWork.run(actor, ({ repositories }) =>
@@ -343,7 +345,7 @@ export const adminService = (dependencies: {
 
     async auditLog(
       actor: Actor,
-      page = { limit: PAGINATION.defaultPageSize, offset: 0 },
+      page: Page = { limit: PAGINATION.defaultPageSize, offset: 0 },
     ): Promise<readonly AuditLogEntry[]> {
       requireAdministrator(actor);
       return unitOfWork.run(actor, (session) =>

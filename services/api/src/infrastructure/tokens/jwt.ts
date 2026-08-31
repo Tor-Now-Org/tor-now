@@ -19,7 +19,39 @@ import type {
 const ALGORITHM = "HS256";
 const ISSUER = "tor-now";
 
-const keyFor = (secret: string): Uint8Array => new TextEncoder().encode(secret);
+/**
+ * The secret handed to this adapter is never used as the signing key directly.
+ * HKDF separates it into a key that exists only for signing sessions, so a key
+ * that also has another job — the service role key, when no dedicated JWT
+ * secret is provisioned — is not the thing that signs tokens.
+ */
+const KEY_INFO = new TextEncoder().encode("tor-now/session-signing-key/v1");
+
+const derived = new Map<string, Promise<Uint8Array>>();
+
+const keyFor = (secret: string): Promise<Uint8Array> => {
+  const cached = derived.get(secret);
+  if (cached !== undefined) return cached;
+
+  const deriving = (async () => {
+    const material = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      "HKDF",
+      false,
+      ["deriveBits"],
+    );
+    const bits = await crypto.subtle.deriveBits(
+      { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: KEY_INFO },
+      material,
+      256,
+    );
+    return new Uint8Array(bits);
+  })();
+
+  derived.set(secret, deriving);
+  return deriving;
+};
 
 export const jwtIssuer = (secret: string): TokenIssuer => ({
   async issue(claims: SessionClaims) {
@@ -34,14 +66,14 @@ export const jwtIssuer = (secret: string): TokenIssuer => ({
       .setIssuer(ISSUER)
       .setIssuedAt(now)
       .setExpirationTime(now + SESSION_LIFETIME_SECONDS)
-      .sign(keyFor(secret));
+      .sign(await keyFor(secret));
   },
 });
 
 export const jwtVerifier = (secret: string): TokenVerifier => ({
   async verify(token: string) {
     try {
-      const { payload } = await jwtVerify(token, keyFor(secret), {
+      const { payload } = await jwtVerify(token, await keyFor(secret), {
         algorithms: [ALGORITHM],
         issuer: ISSUER,
       });

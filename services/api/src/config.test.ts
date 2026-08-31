@@ -78,6 +78,30 @@ describe("loadConfig", () => {
     expect(config.corsOrigins).toEqual(["https://a.example", "https://b.example"]);
   });
 
+  it("falls back to the service role key when no JWT secret is provisioned", () => {
+    const config = loadConfig({
+      SUPABASE_DB_URL: "postgres://localhost/tor_now",
+      SUPABASE_SERVICE_ROLE_KEY: "s".repeat(64),
+    });
+    expect(config.jwtSecretSource).toBe("SUPABASE_SERVICE_ROLE_KEY");
+    expect(config.jwtSecret).toBe("s".repeat(64));
+  });
+
+  it("prefers an explicit JWT secret over the fallback", () => {
+    const config = loadConfig({
+      ...minimal,
+      SUPABASE_SERVICE_ROLE_KEY: "s".repeat(64),
+    });
+    expect(config.jwtSecretSource).toBe("SUPABASE_JWT_SECRET");
+    expect(config.jwtSecret).toBe(secret);
+  });
+
+  it("refuses to boot with neither a JWT secret nor a service role key", () => {
+    expect(() =>
+      loadConfig({ SUPABASE_DB_URL: "postgres://localhost/tor_now" }),
+    ).toThrow(/SUPABASE_JWT_SECRET/);
+  });
+
   it("fixes the session lifetime at thirty days, per ADR 0009", () => {
     expect(SESSION_LIFETIME_SECONDS).toBe(30 * 24 * 60 * 60);
   });

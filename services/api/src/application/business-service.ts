@@ -12,6 +12,7 @@ import {
   type ResourceId,
   type Service,
   type ServiceId,
+  type Patch,
   type WorkingHours,
 } from "@tor-now/domain";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
@@ -26,9 +27,9 @@ import { loadOwnedBusiness, loadOwnedResource, requireUser } from "./authorizati
 export type RegistrationInput = {
   readonly name: string;
   readonly phone: string;
-  readonly timeZone?: string;
-  readonly description?: string | null;
-  readonly address?: string | null;
+  readonly timeZone?: string | undefined;
+  readonly description?: string | null | undefined;
+  readonly address?: string | null | undefined;
   readonly resourceNames: readonly string[];
   readonly services: readonly {
     name: string;
@@ -108,7 +109,7 @@ export const businessService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => (
   async update(
     actor: Actor,
     businessId: BusinessId,
-    changes: Partial<{
+    changes: Patch<{
       name: string;
       phone: string;
       timeZone: string;
@@ -183,7 +184,7 @@ export const businessService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => (
     actor: Actor,
     businessId: BusinessId,
     serviceId: ServiceId,
-    changes: Partial<{
+    changes: Patch<{
       name: string;
       durationMinutes: number;
       priceMinor: number;
@@ -197,9 +198,10 @@ export const businessService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => (
       if (service === null || service.businessId !== businessId) {
         throw notFound("Service", serviceId);
       }
+      const { priceMinor, ...rest } = changes;
       return repositories.services.update(serviceId, {
-        ...changes,
-        ...(changes.priceMinor === undefined ? {} : { price: money(changes.priceMinor) }),
+        ...rest,
+        ...(priceMinor === undefined ? {} : { price: money(priceMinor) }),
       });
     });
   },
@@ -241,7 +243,7 @@ export const businessService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => (
     actor: Actor,
     businessId: BusinessId,
     resourceId: ResourceId,
-    changes: Partial<{ name: string; active: boolean }>,
+    changes: Patch<{ name: string; active: boolean }>,
   ) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       await loadOwnedBusiness(repositories, actor, businessId);

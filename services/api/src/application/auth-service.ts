@@ -6,6 +6,7 @@ import {
   unauthenticated,
   type Clock,
   type LocalDate,
+  type Patch,
   type User,
 } from "@tor-now/domain";
 import { VERIFICATION } from "../config.ts";
@@ -168,7 +169,7 @@ export const profileService = ({ unitOfWork }: ProfileDependencies) => ({
 
   async updateProfile(
     actor: Actor,
-    changes: { name?: string; birthDate?: string | null },
+    changes: Patch<{ name: string; birthDate: string | null }>,
   ): Promise<User> {
     const userId = requireUser(actor);
     const birthDate: LocalDate | null | undefined =

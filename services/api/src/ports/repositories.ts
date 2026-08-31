@@ -1,4 +1,5 @@
 import type {
+  Patch,
   Appointment,
   AppointmentId,
   Block,
@@ -43,10 +44,7 @@ export type UserRepository = {
     name: string;
     birthDate: LocalDate | null;
   }): Promise<User>;
-  update(
-    id: UserId,
-    changes: Partial<Pick<User, "name" | "birthDate">>,
-  ): Promise<User>;
+  update(id: UserId, changes: Patch<Pick<User, "name" | "birthDate">>): Promise<User>;
   /** ADR 0008: marks the row deleted and hides it; personal data is retained. */
   softDelete(id: UserId): Promise<User>;
   restore(id: UserId): Promise<User>;
@@ -72,9 +70,7 @@ export type BusinessRepository = {
   }): Promise<Business>;
   update(
     id: BusinessId,
-    changes: Partial<
-      Omit<Business, "id" | "timeZone"> & { timeZone: string }
-    >,
+    changes: Patch<Omit<Business, "id" | "timeZone"> & { timeZone: string }>,
   ): Promise<Business>;
   setActive(id: BusinessId, active: boolean): Promise<Business>;
   list(page: Page, query: string | null): Promise<readonly Business[]>;
@@ -105,7 +101,7 @@ export type ResourceRepository = {
   }): Promise<Resource>;
   update(
     id: ResourceId,
-    changes: Partial<Pick<Resource, "name" | "active">>,
+    changes: Patch<Pick<Resource, "name" | "active">>,
   ): Promise<Resource>;
   delete(id: ResourceId): Promise<void>;
 };
@@ -125,7 +121,7 @@ export type ServiceRepository = {
   }): Promise<Service>;
   update(
     id: ServiceId,
-    changes: Partial<Omit<Service, "id" | "businessId">>,
+    changes: Patch<Omit<Service, "id" | "businessId">>,
   ): Promise<Service>;
   delete(id: ServiceId): Promise<void>;
 };
@@ -220,7 +216,7 @@ export type AppointmentRepository = {
   create(draft: AppointmentDraft): Promise<Appointment>;
   update(
     id: AppointmentId,
-    changes: Partial<
+    changes: Patch<
       Pick<
         Appointment,
         | "status"
@@ -239,7 +235,7 @@ export type SubscriptionRepository = {
   findByBusiness(businessId: BusinessId): Promise<Subscription | null>;
   update(
     businessId: BusinessId,
-    changes: Partial<Omit<Subscription, "id" | "businessId">>,
+    changes: Patch<Omit<Subscription, "id" | "businessId">>,
   ): Promise<Subscription>;
   /** Every Subscription whose grace period has elapsed, for the deactivation job. */
   listLapsed(today: LocalDate): Promise<readonly Subscription[]>;

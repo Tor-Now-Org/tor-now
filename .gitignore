@@ -10,4 +10,3 @@ coverage/
 .env*.local
 .vercel/
 .DS_Store
-supabase/functions/api/index.js

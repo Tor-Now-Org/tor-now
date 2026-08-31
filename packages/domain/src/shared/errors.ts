@@ -52,3 +52,10 @@ export const unauthenticated = (message = "Authentication required"): DomainErro
 
 export const isDomainError = (error: unknown): error is DomainError =>
   error instanceof DomainError;
+
+/**
+ * A set of changes to an entity. Under `exactOptionalPropertyTypes`, an absent
+ * field and a field explicitly set to `undefined` are different types — and a
+ * parsed JSON body produces the second. This is the shape that accepts both.
+ */
+export type Patch<T> = { [K in keyof T]?: T[K] | undefined };
