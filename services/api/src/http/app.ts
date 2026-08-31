@@ -452,6 +452,20 @@ const ownerRoutes = (services: Services) => {
     return context.body(null, 204);
   });
 
+  // ADR: Billing → Scheduling is one-way; an owner reads what they owe and
+  // records nothing, which is why there is no matching write here.
+  owner.get("/:businessId/subscription", async (context) => {
+    const result = await services.business.subscription(
+      actorOf(context),
+      idParam(context, "businessId"),
+    );
+    return context.json({
+      subscription: wire.subscriptionOut(result.subscription),
+      payments: result.payments.map(wire.paymentOut),
+      state: result.state,
+    });
+  });
+
   owner.get("/:businessId/customers", async (context) => {
     const customers = await services.calendar.customers(
       actorOf(context),

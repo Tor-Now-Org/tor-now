@@ -91,7 +91,7 @@ export const compose = (
     // ADR 0001: the strategy is named here, so replacing it is a wiring change.
     availability: availabilityService({ unitOfWork, clock, strategy: greedyWalk }),
     booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
-    business: businessService({ unitOfWork }),
+    business: businessService({ unitOfWork, clock }),
     calendar: calendarService({ unitOfWork }),
     admin,
 

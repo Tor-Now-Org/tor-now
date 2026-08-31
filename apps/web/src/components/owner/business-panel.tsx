@@ -1,0 +1,318 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { api } from "@/lib/api/client.ts";
+import { isApiError } from "@/lib/api/errors.ts";
+import type {
+  BusinessDto,
+  PaymentDto,
+  ResourceDto,
+  ServiceDto,
+  SubscriptionDto,
+  SubscriptionState,
+} from "@/lib/api/types.ts";
+import { formatLocalDate, formatPrice } from "@/lib/format.ts";
+import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { useErrorText } from "@/lib/use-error-text.ts";
+import { Button, Card, Critical, Field, Note, Sheet, Spinner, Warning } from "../ui.tsx";
+
+type Panel = "services" | "resources" | "settings" | "billing";
+
+const MINOR_UNITS_PER_MAJOR = 100;
+
+/**
+ * Everything about the Business itself: what it offers, whose calendars, the
+ * rules it books by, and what it owes the platform.
+ */
+export const BusinessPanel = ({
+  token,
+  business,
+  resources,
+  onChanged,
+}: {
+  token: string;
+  business: BusinessDto;
+  resources: readonly ResourceDto[];
+  onChanged: () => void;
+}) => {
+  const copy = useCopy("owner");
+  const { language } = useLanguage();
+  const errorText = useErrorText();
+
+  const [panel, setPanel] = useState<Panel>("services");
+  const [services, setServices] = useState<ServiceDto[] | null>(null);
+  const [billing, setBilling] = useState<{
+    subscription: SubscriptionDto;
+    payments: PaymentDto[];
+    state: SubscriptionState;
+  } | null>(null);
+  const [editing, setEditing] = useState<Partial<ServiceDto> | null>(null);
+  const [newResource, setNewResource] = useState<string | null>(null);
+  const [settings, setSettings] = useState(business);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setServices(await api.listServices(token, business.id));
+      setBilling(await api.subscription(token, business.id));
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    }
+  }, [token, business.id, errorText]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const act = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      setEditing(null);
+      setNewResource(null);
+      await load();
+      onChanged();
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (services === null) return <Spinner />;
+
+  return (
+    <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {(["services", "resources", "settings", "billing"] as const).map((candidate) => (
+          <button
+            key={candidate}
+            className="chip"
+            onClick={() => setPanel(candidate)}
+            aria-pressed={panel === candidate}
+            style={{
+              background: panel === candidate ? "var(--accent-soft)" : "transparent",
+              color: panel === candidate ? "var(--accent-strong)" : "var(--muted)",
+              border: `1px solid ${panel === candidate ? "var(--accent)" : "var(--line)"}`,
+            }}
+          >
+            {candidate === "services" ? copy.services
+              : candidate === "resources" ? copy.resources
+              : candidate === "settings" ? copy.settings
+              : copy.billing}
+          </button>
+        ))}
+      </div>
+
+      {error !== null && <Critical>{error}</Critical>}
+
+      {panel === "services" && (
+        <>
+          <Note>{copy.servicesHint}</Note>
+          {services.map((service) => (
+            <Card key={service.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontWeight: 600 }}>{service.name}</span>
+                <span className="hint tab">
+                  {service.durationMinutes} {copy.minutesShort} ·{" "}
+                  {formatPrice(service.priceMinor, language, "—")}
+                  {service.bufferMinutes !== null &&
+                    ` · ${copy.buffer} ${service.bufferMinutes} ${copy.minutesShort}`}
+                </span>
+              </span>
+              <span className="hint">{service.active ? copy.shown : copy.hidden}</span>
+              <button className="chip" style={{ border: "1px solid var(--line)" }} onClick={() => setEditing(service)}>
+                {copy.editService}
+              </button>
+            </Card>
+          ))}
+          {/* Withdrawing a service never touches bookings already made — each
+              keeps the name, duration and price it was booked at. */}
+          <Note>{copy.serviceHiddenNote}</Note>
+          <Button intent="quiet" onClick={() => setEditing({ name: "", durationMinutes: 30, priceMinor: 0, bufferMinutes: null })}>
+            {copy.addService}
+          </Button>
+        </>
+      )}
+
+      {panel === "resources" && (
+        <>
+          <Note>{copy.resourceNote}</Note>
+          {resources.map((resource) => (
+            <Card key={resource.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ flex: 1, fontWeight: 500 }}>{resource.name}</span>
+              <span className="hint">{resource.active ? copy.shown : copy.hidden}</span>
+              {resources.length > 1 && (
+                <button
+                  onClick={() => act(() => api.deleteResource(token, business.id, resource.id))}
+                  style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
+                >
+                  {copy.delete}
+                </button>
+              )}
+            </Card>
+          ))}
+          <Button intent="quiet" onClick={() => setNewResource("")}>{copy.add}</Button>
+        </>
+      )}
+
+      {panel === "settings" && (
+        <>
+          <span className="label">{copy.publicDetails}</span>
+          <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Field id="s-name" label={copy.fName} hint={copy.fNameHint} value={settings.name}
+              onChange={(e) => { setSettings({ ...settings, name: e.target.value }); setSaved(false); }} />
+            <Field id="s-phone" label={copy.fPhone} hint={copy.fPhoneHint} dir="ltr" value={settings.phone}
+              onChange={(e) => { setSettings({ ...settings, phone: e.target.value }); setSaved(false); }} />
+            <Field id="s-address" label={copy.fAddress} hint={copy.fAddressHint} value={settings.address ?? ""}
+              onChange={(e) => { setSettings({ ...settings, address: e.target.value }); setSaved(false); }} />
+            <Field id="s-desc" label={copy.fDescription} hint={copy.fDescriptionHint} value={settings.description ?? ""}
+              onChange={(e) => { setSettings({ ...settings, description: e.target.value }); setSaved(false); }} />
+            <Field id="s-tz" label={copy.fTimezone} hint={copy.fTimezoneHint} value={settings.timeZone} readOnly disabled />
+          </Card>
+
+          <span className="label">{copy.bookingRules}</span>
+          <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Field id="s-buffer" label={`${copy.fBuffer} (${copy.unitMinutes})`} hint={copy.fBufferHint} type="number"
+              value={settings.defaultBufferMinutes}
+              onChange={(e) => { setSettings({ ...settings, defaultBufferMinutes: Number(e.target.value) }); setSaved(false); }} />
+            <Field id="s-cancel" label={`${copy.fCancel} (${copy.unitHours})`} hint={copy.fCancelHint} type="number"
+              value={settings.cancellationWindowHours}
+              onChange={(e) => { setSettings({ ...settings, cancellationWindowHours: Number(e.target.value) }); setSaved(false); }} />
+            {/* ADR 0012's two ends of the booking window. */}
+            <Field id="s-notice" label={`${copy.fNotice} (${copy.unitMinutes})`} hint={copy.fNoticeHint} type="number"
+              value={settings.minimumNoticeMinutes}
+              onChange={(e) => { setSettings({ ...settings, minimumNoticeMinutes: Number(e.target.value) }); setSaved(false); }} />
+            <Field id="s-horizon" label={`${copy.fHorizon} (${copy.unitDays})`} hint={copy.fHorizonHint} type="number"
+              value={settings.bookingHorizonDays}
+              onChange={(e) => { setSettings({ ...settings, bookingHorizonDays: Number(e.target.value) }); setSaved(false); }} />
+          </Card>
+
+          {/* Changing these takes effect for new availability only; ADR 0012
+              does not invalidate bookings already made outside the new window. */}
+          <Warning>{copy.settingsWarn}</Warning>
+          {saved && <p className="hint" role="status" style={{ margin: 0 }}>{copy.settingsSaved}</p>}
+          <Button
+            busy={busy}
+            onClick={() =>
+              act(async () => {
+                await api.updateBusiness(token, business.id, {
+                  name: settings.name,
+                  phone: settings.phone,
+                  address: settings.address === "" ? null : settings.address,
+                  description: settings.description === "" ? null : settings.description,
+                  defaultBufferMinutes: settings.defaultBufferMinutes,
+                  cancellationWindowHours: settings.cancellationWindowHours,
+                  minimumNoticeMinutes: settings.minimumNoticeMinutes,
+                  bookingHorizonDays: settings.bookingHorizonDays,
+                });
+                setSaved(true);
+              })
+            }
+          >
+            {copy.save}
+          </Button>
+        </>
+      )}
+
+      {panel === "billing" && billing !== null && (
+        <>
+          {billing.state === "IN_GRACE" && <Warning>{copy.billingOverdue}</Warning>}
+          <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <Row label={copy.plan} value={billing.subscription.plan} />
+            <Row label={copy.amount} value={formatPrice(billing.subscription.amountMinor, language, "—")} />
+            <Row label={copy.paidThrough} value={formatLocalDate(billing.subscription.paidThrough, language)} />
+            <Row label={copy.grace} value={billing.state} />
+          </Card>
+          <span className="label">{copy.recentPayments}</span>
+          {billing.payments.map((payment) => (
+            <Card key={payment.id} style={{ display: "flex", gap: 10 }}>
+              <span style={{ flex: 1 }}>{formatLocalDate(payment.paidOn, language)}</span>
+              <span className="tab">{formatPrice(payment.amountMinor, language, "—")}</span>
+            </Card>
+          ))}
+          {/* The platform moves no money; a Payment records something that
+              already happened elsewhere. */}
+          <Note>{copy.billingNote}</Note>
+        </>
+      )}
+
+      <Sheet open={editing !== null} onClose={() => setEditing(null)}>
+        {editing !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 style={{ fontSize: 19 }}>{editing.id === undefined ? copy.newService : copy.editService}</h2>
+            <Note>{copy.serviceFormHint}</Note>
+            <Field id="svc-name" label={copy.serviceName} placeholder={copy.serviceNamePlaceholder}
+              value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+            <Field id="svc-duration" label={copy.durationMinutes} hint={copy.durationHint} type="number"
+              value={editing.durationMinutes ?? 30}
+              onChange={(e) => setEditing({ ...editing, durationMinutes: Number(e.target.value) })} />
+            <Field id="svc-price" label={copy.price} placeholder={copy.pricePlaceholder} hint={copy.priceHint} type="number"
+              value={(editing.priceMinor ?? 0) / MINOR_UNITS_PER_MAJOR}
+              onChange={(e) => setEditing({ ...editing, priceMinor: Math.round(Number(e.target.value) * MINOR_UNITS_PER_MAJOR) })} />
+            <Field id="svc-buffer" label={copy.buffer} hint={copy.bufferHint} type="number"
+              value={editing.bufferMinutes ?? ""}
+              placeholder={copy.defaultBuffer}
+              onChange={(e) =>
+                setEditing({ ...editing, bufferMinutes: e.target.value === "" ? null : Number(e.target.value) })
+              } />
+            {(editing.name ?? "").trim() === "" && <Critical>{copy.serviceInvalid}</Critical>}
+            <Button
+              busy={busy}
+              disabled={(editing.name ?? "").trim() === ""}
+              onClick={() =>
+                act(() =>
+                  editing.id === undefined
+                    ? api.createService(token, business.id, {
+                        name: editing.name ?? "",
+                        durationMinutes: editing.durationMinutes ?? 30,
+                        priceMinor: editing.priceMinor ?? 0,
+                        bufferMinutes: editing.bufferMinutes ?? null,
+                      })
+                    : api.updateService(token, business.id, editing.id, {
+                        name: editing.name,
+                        durationMinutes: editing.durationMinutes,
+                        priceMinor: editing.priceMinor,
+                        bufferMinutes: editing.bufferMinutes ?? null,
+                      }),
+                )
+              }
+            >
+              {copy.save}
+            </Button>
+            {editing.id !== undefined && (
+              <Button intent="danger" busy={busy}
+                onClick={() => act(() => api.deleteService(token, business.id, editing.id as string))}>
+                {copy.removeService}
+              </Button>
+            )}
+          </div>
+        )}
+      </Sheet>
+
+      <Sheet open={newResource !== null} onClose={() => setNewResource(null)}>
+        {newResource !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 style={{ fontSize: 19 }}>{copy.resources}</h2>
+            <Field id="res-name" label={copy.resources} placeholder={copy.resourceNamePlaceholder}
+              value={newResource} onChange={(e) => setNewResource(e.target.value)} />
+            <Button busy={busy} disabled={newResource.trim() === ""}
+              onClick={() => act(() => api.createResource(token, business.id, newResource.trim()))}>
+              {copy.add}
+            </Button>
+          </div>
+        )}
+      </Sheet>
+    </div>
+  );
+};
+
+const Row = ({ label, value }: { label: string; value: string }) => (
+  <div style={{ display: "flex", gap: 10 }}>
+    <span className="label" style={{ flex: 1 }}>{label}</span>
+    <span style={{ fontWeight: 500, fontSize: 14.5 }}>{value}</span>
+  </div>
+);

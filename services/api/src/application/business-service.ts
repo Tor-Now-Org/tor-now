@@ -1,6 +1,8 @@
 import {
   BUSINESS_DEFAULTS,
   money,
+  subscriptionStateOn,
+  todayIn,
   notFound,
   parseLocalDate,
   parseLocalTime,
@@ -12,6 +14,7 @@ import {
   type ResourceId,
   type Service,
   type ServiceId,
+  type Clock,
   type Patch,
   type WorkingHours,
 } from "@tor-now/domain";
@@ -44,7 +47,13 @@ export type RegistrationInput = {
   }[];
 };
 
-export const businessService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => ({
+export const businessService = ({
+  unitOfWork,
+  clock,
+}: {
+  unitOfWork: UnitOfWork;
+  clock: Clock;
+}) => ({
   /**
    * Registration creates the Business, its owner Membership, at least one
    * Resource — every Business has one — and whatever the wizard collected, in a
@@ -129,6 +138,34 @@ export const businessService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => (
           ? {}
           : { timeZone: timeZone(changes.timeZone) }),
       });
+    });
+  },
+
+  /**
+   * What the Business owes the platform, for the owner's own eyes. Billing
+   * concerns the operator and the owner and never the customer, who pays the
+   * Business directly and outside the system entirely.
+   *
+   * Read-only here by design: only an administrator records a Payment or
+   * changes a plan, which is why `subscription` has no write policy for an
+   * owner and this method offers none.
+   */
+  async subscription(actor: Actor, businessId: BusinessId) {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      const business = await loadOwnedBusiness(repositories, actor, businessId);
+      const [subscription, payments] = await Promise.all([
+        repositories.subscriptions.findByBusiness(businessId),
+        repositories.payments.listForBusiness(businessId),
+      ]);
+      if (subscription === null) throw notFound("Subscription", businessId);
+      return {
+        subscription,
+        payments,
+        state: subscriptionStateOn(
+          subscription,
+          todayIn(clock.now(), business.timeZone),
+        ),
+      };
     });
   },
 

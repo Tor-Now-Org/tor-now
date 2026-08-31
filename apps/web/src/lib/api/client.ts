@@ -410,6 +410,14 @@ export const api = {
       token,
     }),
 
+  /** What the owner owes the platform. Read-only: only an administrator writes. */
+  subscription: (token: string, businessId: string) =>
+    request<{
+      subscription: SubscriptionDto;
+      payments: PaymentDto[];
+      state: SubscriptionState;
+    }>(`/businesses/${businessId}/subscription`, { token }),
+
   listCustomers: (token: string, businessId: string) =>
     request<UserDto[]>(`/businesses/${businessId}/customers`, { token }),
 
