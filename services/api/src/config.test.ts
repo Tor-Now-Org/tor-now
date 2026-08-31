@@ -21,6 +21,25 @@ describe("loadConfig", () => {
     expect(config.twilio).toBeNull();
   });
 
+  it("returns the code to the caller when no transport can deliver it", () => {
+    // Otherwise the deployment has no way to authenticate anyone at all.
+    expect(loadConfig(minimal).exposeVerificationCode).toBe(true);
+  });
+
+  it("stops returning the code as soon as a real transport is configured", () => {
+    const config = loadConfig({
+      ...minimal,
+      ...twilio,
+      VERIFICATION_TRANSPORT: "WHATSAPP",
+    });
+    expect(config.exposeVerificationCode).toBe(false);
+  });
+
+  it("can be forced off, locking a credential-less deployment out of sign-in", () => {
+    const config = loadConfig({ ...minimal, EXPOSE_VERIFICATION_CODE: "false" });
+    expect(config.exposeVerificationCode).toBe(false);
+  });
+
   it("refuses to boot without a database url", () => {
     expect(() => loadConfig({ SUPABASE_JWT_SECRET: secret })).toThrow(
       /SUPABASE_DB_URL/,
@@ -57,11 +76,6 @@ describe("loadConfig", () => {
         EXPOSE_VERIFICATION_CODE: "true",
       }),
     ).toThrow(/development only/);
-  });
-
-  it("allows exposing codes while everything is on the log transport", () => {
-    const config = loadConfig({ ...minimal, EXPOSE_VERIFICATION_CODE: "true" });
-    expect(config.exposeVerificationCode).toBe(true);
   });
 
   it("refuses an SMS notification transport with no SMS sender", () => {

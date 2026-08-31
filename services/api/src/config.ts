@@ -74,12 +74,19 @@ const schema = z.object({
     .nullable()
     .default(null),
   /**
-   * Development only. When true, the API returns the verification code in the
-   * response so a tester can sign in without a delivery channel. Refused
-   * outright when a real transport is configured, so it cannot be left on by
-   * accident in production.
+   * When true, the API returns the verification code in its own response.
+   *
+   * This is not a convenience. With `VERIFICATION_TRANSPORT=LOG` there is no
+   * delivery channel at all, so a code that is not returned is a code nobody
+   * can ever enter — the deployment would have no way to authenticate anyone.
+   * It therefore defaults to on exactly when no real transport is configured,
+   * and `assertCoherent` refuses the combination the moment one is, so
+   * configuring Twilio turns it off rather than leaving it to be noticed.
+   *
+   * `EXPOSE_VERIFICATION_CODE=false` forces it off, which locks a credential-
+   * less deployment out of its own sign-in — correct if that is what is wanted.
    */
-  exposeVerificationCode: z.boolean().default(false),
+  exposeVerificationCode: z.boolean(),
   corsOrigins: z.array(z.string()).default([]),
 });
 
@@ -97,7 +104,10 @@ const ENVIRONMENT_VARIABLE: Readonly<Record<string, string>> = Object.freeze({
   serviceRoleKey: "SUPABASE_SERVICE_ROLE_KEY",
 });
 
-const readBoolean = (value: string | undefined): boolean => value === "true";
+const readBoolean = (
+  value: string | undefined,
+  whenUnset: boolean,
+): boolean => (value === undefined ? whenUnset : value === "true");
 
 const readTwilio = (env: Environment): Config["twilio"] => {
   const accountSid = env["TWILIO_ACCOUNT_SID"];
@@ -155,7 +165,10 @@ export const loadConfig = (env: Environment): Config => {
     verificationTransport: env["VERIFICATION_TRANSPORT"],
     notificationTransport: env["NOTIFICATION_TRANSPORT"],
     twilio: readTwilio(env),
-    exposeVerificationCode: readBoolean(env["EXPOSE_VERIFICATION_CODE"]),
+    exposeVerificationCode: readBoolean(
+      env["EXPOSE_VERIFICATION_CODE"],
+      (env["VERIFICATION_TRANSPORT"] ?? "LOG") === "LOG",
+    ),
     corsOrigins: (env["CORS_ORIGINS"] ?? "")
       .split(",")
       .map((origin) => origin.trim())
