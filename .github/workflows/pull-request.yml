@@ -202,10 +202,18 @@ jobs:
 
       # ADR 0004 makes a phone number the whole credential and the service role
       # key the most dangerous thing in the project; neither belongs in git.
+      #
+      # The gitleaks CLI is used directly rather than its Action, which requires
+      # a paid licence for organisation repositories. The tool is the same.
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=8.28.0
+          curl -sSL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          # The whole history, not just the diff: a secret removed in a later
+          # commit is still a secret that was published.
+          /tmp/gitleaks detect --source . --redact --verbose --no-banner
 
       - name: Check the deployed bundle matches its sources
         run: |
