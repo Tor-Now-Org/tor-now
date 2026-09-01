@@ -53,6 +53,11 @@ export type Appointment = {
   readonly cancelledBy: CancelledBy | null;
   /** A customer cancellation made inside the Cancellation Window. */
   readonly lateCancellation: boolean;
+  /**
+   * ADR 0005: when the reminder was written to the outbox. Null means it has
+   * not been, which is the only question the reminder job asks.
+   */
+  readonly reminderEnqueuedAt: Instant | null;
   readonly createdAt: Instant;
 };
 

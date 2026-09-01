@@ -125,6 +125,7 @@ export const userOut = (user: User) => ({
   birthDate: user.birthDate,
   isAdministrator: user.isAdministrator,
   deleted: user.deletedAt !== null,
+  anonymised: user.anonymisedAt !== null,
   createdAt: formatInstant(user.createdAt),
 });
 

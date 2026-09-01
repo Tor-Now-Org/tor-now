@@ -132,6 +132,7 @@ export const anAppointment = (
     cancelledAt: null,
     cancelledBy: null,
     lateCancellation: false,
+    reminderEnqueuedAt: null,
     createdAt: instant(startAt - minute * 60 * 24),
     ...overrides,
   };

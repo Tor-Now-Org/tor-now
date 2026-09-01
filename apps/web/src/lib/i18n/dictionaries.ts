@@ -825,12 +825,52 @@ const admin = {
   },
 } as const;
 
+/**
+ * Copy for the erasure path of ADR 0008. The canvas has none, because the ADR
+ * recorded that the path did not exist yet; these follow its own words.
+ */
+const erasure = {
+  he: {
+    "title": "מחיקה מלאה של המידע",
+    "hint": "לבקשת מחיקה רשמית לפי חוק הגנת הפרטיות.",
+    "what": "מה נמחק",
+    "p1": "· השם, תאריך הלידה ומספר הטלפון נמחקים מהמערכת",
+    "p2": "· השורה נשארת, כדי שתורים, סטטיסטיקות ויומן הביקורת לא יישברו",
+    "p3": "· מספר הטלפון משתחרר וניתן להירשם איתו מחדש",
+    "irreversible": "הפעולה אינה הפיכה. אי אפשר לשחזר את המידע, וגם לא דרך ההנהלה.",
+    "reason": "סיבת המחיקה",
+    "reasonPlaceholder": "בקשת מחיקה רשמית מיום…",
+    "reasonHint": "נשמר ביומן הביקורת. הערכים שנמחקו לא נשמרים שם.",
+    "confirm": "מחיקת המידע",
+    "cancel": "ביטול",
+    "done": "המידע נמחק.",
+    "already": "המידע של המשתמש הזה כבר נמחק.",
+  },
+  en: {
+    "title": "Erase this person's data",
+    "hint": "For a formal erasure request under the Privacy Protection Law.",
+    "what": "What is erased",
+    "p1": "· Name, date of birth and phone number are removed from the system",
+    "p2": "· The row remains, so appointments, statistics and the audit trail stay whole",
+    "p3": "· The phone number is released and can register again",
+    "irreversible": "This cannot be undone. The data cannot be recovered, not even by an administrator.",
+    "reason": "Reason for the erasure",
+    "reasonPlaceholder": "Formal erasure request received on…",
+    "reasonHint": "Written to the audit trail. The erased values are not.",
+    "confirm": "Erase the data",
+    "cancel": "Cancel",
+    "done": "The data was erased.",
+    "already": "This person's data has already been erased.",
+  },
+} as const;
+
 export const DICTIONARIES = {
   customer,
   signIn,
   onboarding,
   owner,
   admin,
+  erasure,
 } as const;
 
 export type Namespace = keyof typeof DICTIONARIES;

@@ -35,6 +35,17 @@ export const PAGINATION = Object.freeze({
   maxPageSize: 100,
 });
 
+/**
+ * ADR 0005's reminders. A day's notice is what these businesses give, and the
+ * window is wider than the hour the job runs on so a missed run still catches
+ * its appointments — the enqueued stamp is what stops the overlap duplicating.
+ */
+export const REMINDERS = Object.freeze({
+  leadMinutes: 24 * 60,
+  windowMinutes: 90,
+  batchSize: 200,
+});
+
 export const OUTBOX = Object.freeze({
   batchSize: 50,
   maxAttempts: 5,

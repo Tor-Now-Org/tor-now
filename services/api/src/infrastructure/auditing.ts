@@ -258,6 +258,16 @@ export const auditedUsers = (
     await record(context, AUDIT_ACTIONS.userRestored, "User", id, null, after);
     return after;
   },
+  async anonymise(id) {
+    const after = await inner.anonymise(id);
+    // Neither `before` nor `after` carries the person's details. The trail
+    // records that an erasure happened, by whom and to which row — recording
+    // the values would keep exactly what the request asked to be removed.
+    await record(context, AUDIT_ACTIONS.userAnonymised, "User", id, null, {
+      anonymisedAt: after.anonymisedAt,
+    });
+    return after;
+  },
   async setAdministrator(id, isAdministrator) {
     const before = await inner.findById(id);
     const after = await inner.setAdministrator(id, isAdministrator);

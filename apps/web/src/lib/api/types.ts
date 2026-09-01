@@ -95,6 +95,8 @@ export type UserDto = {
   birthDate: string | null;
   isAdministrator: boolean;
   deleted: boolean;
+  /** ADR 0008: a formal erasure was answered. Not the same as deleted. */
+  anonymised: boolean;
   createdAt: string;
 };
 

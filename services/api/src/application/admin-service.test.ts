@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseLocalDate } from "@tor-now/domain";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
-import { anEstablishedBusiness } from "../infrastructure/testing/scenarios.ts";
+import { anEstablishedBusiness, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
 
 /**
  * ADR 0010's scope, and its edges. These run over the actor kind that bypasses
@@ -130,6 +130,98 @@ describe("administrator scope", () => {
     expect(after.payments).toHaveLength(1);
     expect(after.subscription.paidThrough > before.subscription.paidThrough).toBe(true);
     expect(test.store.audit.some((entry) => entry.action === "PAYMENT_RECORDED")).toBe(true);
+  });
+
+  it("erases a person's details while keeping what refers to them", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const admin = await signIn(test, "+972500000000");
+    const customer = await signIn(test, "+972500000002", "דנה כהן");
+
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    const erased = await test.services.admin.anonymiseUser(
+      admin.administrator,
+      customer.user.id,
+      "בקשת מחיקה רשמית",
+    );
+
+    // ADR 0008: name, birth date and phone go; the row stays.
+    expect(erased.name).not.toBe("דנה כהן");
+    expect(erased.phone).not.toBe("+972500000002");
+    expect(erased.birthDate).toBeNull();
+    expect(erased.anonymisedAt).not.toBeNull();
+
+    // The appointment, and the business's count of it, are untouched.
+    expect(test.store.appointments).toHaveLength(1);
+    expect(test.store.appointments[0]?.customerId).toBe(customer.user.id);
+  });
+
+  it("releases the phone number so it can be used again", async () => {
+    const admin = await signIn(test, "+972500000000");
+    const person = await signIn(test, "+972500000002", "דנה");
+
+    await test.services.admin.anonymiseUser(
+      admin.administrator,
+      person.user.id,
+      "בקשת מחיקה",
+    );
+
+    // The other consequence ADR 0008 records: the number is no longer held.
+    const again = await signIn(test, "+972500000002", "מישהו אחר");
+    expect(again.user.id).not.toBe(person.user.id);
+  });
+
+  it("records that an erasure happened without recording what it erased", async () => {
+    const admin = await signIn(test, "+972500000000");
+    const person = await signIn(test, "+972500000002", "דנה כהן");
+
+    await test.services.admin.anonymiseUser(
+      admin.administrator,
+      person.user.id,
+      "בקשת מחיקה רשמית",
+    );
+
+    const entries = test.store.audit.filter(
+      (entry) => entry.action === "USER_ANONYMISED",
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    // A trail that kept the erased values would defeat the erasure.
+    const written = JSON.stringify(entries);
+    expect(written).not.toContain("דנה כהן");
+    expect(written).not.toContain("+972500000002");
+    expect(written).toContain("בקשת מחיקה רשמית");
+  });
+
+  it("refuses an erasure with no reason, and refuses self-erasure", async () => {
+    const admin = await signIn(test, "+972500000000");
+    const person = await signIn(test, "+972500000002");
+
+    await expect(
+      test.services.admin.anonymiseUser(admin.administrator, person.user.id, "  "),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    await expect(
+      test.services.admin.anonymiseUser(admin.administrator, admin.user.id, "למה לא"),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("is not undone by restoring the account", async () => {
+    const admin = await signIn(test, "+972500000000");
+    const person = await signIn(test, "+972500000002", "דנה");
+
+    await test.services.admin.anonymiseUser(admin.administrator, person.user.id, "בקשה");
+    const restored = await test.services.admin.setUserActive(
+      admin.administrator,
+      person.user.id,
+      true,
+    );
+    expect(restored.anonymisedAt).not.toBeNull();
+    expect(restored.name).not.toBe("דנה");
   });
 
   it("deactivates a business only once the grace period has elapsed", async () => {

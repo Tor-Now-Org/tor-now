@@ -34,6 +34,7 @@ const MINOR_UNITS_PER_MAJOR = 100;
  */
 export default function AdminPage() {
   const copy = useCopy("admin");
+  const erasureCopy = useCopy("erasure");
   const router = useRouter();
   const { language } = useLanguage();
   const { token, user, loading } = useSession();
@@ -57,9 +58,17 @@ export default function AdminPage() {
     state: SubscriptionState;
   } | null>(null);
   const [editReason, setEditReason] = useState("");
+  const [edits, setEdits] = useState<{
+    name: string;
+    phone: string;
+    address: string;
+    description: string;
+  } | null>(null);
+  const [plan, setPlan] = useState<{ plan: "FREE" | "STANDARD"; amount: string; billingPeriod: "MONTHLY" | "YEARLY" } | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [openUser, setOpenUser] = useState<{ user: UserDto; appointments: AppointmentDto[] } | null>(null);
   const [newAllowed, setNewAllowed] = useState<string | null>(null);
+  const [erasing, setErasing] = useState<{ userId: string; reason: string } | null>(null);
 
   const load = useCallback(async () => {
     if (token === null) return;
@@ -93,6 +102,7 @@ export default function AdminPage() {
       setOpenBusiness(null);
       setOpenUser(null);
       setNewAllowed(null);
+      setErasing(null);
       setEditReason("");
       setPaymentAmount("");
       await load();
@@ -141,7 +151,25 @@ export default function AdminPage() {
             <button key={summary.business.id} style={{ textAlign: "start" }}
               onClick={() => {
                 setOpenBusiness(summary);
-                void api.adminSubscription(token, summary.business.id).then(setBilling).catch(() => setBilling(null));
+                setEdits({
+                  name: summary.business.name,
+                  phone: summary.business.phone,
+                  address: summary.business.address ?? "",
+                  description: summary.business.description ?? "",
+                });
+                setPlan(
+                  summary.subscription === null
+                    ? null
+                    : {
+                        plan: summary.subscription.plan,
+                        amount: String(summary.subscription.amount),
+                        billingPeriod: summary.subscription.billingPeriod,
+                      },
+                );
+                void api
+                  .adminSubscription(token, summary.business.id)
+                  .then(setBilling)
+                  .catch(() => setBilling(null));
               }}>
               <Card style={{ width: "100%", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -302,13 +330,113 @@ export default function AdminPage() {
               {copy.recordPayment}
             </Button>
 
+            <span className="label">{copy.plan}</span>
+            {plan !== null && (
+              <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {(["FREE", "STANDARD"] as const).map((candidate) => (
+                    <button
+                      key={candidate}
+                      className="chip"
+                      aria-pressed={plan.plan === candidate}
+                      onClick={() => setPlan({ ...plan, plan: candidate })}
+                      style={{
+                        flex: 1,
+                        background: plan.plan === candidate ? "var(--accent)" : "var(--raised)",
+                        color: plan.plan === candidate ? "var(--on-accent)" : "var(--ink)",
+                        border: "1px solid var(--line)",
+                      }}
+                    >
+                      {candidate}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {(["MONTHLY", "YEARLY"] as const).map((candidate) => (
+                    <button
+                      key={candidate}
+                      className="chip"
+                      aria-pressed={plan.billingPeriod === candidate}
+                      onClick={() => setPlan({ ...plan, billingPeriod: candidate })}
+                      style={{
+                        flex: 1,
+                        background: plan.billingPeriod === candidate ? "var(--accent-soft)" : "var(--raised)",
+                        color: plan.billingPeriod === candidate ? "var(--accent-strong)" : "var(--muted)",
+                        border: "1px solid var(--line)",
+                      }}
+                    >
+                      {candidate}
+                    </button>
+                  ))}
+                </div>
+                <Field
+                  id="plan-amount"
+                  label={copy.amount}
+                  type="number"
+                  value={plan.amount}
+                  onChange={(event) => setPlan({ ...plan, amount: event.target.value })}
+                />
+                <Button
+                  intent="quiet"
+                  busy={busy}
+                  onClick={() =>
+                    act(() =>
+                      api.adminUpdateSubscription(token, openBusiness.business.id, {
+                        plan: plan.plan,
+                        billingPeriod: plan.billingPeriod,
+                        amountMinor: Math.round(Number(plan.amount) * MINOR_UNITS_PER_MAJOR),
+                      }),
+                    )
+                  }
+                >
+                  {copy.save}
+                </Button>
+              </Card>
+            )}
+
             <span className="label">{copy.editOnBehalf}</span>
             <Note>{copy.editOnBehalfHint}</Note>
             {/* No impersonation: the edit is recorded against the administrator
                 who made it, with the reason they gave. */}
             <Warning>{copy.editAudited}</Warning>
-            <Field id="edit-reason" label={copy.editReason} placeholder={copy.editReasonPlaceholder}
-              hint={copy.editReasonHint} value={editReason} onChange={(e) => setEditReason(e.target.value)} />
+            {edits !== null && (
+              <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <Field id="edit-name" label={copy.fName} value={edits.name}
+                  onChange={(event) => setEdits({ ...edits, name: event.target.value })} />
+                <Field id="edit-phone" label={copy.fPhone} dir="ltr" value={edits.phone}
+                  onChange={(event) => setEdits({ ...edits, phone: event.target.value })} />
+                <Field id="edit-address" label={copy.fAddress} value={edits.address}
+                  onChange={(event) => setEdits({ ...edits, address: event.target.value })} />
+                <Field id="edit-description" label={copy.fDescription} value={edits.description}
+                  onChange={(event) => setEdits({ ...edits, description: event.target.value })} />
+                <Field id="edit-reason" label={copy.editReason} placeholder={copy.editReasonPlaceholder}
+                  hint={copy.editReasonHint} value={editReason}
+                  onChange={(event) => setEditReason(event.target.value)} />
+                <Button
+                  busy={busy}
+                  // The reason is not optional: it is what the trail records
+                  // alongside the change, and what makes the edit answerable.
+                  disabled={editReason.trim().length < 3}
+                  onClick={() =>
+                    act(() =>
+                      api.adminUpdateBusiness(
+                        token,
+                        openBusiness.business.id,
+                        {
+                          name: edits.name,
+                          phone: edits.phone,
+                          address: edits.address === "" ? null : edits.address,
+                          description: edits.description === "" ? null : edits.description,
+                        },
+                        editReason.trim(),
+                      ),
+                    )
+                  }
+                >
+                  {copy.save}
+                </Button>
+              </Card>
+            )}
 
             <Note>{copy.deactivateNote}</Note>
             <Button
@@ -345,6 +473,59 @@ export default function AdminPage() {
             <Button intent="quiet" busy={busy}
               onClick={() => act(() => api.adminSetAdministrator(token, openUser.user.id, !openUser.user.isAdministrator))}>
               {openUser.user.isAdministrator ? copy.revoke : copy.grant}
+            </Button>
+
+            {/* ADR 0008's erasure sits below a rule, apart from the reversible
+                actions above it, because it is not one of them. */}
+            <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+              <span className="label">{erasureCopy.title}</span>
+              <span className="hint">{erasureCopy.hint}</span>
+              {openUser.user.anonymised ? (
+                <Note>{erasureCopy.already}</Note>
+              ) : (
+                <Button
+                  intent="danger"
+                  onClick={() => setErasing({ userId: openUser.user.id, reason: "" })}
+                >
+                  {erasureCopy.title}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Sheet>
+
+      <Sheet open={erasing !== null} onClose={() => setErasing(null)}>
+        {erasing !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 style={{ fontSize: 20 }}>{erasureCopy.title}</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span className="label">{erasureCopy.what}</span>
+              <span className="hint">{erasureCopy.p1}</span>
+              <span className="hint">{erasureCopy.p2}</span>
+              <span className="hint">{erasureCopy.p3}</span>
+            </div>
+            <Critical>{erasureCopy.irreversible}</Critical>
+            <Field
+              id="erase-reason"
+              label={erasureCopy.reason}
+              placeholder={erasureCopy.reasonPlaceholder}
+              hint={erasureCopy.reasonHint}
+              value={erasing.reason}
+              onChange={(event) => setErasing({ ...erasing, reason: event.target.value })}
+            />
+            <Button
+              intent="danger"
+              busy={busy}
+              disabled={erasing.reason.trim().length < 3}
+              onClick={() =>
+                act(() => api.adminAnonymiseUser(token, erasing.userId, erasing.reason.trim()))
+              }
+            >
+              {erasureCopy.confirm}
+            </Button>
+            <Button intent="quiet" onClick={() => setErasing(null)}>
+              {erasureCopy.cancel}
             </Button>
           </div>
         )}

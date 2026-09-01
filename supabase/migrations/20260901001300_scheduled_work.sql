@@ -99,4 +99,9 @@ begin
   perform cron.schedule(
     'deactivate-lapsed-businesses', '0 4 * * *',
     $job$select app.run_scheduled_job('billing-deactivation')$job$);
+  -- ADR 0005's reminders, hourly against a wider window so a skipped run still
+  -- catches its appointments; the enqueued stamp stops the overlap duplicating.
+  perform cron.schedule(
+    'send-appointment-reminders', '15 * * * *',
+    $job$select app.run_scheduled_job('reminders')$job$);
 end $$;

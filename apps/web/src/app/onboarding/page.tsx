@@ -36,7 +36,24 @@ type DraftService = {
   bufferMinutes: number | null;
 };
 
-type DayHours = { open: boolean; start: string; end: string };
+type DayHours = {
+  open: boolean;
+  start: string;
+  end: string;
+  /** A break splits the day into two ranges; ADR 0002 has no break entity. */
+  breakFrom?: string;
+  breakTo?: string;
+};
+
+/** What the bulk editor is currently set to apply. */
+type BulkHours = {
+  days: number[];
+  start: string;
+  end: string;
+  withBreak: boolean;
+  breakFrom: string;
+  breakTo: string;
+};
 
 export default function OnboardingPage() {
   const copy = useCopy("onboarding");
@@ -58,6 +75,14 @@ export default function OnboardingPage() {
       ...DEFAULT_OPENING,
     })),
   );
+  const [bulk, setBulk] = useState<BulkHours>({
+    days: [...DEFAULT_OPEN_DAYS],
+    start: DEFAULT_OPENING.start,
+    end: DEFAULT_OPENING.end,
+    withBreak: false,
+    breakFrom: "13:00",
+    breakTo: "16:00",
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
@@ -116,9 +141,7 @@ export default function OnboardingPage() {
         services: services
           .filter((service) => service.name.trim().length > 0)
           .map((service) => ({ ...service, name: service.name.trim() })),
-        workingHours: hours.flatMap((day, dayOfWeek) =>
-          day.open ? [{ dayOfWeek, start: day.start, end: day.end }] : [],
-        ),
+        workingHours: hours.flatMap((day, dayOfWeek) => rangesFor(day, dayOfWeek)),
       });
       setLive(business.id);
     } catch (cause) {
@@ -262,6 +285,97 @@ export default function OnboardingPage() {
         {step === "hours" && (
           <>
             <StepHeading title={copy.hoursTitle} body={copy.hoursBody} />
+
+            {/* Most businesses keep the same hours most days, so the wizard
+                offers that first and lets any one day diverge below. */}
+            <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <span className="label">{copy.sameForAll}</span>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <span className="hint">{copy.whichDays}</span>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {copy.dayShort.map((short, dayOfWeek) => {
+                    const chosen = bulk.days.includes(dayOfWeek);
+                    return (
+                      <button
+                        key={dayOfWeek}
+                        className="chip"
+                        aria-pressed={chosen}
+                        aria-label={copy.days[dayOfWeek]}
+                        onClick={() =>
+                          setBulk({
+                            ...bulk,
+                            days: chosen
+                              ? bulk.days.filter((day) => day !== dayOfWeek)
+                              : [...bulk.days, dayOfWeek],
+                          })
+                        }
+                        style={{
+                          minWidth: 44,
+                          padding: "0 10px",
+                          background: chosen ? "var(--accent)" : "var(--raised)",
+                          color: chosen ? "var(--on-accent)" : "var(--ink)",
+                          border: `1px solid ${chosen ? "var(--accent)" : "var(--line)"}`,
+                        }}
+                      >
+                        {short}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <Field id="bulk-from" label={copy.from} type="time" value={bulk.start}
+                  onChange={(event) => setBulk({ ...bulk, start: event.target.value })} />
+                <Field id="bulk-to" label={copy.to} type="time" value={bulk.end}
+                  onChange={(event) => setBulk({ ...bulk, end: event.target.value })} />
+              </div>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={bulk.withBreak}
+                  onChange={(event) => setBulk({ ...bulk, withBreak: event.target.checked })}
+                />
+                <span style={{ fontSize: 14.5 }}>{copy.withBreak}</span>
+              </label>
+
+              {bulk.withBreak && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <Field id="break-from" label={copy.breakFrom} type="time" value={bulk.breakFrom}
+                    onChange={(event) => setBulk({ ...bulk, breakFrom: event.target.value })} />
+                  <Field id="break-to" label={copy.breakTo} type="time" value={bulk.breakTo}
+                    onChange={(event) => setBulk({ ...bulk, breakTo: event.target.value })} />
+                </div>
+              )}
+
+              <Button
+                intent="quiet"
+                disabled={bulk.days.length === 0 || bulk.end <= bulk.start}
+                onClick={() =>
+                  setHours(
+                    hours.map((day, dayOfWeek) =>
+                      bulk.days.includes(dayOfWeek)
+                        ? {
+                            open: true,
+                            start: bulk.start,
+                            end: bulk.end,
+                            ...(bulk.withBreak
+                              ? { breakFrom: bulk.breakFrom, breakTo: bulk.breakTo }
+                              : {}),
+                          }
+                        : day,
+                    ),
+                  )
+                }
+              >
+                {copy.applyToAll}
+              </Button>
+
+              <Note>{copy.perDayNote}</Note>
+            </Card>
+
             {hours.map((day, dayOfWeek) => (
               <Card key={dayOfWeek} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -275,6 +389,11 @@ export default function OnboardingPage() {
                   <span style={{ flex: 1, fontWeight: 500 }}>{copy.days[dayOfWeek]}</span>
                   <span className="hint">{day.open ? copy.open : copy.closed}</span>
                 </label>
+                {day.open && day.breakFrom !== undefined && (
+                  <span className="hint">
+                    {copy.withBreak}: {day.breakFrom}–{day.breakTo}
+                  </span>
+                )}
                 {day.open && (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     <Field
@@ -318,6 +437,31 @@ export default function OnboardingPage() {
     </>
   );
 }
+
+/**
+ * ADR 0002: the gap between two ranges on a day is the break. A day with a
+ * break is therefore two ranges, and nothing else in the system needs to know
+ * that a break was what the owner had in mind.
+ */
+const rangesFor = (
+  day: DayHours,
+  dayOfWeek: number,
+): { dayOfWeek: number; start: string; end: string }[] => {
+  if (!day.open) return [];
+  if (
+    day.breakFrom === undefined ||
+    day.breakTo === undefined ||
+    day.breakFrom <= day.start ||
+    day.breakTo >= day.end ||
+    day.breakTo <= day.breakFrom
+  ) {
+    return [{ dayOfWeek, start: day.start, end: day.end }];
+  }
+  return [
+    { dayOfWeek, start: day.start, end: day.breakFrom },
+    { dayOfWeek, start: day.breakTo, end: day.end },
+  ];
+};
 
 const StepHeading = ({ title, body }: { title: string; body: string }) => (
   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

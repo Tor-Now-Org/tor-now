@@ -28,7 +28,13 @@ export type BookingRequest = {
  */
 export type AppointmentDraft = Omit<
   Appointment,
-  "id" | "cancelledAt" | "cancelledBy" | "lateCancellation" | "createdAt"
+  | "id"
+  | "cancelledAt"
+  | "cancelledBy"
+  | "lateCancellation"
+  // Set by the reminder job, never by whoever is making the booking.
+  | "reminderEnqueuedAt"
+  | "createdAt"
 >;
 
 export type BookingContext = Omit<
@@ -106,7 +112,15 @@ export const validateBooking = (
 
   const draft = draftAppointment(request);
   const window = bookingWindowFor(business, now);
-  if (!isWithinBookingWindow(window, startAt, draft.endAt)) {
+  if (
+    !isWithinBookingWindow(
+      window,
+      startAt,
+      draft.endAt,
+      now,
+      business.minimumNoticeMinutes,
+    )
+  ) {
     throw new DomainError(
       "OUTSIDE_BOOKING_WINDOW",
       "That time is outside the period this business accepts bookings for",

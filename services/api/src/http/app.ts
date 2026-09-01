@@ -634,6 +634,22 @@ const adminRoutes = (services: Services) => {
     );
   });
 
+  // ADR 0008. A DELETE rather than a PATCH, because it removes rather than
+  // toggles — and it demands an explicit confirmation in the body, since no
+  // amount of undo will bring the data back.
+  admin.delete("/users/:userId", async (context) => {
+    const { reason } = await parseBody(context, schema.erasureSchema);
+    return context.json(
+      wire.userOut(
+        await services.admin.anonymiseUser(
+          actorOf(context),
+          idParam(context, "userId"),
+          reason,
+        ),
+      ),
+    );
+  });
+
   admin.get("/administrators", async (context) => {
     const list = await services.admin.listAdministrators(actorOf(context));
     return context.json(list.map(wire.userOut));
@@ -693,6 +709,10 @@ const jobRoutes = (services: Services) => {
 
   jobs.post("/outbox", async (context) =>
     context.json(await services.outboxWorker.drain()),
+  );
+
+  jobs.post("/reminders", async (context) =>
+    context.json(await services.reminders.send()),
   );
 
   jobs.post("/audit-retention", async (context) =>

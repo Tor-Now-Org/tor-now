@@ -70,6 +70,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           name,
           birthDate,
           deletedAt: null,
+          anonymisedAt: null,
           isAdministrator: false,
           createdAt: now(),
         };
@@ -90,6 +91,20 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       async restore(id) {
         return replaceUser({ ...requireUser(id), deletedAt: null });
       },
+      async anonymise(id) {
+        const user = requireUser(id);
+        if (user.anonymisedAt !== null) return user;
+        return replaceUser({
+          ...user,
+          phone: `anonymised:${nextId("erased")}`,
+          name: "משתמש שהוסר",
+          birthDate: null,
+          deletedAt: user.deletedAt ?? now(),
+          anonymisedAt: now(),
+          isAdministrator: false,
+        });
+      },
+
       async setAdministrator(id, isAdministrator) {
         return replaceUser({ ...requireUser(id), isAdministrator });
       },
@@ -505,6 +520,44 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             appointment.businessId === businessId,
         );
       },
+      async dueForReminder(from, to, limit) {
+        return store.appointments
+          .filter(
+            (appointment) =>
+              isActive(appointment) &&
+              appointment.reminderEnqueuedAt === null &&
+              appointment.startAt >= from &&
+              appointment.startAt < to,
+          )
+          .sort((left, right) => left.startAt - right.startAt)
+          .slice(0, limit)
+          .map((appointment) => {
+            const customer = store.users.find(
+              (user) => user.id === appointment.customerId,
+            );
+            const business = store.businesses.find(
+              (candidate) => candidate.id === appointment.businessId,
+            );
+            return {
+              appointment,
+              customerName: customer?.name ?? "",
+              customerPhone: customer?.phone ?? "",
+              businessName: business?.name ?? "",
+              businessPhone: business?.phone ?? "",
+              businessTimeZone: business?.timeZone ?? "UTC",
+            };
+          });
+      },
+
+      async markReminderEnqueued(ids) {
+        const stamped = new Set<string>(ids);
+        store.appointments = store.appointments.map((appointment) =>
+          stamped.has(appointment.id)
+            ? { ...appointment, reminderEnqueuedAt: now() }
+            : appointment,
+        );
+      },
+
       /** ADR 0003's constraint, enforced here so both implementations agree. */
       async create(draft) {
         assertNoOverlap(store, draft.resourceId, draft.startAt, draft.occupiedUntil, null);
@@ -514,6 +567,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           cancelledAt: null,
           cancelledBy: null,
           lateCancellation: false,
+          reminderEnqueuedAt: null,
           createdAt: now(),
         };
         store.appointments = [...store.appointments, appointment];

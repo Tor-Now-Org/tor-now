@@ -63,6 +63,7 @@ export const toUser = (row: Row): User => ({
   name: text(row["name"]),
   birthDate: nullableLocalDate(row["birth_date"]),
   deletedAt: nullableInstant(row["deleted_at"]),
+  anonymisedAt: nullableInstant(row["anonymised_at"]),
   isAdministrator: bool(row["is_administrator"]),
   createdAt: toInstant(row["created_at"]),
 });
@@ -160,6 +161,7 @@ export const toAppointment = (row: Row): Appointment => ({
   cancelledAt: nullableInstant(row["cancelled_at"]),
   cancelledBy: (nullableText(row["cancelled_by"]) as Appointment["cancelledBy"]),
   lateCancellation: bool(row["late_cancellation"]),
+  reminderEnqueuedAt: nullableInstant(row["reminder_enqueued_at"]),
   createdAt: toInstant(row["created_at"]),
 });
 

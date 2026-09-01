@@ -50,6 +50,12 @@ export type UserRepository = {
   /** ADR 0008: marks the row deleted and hides it; personal data is retained. */
   softDelete(id: UserId): Promise<User>;
   restore(id: UserId): Promise<User>;
+  /**
+   * ADR 0008: answers a formal erasure request. Clears everything identifying
+   * and keeps the row, so nothing that refers to it is orphaned. Irreversible,
+   * and never undone by `restore`.
+   */
+  anonymise(id: UserId): Promise<User>;
   setAdministrator(id: UserId, isAdministrator: boolean): Promise<User>;
   list(page: Page, query: string | null): Promise<readonly User[]>;
 };
@@ -193,8 +199,24 @@ export type BlockRepository = {
 
 export type AppointmentDraft = Omit<
   Appointment,
-  "id" | "cancelledAt" | "cancelledBy" | "lateCancellation" | "createdAt"
+  | "id"
+  | "cancelledAt"
+  | "cancelledBy"
+  | "lateCancellation"
+  // Set by the reminder job, never by whoever is making the booking.
+  | "reminderEnqueuedAt"
+  | "createdAt"
 >;
+
+/** An appointment and everyone a reminder about it needs to name. */
+export type AppointmentToRemind = {
+  readonly appointment: Appointment;
+  readonly customerName: string;
+  readonly customerPhone: string;
+  readonly businessName: string;
+  readonly businessPhone: string;
+  readonly businessTimeZone: string;
+};
 
 export type AppointmentRepository = {
   findById(id: AppointmentId): Promise<Appointment | null>;
@@ -227,6 +249,18 @@ export type AppointmentRepository = {
     customerId: UserId,
     businessId: BusinessId,
   ): Promise<readonly Appointment[]>;
+  /**
+   * Confirmed appointments starting inside the window that have not had a
+   * reminder written yet (ADR 0005). Returned with the customer attached,
+   * because a reminder is addressed to a person.
+   */
+  dueForReminder(
+    from: Instant,
+    to: Instant,
+    limit: number,
+  ): Promise<readonly AppointmentToRemind[]>;
+  /** Stamped in the same transaction as the outbox row, so it happens once. */
+  markReminderEnqueued(ids: readonly AppointmentId[]): Promise<void>;
   /**
    * Throws a `SLOT_TAKEN` DomainError when ADR 0003's exclusion constraint
    * refuses the insert. Translating it here means no caller has to know that

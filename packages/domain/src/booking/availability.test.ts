@@ -24,6 +24,9 @@ const times = (result: { slots: readonly { startAt: number }[] }) =>
     formatLocalTime(instantToZoned(slot.startAt as never, JERUSALEM).time),
   );
 
+const aBusinessWithMinimumNotice = (minutes: number) =>
+  aBusiness({ minimumNoticeMinutes: minutes });
+
 const request = (overrides: Partial<Parameters<typeof availableSlotsOn>[0]> = {}) => ({
   business: aBusiness(),
   resource: aResource(),
@@ -203,8 +206,10 @@ describe("availableSlotsOn — the booking window", () => {
         now: at(TUESDAY, "09:15"),
       }),
     );
-    // 09:15 + 60 minutes of notice = 10:15, the first offerable start.
-    expect(times(result)).toEqual(["10:15"]);
+    // 09:15 + 60 minutes of notice = 10:15, rounded up to the next offer
+    // boundary. 10:15 itself is unbookable: confirming it takes time, and by
+    // then it is inside the hour's notice the business asked for.
+    expect(times(result)).toEqual(["10:20"]);
   });
 
   it("reports TOO_SOON when notice consumes the rest of the day", () => {
@@ -236,7 +241,27 @@ describe("availableSlotsOn — the booking window", () => {
         now: at(TUESDAY, "08:00"),
       }),
     );
-    expect(times(result)[0]).toBe("09:00");
+    // Opening time is 09:00 and notice expires at 09:00 exactly, so the first
+    // offer is the boundary after it. Same-day booking still works, which is
+    // what this is about.
+    expect(times(result)[0]).toBe("09:05");
+  });
+
+  it("never offers a start that the notice would refuse a moment later", async () => {
+    // The failure this guards against is quiet and constant: a first slot on
+    // the notice boundary is drawn, read, chosen and then refused, because
+    // `now` moved while the customer was deciding.
+    const now = at(TUESDAY, "08:03");
+    const result = availableSlotsOn(
+      request({
+        workingHours: [workingHours(2, "06:00", "20:00")],
+        business: aBusinessWithMinimumNotice(60),
+        now,
+      }),
+    );
+    const first = result.slots[0];
+    expect(first).toBeDefined();
+    expect(first!.startAt - now).toBeGreaterThan(60 * 60 * 1000);
   });
 });
 

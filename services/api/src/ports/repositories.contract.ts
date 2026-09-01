@@ -129,6 +129,39 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("erases everything identifying and keeps the row", async () => {
+      await withRepositories(async (repositories) => {
+        const created = await repositories.users.create({
+          phone: "+972500001114",
+          name: "דנה כהן",
+          birthDate: parseLocalDate("1990-01-01"),
+        });
+
+        const erased = await repositories.users.anonymise(created.id);
+
+        expect(erased.name).not.toBe("דנה כהן");
+        expect(erased.phone).not.toBe("+972500001114");
+        expect(erased.birthDate).toBeNull();
+        expect(erased.anonymisedAt).not.toBeNull();
+        // The number is released, so it can register again.
+        expect(await repositories.users.findByPhone("+972500001114")).toBeNull();
+      });
+    });
+
+    it("erases only once, however many times it is asked", async () => {
+      await withRepositories(async (repositories) => {
+        const created = await repositories.users.create({
+          phone: "+972500001115",
+          name: "דנה",
+          birthDate: null,
+        });
+        const first = await repositories.users.anonymise(created.id);
+        const second = await repositories.users.anonymise(created.id);
+        expect(second.phone).toBe(first.phone);
+        expect(second.anonymisedAt).toEqual(first.anonymisedAt);
+      });
+    });
+
     it("updates only the fields it is given", async () => {
       await withRepositories(async (repositories) => {
         const created = await repositories.users.create({

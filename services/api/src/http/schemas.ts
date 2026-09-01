@@ -175,6 +175,12 @@ export const adminBusinessUpdateSchema = updateBusinessSchema.extend({
   reason: z.string().trim().min(3).max(200),
 });
 
+/** ADR 0008: an erasure records why it was carried out, and cannot be undone. */
+export const erasureSchema = z.object({
+  reason: z.string().trim().min(3).max(200),
+  confirm: z.literal(true),
+});
+
 export const allowlistSchema = z.object({
   phone: phoneSchema,
   note: z.string().trim().max(200).nullable().default(null),

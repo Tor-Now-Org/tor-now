@@ -518,6 +518,17 @@ export const api = {
       token,
     }),
 
+  /**
+   * ADR 0008's erasure. Irreversible, so it takes an explicit confirmation and
+   * a reason that is written to the audit trail.
+   */
+  adminAnonymiseUser: (token: string, userId: string, reason: string) =>
+    request<UserDto>(`/admin/users/${userId}`, {
+      method: "DELETE",
+      body: { reason, confirm: true },
+      token,
+    }),
+
   adminAdministrators: (token: string) =>
     request<UserDto[]>("/admin/administrators", { token }),
 

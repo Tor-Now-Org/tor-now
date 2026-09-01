@@ -8,6 +8,7 @@ import { businessService } from "./application/business-service.ts";
 import { calendarService } from "./application/calendar-service.ts";
 import { discoveryService } from "./application/discovery-service.ts";
 import { outboxWorker } from "./application/outbox-worker.ts";
+import { reminderService } from "./application/reminder-service.ts";
 import { pruneAuditLog } from "./application/retention-service.ts";
 import { createPool, type Sql } from "./infrastructure/pg/client.ts";
 import { postgresUnitOfWork } from "./infrastructure/pg/unit-of-work.ts";
@@ -98,6 +99,7 @@ export const compose = (
     admin,
 
     outboxWorker: outboxWorker({ unitOfWork, notifier }),
+    reminders: reminderService({ unitOfWork, clock }),
     pruneAuditLog: () => pruneAuditLog(sql),
     deactivateLapsedBusinesses: () => admin.deactivateLapsedBusinesses(system()),
   };

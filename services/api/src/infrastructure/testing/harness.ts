@@ -13,6 +13,7 @@ import { businessService } from "../../application/business-service.ts";
 import { calendarService } from "../../application/calendar-service.ts";
 import { discoveryService } from "../../application/discovery-service.ts";
 import { outboxWorker } from "../../application/outbox-worker.ts";
+import { reminderService } from "../../application/reminder-service.ts";
 import type { AuditLogEntry, AuditReader, AuditSink } from "../../ports/audit.ts";
 import type { Notifier, Outbox } from "../../ports/notifier.ts";
 import type { TokenIssuer, TokenVerifier } from "../../ports/tokens.ts";
@@ -230,6 +231,7 @@ export const harness = (options: { now?: Instant } = {}) => {
       calendar: calendarService({ unitOfWork }),
       admin,
       outboxWorker: outboxWorker({ unitOfWork, notifier }),
+      reminders: reminderService({ unitOfWork, clock }),
     },
   };
 };

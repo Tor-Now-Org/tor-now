@@ -4,6 +4,7 @@ import {
   money,
   notFound,
   parseLocalDate,
+  validationFailed,
   shouldDeactivate,
   subscriptionStateOn,
   todayIn,
@@ -185,6 +186,40 @@ export const adminService = (dependencies: {
           { limit: PAGINATION.maxPageSize, offset: 0 },
         );
         return { user, memberships, appointments };
+      });
+    },
+
+    /**
+     * ADR 0008's erasure path, answering a formal request under Israel's
+     * Privacy Protection Law. Distinct from deactivation: that hides a person
+     * and can be undone, this removes them and cannot.
+     *
+     * An administrator action because a formal request reaches the operator,
+     * not a screen — and because it is irreversible, which is not something to
+     * put behind a button a customer can press by accident.
+     */
+    async anonymiseUser(actor: Actor, userId: UserId, reason: string): Promise<User> {
+      const administratorId = requireAdministrator(actor);
+      if (administratorId === userId) {
+        throw forbidden("An administrator cannot erase their own account");
+      }
+      if (reason.trim().length < 3) {
+        throw validationFailed("An erasure has to record why it was carried out");
+      }
+
+      return unitOfWork.run(actor, async (session) => {
+        const erased = await session.repositories.users.anonymise(userId);
+        await session.audit.append({
+          actorId: administratorId,
+          action: AUDIT_ACTIONS.userAnonymised,
+          entityType: "User",
+          entityId: userId,
+          before: null,
+          // The reason, not the data: what was removed is precisely what must
+          // not be kept here.
+          after: { reason: reason.trim() },
+        });
+        return erased;
       });
     },
 

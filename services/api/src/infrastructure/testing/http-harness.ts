@@ -33,7 +33,7 @@ export const httpHarness = () => {
     config: testConfig,
     tokens: test.tokens,
     jobCredential: { async read() { return JOB_SECRET; } },
-    pruneAuditLog: async () => 0,
+    pruneAuditLog: () => Promise.resolve(0),
     deactivateLapsedBusinesses: () =>
       test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" }),
   }));

@@ -69,6 +69,14 @@ export const userRepository = (tx: Transaction): UserRepository => ({
     return one(rows, toUser, "User");
   },
 
+  async anonymise(id) {
+    // The clearing itself lives in app.anonymise_user, so the exact set of
+    // fields erased is stated once, next to the constraints that permit it.
+    await tx`select app.anonymise_user(${id})`;
+    const rows = await tx<Row[]>`select * from app_user where id = ${id}`;
+    return one(rows, toUser, "User");
+  },
+
   async setAdministrator(id, isAdministrator) {
     const rows = await tx<Row[]>`
       update app_user set is_administrator = ${isAdministrator}

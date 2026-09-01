@@ -66,6 +66,47 @@ export const appointmentRepository = (
   },
 
   /**
+   * One query rather than one per appointment: a reminder names the customer
+   * and the business, and the job may be handling a hundred of them.
+   *
+   * `for update skip locked` means two workers can drain this together without
+   * both claiming the same appointment — the same device the outbox uses.
+   */
+  async dueForReminder(from, to, limit) {
+    const rows = await tx<Row[]>`
+      select a.*,
+             c.name  as customer_name,  c.phone as customer_phone,
+             b.name  as business_name,  b.phone as business_phone,
+             b.time_zone as business_time_zone
+      from appointment a
+      join app_user c on c.id = a.customer_id
+      join business  b on b.id = a.business_id
+      where a.status = 'CONFIRMED'
+        and a.reminder_enqueued_at is null
+        and a.start_at >= ${asDate(from)}
+        and a.start_at < ${asDate(to)}
+      order by a.start_at
+      limit ${limit}
+      for update of a skip locked`;
+
+    return rows.map((row) => ({
+      appointment: toAppointment(row),
+      customerName: String(row["customer_name"]),
+      customerPhone: String(row["customer_phone"]),
+      businessName: String(row["business_name"]),
+      businessPhone: String(row["business_phone"]),
+      businessTimeZone: String(row["business_time_zone"]),
+    }));
+  },
+
+  async markReminderEnqueued(ids) {
+    if (ids.length === 0) return;
+    await tx`
+      update appointment set reminder_enqueued_at = now()
+      where id in ${tx([...ids])}`;
+  },
+
+  /**
    * ADR 0003: the application attempts the insert and translates a constraint
    * violation, rather than checking first. A check-then-insert would be wrong
    * at READ COMMITTED — two transactions can both see no conflict, because the

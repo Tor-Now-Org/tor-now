@@ -7,11 +7,19 @@ import type { Instant } from "@tor-now/domain";
  * caused them, and drained by a worker.
  */
 
-/** The three approved templates. Reminders wait for a scheduler. */
+/**
+ * The approved templates. ADR 0005 named three and deferred reminders "until a
+ * scheduler exists"; one exists now, and the fourth is that reminder.
+ *
+ * The set stays closed on purpose: Meta bills per delivered template message
+ * and approves each one, so adding a fifth is a conversation with Meta rather
+ * than a line of code.
+ */
 export const TEMPLATES = {
   bookingConfirmed: "BOOKING_CONFIRMED",
   bookingCancelled: "BOOKING_CANCELLED",
   bookingRescheduled: "BOOKING_RESCHEDULED",
+  bookingReminder: "BOOKING_REMINDER",
 } as const;
 
 export type Template = (typeof TEMPLATES)[keyof typeof TEMPLATES];

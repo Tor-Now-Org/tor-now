@@ -44,6 +44,12 @@ export const AUDIT_ACTIONS = {
   userUpdated: "USER_UPDATED",
   userDeleted: "USER_DELETED",
   userRestored: "USER_RESTORED",
+  /**
+   * ADR 0008's erasure. The entry records that it happened and to which row;
+   * it deliberately carries none of the values removed, because a trail that
+   * retained them would defeat the request it is recording.
+   */
+  userAnonymised: "USER_ANONYMISED",
   administratorGranted: "ADMINISTRATOR_GRANTED",
   administratorRevoked: "ADMINISTRATOR_REVOKED",
   allowlistChanged: "ADMINISTRATOR_ALLOWLIST_CHANGED",

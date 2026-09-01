@@ -14,6 +14,12 @@ export type User = {
   readonly birthDate: LocalDate | null;
   /** ADR 0008: deletion hides the row rather than removing it. */
   readonly deletedAt: Instant | null;
+  /**
+   * ADR 0008's erasure path. Deletion hides a person; anonymisation removes
+   * them, keeping the row so appointments, statistics and the audit trail stay
+   * whole. It cannot be undone, which is the point.
+   */
+  readonly anonymisedAt: Instant | null;
   /** ADR 0010: set only by another administrator, and audited. */
   readonly isAdministrator: boolean;
   readonly createdAt: Instant;
@@ -21,6 +27,9 @@ export type User = {
 
 export const isDeleted = (user: Pick<User, "deletedAt">): boolean =>
   user.deletedAt !== null;
+
+export const isAnonymised = (user: Pick<User, "anonymisedAt">): boolean =>
+  user.anonymisedAt !== null;
 
 /**
  * The relationship between one User and one Business, carrying the role held
