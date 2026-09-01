@@ -11,6 +11,19 @@ import { Button, Critical, Field, Note } from "./ui.tsx";
  * the same flow — an unrecognised number becomes a new User, a recognised one
  * is signed in — which is why this panel appears inline inside the booking flow
  * rather than redirecting anywhere.
+ *
+ * Being one flow is exactly what makes the name awkward. A returning customer
+ * has a name already and must not be asked for it again, but "is this number
+ * already someone" cannot be asked before the code is checked without turning
+ * the endpoint into an oracle: anyone could type a number and learn from the
+ * answer whether that person has an account here, and each guess would send
+ * them a message. So the code is checked first, and the name is asked
+ * afterwards and only of someone the API says is new.
+ *
+ * The cost of that order is one extra request for a genuinely new customer, and
+ * a moment where their account exists under the API's own placeholder. That is
+ * the same state as someone who declines to give a name at all, which the
+ * system already allows and the profile screen already fixes.
  */
 export type VerifyLabels = {
   title: string;
@@ -23,9 +36,8 @@ export type VerifyLabels = {
   nameTitle: string;
   nameBody: string;
   firstName: string;
-  firstPlaceholder: string;
   lastName: string;
-  lastPlaceholder: string;
+  saveName: string;
 };
 
 /** The API returns the code only on a deployment with no delivery channel. */
@@ -45,7 +57,9 @@ export const VerifyPanel = ({
   const [code, setCode] = useState("");
   const [givenName, setGivenName] = useState("");
   const [familyName, setFamilyName] = useState("");
-  const [stage, setStage] = useState<"phone" | "code">("phone");
+  const [stage, setStage] = useState<"phone" | "code" | "name">("phone");
+  /** Held between verifying and naming; the session is real from here on. */
+  const [session, setSession] = useState<{ token: string; user: UserDto } | null>(null);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,17 +85,41 @@ export const VerifyPanel = ({
     setBusy(true);
     setError(null);
     try {
-      const session = await api.verifyCode(
-        phone.trim(),
-        code.trim(),
-        givenName.trim() === ""
-          ? null
-          : {
-              givenName: givenName.trim(),
-              familyName: familyName.trim() === "" ? null : familyName.trim(),
-            },
-      );
+      // No name here: nobody has been asked for one yet, and a returning
+      // customer never will be.
+      const verified = await api.verifyCode(phone.trim(), code.trim(), null);
+      if (!verified.isNewUser) {
+        onVerified(verified.token, verified.user);
+        return;
+      }
+      setSession({ token: verified.token, user: verified.user });
+      setStage("name");
+    } catch (cause) {
+      fail(cause);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * The name is the last step rather than a gate: someone who leaves it empty
+   * is signed in regardless, under the placeholder the API gives them, and the
+   * profile screen is where they change their mind.
+   */
+  const saveName = async () => {
+    if (session === null) return;
+    if (givenName.trim() === "") {
       onVerified(session.token, session.user);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const named = await api.updateProfile(session.token, {
+        givenName: givenName.trim(),
+        familyName: familyName.trim() === "" ? null : familyName.trim(),
+      });
+      onVerified(session.token, named);
     } catch (cause) {
       fail(cause);
     } finally {
@@ -93,10 +131,10 @@ export const VerifyPanel = ({
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <h2 style={{ fontSize: 20 }}>
-          {stage === "phone" ? labels.title : labels.nameTitle}
+          {stage === "name" ? labels.nameTitle : labels.title}
         </h2>
         <p className="hint" style={{ margin: 0 }}>
-          {stage === "phone" ? labels.body : labels.nameBody}
+          {stage === "name" ? labels.nameBody : labels.body}
         </p>
       </div>
 
@@ -118,7 +156,7 @@ export const VerifyPanel = ({
             {labels.sendCode}
           </Button>
         </>
-      ) : (
+      ) : stage === "code" ? (
         <>
           <Field
             id="verify-code"
@@ -129,10 +167,17 @@ export const VerifyPanel = ({
             value={code}
             onChange={(event) => setCode(event.target.value)}
           />
+          {devCode !== null && <Note>{developmentCodeNotice(devCode)}</Note>}
+          {error !== null && <Critical>{error}</Critical>}
+          <Button onClick={verify} busy={busy} disabled={code.trim().length < 4}>
+            {labels.verify}
+          </Button>
+        </>
+      ) : (
+        <>
           <Field
             id="verify-given-name"
             label={labels.firstName}
-            placeholder={labels.firstPlaceholder}
             autoComplete="given-name"
             value={givenName}
             onChange={(event) => setGivenName(event.target.value)}
@@ -142,15 +187,13 @@ export const VerifyPanel = ({
           <Field
             id="verify-family-name"
             label={labels.lastName}
-            placeholder={labels.lastPlaceholder}
             autoComplete="family-name"
             value={familyName}
             onChange={(event) => setFamilyName(event.target.value)}
           />
-          {devCode !== null && <Note>{developmentCodeNotice(devCode)}</Note>}
           {error !== null && <Critical>{error}</Critical>}
-          <Button onClick={verify} busy={busy} disabled={code.trim().length < 4}>
-            {labels.verify}
+          <Button onClick={saveName} busy={busy}>
+            {labels.saveName}
           </Button>
         </>
       )}

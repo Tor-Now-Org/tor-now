@@ -88,9 +88,19 @@ test.describe("finding and booking", () => {
     const code = (await notice.textContent())?.match(/(\d{4,8})/)?.[1] ?? "";
 
     await page.getByLabel("הקוד שקיבלתם").fill(code);
+    // The name is not asked for alongside the code: the number has to be
+    // verified before the system may say whether it already belongs to anyone.
+    await expect(page.getByLabel("שם פרטי")).toHaveCount(0);
+    await page.getByRole("button", { name: "אישור הקוד" }).click();
+
+    // This number is new, so now it asks — once, and with no example name
+    // sitting in the field.
+    await expect(page.getByLabel("שם פרטי")).toBeVisible();
+    expect(await page.getByLabel("שם פרטי").getAttribute("placeholder")).toBeNull();
+    expect(await page.getByLabel("שם משפחה").getAttribute("placeholder")).toBeNull();
     await page.getByLabel("שם פרטי").fill("דנה");
     await page.getByLabel("שם משפחה").fill("כהן");
-    await page.getByRole("button", { name: "אישור הקוד" }).click();
+    await page.getByRole("button", { name: "ממשיכים" }).click();
 
     await expect(page.getByRole("button", { name: "אישור התור" })).toBeVisible({
       timeout: 15_000,
@@ -248,6 +258,48 @@ test.describe("leaving", () => {
     await page.getByRole("button", { name: "הפרטים שלי" }).click();
 
     await expect(page.getByRole("button", { name: "התנתקות" })).toBeVisible();
+  });
+});
+
+test.describe("signing in again", () => {
+  /**
+   * The complaint that produced this: a customer who had already given their
+   * name was asked for it again on every sign-in. The panel cannot know whether
+   * a number is new until the code is checked — asking the API sooner would let
+   * anyone learn who has an account here, one message at a time — so the name
+   * step exists, and a returning customer must never reach it.
+   */
+  test("a returning customer is never asked for a name again", async ({ page }) => {
+    const phone = uniquePhone();
+    await signInDirectly(page, phone, "יעל אבידן");
+    await page.goto("/");
+    await ready(page);
+
+    // Leave, so the next sign-in is a real one through the interface.
+    await page.getByRole("button", { name: "החשבון שלי" }).click();
+    await page.getByRole("button", { name: "התנתקות" }).click();
+    await expect(page.getByRole("button", { name: "החשבון שלי" })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "התורים שלי" }).click();
+    await page.getByLabel("מספר טלפון").fill(phone);
+    await page.getByRole("button", { name: "שליחת קוד" }).click();
+
+    const notice = page.getByText(/code is returned here: (\d+)/);
+    await expect(notice).toBeVisible({ timeout: 15_000 });
+    const code = (await notice.textContent())?.match(/(\d{4,8})/)?.[1] ?? "";
+
+    await page.getByLabel("הקוד שקיבלתם").fill(code);
+    await page.getByRole("button", { name: "אישור הקוד" }).click();
+
+    // Straight in, with the name they gave the first time still on the account.
+    await expect(page.getByRole("button", { name: "החשבון שלי" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByLabel("שם פרטי")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "החשבון שלי" }).click();
+    await page.getByRole("button", { name: "הפרטים שלי" }).click();
+    await expect(page.getByLabel("שם פרטי")).toHaveValue("יעל");
   });
 });
 

@@ -57,6 +57,8 @@ type BulkHours = {
 
 export default function OnboardingPage() {
   const copy = useCopy("onboarding");
+  // Signing in is one flow with one set of words, wherever it is reached from.
+  const signInCopy = useCopy("signIn");
   const router = useRouter();
   const errorText = useErrorText();
   const { token, user, loading, signIn } = useSession();
@@ -97,19 +99,23 @@ export default function OnboardingPage() {
         <AppHeader languageLabel={copy.langSwitch} />
         <main className="scroll" style={{ flex: 1, padding: "28px 20px" }}>
           <VerifyPanel
+            /* This is the same sign-in as everywhere else, so it says the same
+               things. Only the title and the reason come from the wizard: what
+               was here labelled the phone field "business name" and the code
+               field "next", because the onboarding namespace has no sign-in
+               copy and something had to be passed. */
             labels={{
               title: copy.wizardTitle,
-              body: copy.detailsBody,
-              phoneLabel: copy.bizName,
-              sendCode: copy.next,
-              codeLabel: copy.next,
-              verify: copy.next,
-              nameTitle: copy.detailsTitle,
-              nameBody: copy.detailsBody,
-              firstName: copy.bizName,
-              firstPlaceholder: copy.serviceNamePlaceholder,
-              lastName: copy.bizName,
-              lastPlaceholder: copy.serviceNamePlaceholder,
+              body: copy.signInBody,
+              phoneLabel: signInCopy.phoneLabel,
+              sendCode: signInCopy.sendCode,
+              codeLabel: signInCopy.codeTitle,
+              verify: signInCopy.enter,
+              nameTitle: signInCopy.nameTitle,
+              nameBody: signInCopy.nameBody,
+              firstName: signInCopy.firstName,
+              lastName: signInCopy.lastName,
+              saveName: signInCopy.saveName,
             }}
             errorText={errorText}
             onVerified={signIn}
