@@ -35,7 +35,7 @@ import type {
  */
 export const API_BASE_URL =
   process.env["NEXT_PUBLIC_API_URL"] ??
-  "https://boiqhhckvypicjfpeuem.supabase.co/functions/v1/api";
+  "https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api";
 
 export type Session = { token: string; user: UserDto };
 
