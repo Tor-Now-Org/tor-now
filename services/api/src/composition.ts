@@ -10,6 +10,7 @@ import { discoveryService } from "./application/discovery-service.ts";
 import { outboxWorker } from "./application/outbox-worker.ts";
 import { reminderService } from "./application/reminder-service.ts";
 import { pruneAuditLog } from "./application/retention-service.ts";
+import { measureDatabase } from "./http/diagnostics.ts";
 import { createPool, type Sql } from "./infrastructure/pg/client.ts";
 import { postgresUnitOfWork } from "./infrastructure/pg/unit-of-work.ts";
 import { jobCredential } from "./infrastructure/pg/job-credential.ts";
@@ -100,6 +101,7 @@ export const compose = (
 
     outboxWorker: outboxWorker({ unitOfWork, notifier }),
     reminders: reminderService({ unitOfWork, clock }),
+    measureDatabase: () => measureDatabase(sql),
     pruneAuditLog: () => pruneAuditLog(sql),
     deactivateLapsedBusinesses: () => admin.deactivateLapsedBusinesses(system()),
   };

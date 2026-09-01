@@ -33,6 +33,14 @@ export const httpHarness = () => {
     config: testConfig,
     tokens: test.tokens,
     jobCredential: { async read() { return JOB_SECRET; } },
+    measureDatabase: () =>
+      Promise.resolve({
+        connectAndQueryMs: 0,
+        warmRoundTripMs: 0,
+        transactionOverheadMs: 0,
+        roundTripsPerRead: 4,
+        estimatedReadMs: 0,
+      }),
     pruneAuditLog: () => Promise.resolve(0),
     deactivateLapsedBusinesses: () =>
       test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" }),

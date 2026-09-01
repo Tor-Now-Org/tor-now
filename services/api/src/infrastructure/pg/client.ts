@@ -45,13 +45,16 @@ export const assumeIdentity = async (
   if (actor.kind === "ADMINISTRATOR" || actor.kind === "SYSTEM") return;
 
   const role = actor.kind === "USER" ? "authenticated" : "anon";
-  await tx`select set_config('role', ${role}, true)`;
-
   const claims =
     actor.kind === "USER"
       ? JSON.stringify({ sub: actor.userId, role })
       : JSON.stringify({ role });
-  await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+
+  // One statement, not two. Every round trip to the database is a round trip
+  // the customer waits for, and these two settings always travel together.
+  await tx`
+    select set_config('role', ${role}, true),
+           set_config('request.jwt.claims', ${claims}, true)`;
 };
 
 /** Postgres error codes the application translates rather than propagates. */

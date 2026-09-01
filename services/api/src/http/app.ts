@@ -75,6 +75,15 @@ export const createApp = (services: Services) => {
     }),
   );
 
+  /**
+   * Where the time goes. Latency to the database dominates this system and is
+   * invisible from outside — a slow endpoint and a distant database look the
+   * same from a browser. Returns timings only, never data.
+   */
+  app.get("/health/database", async (context) =>
+    context.json(await services.measureDatabase()),
+  );
+
   // ---------------------------------------------------------------------------
   // Verification (ADR 0004). Registering and logging in are the same act.
   // ---------------------------------------------------------------------------
