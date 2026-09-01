@@ -317,7 +317,7 @@ export default function AdminPage() {
             <span className="hint" dir="ltr">{user.phone}</span>
           </Card>
           <Button intent="quiet" onClick={() => router.push("/")}>{copy.asCustomer}</Button>
-          <SignOutButton label={copy.signOut} hint={copy.signOutHint} />
+          <SignOutButton label={copy.signOut} />
         </div>
       </Sheet>
 

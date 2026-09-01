@@ -67,6 +67,9 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
       </div>
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Said before the fields it is about, rather than after the phone
+            number three fields further down. */}
+        <Note>{copy.nameShared}</Note>
         <Field
           id="profile-given-name"
           label={copy.firstName}
@@ -90,13 +93,12 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
         />
         <Field id="profile-phone" label={copy.phoneLabel} value={user.phone} dir="ltr" readOnly disabled />
         <Note>{copy.phoneLocked}</Note>
-        <Note>{copy.nameShared}</Note>
         {error !== null && <Critical>{error}</Critical>}
         {saved && <p className="hint" style={{ margin: 0 }} role="status">{copy.profileSaved}</p>}
         <Button onClick={save} busy={busy}>{copy.saveDetails}</Button>
       </Card>
 
-      <SignOutButton label={copy.signOut} hint={copy.signOutHint} onSignedOut={onSignedOut} />
+      <SignOutButton label={copy.signOut} onSignedOut={onSignedOut} />
 
       <button
         onClick={() => setDeleting(true)}

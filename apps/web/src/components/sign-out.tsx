@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/session.tsx";
-import { Button, Note } from "./ui.tsx";
+import { Button } from "./ui.tsx";
 
 /**
  * Leaving.
@@ -18,11 +18,9 @@ import { Button, Note } from "./ui.tsx";
  */
 export const SignOutButton = ({
   label,
-  hint,
   onSignedOut,
 }: {
   label: string;
-  hint?: string;
   /** Runs instead of navigating, for a screen that closes its own drawer. */
   onSignedOut?: () => void;
 }) => {
@@ -30,18 +28,15 @@ export const SignOutButton = ({
   const router = useRouter();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <Button
-        intent="quiet"
-        onClick={() => {
-          signOut();
-          if (onSignedOut === undefined) router.push("/");
-          else onSignedOut();
-        }}
-      >
-        {label}
-      </Button>
-      {hint !== undefined && <Note>{hint}</Note>}
-    </div>
+    <Button
+      intent="quiet"
+      onClick={() => {
+        signOut();
+        if (onSignedOut === undefined) router.push("/");
+        else onSignedOut();
+      }}
+    >
+      {label}
+    </Button>
   );
 };

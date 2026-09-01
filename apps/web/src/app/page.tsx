@@ -149,14 +149,11 @@ export default function CustomerApp() {
             </>
           )}
 
-          <Note>{copy.oneIdentity}</Note>
-
           <Button intent="quiet" onClick={() => { setDrawerOpen(false); setScreen("profile"); }}>
             {copy.profile}
           </Button>
           <SignOutButton
             label={copy.signOut}
-            hint={copy.signOutHint}
             onSignedOut={() => {
               setDrawerOpen(false);
               setScreen("search");

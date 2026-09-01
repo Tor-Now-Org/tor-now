@@ -165,7 +165,7 @@ function ManageApp() {
             ))}
           <Button onClick={() => router.push("/")}>{copy.asCustomer}</Button>
           <Note>{copy.oneIdentity}</Note>
-          <SignOutButton label={copy.signOut} hint={copy.signOutHint} />
+          <SignOutButton label={copy.signOut} />
         </div>
       </Sheet>
     </>
