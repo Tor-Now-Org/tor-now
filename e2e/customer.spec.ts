@@ -261,6 +261,42 @@ test.describe("leaving", () => {
   });
 });
 
+test.describe("an API older than the interface", () => {
+  /**
+   * The two halves deploy separately, so for a few minutes a browser running
+   * the new page talks to the function that came before it. A page that assumes
+   * a field it has never seen before goes blank for everybody in that window —
+   * which is exactly what the photos field did, on a screen that had no test
+   * for the absence because nothing was absent locally.
+   */
+  test("a business page still draws when the profile carries no photos", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `בלי תמונות ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+
+    // The response an older function would have sent: no photos field at all.
+    await page.route(`**/businesses/${shop.business.id}?*`, async (route) => {
+      const answer = await route.fetch();
+      const body = (await answer.json()) as Record<string, unknown>;
+      delete body["photos"];
+      await route.fulfill({ response: answer, json: body });
+    });
+
+    await page.goto("/");
+    await ready(page);
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(shop.business.name.slice(0, 8));
+    await page.getByText(shop.business.name).first().click();
+
+    // The screen is the screen, minus the pictures nobody sent.
+    await expect(page.getByRole("heading", { name: shop.business.name })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(shop.service.name).first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "תמונות מהעסק" })).toHaveCount(0);
+  });
+});
+
 test.describe("the way in", () => {
   test("the header offers a way in before anyone has signed in", async ({ page }) => {
     await page.goto("/");

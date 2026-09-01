@@ -40,6 +40,15 @@ export type BusinessProfileDto = {
   business: BusinessDto;
   services: ServiceDto[];
   resources: ResourceDto[];
+  /**
+   * The cover first, then the rest, in slot order.
+   *
+   * Optional because the interface and the API are deployed separately, and for
+   * the minutes between the two a browser running the new page can be talking
+   * to the old function. A field this page has never seen before is absent
+   * then, and a page that assumes otherwise goes blank for everybody.
+   */
+  photos?: BusinessPhotoDto[];
   /** Present when the request asked for a date range. */
   availability?: DayAvailabilityDto[];
 };
@@ -88,6 +97,16 @@ export type AppointmentDto = {
 export type CalendarAppointmentDto = AppointmentDto & {
   customerName: string;
   customerPhone: string;
+};
+
+/** One picture of a business. Slot 0 is the cover; 1-3 are the rest. */
+export type BusinessPhotoDto = {
+  id: string;
+  slot: 0 | 1 | 2 | 3;
+  /** Absolute with Storage behind the deployment, relative to the API without. */
+  url: string;
+  contentType: string;
+  byteSize: number;
 };
 
 export type UserDto = {

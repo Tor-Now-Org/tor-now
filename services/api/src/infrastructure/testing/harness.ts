@@ -24,6 +24,7 @@ import type {
   VerificationSender,
 } from "../../ports/verification.ts";
 import { withAuditing } from "../auditing.ts";
+import { inFunctionPhotos } from "../photos/in-function-photos.ts";
 import { sha256Hasher } from "../verification/code.ts";
 import { inMemoryRepositories } from "./in-memory-repositories.ts";
 import { emptyStore, type Store } from "./in-memory-store.ts";
@@ -48,6 +49,10 @@ export const harness = (options: { now?: Instant } = {}) => {
   // and freezing one of them makes that scenario unreachable.
   let currentTime: Instant = options.now ?? FROZEN_NOW;
   const clock: Clock = { now: () => currentTime };
+
+  // The same store production falls back to, so a test exercises the real
+  // ordering — bytes first, row second — rather than a stub of it.
+  const photos = inFunctionPhotos();
 
   const audit: AuditSink = {
     async append(entry) {
@@ -213,6 +218,7 @@ export const harness = (options: { now?: Instant } = {}) => {
     sentCodes: sent,
     deliveredTemplates: delivered,
     tokens: verifier,
+    photos,
     services: {
       auth: authService({
         unitOfWork,
@@ -228,7 +234,7 @@ export const harness = (options: { now?: Instant } = {}) => {
       discovery: discoveryService({ unitOfWork, clock, strategy: greedyWalk }),
       availability,
       booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
-      business: businessService({ unitOfWork, clock }),
+      business: businessService({ unitOfWork, clock, photos }),
       calendar: calendarService({ unitOfWork }),
       admin,
       outboxWorker: outboxWorker({ unitOfWork, notifier }),

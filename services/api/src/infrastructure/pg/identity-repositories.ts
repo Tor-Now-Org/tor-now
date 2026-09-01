@@ -7,6 +7,7 @@ import {
 import { SEARCH } from "../../config.ts";
 import type {
   AdministratorAllowlistRepository,
+  BusinessPhotoRepository,
   BusinessRepository,
   BusinessSearchResult,
   MembershipRepository,
@@ -14,7 +15,13 @@ import type {
   UserRepository,
 } from "../../ports/repositories.ts";
 import type { Transaction } from "./client.ts";
-import { toBusiness, toMembership, toUser, type Row } from "./mappers.ts";
+import {
+  toBusiness,
+  toBusinessPhoto,
+  toMembership,
+  toUser,
+  type Row,
+} from "./mappers.ts";
 
 const one = <T>(rows: readonly Row[], map: (row: Row) => T, entity: string): T => {
   const row = rows[0];
@@ -260,5 +267,42 @@ export const administratorAllowlistRepository = (
 
   async remove(phone) {
     await tx`delete from administrator_allowlist where phone = ${phone}`;
+  },
+});
+
+/**
+ * The record of a photo, not its bytes. Which slot a row claims is the whole of
+ * the "one cover, at most three others" rule, and the database refuses a second
+ * row in a taken slot — so a race between two uploads ends as a unique
+ * violation rather than as a fifth photo.
+ */
+export const businessPhotoRepository = (
+  tx: Transaction,
+): BusinessPhotoRepository => ({
+  async listForBusiness(businessId) {
+    const rows = await tx<Row[]>`
+      select * from business_photo
+      where business_id = ${businessId}
+      order by position`;
+    return rows.map(toBusinessPhoto);
+  },
+
+  async findById(id) {
+    const rows = await tx<Row[]>`select * from business_photo where id = ${id}`;
+    const row = rows[0];
+    return row === undefined ? null : toBusinessPhoto(row);
+  },
+
+  async create({ businessId, slot, storagePath, contentType, byteSize }) {
+    const rows = await tx<Row[]>`
+      insert into business_photo
+        (business_id, position, storage_path, content_type, byte_size)
+      values (${businessId}, ${slot}, ${storagePath}, ${contentType}, ${byteSize})
+      returning *`;
+    return one(rows, toBusinessPhoto, "BusinessPhoto");
+  },
+
+  async delete(id) {
+    await tx`delete from business_photo where id = ${id}`;
   },
 });

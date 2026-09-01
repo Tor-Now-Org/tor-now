@@ -2,7 +2,14 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { forbidden } from "@tor-now/domain";
 import type { Services } from "../composition.ts";
-import { parseBody, parseQuery, readActor, idParam, parse } from "./context.ts";
+import {
+  parseBody,
+  parseQuery,
+  readActor,
+  idParam,
+  parse,
+  photoSlotParam,
+} from "./context.ts";
 import { toErrorResponse } from "./errors.ts";
 import * as schema from "./schemas.ts";
 import * as wire from "./wire.ts";
@@ -72,6 +79,9 @@ export const createApp = (services: Services) => {
       signingKeyDerivedFrom: services.config.jwtSecretSource,
       notificationTransport: services.config.notificationTransport,
       exposesVerificationCode: services.config.exposeVerificationCode,
+      // Which photo store is live. The in-function one forgets every picture
+      // when the isolate restarts, so this is never something to guess at.
+      photoStore: services.photos.kind,
     }),
   );
 
@@ -157,9 +167,26 @@ export const createApp = (services: Services) => {
       business: wire.businessOut(profile.business),
       services: profile.services.map(wire.serviceOut),
       resources: profile.resources.map(wire.resourceOut),
+      photos: profile.photos.map((photo) =>
+        wire.businessPhotoOut(photo, services.photos.urlFor),
+      ),
       ...(profile.availability === undefined
         ? {}
         : { availability: profile.availability }),
+    });
+  });
+
+  /**
+   * The bytes, for the deployment that has no Storage behind it and serves its
+   * own. With Storage the URLs point at the bucket's CDN and nothing reaches
+   * this route at all; it answers 404 there rather than pretending.
+   */
+  app.get("/photos/:path{.+}", (context) => {
+    const held = services.photos.read?.(context.req.param("path"));
+    if (held === undefined || held === null) return context.notFound();
+    return context.body(held.bytes as unknown as ArrayBuffer, 200, {
+      "Content-Type": held.contentType,
+      "Cache-Control": "public, max-age=31536000, immutable",
     });
   });
 
@@ -308,6 +335,46 @@ const ownerRoutes = (services: Services) => {
       actorOf(context),
       idParam(context, "businessId"),
       idParam(context, "serviceId"),
+    );
+    return context.body(null, 204);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Photos
+  //
+  // The bytes arrive as the request body rather than as a JSON field, because
+  // base64 costs a third more of everything for nothing, and the content type
+  // is already a header. The slot is in the path, so which picture is being
+  // replaced is never inferred.
+  // ---------------------------------------------------------------------------
+
+  owner.get("/:businessId/photos", async (context) => {
+    const list = await services.business.listPhotos(
+      actorOf(context),
+      idParam(context, "businessId"),
+    );
+    return context.json(
+      list.map((photo) => wire.businessPhotoOut(photo, services.photos.urlFor)),
+    );
+  });
+
+  owner.put("/:businessId/photos/:slot", async (context) => {
+    const slot = photoSlotParam(context);
+    const contentType = (context.req.header("content-type") ?? "").split(";")[0]?.trim() ?? "";
+    const bytes = new Uint8Array(await context.req.arrayBuffer());
+    const photo = await services.business.addPhoto(
+      actorOf(context),
+      idParam(context, "businessId"),
+      { slot, bytes, contentType },
+    );
+    return context.json(wire.businessPhotoOut(photo, services.photos.urlFor), 201);
+  });
+
+  owner.delete("/:businessId/photos/:photoId", async (context) => {
+    await services.business.deletePhoto(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "photoId"),
     );
     return context.body(null, 204);
   });

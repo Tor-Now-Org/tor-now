@@ -1,6 +1,6 @@
 import type { LocalTime } from "../time/local-time.ts";
 import type { TimeZone } from "../time/zone.ts";
-import type { BusinessId, ResourceId, ServiceId } from "./ids.ts";
+import type { BusinessId, BusinessPhotoId, ResourceId, ServiceId } from "./ids.ts";
 import type { Money } from "./money.ts";
 
 /**
@@ -29,6 +29,44 @@ export type Business = {
   readonly minimumNoticeMinutes: number;
   readonly bookingHorizonDays: number;
   readonly cancellationWindowHours: number;
+};
+
+/**
+ * How many pictures a Business may show, and which slot each one occupies.
+ *
+ * The cover is slot zero rather than a boolean, so "which is the cover" and
+ * "how many are there" are the same fact: the database gives each Business one
+ * row per slot, and the range is the limit. Nothing counts rows to find out.
+ */
+export const PHOTO_SLOTS = Object.freeze({
+  cover: 0,
+  firstExtra: 1,
+  lastExtra: 3,
+});
+
+export const MAXIMUM_PHOTOS = PHOTO_SLOTS.lastExtra + 1;
+
+export type PhotoSlot = 0 | 1 | 2 | 3;
+
+export const isCover = (slot: PhotoSlot): boolean => slot === PHOTO_SLOTS.cover;
+
+/** The slots a Business has not filled, in the order they should be offered. */
+export const freeSlots = (taken: readonly PhotoSlot[]): readonly PhotoSlot[] =>
+  ([0, 1, 2, 3] as const).filter((slot) => !taken.includes(slot));
+
+/**
+ * A picture of a Business. The bytes are elsewhere, and where exactly is not
+ * the domain's business: this is the record of one of them, holding the key
+ * that finds it. The address a browser fetches it from is added on the way out,
+ * because it depends on which store is behind the deployment.
+ */
+export type BusinessPhoto = {
+  readonly id: BusinessPhotoId;
+  readonly businessId: BusinessId;
+  readonly slot: PhotoSlot;
+  readonly storagePath: string;
+  readonly contentType: string;
+  readonly byteSize: number;
 };
 
 /** A single bookable calendar belonging to a Business. */

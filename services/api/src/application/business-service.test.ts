@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { displayName, parseInstant } from "@tor-now/domain";
+import { asId, displayName, MAXIMUM_PHOTOS, parseInstant } from "@tor-now/domain";
+import { PHOTOS } from "../config.ts";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
 
@@ -279,5 +280,164 @@ describe("the owner's customers", () => {
       customer.user.id,
     );
     expect(record.lateCancellations).toBe(1);
+  });
+});
+
+describe("business photos", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  const aPhoto = (byteSize = 64) => new Uint8Array(byteSize).fill(7);
+
+  it("puts the cover in slot zero and hands back where it lives", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const photo = await test.services.business.addPhoto(
+      shop.owner.actor,
+      shop.business.id,
+      { slot: 0, bytes: aPhoto(), contentType: "image/jpeg" },
+    );
+
+    expect(photo.slot).toBe(0);
+    expect(photo.byteSize).toBe(64);
+    // The bytes really went to the store, rather than only the row being written.
+    expect(test.photos.read?.(photo.storagePath)?.bytes).toHaveLength(64);
+  });
+
+  it("takes a cover and three more, and then no more", async () => {
+    const shop = await anEstablishedBusiness(test);
+    for (const slot of [0, 1, 2, 3] as const) {
+      await test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+        slot,
+        bytes: aPhoto(),
+        contentType: "image/png",
+      });
+    }
+    expect(
+      await test.services.business.listPhotos(shop.owner.actor, shop.business.id),
+    ).toHaveLength(MAXIMUM_PHOTOS);
+
+    await expect(
+      test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+        slot: 1,
+        bytes: aPhoto(),
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow(/slot/i);
+  });
+
+  it("refuses a file that is not one of the image types", async () => {
+    const shop = await anEstablishedBusiness(test);
+    await expect(
+      test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+        slot: 0,
+        bytes: aPhoto(),
+        contentType: "application/pdf",
+      }),
+    ).rejects.toThrow(/image/);
+  });
+
+  it("refuses an empty file and one over the limit", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const add = (bytes: Uint8Array) =>
+      test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+        slot: 0,
+        bytes,
+        contentType: "image/jpeg",
+      });
+
+    await expect(add(new Uint8Array(0))).rejects.toThrow(/empty/i);
+    await expect(add(aPhoto(PHOTOS.maximumBytes + 1))).rejects.toThrow(/at most/i);
+  });
+
+  it("does not let somebody else's owner add a photo, or reach the bucket", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const stranger = await signIn(test, "+972500000099");
+
+    await expect(
+      test.services.business.addPhoto(stranger.actor, shop.business.id, {
+        slot: 0,
+        bytes: aPhoto(),
+        contentType: "image/jpeg",
+      }),
+    ).rejects.toThrow(/manage/i);
+    // Ownership is checked before anything is uploaded, so nothing was stored.
+    expect(test.store.businessPhotos).toHaveLength(0);
+  });
+
+  it("leaves no orphaned bytes when the row cannot be written", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    // Two owners uploading into the same slot at once. The second reads the
+    // slot as free, and by the time its bytes are up the first has taken it —
+    // so the row fails and the bytes must not be left behind.
+    const realPut = test.photos.put.bind(test.photos);
+    let stored: string | null = null;
+    test.photos.put = async (input) => {
+      const result = await realPut(input);
+      stored = result.path;
+      store.businessPhotos.push({
+        id: asId("00000000-0000-4000-8000-00000000dead"),
+        businessId: shop.business.id,
+        slot: 2,
+        storagePath: "somebody-else.jpg",
+        contentType: "image/jpeg",
+        byteSize: 1,
+      });
+      return result;
+    };
+    const store = test.store;
+
+    await expect(
+      test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+        slot: 2,
+        bytes: aPhoto(),
+        contentType: "image/jpeg",
+      }),
+    ).rejects.toThrow();
+
+    expect(stored).not.toBeNull();
+    expect(test.photos.read?.(stored as unknown as string)).toBeNull();
+    // Exactly the winner's row, and no second one.
+    expect(test.store.businessPhotos).toHaveLength(1);
+  });
+
+  it("deleting a photo frees its slot and drops the bytes", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const photo = await test.services.business.addPhoto(
+      shop.owner.actor,
+      shop.business.id,
+      { slot: 3, bytes: aPhoto(), contentType: "image/webp" },
+    );
+
+    await test.services.business.deletePhoto(
+      shop.owner.actor,
+      shop.business.id,
+      photo.id,
+    );
+
+    expect(
+      await test.services.business.listPhotos(shop.owner.actor, shop.business.id),
+    ).toEqual([]);
+    expect(test.photos.read?.(photo.storagePath)).toBeNull();
+  });
+
+  it("a customer looking at the business sees its photos, cover first", async () => {
+    const shop = await anEstablishedBusiness(test);
+    for (const slot of [2, 0] as const) {
+      await test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+        slot,
+        bytes: aPhoto(),
+        contentType: "image/jpeg",
+      });
+    }
+
+    const profile = await test.services.discovery.profile(
+      { kind: "ANONYMOUS" },
+      shop.business.id,
+    );
+    expect(profile.photos.map((photo) => photo.slot)).toEqual([0, 2]);
   });
 });

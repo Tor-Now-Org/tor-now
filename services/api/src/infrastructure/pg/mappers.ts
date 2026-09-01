@@ -9,10 +9,12 @@ import {
   type Appointment,
   type Block,
   type Business,
+  type BusinessPhoto,
   type DateOverride,
   type Membership,
   type Payment,
   type Resource,
+  type PhotoSlot,
   type Service,
   type Subscription,
   type User,
@@ -44,6 +46,16 @@ const nullableText = (value: unknown): string | null =>
   value === null || value === undefined ? null : text(value);
 const int = (value: unknown): number => Number(value);
 const bool = (value: unknown): boolean => Boolean(value);
+
+/**
+ * The column is checked to 0..3 by the schema, so a value outside it means the
+ * schema and this file have drifted apart — which is worth a loud failure at
+ * the boundary rather than a photo appearing in a slot nothing renders.
+ */
+const photoSlot = (value: number): PhotoSlot => {
+  if (value === 0 || value === 1 || value === 2 || value === 3) return value;
+  throw new Error(`A photo slot must be 0..3, got ${value}`);
+};
 const toInstant = (value: unknown) => instant(new Date(value as string).getTime());
 const nullableInstant = (value: unknown) =>
   value === null || value === undefined ? null : toInstant(value);
@@ -81,6 +93,17 @@ export const toBusiness = (row: Row): Business => ({
   minimumNoticeMinutes: int(row["minimum_notice_minutes"]),
   bookingHorizonDays: int(row["booking_horizon_days"]),
   cancellationWindowHours: int(row["cancellation_window_hours"]),
+});
+
+export const toBusinessPhoto = (row: Row): BusinessPhoto => ({
+  id: asId(text(row["id"])),
+  businessId: asId(text(row["business_id"])),
+  // The column is constrained to 0..3, so this is the one place the range is
+  // asserted rather than assumed on the way back in.
+  slot: photoSlot(int(row["position"])),
+  storagePath: text(row["storage_path"]),
+  contentType: text(row["content_type"]),
+  byteSize: int(row["byte_size"]),
 });
 
 export const toMembership = (row: Row): Membership => ({

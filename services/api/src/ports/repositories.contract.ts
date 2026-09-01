@@ -8,6 +8,7 @@ import {
   parseInstant,
   parseLocalDate,
   type Instant,
+  type PhotoSlot,
 } from "@tor-now/domain";
 import type { Repositories } from "./repositories.ts";
 
@@ -481,6 +482,88 @@ export const describeRepositoryContract = (
         const context = await aBookableBusiness(repositories, "05002");
         await repositories.services.delete(context.service.id);
         expect(await repositories.services.findById(context.service.id)).toBeNull();
+      });
+    });
+
+    // --- Photos ---------------------------------------------------------
+
+    it("holds one photo per slot and refuses a second in the same one", async () => {
+      await withRepositories(async (repositories) => {
+        const { business } = await aBookableBusiness(repositories, "3101");
+        const add = (slot: PhotoSlot, path: string) =>
+          repositories.businessPhotos.create({
+            businessId: business.id,
+            slot,
+            storagePath: path,
+            contentType: "image/jpeg",
+            byteSize: 1234,
+          });
+
+        const cover = await add(0, `${business.id}/cover.jpg`);
+        expect(cover.slot).toBe(0);
+
+        // The limit is the slot, not a count kept somewhere.
+        await expect(add(0, `${business.id}/again.jpg`)).rejects.toThrow();
+      });
+    });
+
+    it("returns the cover first and the rest in slot order", async () => {
+      await withRepositories(async (repositories) => {
+        const { business } = await aBookableBusiness(repositories, "3102");
+        // Added out of order on purpose: the order is a property of the read.
+        for (const slot of [2, 0, 3] as PhotoSlot[]) {
+          await repositories.businessPhotos.create({
+            businessId: business.id,
+            slot,
+            storagePath: `${business.id}/${slot}.jpg`,
+            contentType: "image/jpeg",
+            byteSize: 10,
+          });
+        }
+        const held = await repositories.businessPhotos.listForBusiness(business.id);
+        expect(held.map((photo) => photo.slot)).toEqual([0, 2, 3]);
+      });
+    });
+
+    it("frees the slot again when a photo is deleted", async () => {
+      await withRepositories(async (repositories) => {
+        const { business } = await aBookableBusiness(repositories, "3103");
+        const first = await repositories.businessPhotos.create({
+          businessId: business.id,
+          slot: 1,
+          storagePath: `${business.id}/first.jpg`,
+          contentType: "image/png",
+          byteSize: 99,
+        });
+        await repositories.businessPhotos.delete(first.id);
+        const replacement = await repositories.businessPhotos.create({
+          businessId: business.id,
+          slot: 1,
+          storagePath: `${business.id}/second.jpg`,
+          contentType: "image/png",
+          byteSize: 99,
+        });
+        expect(replacement.slot).toBe(1);
+        expect(
+          await repositories.businessPhotos.listForBusiness(business.id),
+        ).toHaveLength(1);
+      });
+    });
+
+    it("keeps each business's photos to itself", async () => {
+      await withRepositories(async (repositories) => {
+        const mine = await aBookableBusiness(repositories, "3104");
+        const theirs = await aBookableBusiness(repositories, "3105");
+        await repositories.businessPhotos.create({
+          businessId: mine.business.id,
+          slot: 0,
+          storagePath: `${mine.business.id}/cover.jpg`,
+          contentType: "image/webp",
+          byteSize: 7,
+        });
+        expect(
+          await repositories.businessPhotos.listForBusiness(theirs.business.id),
+        ).toEqual([]);
       });
     });
 

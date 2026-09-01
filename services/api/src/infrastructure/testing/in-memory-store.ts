@@ -2,6 +2,7 @@ import type {
   Appointment,
   Block,
   Business,
+  BusinessPhoto,
   DateOverride,
   Membership,
   Payment,
@@ -31,6 +32,7 @@ export type Store = {
   nextId: NextId;
   users: User[];
   businesses: Business[];
+  businessPhotos: BusinessPhoto[];
   memberships: Membership[];
   resources: Resource[];
   services: Service[];
@@ -50,6 +52,7 @@ export const emptyStore = (): Store => ({
   nextId: identifiers(),
   users: [],
   businesses: [],
+  businessPhotos: [],
   memberships: [],
   resources: [],
   services: [],

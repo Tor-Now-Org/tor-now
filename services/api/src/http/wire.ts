@@ -6,6 +6,7 @@ import {
   type Appointment,
   type Block,
   type Business,
+  type BusinessPhoto,
   type DateOverride,
   type Payment,
   type Resource,
@@ -40,6 +41,19 @@ export const businessOut = (business: Business) => ({
   minimumNoticeMinutes: business.minimumNoticeMinutes,
   bookingHorizonDays: business.bookingHorizonDays,
   cancellationWindowHours: business.cancellationWindowHours,
+});
+
+/**
+ * A photo, addressed. Where it is served from depends on which store is behind
+ * the deployment, so the store is asked rather than the URL being assembled
+ * from a pattern that would be wrong on the other one.
+ */
+export const businessPhotoOut = (photo: BusinessPhoto, urlFor: (path: string) => string) => ({
+  id: photo.id,
+  slot: photo.slot,
+  url: urlFor(photo.storagePath),
+  contentType: photo.contentType,
+  byteSize: photo.byteSize,
 });
 
 export const serviceOut = (service: Service) => ({

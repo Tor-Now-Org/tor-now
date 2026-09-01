@@ -12,7 +12,7 @@ import {
  * business panel, and the customer record.
  */
 test.describe("opening a business", () => {
-  test("the wizard takes four steps and puts the business in search", async ({ page }) => {
+  test("the wizard takes five steps and puts the business in search", async ({ page }) => {
     const phone = uniquePhone();
     await signInDirectly(page, phone, "בעלים חדש");
     const name = `עסק חדש ${Date.now()}`;
@@ -27,17 +27,21 @@ test.describe("opening a business", () => {
     await page.getByLabel("כתובת").fill("הרצל 1");
     await page.getByRole("button", { name: "המשך" }).click();
 
-    // 2 — calendars
+    // 2 — photos, which nothing requires
+    await expect(page.getByText("תמונות", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    // 3 — calendars
     await expect(page.getByText("מי נותן את השירות")).toBeVisible();
     await page.getByLabel("שם היומן").fill("ראשי");
     await page.getByRole("button", { name: "המשך" }).click();
 
-    // 3 — services
+    // 4 — services
     await expect(page.getByText("מה אתם נותנים")).toBeVisible();
     await page.getByLabel("שם השירות").fill("ייעוץ");
     await page.getByRole("button", { name: "המשך" }).click();
 
-    // 4 — hours, then live
+    // 5 — hours, then live
     await expect(page.getByText("מתי אתם פתוחים")).toBeVisible();
     await page.getByRole("button", { name: "סיום" }).click();
 
@@ -238,3 +242,72 @@ test.describe("the business panel", () => {
 
 const today = (): string =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+
+
+test.describe("photos", () => {
+  /**
+   * A one-pixel PNG. Small enough to write here, real enough that the browser
+   * decodes it — the picker re-encodes through a canvas, so a file that is not
+   * genuinely an image never reaches the API.
+   */
+  const A_PNG = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+
+  test("a cover chosen in the wizard is on the business page afterwards", async ({ page }) => {
+    const phone = uniquePhone();
+    await signInDirectly(page, phone, "בעלים עם תמונות");
+    const name = `עסק מצולם ${Date.now()}`;
+
+    await page.goto("/onboarding");
+    await ready(page);
+
+    await page.getByLabel("שם העסק").fill(name);
+    await page.getByLabel("טלפון").fill(phone);
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    // The cover, and one of the three optional ones.
+    await expect(page.getByText("תמונה ראשית")).toBeVisible();
+    const files = page.locator('input[type="file"]');
+    await files.nth(0).setInputFiles({ name: "cover.png", mimeType: "image/png", buffer: A_PNG });
+    await files.nth(1).setInputFiles({ name: "more.png", mimeType: "image/png", buffer: A_PNG });
+    // Both are shown back before anything is uploaded.
+    await expect(page.locator("main img")).toHaveCount(2);
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    await page.getByLabel("שם היומן").fill("ראשי");
+    await page.getByRole("button", { name: "המשך" }).click();
+    await page.getByLabel("שם השירות").fill("ייעוץ");
+    await page.getByRole("button", { name: "המשך" }).click();
+    await page.getByRole("button", { name: "סיום" }).click();
+    await expect(page.getByText("באוויר")).toBeVisible({ timeout: 20_000 });
+
+    // The record says two photos, in slot order, with the cover first.
+    const found = await call<{ id: string; name: string }[]>(
+      `/businesses/search?q=${encodeURIComponent(name.slice(0, 8))}`,
+    );
+    const businessId = found.find((business) => business.name === name)?.id ?? "";
+    expect(businessId).not.toBe("");
+    const profile = await call<{ photos: { slot: number; url: string }[] }>(
+      `/businesses/${businessId}`,
+    );
+    expect(profile.photos.map((photo) => photo.slot)).toEqual([0, 1]);
+
+    // And a customer looking at the business sees them, cover large.
+    await page.goto("/");
+    await ready(page);
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 8));
+    await page.getByText(name).first().click();
+    const gallery = page.getByRole("region", { name: "תמונות מהעסק" });
+    await expect(gallery).toBeVisible({ timeout: 15_000 });
+    await expect(gallery.getByRole("button")).toHaveCount(2);
+
+    // The bytes really load, rather than the page holding two broken frames.
+    const loaded = await gallery
+      .locator("img")
+      .first()
+      .evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0);
+    expect(loaded).toBe(true);
+  });
+});

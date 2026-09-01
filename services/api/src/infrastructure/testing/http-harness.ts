@@ -18,6 +18,7 @@ const testConfig: Config = {
   exposeVerificationCode: true,
   exposeInternalErrors: true,
   corsOrigins: [],
+  storage: null,
 };
 
 const JOB_SECRET = "test-job-secret";
@@ -32,6 +33,7 @@ export const httpHarness = () => {
     ...test.services,
     config: testConfig,
     tokens: test.tokens,
+    photos: test.photos,
     jobCredential: { async read() { return JOB_SECRET; } },
     measureDatabase: () =>
       Promise.resolve({
@@ -81,6 +83,36 @@ export const httpHarness = () => {
       call("PUT", path, { body, ...(token === undefined ? {} : { token }) }),
     delete: (path: string, token?: string) =>
       call("DELETE", path, token === undefined ? {} : { token }),
+    /** A body that is bytes rather than JSON, which is how a photo arrives. */
+    putBytes: async (
+      path: string,
+      bytes: Uint8Array,
+      contentType: string,
+      token?: string,
+    ) => {
+      const response = await app.request(`/api${path}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": contentType,
+          ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
+        },
+        body: bytes as unknown as BodyInit,
+      });
+      const text = await response.text();
+      return {
+        status: response.status,
+        body: (text === "" ? null : JSON.parse(text)) as unknown,
+      };
+    },
+    /** The bytes back out again, as a browser would fetch them. */
+    getBytes: async (path: string) => {
+      const response = await app.request(`/api${path}`);
+      return {
+        status: response.status,
+        contentType: response.headers.get("content-type"),
+        bytes: new Uint8Array(await response.arrayBuffer()),
+      };
+    },
   };
 };
 

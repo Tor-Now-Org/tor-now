@@ -1,5 +1,6 @@
 import {
   BUSINESS_DEFAULTS,
+  freeSlots,
   money,
   subscriptionStateOn,
   todayIn,
@@ -10,6 +11,9 @@ import {
   validationFailed,
   type Business,
   type BusinessId,
+  type BusinessPhoto,
+  type BusinessPhotoId,
+  type PhotoSlot,
   type DateOverride,
   type ResourceId,
   type Service,
@@ -18,6 +22,8 @@ import {
   type Patch,
   type WorkingHours,
 } from "@tor-now/domain";
+import { PHOTOS } from "../config.ts";
+import type { PhotoStore } from "../ports/photo-store.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { loadOwnedBusiness, loadOwnedResource, requireUser } from "./authorization.ts";
 
@@ -47,12 +53,24 @@ export type RegistrationInput = {
   }[];
 };
 
+/** The object key a photo is stored under. Never guessed, always recorded. */
+const pathFor = (businessId: BusinessId, slot: PhotoSlot, contentType: string) =>
+  `${businessId}/${slot}-${Date.now()}.${EXTENSIONS[contentType] ?? "bin"}`;
+
+const EXTENSIONS: Readonly<Record<string, string>> = Object.freeze({
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+});
+
 export const businessService = ({
   unitOfWork,
   clock,
+  photos,
 }: {
   unitOfWork: UnitOfWork;
   clock: Clock;
+  photos: PhotoStore;
 }) => ({
   /**
    * Registration creates the Business, its owner Membership, at least one
@@ -256,6 +274,111 @@ export const businessService = ({
       }
       await repositories.services.delete(serviceId);
     });
+  },
+
+  // -------------------------------------------------------------------------
+  // Photos
+  // -------------------------------------------------------------------------
+
+  async listPhotos(
+    actor: Actor,
+    businessId: BusinessId,
+  ): Promise<readonly BusinessPhoto[]> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      return repositories.businessPhotos.listForBusiness(businessId);
+    });
+  },
+
+  /**
+   * Adds one photo to one slot.
+   *
+   * The bytes go to the store first and the row second, because the opposite
+   * order can leave a row pointing at nothing — a broken picture on a public
+   * page. This order can leave an object with no row, which is invisible and
+   * costs a few kilobytes; of the two failures it is plainly the better one.
+   */
+  async addPhoto(
+    actor: Actor,
+    businessId: BusinessId,
+    input: {
+      slot: PhotoSlot;
+      bytes: Uint8Array;
+      contentType: string;
+    },
+  ): Promise<BusinessPhoto> {
+    if (!PHOTOS.allowedTypes.includes(input.contentType as never)) {
+      throw validationFailed(
+        `A photo must be one of ${PHOTOS.allowedTypes.join(", ")}`,
+        { contentType: input.contentType },
+      );
+    }
+    if (input.bytes.byteLength === 0) {
+      throw validationFailed("A photo cannot be empty");
+    }
+    if (input.bytes.byteLength > PHOTOS.maximumBytes) {
+      throw validationFailed(
+        `A photo may be at most ${PHOTOS.maximumBytes} bytes`,
+        { byteSize: input.bytes.byteLength },
+      );
+    }
+
+    // Ownership and the free slot are read before anything is uploaded, so a
+    // stranger's bytes never reach the bucket at all.
+    const free = await unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      const existing =
+        await repositories.businessPhotos.listForBusiness(businessId);
+      return freeSlots(existing.map((photo) => photo.slot));
+    });
+    if (!free.includes(input.slot)) {
+      throw validationFailed("That photo slot is already taken", {
+        slot: input.slot,
+      });
+    }
+
+    const stored = await photos.put({
+      path: pathFor(businessId, input.slot, input.contentType),
+      bytes: input.bytes,
+      contentType: input.contentType,
+    });
+
+    try {
+      return await unitOfWork.run(actor, async ({ repositories }) => {
+        await loadOwnedBusiness(repositories, actor, businessId);
+        return repositories.businessPhotos.create({
+          businessId,
+          slot: input.slot,
+          storagePath: stored.path,
+          contentType: input.contentType,
+          byteSize: input.bytes.byteLength,
+        });
+      });
+    } catch (cause) {
+      // The slot was free a moment ago and is not now, or the write failed for
+      // any other reason. Either way nothing points at these bytes.
+      await photos.remove(stored.path);
+      throw cause;
+    }
+  },
+
+  async deletePhoto(
+    actor: Actor,
+    businessId: BusinessId,
+    photoId: BusinessPhotoId,
+  ): Promise<void> {
+    const removed = await unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      const photo = await repositories.businessPhotos.findById(photoId);
+      if (photo === null || photo.businessId !== businessId) {
+        throw notFound("BusinessPhoto", photoId);
+      }
+      await repositories.businessPhotos.delete(photoId);
+      return photo;
+    });
+    // The row is gone, so nothing can render this object; dropping the bytes
+    // after is a tidy-up rather than part of the change.
+    await photos.remove(removed.storagePath);
   },
 
   // -------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import { auditReader, auditSink } from "./audit-sink.ts";
 import { assumeIdentity, type Sql, type Transaction } from "./client.ts";
 import {
   administratorAllowlistRepository,
+  businessPhotoRepository,
   businessRepository,
   membershipRepository,
   userRepository,
@@ -23,6 +24,7 @@ import {
 const repositoriesOn = (tx: Transaction): Repositories => ({
   users: userRepository(tx),
   businesses: businessRepository(tx),
+  businessPhotos: businessPhotoRepository(tx),
   memberships: membershipRepository(tx),
   resources: resourceRepository(tx),
   services: serviceRepository(tx),

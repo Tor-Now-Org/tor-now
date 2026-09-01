@@ -304,6 +304,42 @@ body {
   .toast { position: absolute; bottom: 26px; }
 }
 
+/* ---------------------------------------------------------------------------
+ * The business gallery.
+ *
+ * On a phone the cover is the top of the screen and the thumbnails are a row
+ * under it, which is the whole of the design. On a wide screen the same markup
+ * would give a 720px cover and 227px thumbnails, pushing the thing the page is
+ * for — choosing a service and a time — below the fold. So the pictures are
+ * capped there rather than scaled with the column.
+ * ------------------------------------------------------------------------- */
+.gallery-cover {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--sunken);
+}
+.gallery-thumbs { display: flex; gap: 8px; }
+.gallery-thumb {
+  flex: 1;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 0;
+  transition: opacity .13s ease, border-color .13s ease;
+}
+.gallery-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (min-width: 1024px) {
+  .gallery-cover { max-height: 300px; }
+  /* Fixed rather than a share of the column, so three thumbnails do not become
+     three more covers. */
+  .gallery-thumbs { gap: 10px; }
+  .gallery-thumb { flex: 0 0 96px; }
+}
+
 /* A pointer is not a thumb: rows that are merely tappable on a phone should
    also look reachable when there is a cursor to put on them. */
 @media (hover: hover) and (pointer: fine) {

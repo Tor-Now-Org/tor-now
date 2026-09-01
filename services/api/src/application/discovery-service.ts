@@ -5,6 +5,7 @@ import {
   zonedToInstant,
   type Business,
   type BusinessId,
+  type BusinessPhoto,
   type Clock,
   type LocalDate,
   type Resource,
@@ -37,6 +38,8 @@ export type BusinessProfile = {
    * Service or the day still asks the availability endpoint directly.
    */
   readonly availability?: readonly DaySlots[];
+  /** The cover first, then the rest, in slot order. */
+  readonly photos: readonly BusinessPhoto[];
 };
 
 /** Midnight to midnight in the Business's own zone, not the server's. */
@@ -81,13 +84,14 @@ export const discoveryService = ({
       const business = await repositories.businesses.findById(businessId);
       if (business === null) throw notFound("Business", businessId);
 
-      const [services, resources] = await Promise.all([
+      const [services, resources, photos] = await Promise.all([
         repositories.services.listForBusiness(businessId, false),
         repositories.resources.listForBusiness(businessId),
+        repositories.businessPhotos.listForBusiness(businessId),
       ]);
 
       const bookable = resources.filter((resource) => resource.active);
-      const profile = { business, services, resources: bookable };
+      const profile = { business, services, resources: bookable, photos };
 
       const service = services[0];
       const resource = bookable[0];

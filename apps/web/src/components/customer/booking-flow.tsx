@@ -18,7 +18,8 @@ import { useSession } from "@/lib/session.tsx";
 import { DateStrip } from "../date-strip.tsx";
 import { SlotGrid } from "../slot-grid.tsx";
 import { VerifyPanel } from "../verify-panel.tsx";
-import { Button, Card, Critical, Note, Sheet, Spinner, Warning } from "../ui.tsx";
+import { BusinessPhotos } from "./business-photos.tsx";
+import { Button, Card, Critical, Sheet, Spinner, Warning } from "../ui.tsx";
 
 /** How much of the calendar the strip offers at once. */
 const VISIBLE_DAYS = 14;
@@ -44,7 +45,7 @@ export const BookingFlow = ({
   const copy = useCopy("customer");
   const { language } = useLanguage();
   const errorText = useErrorText();
-  const { token, user, signIn } = useSession();
+  const { token, signIn } = useSession();
 
   const [profile, setProfile] = useState<BusinessProfileDto | null>(null);
   const [service, setService] = useState<ServiceDto | null>(null);
@@ -170,6 +171,12 @@ export const BookingFlow = ({
 
   return (
     <div style={{ padding: "18px 18px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
+      <BusinessPhotos
+        photos={profile.photos}
+        businessName={business.name}
+        labels={{ gallery: copy.photosOf, showPhoto: copy.showPhoto }}
+      />
+
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <h1 style={{ fontSize: 22 }}>{business.name}</h1>
         {business.address !== null && <span className="hint">{business.address}</span>}
@@ -289,7 +296,6 @@ export const BookingFlow = ({
                 ).format(new Date(slot.startAt))}`}
               />
             </Card>
-            {token !== null && user !== null && <Note>{copy.stillVerified}</Note>}
             {error !== null && <Critical>{error}</Critical>}
             <Button onClick={confirm} busy={busy}>
               {copy.confirmBooking}

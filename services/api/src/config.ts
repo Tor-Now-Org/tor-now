@@ -54,6 +54,13 @@ export const OUTBOX = Object.freeze({
 /** ADR 0006: audit rows are retained for one year. */
 export const AUDIT_RETENTION_DAYS = 365;
 
+/** Business photos: one cover and three more, and what may be uploaded. */
+export const PHOTOS = Object.freeze({
+  bucket: "business-photos",
+  maximumBytes: 5 * 1024 * 1024,
+  allowedTypes: ["image/jpeg", "image/png", "image/webp"] as const,
+});
+
 const transportSchema = z.enum(["LOG", "WHATSAPP", "SMS"]);
 
 /**
@@ -103,6 +110,14 @@ const schema = z.object({
    */
   exposeInternalErrors: z.boolean(),
   corsOrigins: z.array(z.string()).default([]),
+  /**
+   * Where photo bytes go. Null on a deployment with no Supabase behind it,
+   * where the function serves them itself — see the photo store port.
+   */
+  storage: z
+    .object({ url: z.string().min(1), serviceRoleKey: z.string().min(1) })
+    .nullable()
+    .default(null),
 });
 
 export type Config = z.infer<typeof schema>;
@@ -117,6 +132,7 @@ const ENVIRONMENT_VARIABLE: Readonly<Record<string, string>> = Object.freeze({
   exposeVerificationCode: "EXPOSE_VERIFICATION_CODE",
   exposeInternalErrors: "EXPOSE_INTERNAL_ERRORS",
   corsOrigins: "CORS_ORIGINS",
+  storage: "SUPABASE_URL",
 });
 
 /**
@@ -132,6 +148,17 @@ const readBoolean = (
   value: string | undefined,
   whenUnset: boolean,
 ): boolean => (value === undefined ? whenUnset : value === "true");
+
+/**
+ * Supabase injects both of these into every Edge Function, so having them is
+ * the same question as "is there a Supabase behind this deployment".
+ */
+const readStorage = (env: Environment): Config["storage"] => {
+  const url = env["SUPABASE_URL"];
+  const serviceRoleKey = env["SUPABASE_SERVICE_ROLE_KEY"];
+  if (url === undefined || serviceRoleKey === undefined) return null;
+  return { url, serviceRoleKey };
+};
 
 const readTwilio = (env: Environment): Config["twilio"] => {
   const accountSid = env["TWILIO_ACCOUNT_SID"];
@@ -188,6 +215,7 @@ export const loadConfig = (env: Environment): Config => {
     verificationTransport: env["VERIFICATION_TRANSPORT"],
     notificationTransport: env["NOTIFICATION_TRANSPORT"],
     twilio: readTwilio(env),
+    storage: readStorage(env),
     exposeVerificationCode: readBoolean(
       env["EXPOSE_VERIFICATION_CODE"],
       isDevelopmentDeployment(env),

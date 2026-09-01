@@ -8,6 +8,7 @@ import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppHeader } from "@/components/app-header.tsx";
+import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
 import { Button, Card, Critical, Field, Note, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 
@@ -16,12 +17,17 @@ import { VerifyPanel } from "@/components/verify-panel.tsx";
  * approval queue — so this wizard is the whole of onboarding, and its last step
  * puts the business in front of customers.
  *
- * The four steps are the four things a Business cannot be booked without: who
- * it is, whose calendar, what it offers, and when it is open. Working Hours are
- * last because they are the only one that actually blocks a booking.
+ * Four of the steps are the four things a Business cannot be booked without:
+ * who it is, whose calendar, what it offers, and when it is open. Working Hours
+ * are last because they are the only one that actually blocks a booking.
+ *
+ * Photos are the exception and sit second, next to the rest of what a customer
+ * sees. Nothing there is required and the step can be walked straight past —
+ * which is why it is before the three that cannot be, rather than a fifth thing
+ * standing between an owner and being open.
  */
 
-const STEPS = ["details", "resources", "services", "hours"] as const;
+const STEPS = ["details", "photos", "resources", "services", "hours"] as const;
 type Step = (typeof STEPS)[number];
 
 const DEFAULT_SERVICE_MINUTES = 30;
@@ -67,6 +73,7 @@ export default function OnboardingPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState(user?.phone ?? "+972");
   const [address, setAddress] = useState("");
+  const [photos, setPhotos] = useState<readonly ChosenPhoto[]>([]);
   const [resources, setResources] = useState<string[]>([""]);
   const [services, setServices] = useState<DraftService[]>([
     { name: "", durationMinutes: DEFAULT_SERVICE_MINUTES, priceMinor: 0, bufferMinutes: null },
@@ -130,7 +137,10 @@ export default function OnboardingPage() {
   const canContinue =
     step === "details"
       ? name.trim().length >= 2 && /^\+[1-9]\d{7,14}$/.test(phone.trim())
-      : step === "resources"
+      : // Photos are optional, so this step never blocks.
+        step === "photos"
+        ? true
+        : step === "resources"
         ? resources.some((resource) => resource.trim().length > 0)
         : step === "services"
           ? services.some((service) => service.name.trim().length > 0)
@@ -151,6 +161,18 @@ export default function OnboardingPage() {
           .map((service) => ({ ...service, name: service.name.trim() })),
         workingHours: hours.flatMap((day, dayOfWeek) => rangesFor(day, dayOfWeek)),
       });
+      // The business exists now, so the held files finally have somewhere to
+      // go. A photo that fails to upload is not worth losing the business
+      // over: it is registered and bookable either way, and a missing picture
+      // is a smaller problem than a wizard that ends in an error after four
+      // steps of typing.
+      await Promise.all(
+        photos.map((photo) =>
+          api
+            .uploadBusinessPhoto(token, business.id, photo.slot, photo.file)
+            .catch(() => null),
+        ),
+      );
       setLive(business.id);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
@@ -200,6 +222,27 @@ export default function OnboardingPage() {
             </Card>
             <Note>{copy.noQueue}</Note>
           </>
+        )}
+
+        {step === "photos" && (
+          <div className="stack" style={{ gap: 16 }}>
+            <StepHeading title={copy.photosTitle} body={copy.photosBody} />
+            <PhotoPicker
+              chosen={photos}
+              onChange={setPhotos}
+              labels={{
+                cover: copy.photoCover,
+                coverHint: copy.photoCoverHint,
+                more: copy.photoMore,
+                moreHint: copy.photoMoreHint,
+                add: copy.photoAdd,
+                replace: copy.photoReplace,
+                remove: copy.photoRemove,
+                tooLarge: copy.photoTooLarge,
+                notAnImage: copy.photoNotAnImage,
+              }}
+            />
+          </div>
         )}
 
         {step === "resources" && (

@@ -7,6 +7,8 @@ import type {
   BlockId,
   Business,
   BusinessId,
+  BusinessPhoto,
+  BusinessPhotoId,
   DateOverride,
   DateOverrideId,
   Instant,
@@ -16,6 +18,7 @@ import type {
   Money,
   OccupiedSpan,
   Payment,
+  PhotoSlot,
   Resource,
   ResourceId,
   Service,
@@ -86,6 +89,24 @@ export type BusinessRepository = {
   ): Promise<Business>;
   setActive(id: BusinessId, active: boolean): Promise<Business>;
   list(page: Page, query: string | null): Promise<readonly Business[]>;
+};
+
+export type BusinessPhotoRepository = {
+  listForBusiness(businessId: BusinessId): Promise<readonly BusinessPhoto[]>;
+  findById(id: BusinessPhotoId): Promise<BusinessPhoto | null>;
+  /**
+   * Claims one slot. The database refuses a second row in the same slot, which
+   * is what makes "one cover, at most three others" true of the data rather
+   * than of whichever code path happens to be writing.
+   */
+  create(photo: {
+    businessId: BusinessId;
+    slot: PhotoSlot;
+    storagePath: string;
+    contentType: string;
+    byteSize: number;
+  }): Promise<BusinessPhoto>;
+  delete(id: BusinessPhotoId): Promise<void>;
 };
 
 export type MembershipRepository = {
@@ -320,6 +341,7 @@ export type AdministratorAllowlistRepository = {
 export type Repositories = {
   readonly users: UserRepository;
   readonly businesses: BusinessRepository;
+  readonly businessPhotos: BusinessPhotoRepository;
   readonly memberships: MembershipRepository;
   readonly resources: ResourceRepository;
   readonly services: ServiceRepository;

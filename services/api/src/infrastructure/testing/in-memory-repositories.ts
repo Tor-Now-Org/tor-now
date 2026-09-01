@@ -10,6 +10,7 @@ import {
   timeZone,
   type Appointment,
   type Business,
+  type BusinessPhoto,
   type Membership,
   type Resource,
   type Service,
@@ -23,6 +24,7 @@ import {
   localTime,
 } from "@tor-now/domain";
 import { SEARCH } from "../../config.ts";
+import { PG_ERRORS } from "../pg/client.ts";
 import type { Repositories } from "../../ports/repositories.ts";
 import type { Store } from "./in-memory-store.ts";
 
@@ -212,6 +214,46 @@ export const inMemoryRepositories = (store: Store): Repositories => {
               business.name.toLowerCase().includes(query.toLowerCase()),
           )
           .slice(page.offset, page.offset + page.limit);
+      },
+    },
+
+    businessPhotos: {
+      async listForBusiness(businessId) {
+        return store.businessPhotos
+          .filter((photo) => photo.businessId === businessId)
+          .sort((a, b) => a.slot - b.slot);
+      },
+      async findById(id) {
+        return store.businessPhotos.find((photo) => photo.id === id) ?? null;
+      },
+      async create(input) {
+        // The unique pair the schema enforces, enforced here too: the contract
+        // suite runs against both, and an implementation that quietly allowed a
+        // fifth photo would pass against memory and fail against Postgres.
+        const taken = store.businessPhotos.some(
+          (photo) =>
+            photo.businessId === input.businessId && photo.slot === input.slot,
+        );
+        if (taken) {
+          throw Object.assign(new Error("photo slot already taken"), {
+            code: PG_ERRORS.uniqueViolation,
+          });
+        }
+        const photo: BusinessPhoto = {
+          id: asId(store.nextId("business_photo")),
+          businessId: input.businessId,
+          slot: input.slot,
+          storagePath: input.storagePath,
+          contentType: input.contentType,
+          byteSize: input.byteSize,
+        };
+        store.businessPhotos.push(photo);
+        return photo;
+      },
+      async delete(id) {
+        store.businessPhotos = store.businessPhotos.filter(
+          (photo) => photo.id !== id,
+        );
       },
     },
 

@@ -5,6 +5,7 @@ import type {
   AuditEntryDto,
   BlockDto,
   BusinessDto,
+  BusinessPhotoDto,
   BusinessProfileDto,
   BusinessSummaryDto,
   CalendarDayDto,
@@ -45,6 +46,11 @@ type RequestOptions = {
   token?: string | null;
   query?: Record<string, string | number | undefined>;
   signal?: AbortSignal;
+  /**
+   * Sent as-is, with its own content type. A photo is bytes: putting it through
+   * JSON would cost a third more of every one of them to say nothing extra.
+   */
+  raw?: { bytes: Blob; contentType: string };
 };
 
 const buildUrl = (path: string, query: RequestOptions["query"]): string => {
@@ -72,7 +78,7 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<ApiErrorCode>([
 ]);
 
 const request = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
-  const { method = "GET", body, token, query, signal } = options;
+  const { method = "GET", body, token, query, signal, raw } = options;
 
   let response: Response;
   try {
@@ -81,11 +87,13 @@ const request = async <T>(path: string, options: RequestOptions = {}): Promise<T
       signal: signal ?? null,
       headers: {
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(raw === undefined ? {} : { "Content-Type": raw.contentType }),
         ...(token === undefined || token === null
           ? {}
           : { Authorization: `Bearer ${token}` }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(raw === undefined ? {} : { body: raw.bytes }),
     });
   } catch (cause) {
     // A failed fetch is the network, not the API. The interface says so rather
@@ -156,6 +164,27 @@ export const api = {
       birthDate?: string | null;
     },
   ) => request<UserDto>("/me", { method: "PATCH", body: changes, token }),
+
+  businessPhotos: (token: string, businessId: string) =>
+    request<BusinessPhotoDto[]>(`/businesses/${businessId}/photos`, { token }),
+
+  uploadBusinessPhoto: (
+    token: string,
+    businessId: string,
+    slot: number,
+    file: Blob,
+  ) =>
+    request<BusinessPhotoDto>(`/businesses/${businessId}/photos/${slot}`, {
+      method: "PUT",
+      token,
+      raw: { bytes: file, contentType: file.type },
+    }),
+
+  deleteBusinessPhoto: (token: string, businessId: string, photoId: string) =>
+    request<void>(`/businesses/${businessId}/photos/${photoId}`, {
+      method: "DELETE",
+      token,
+    }),
 
   deleteAccount: (token: string) =>
     request<void>("/me", { method: "DELETE", token }),

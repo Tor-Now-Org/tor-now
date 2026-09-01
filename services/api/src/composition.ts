@@ -1,5 +1,5 @@
 import { greedyWalk, systemClock, type Clock } from "@tor-now/domain";
-import { loadConfig, type Config, type Environment } from "./config.ts";
+import { loadConfig, PHOTOS, type Config, type Environment } from "./config.ts";
 import { adminService } from "./application/admin-service.ts";
 import { authService, profileService } from "./application/auth-service.ts";
 import { availabilityService } from "./application/availability-service.ts";
@@ -16,6 +16,8 @@ import { postgresUnitOfWork } from "./infrastructure/pg/unit-of-work.ts";
 import { jobCredential } from "./infrastructure/pg/job-credential.ts";
 import { verificationCodeRepository } from "./infrastructure/pg/verification-repository.ts";
 import { logNotifier } from "./infrastructure/notifier/log-notifier.ts";
+import { inFunctionPhotos } from "./infrastructure/photos/in-function-photos.ts";
+import { supabaseStoragePhotos } from "./infrastructure/photos/supabase-storage.ts";
 import { twilioNotifier } from "./infrastructure/notifier/twilio-notifier.ts";
 import { randomDigitsGenerator, sha256Hasher } from "./infrastructure/verification/code.ts";
 import {
@@ -58,6 +60,16 @@ const verificationSenderFor = (config: Config): VerificationSender => {
   return twilioVerificationSender(config.twilio, config.verificationTransport);
 };
 
+/**
+ * Storage when there is a Supabase behind the deployment, and the function's
+ * own memory when there is not — the same shape as the notifier, and for the
+ * same reason: the whole path should be exercisable without the vendor.
+ */
+const photoStoreFor = (config: Config) =>
+  config.storage === null
+    ? inFunctionPhotos()
+    : supabaseStoragePhotos({ ...config.storage, bucket: PHOTOS.bucket });
+
 export const compose = (
   environment: Environment,
   overrides: { clock?: Clock; sql?: Sql } = {},
@@ -69,6 +81,7 @@ export const compose = (
   const unitOfWork = postgresUnitOfWork(sql);
   const tokens: TokenVerifier = jwtVerifier(config.jwtSecret);
   const notifier = notifierFor(config);
+  const photos = photoStoreFor(config);
 
   const admin = adminService({ unitOfWork, clock });
   // ADR 0001: the strategy is named here, so replacing it is a wiring change.
@@ -77,6 +90,7 @@ export const compose = (
   const services = {
     config,
     tokens,
+    photos,
     jobCredential: jobCredential(sql),
 
     auth: authService({
@@ -96,7 +110,7 @@ export const compose = (
     discovery: discoveryService({ unitOfWork, clock, strategy: greedyWalk }),
     availability,
     booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
-    business: businessService({ unitOfWork, clock }),
+    business: businessService({ unitOfWork, clock, photos }),
     calendar: calendarService({ unitOfWork }),
     admin,
 

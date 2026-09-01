@@ -5,6 +5,7 @@ import { appointmentRepository } from "./appointment-repository.ts";
 import { paymentRepository, subscriptionRepository } from "./billing-repositories.ts";
 import {
   administratorAllowlistRepository,
+  businessPhotoRepository,
   businessRepository,
   membershipRepository,
   userRepository,
@@ -68,6 +69,7 @@ if (databaseUrl === undefined || databaseUrl === "") {
       repositories: {
         users: userRepository(transaction),
         businesses: businessRepository(transaction),
+        businessPhotos: businessPhotoRepository(transaction),
         memberships: membershipRepository(transaction),
         resources: resourceRepository(transaction),
         services: serviceRepository(transaction),

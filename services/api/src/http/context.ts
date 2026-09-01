@@ -1,4 +1,4 @@
-import { asId, validationFailed } from "@tor-now/domain";
+import { asId, validationFailed, type PhotoSlot } from "@tor-now/domain";
 import type { Context, Env, Input } from "hono";
 
 /**
@@ -94,4 +94,19 @@ export const idParam = <T extends string, E extends Env>(
     throw validationFailed(`${name} is required`);
   }
   return asId<T>(value);
+};
+
+/**
+ * The slot a photo is going into. Validated here rather than trusted, because
+ * the database's range check is a backstop and a 400 is a better answer than a
+ * constraint violation.
+ */
+export const photoSlotParam = <E extends Env>(
+  context: AnyContext<E>,
+): PhotoSlot => {
+  const raw = Number(context.req.param("slot"));
+  if (raw === 0 || raw === 1 || raw === 2 || raw === 3) return raw;
+  throw validationFailed("A photo slot must be 0, 1, 2 or 3", {
+    slot: context.req.param("slot"),
+  });
 };

@@ -272,3 +272,102 @@ describe("the owner routes", () => {
     expect(body).toBeNull();
   });
 });
+
+describe("business photos over HTTP", () => {
+  const A_PICTURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+
+  const anOwnerWithABusiness = async (api: HttpHarness) => {
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const businessId = (
+      (await api.post("/businesses", A_BUSINESS, owner.token)).body as { id: string }
+    ).id;
+    return { owner, businessId };
+  };
+
+  it("uploads a cover, lists it, serves the bytes and deletes it", async () => {
+    const api = httpHarness();
+    const { owner, businessId } = await anOwnerWithABusiness(api);
+
+    const created = await api.putBytes(
+      `/businesses/${businessId}/photos/0`,
+      A_PICTURE,
+      "image/png",
+      owner.token,
+    );
+    expect(created.status).toBe(201);
+    const photo = created.body as { id: string; slot: number; url: string; byteSize: number };
+    expect(photo).toMatchObject({ slot: 0, byteSize: A_PICTURE.byteLength });
+
+    const listed = await api.get(`/businesses/${businessId}/photos`, owner.token);
+    expect(listed.body).toHaveLength(1);
+
+    // The URL the client is given actually serves the bytes that were sent.
+    const fetched = await api.getBytes(photo.url);
+    expect(fetched.status).toBe(200);
+    expect(fetched.contentType).toContain("image/png");
+    expect([...fetched.bytes]).toEqual([...A_PICTURE]);
+
+    expect(
+      (await api.delete(`/businesses/${businessId}/photos/${photo.id}`, owner.token)).status,
+    ).toBe(204);
+    expect((await api.getBytes(photo.url)).status).toBe(404);
+  });
+
+  it("a customer sees the photos on the business, cover first", async () => {
+    const api = httpHarness();
+    const { owner, businessId } = await anOwnerWithABusiness(api);
+    for (const slot of [3, 0]) {
+      await api.putBytes(
+        `/businesses/${businessId}/photos/${slot}`,
+        A_PICTURE,
+        "image/jpeg",
+        owner.token,
+      );
+    }
+
+    // No token: this is the public page.
+    const profile = await api.get(`/businesses/${businessId}`);
+    expect((profile.body as { photos: { slot: number }[] }).photos.map((p) => p.slot)).toEqual([0, 3]);
+  });
+
+  it("refuses a slot that is not one of the four", async () => {
+    const api = httpHarness();
+    const { owner, businessId } = await anOwnerWithABusiness(api);
+    const answer = await api.putBytes(
+      `/businesses/${businessId}/photos/9`,
+      A_PICTURE,
+      "image/png",
+      owner.token,
+    );
+    expect(answer.status).toBe(400);
+    expect(answer.body).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
+  });
+
+  it("refuses a stranger, and something that is not an image", async () => {
+    const api = httpHarness();
+    const { owner, businessId } = await anOwnerWithABusiness(api);
+    const stranger = await signInOverHttp(api, "+972500000077", "זר");
+
+    expect(
+      (
+        await api.putBytes(
+          `/businesses/${businessId}/photos/0`,
+          A_PICTURE,
+          "image/png",
+          stranger.token,
+        )
+      ).status,
+    ).toBe(403);
+
+    expect(
+      (
+        await api.putBytes(
+          `/businesses/${businessId}/photos/0`,
+          A_PICTURE,
+          "application/pdf",
+          owner.token,
+        )
+      ).status,
+    ).toBe(400);
+  });
+});
