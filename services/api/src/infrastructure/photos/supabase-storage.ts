@@ -8,16 +8,35 @@ import type { PhotoStore, StoredPhoto } from "../../ports/photo-store.ts";
  * all. It never leaves the function, and the URL handed back is public, so
  * reading a photo costs a browser one CDN request and no round trip here.
  */
-export const supabaseStoragePhotos = (config: {
-  url: string;
-  serviceRoleKey: string;
-  bucket: string;
-}): PhotoStore => {
+/**
+ * How the key is presented.
+ *
+ * Supabase issues two kinds of secret. The legacy one is a JWT and travels on
+ * both headers, which is what every older example shows. The current one
+ * (`sb_secret_…`) is opaque, and sending it as a Bearer makes the platform try
+ * to parse it as a JWT and refuse the request with "Invalid Compact JWS" — so
+ * it goes on `apikey` alone. Which kind a project has is not something the
+ * function chooses, so it reads the key rather than assuming.
+ */
+export const storageHeaders = (key: string): Readonly<Record<string, string>> =>
+  key.startsWith("sb_")
+    ? { apikey: key }
+    : { apikey: key, Authorization: `Bearer ${key}` };
+
+export const supabaseStoragePhotos = (
+  config: {
+    url: string;
+    serviceRoleKey: string;
+    bucket: string;
+  },
+  /** Injected so the header choice above can be tested without a vendor. */
+  send: typeof fetch = fetch,
+): PhotoStore => {
   const base = config.url.replace(/\/+$/, "");
   const object = (path: string) =>
     `${base}/storage/v1/object/${config.bucket}/${encodeURI(path)}`;
 
-  const authorization = { Authorization: `Bearer ${config.serviceRoleKey}` };
+  const authorization = storageHeaders(config.serviceRoleKey);
 
   return {
     kind: "SUPABASE_STORAGE",
@@ -26,7 +45,7 @@ export const supabaseStoragePhotos = (config: {
       `${base}/storage/v1/object/public/${config.bucket}/${encodeURI(path)}`,
 
     async put({ path, bytes, contentType }): Promise<StoredPhoto> {
-      const response = await fetch(object(path), {
+      const response = await send(object(path), {
         method: "POST",
         headers: {
           ...authorization,
@@ -49,7 +68,7 @@ export const supabaseStoragePhotos = (config: {
     },
 
     async remove(path) {
-      const response = await fetch(object(path), {
+      const response = await send(object(path), {
         method: "DELETE",
         headers: authorization,
       });
