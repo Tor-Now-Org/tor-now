@@ -173,8 +173,14 @@ export const api = {
       ...(signal === undefined ? {} : { signal }),
     }),
 
-  businessProfile: (businessId: string) =>
-    request<BusinessProfileDto>(`/businesses/${businessId}`),
+  /**
+   * Optionally carries the first day's availability, which saves the booking
+   * screen a second round trip it could not begin until this one answered.
+   */
+  businessProfile: (businessId: string, range?: { from: string; to: string }) =>
+    request<BusinessProfileDto>(`/businesses/${businessId}`, {
+      ...(range === undefined ? {} : { query: range }),
+    }),
 
   availability: (
     businessId: string,

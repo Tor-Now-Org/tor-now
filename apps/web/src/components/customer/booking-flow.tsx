@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError, isRecoverableSlotError } from "@/lib/api/errors.ts";
 import type {
@@ -22,6 +22,15 @@ import { Button, Card, Critical, Note, Sheet, Spinner, Warning } from "../ui.tsx
 
 /** How much of the calendar the strip offers at once. */
 const VISIBLE_DAYS = 14;
+
+const key = (
+  serviceId: string | undefined,
+  resourceId: string | undefined,
+  date: string | undefined,
+): string | null =>
+  serviceId === undefined || resourceId === undefined || date === undefined
+    ? null
+    : `${serviceId}|${resourceId}|${date}`;
 
 type Stage = "choosing" | "confirming" | "verifying" | "done";
 
@@ -47,16 +56,33 @@ export const BookingFlow = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** The service, calendar and day the profile response already answered for. */
+  const alreadyHave = useRef<string | null>(null);
+
   useEffect(() => {
+    const today = todayIn(business.timeZone);
     api
-      .businessProfile(business.id)
+      .businessProfile(business.id, { from: today, to: today })
       .then((loaded) => {
         setProfile(loaded);
         setService(loaded.services[0] ?? null);
         setResource(loaded.resources[0] ?? null);
+        // The first day came back with the profile, so the screen can draw
+        // times immediately instead of waiting for a second request. Remember
+        // which combination it answered, so the effect below does not
+        // immediately ask for the same thing again.
+        const first = loaded.availability?.[0];
+        if (first !== undefined) {
+          setDay(first);
+          alreadyHave.current = key(
+            loaded.services[0]?.id,
+            loaded.resources[0]?.id,
+            first.date,
+          );
+        }
       })
       .catch((cause) => setError(errorText(isApiError(cause) ? cause.code : "INTERNAL")));
-  }, [business.id, errorText]);
+  }, [business.id, business.timeZone, errorText]);
 
   /**
    * ADR 0003: availability is fetched on demand — when a service or date is
@@ -84,8 +110,15 @@ export const BookingFlow = ({
 
   useEffect(() => {
     setSlot(null);
+    // The profile may already have answered this exact question. Skip it once,
+    // then forget — every later change of service, calendar or day is a real
+    // request, because availability is never assumed to have stayed still.
+    if (alreadyHave.current === key(service?.id, resource?.id, date)) {
+      alreadyHave.current = null;
+      return;
+    }
     void loadDay();
-  }, [loadDay]);
+  }, [loadDay, service, resource, date]);
 
   const confirm = async () => {
     if (service === null || resource === null || slot === null) return;

@@ -201,6 +201,7 @@ export const harness = (options: { now?: Instant } = {}) => {
   };
 
   const admin = adminService({ unitOfWork, clock });
+  const availability = availabilityService({ unitOfWork, clock, strategy: greedyWalk });
 
   return {
     store,
@@ -224,8 +225,8 @@ export const harness = (options: { now?: Instant } = {}) => {
         exposeCode: true,
       }),
       profile: profileService({ unitOfWork }),
-      discovery: discoveryService({ unitOfWork }),
-      availability: availabilityService({ unitOfWork, clock, strategy: greedyWalk }),
+      discovery: discoveryService({ unitOfWork, availability }),
+      availability,
       booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
       business: businessService({ unitOfWork, clock }),
       calendar: calendarService({ unitOfWork }),

@@ -142,14 +142,24 @@ export const createApp = (services: Services) => {
   });
 
   app.get("/businesses/:businessId", async (context) => {
+    // `from`/`to` are optional: with them the response also carries the times
+    // the screen draws first, which saves the client a second round trip it
+    // could not start until this one answered.
+    const range = parseQuery(context, schema.optionalDateRangeSchema);
     const profile = await services.discovery.profile(
       actorOf(context),
       idParam(context, "businessId"),
+      range.from === undefined || range.to === undefined
+        ? undefined
+        : { from: range.from as never, to: range.to as never },
     );
     return context.json({
       business: wire.businessOut(profile.business),
       services: profile.services.map(wire.serviceOut),
       resources: profile.resources.map(wire.resourceOut),
+      ...(profile.availability === undefined
+        ? {}
+        : { availability: profile.availability }),
     });
   });
 

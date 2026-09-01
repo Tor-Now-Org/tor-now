@@ -71,6 +71,8 @@ export const compose = (
   const notifier = notifierFor(config);
 
   const admin = adminService({ unitOfWork, clock });
+  // ADR 0001: the strategy is named here, so replacing it is a wiring change.
+  const availability = availabilityService({ unitOfWork, clock, strategy: greedyWalk });
 
   const services = {
     config,
@@ -91,9 +93,8 @@ export const compose = (
     }),
 
     profile: profileService({ unitOfWork }),
-    discovery: discoveryService({ unitOfWork }),
-    // ADR 0001: the strategy is named here, so replacing it is a wiring change.
-    availability: availabilityService({ unitOfWork, clock, strategy: greedyWalk }),
+    discovery: discoveryService({ unitOfWork, availability }),
+    availability,
     booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
     business: businessService({ unitOfWork, clock }),
     calendar: calendarService({ unitOfWork }),

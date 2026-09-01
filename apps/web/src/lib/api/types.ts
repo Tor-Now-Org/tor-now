@@ -40,6 +40,8 @@ export type BusinessProfileDto = {
   business: BusinessDto;
   services: ServiceDto[];
   resources: ResourceDto[];
+  /** Present when the request asked for a date range. */
+  availability?: DayAvailabilityDto[];
 };
 
 export type SlotDto = { startAt: string; endAt: string };

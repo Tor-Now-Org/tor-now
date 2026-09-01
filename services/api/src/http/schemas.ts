@@ -179,6 +179,17 @@ export const dateRangeSchema = z.object({
 
 export const calendarDaySchema = z.object({ date: localDateSchema });
 
+/** Both or neither; a half-given range is a mistake, not a default. */
+export const optionalDateRangeSchema = z
+  .object({
+    from: localDateSchema.optional(),
+    to: localDateSchema.optional(),
+  })
+  .refine(
+    (range) => (range.from === undefined) === (range.to === undefined),
+    { message: "from and to must be given together" },
+  );
+
 export const paymentSchema = z.object({
   amountMinor: z.number().int().positive(),
   paidOn: localDateSchema,
