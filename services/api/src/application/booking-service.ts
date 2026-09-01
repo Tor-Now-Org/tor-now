@@ -1,6 +1,7 @@
 import {
   cancelAppointment,
   clearNoShow,
+  displayName,
   END_OF_DAY,
   formatInstant,
   instantToZoned,
@@ -64,7 +65,7 @@ const notificationFor = (
   template: OutboundMessage["template"],
   appointment: Appointment,
   business: { name: string; phone: string; timeZone: string },
-  customer: { name: string; phone: string },
+  customer: { givenName: string; familyName: string | null; phone: string },
   previousStartAt?: string,
 ): OutboundMessage => ({
   recipientPhone: customer.phone,
@@ -73,7 +74,7 @@ const notificationFor = (
     businessName: business.name,
     businessPhone: business.phone,
     serviceName: appointment.serviceName,
-    customerName: customer.name,
+    customerName: displayName(customer),
     startAt: formatInstant(appointment.startAt),
     ...(previousStartAt === undefined ? {} : { previousStartAt }),
   },

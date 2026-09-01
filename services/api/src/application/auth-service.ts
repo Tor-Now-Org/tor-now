@@ -95,7 +95,7 @@ export const authService = (dependencies: AuthDependencies) => ({
   async verifyCode(
     phone: string,
     code: string,
-    name: string | null,
+    name: { givenName: string; familyName: string | null } | null,
   ): Promise<SignInResult> {
     const record = await dependencies.codes.latestLiveFor(phone);
     if (record === null) {
@@ -139,7 +139,10 @@ export const authService = (dependencies: AuthDependencies) => ({
         existing ??
         (await repositories.users.create({
           phone,
-          name: (name ?? "").trim() || "אורח",
+          // Sign-in asks for a first name and accepts the answer; someone who
+          // gives none is still a customer, and can fill it in later.
+          givenName: name?.givenName.trim() || "אורח",
+          familyName: name?.familyName?.trim() || null,
           birthDate: null,
         }));
 
@@ -175,7 +178,7 @@ export const profileService = ({ unitOfWork }: ProfileDependencies) => ({
 
   async updateProfile(
     actor: Actor,
-    changes: Patch<{ name: string; birthDate: string | null }>,
+    changes: Patch<{ givenName: string; familyName: string | null; birthDate: string | null }>,
   ): Promise<User> {
     const userId = requireUser(actor);
     const birthDate: LocalDate | null | undefined =
@@ -187,7 +190,8 @@ export const profileService = ({ unitOfWork }: ProfileDependencies) => ({
 
     return unitOfWork.run(actor, ({ repositories }) =>
       repositories.users.update(userId, {
-        ...(changes.name === undefined ? {} : { name: changes.name }),
+        ...(changes.givenName === undefined ? {} : { givenName: changes.givenName }),
+        ...(changes.familyName === undefined ? {} : { familyName: changes.familyName }),
         ...(birthDate === undefined ? {} : { birthDate }),
       }),
     );

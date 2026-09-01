@@ -43,10 +43,14 @@ export type UserRepository = {
   findByPhone(phone: string): Promise<User | null>;
   create(user: {
     phone: string;
-    name: string;
+    givenName: string;
+    familyName: string | null;
     birthDate: LocalDate | null;
   }): Promise<User>;
-  update(id: UserId, changes: Patch<Pick<User, "name" | "birthDate">>): Promise<User>;
+  update(
+    id: UserId,
+    changes: Patch<Pick<User, "givenName" | "familyName" | "birthDate">>,
+  ): Promise<User>;
   /** ADR 0008: marks the row deleted and hides it; personal data is retained. */
   softDelete(id: UserId): Promise<User>;
   restore(id: UserId): Promise<User>;

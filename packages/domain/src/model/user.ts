@@ -10,7 +10,10 @@ import type { LocalDate } from "../time/local-date.ts";
 export type User = {
   readonly id: UserId;
   readonly phone: string;
-  readonly name: string;
+  /** What a person is called. Always present; every screen renders it. */
+  readonly givenName: string;
+  /** Optional, because sign-in asks for a first name and stops there. */
+  readonly familyName: string | null;
   readonly birthDate: LocalDate | null;
   /** ADR 0008: deletion hides the row rather than removing it. */
   readonly deletedAt: Instant | null;
@@ -24,6 +27,25 @@ export type User = {
   readonly isAdministrator: boolean;
   readonly createdAt: Instant;
 };
+
+/**
+ * The name to show. Joining happens here rather than in each interface, so
+ * "דנה כהן" and "דנה" are formatted the same way everywhere.
+ */
+export const displayName = (
+  user: Pick<User, "givenName" | "familyName">,
+): string =>
+  user.familyName === null ? user.givenName : `${user.givenName} ${user.familyName}`;
+
+/** How an owner's customer list is ordered: by family name where there is one. */
+export const compareByName = (
+  left: Pick<User, "givenName" | "familyName">,
+  right: Pick<User, "givenName" | "familyName">,
+): number =>
+  (left.familyName ?? left.givenName).localeCompare(
+    right.familyName ?? right.givenName,
+    "he",
+  ) || left.givenName.localeCompare(right.givenName, "he");
 
 export const isDeleted = (user: Pick<User, "deletedAt">): boolean =>
   user.deletedAt !== null;

@@ -60,7 +60,8 @@ const nullableLocalDate = (value: unknown) =>
 export const toUser = (row: Row): User => ({
   id: asId(text(row["id"])),
   phone: text(row["phone"]),
-  name: text(row["name"]),
+  givenName: text(row["given_name"]),
+  familyName: nullableText(row["family_name"]),
   birthDate: nullableLocalDate(row["birth_date"]),
   deletedAt: nullableInstant(row["deleted_at"]),
   anonymisedAt: nullableInstant(row["anonymised_at"]),

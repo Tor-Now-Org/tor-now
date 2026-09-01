@@ -91,6 +91,9 @@ export type CalendarAppointmentDto = AppointmentDto & {
 export type UserDto = {
   id: string;
   phone: string;
+  givenName: string;
+  familyName: string | null;
+  /** The two joined, as the API renders them. Display only. */
   name: string;
   birthDate: string | null;
   isAdministrator: boolean;

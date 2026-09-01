@@ -1,4 +1,6 @@
 import {
+  compareByName,
+  displayName,
   END_OF_DAY,
   MIDNIGHT,
   notFound,
@@ -66,7 +68,7 @@ export const calendarService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => (
           const customer = customers.get(appointment.customerId);
           return {
             ...appointment,
-            customerName: customer?.name ?? "—",
+            customerName: customer === undefined ? "—" : displayName(customer),
             customerPhone: customer?.phone ?? "",
           };
         }),
@@ -125,7 +127,8 @@ export const calendarService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => (
       );
       return memberships
         .map((membership) => users.get(membership.userId))
-        .filter((user): user is User => user !== undefined && user.deletedAt === null);
+        .filter((user): user is User => user !== undefined && user.deletedAt === null)
+        .sort(compareByName);
     });
   },
 

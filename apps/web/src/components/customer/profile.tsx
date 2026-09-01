@@ -17,7 +17,8 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
   const { token, user, signOut, refresh } = useSession();
   const errorText = useErrorText();
 
-  const [name, setName] = useState(user?.name ?? "");
+  const [givenName, setGivenName] = useState(user?.givenName ?? "");
+  const [familyName, setFamilyName] = useState(user?.familyName ?? "");
   const [birthDate, setBirthDate] = useState(user?.birthDate ?? "");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,7 +32,8 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
     setError(null);
     try {
       await api.updateProfile(token, {
-        name: name.trim(),
+        givenName: givenName.trim(),
+        familyName: familyName.trim() === "" ? null : familyName.trim(),
         birthDate: birthDate.trim() === "" ? null : birthDate.trim(),
       });
       await refresh();
@@ -65,10 +67,18 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Field
-          id="profile-name"
+          id="profile-given-name"
           label={copy.firstName}
-          value={name}
-          onChange={(event) => { setName(event.target.value); setSaved(false); }}
+          autoComplete="given-name"
+          value={givenName}
+          onChange={(event) => { setGivenName(event.target.value); setSaved(false); }}
+        />
+        <Field
+          id="profile-family-name"
+          label={copy.lastName}
+          autoComplete="family-name"
+          value={familyName}
+          onChange={(event) => { setFamilyName(event.target.value); setSaved(false); }}
         />
         <Field
           id="profile-birth"

@@ -1,6 +1,7 @@
 import {
   applyPayment,
   forbidden,
+  displayName,
   money,
   notFound,
   parseLocalDate,
@@ -79,7 +80,7 @@ export const adminService = (dependencies: {
               subscription,
               subscriptionState:
                 subscription === null ? null : subscriptionStateOn(subscription, today),
-              ownerName: owner?.name ?? null,
+              ownerName: owner === null || owner === undefined ? null : displayName(owner),
             };
           }),
         );

@@ -28,14 +28,35 @@ const uuidSchema = z.string().uuid();
 
 export const requestCodeSchema = z.object({ phone: phoneSchema });
 
+const personName = z.object({
+  givenName: z.string().trim().min(1).max(80),
+  familyName: z.string().trim().min(1).max(80).nullable().default(null),
+});
+
 export const verifyCodeSchema = z.object({
   phone: phoneSchema,
   code: z.string().trim().regex(/^\d{4,8}$/),
-  name: z.string().trim().min(1).max(80).nullable().default(null),
+  /**
+   * Accepts either shape. The screens send the two halves; a caller that only
+   * has a single name — the seed script, an older client — sends a string and
+   * it becomes the given name.
+   */
+  name: z
+    .union([personName, z.string().trim().min(1).max(80)])
+    .nullable()
+    .default(null)
+    .transform((value) =>
+      value === null
+        ? null
+        : typeof value === "string"
+          ? { givenName: value, familyName: null }
+          : value,
+    ),
 });
 
 export const updateProfileSchema = z.object({
-  name: z.string().trim().min(1).max(80).optional(),
+  givenName: z.string().trim().min(1).max(80).optional(),
+  familyName: z.string().trim().min(1).max(80).nullable().optional(),
   birthDate: localDateSchema.nullable().optional(),
 });
 

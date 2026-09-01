@@ -75,6 +75,15 @@ export const call = async <T>(
  * about the owner's calendar does not have to re-test the sign-in screen.
  * The sign-in screen has its own spec.
  */
+/** The two halves the screens ask for, from one test-friendly string. */
+const splitName = (name: string) => {
+  const [givenName, ...rest] = name.split(" ").filter((part) => part !== "");
+  return {
+    givenName: givenName ?? name,
+    familyName: rest.length === 0 ? null : rest.join(" "),
+  };
+};
+
 export const signInDirectly = async (
   page: Page,
   phone: string,
@@ -86,7 +95,7 @@ export const signInDirectly = async (
   });
   const session = await call<{ token: string; user: { id: string } }>("/auth/verify", {
     method: "POST",
-    body: { phone, code, name },
+    body: { phone, code, name: splitName(name) },
   });
 
   await page.addInitScript(
@@ -116,7 +125,7 @@ export const aBusinessWithOpenHours = async (options: {
   });
   const owner = await call<{ token: string; user: { id: string } }>("/auth/verify", {
     method: "POST",
-    body: { phone: options.ownerPhone, code, name: "בעלים" },
+    body: { phone: options.ownerPhone, code, name: splitName("בעלים") },
   });
 
   const business = await call<{ id: string; name: string }>("/businesses", {

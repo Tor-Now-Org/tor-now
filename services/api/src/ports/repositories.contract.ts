@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   asId,
+  displayName,
   isActive,
   money,
   parseInstant,
@@ -48,7 +49,8 @@ export const describeRepositoryContract = (
     const aBookableBusiness = async (repositories: Repositories, suffix: string) => {
       const owner = await repositories.users.create({
         phone: `+9725000${suffix}`,
-        name: "בעלים",
+        givenName: "בעלים",
+          familyName: null,
         birthDate: null,
       });
       const business = await repositories.businesses.create({
@@ -100,7 +102,8 @@ export const describeRepositoryContract = (
       await withRepositories(async (repositories) => {
         const created = await repositories.users.create({
           phone: "+972500001111",
-          name: "דנה",
+          givenName: "דנה",
+          familyName: null,
           birthDate: null,
         });
 
@@ -120,7 +123,8 @@ export const describeRepositoryContract = (
       await withRepositories(async (repositories) => {
         const created = await repositories.users.create({
           phone: "+972500001112",
-          name: "דנה",
+          givenName: "דנה",
+          familyName: null,
           birthDate: null,
         });
         await repositories.users.softDelete(created.id);
@@ -133,13 +137,14 @@ export const describeRepositoryContract = (
       await withRepositories(async (repositories) => {
         const created = await repositories.users.create({
           phone: "+972500001114",
-          name: "דנה כהן",
+          givenName: "דנה כהן",
+          familyName: null,
           birthDate: parseLocalDate("1990-01-01"),
         });
 
         const erased = await repositories.users.anonymise(created.id);
 
-        expect(erased.name).not.toBe("דנה כהן");
+        expect(displayName(erased)).not.toBe("דנה כהן");
         expect(erased.phone).not.toBe("+972500001114");
         expect(erased.birthDate).toBeNull();
         expect(erased.anonymisedAt).not.toBeNull();
@@ -152,7 +157,8 @@ export const describeRepositoryContract = (
       await withRepositories(async (repositories) => {
         const created = await repositories.users.create({
           phone: "+972500001115",
-          name: "דנה",
+          givenName: "דנה",
+          familyName: null,
           birthDate: null,
         });
         const first = await repositories.users.anonymise(created.id);
@@ -166,11 +172,15 @@ export const describeRepositoryContract = (
       await withRepositories(async (repositories) => {
         const created = await repositories.users.create({
           phone: "+972500001113",
-          name: "לפני",
+          givenName: "לפני",
+          familyName: null,
           birthDate: parseLocalDate("1990-01-01"),
         });
-        const updated = await repositories.users.update(created.id, { name: "אחרי" });
-        expect(updated.name).toBe("אחרי");
+        const updated = await repositories.users.update(created.id, {
+          givenName: "אחרי",
+          familyName: "כהן",
+        });
+        expect(displayName(updated)).toBe("אחרי כהן");
         expect(updated.birthDate).toBe("1990-01-01");
       });
     });
@@ -193,7 +203,8 @@ export const describeRepositoryContract = (
         const context = await aBookableBusiness(repositories, "02002");
         const customer = await repositories.users.create({
           phone: "+972500002222",
-          name: "דנה",
+          givenName: "דנה",
+          familyName: null,
           birthDate: null,
         });
 
@@ -536,7 +547,8 @@ export const describeRepositoryContract = (
       await withRepositories(async (repositories) => {
         const admin = await repositories.users.create({
           phone: "+972500008888",
-          name: "הנהלה",
+          givenName: "הנהלה",
+          familyName: null,
           birthDate: null,
         });
         expect(await repositories.administratorAllowlist.contains("+972500009999")).toBe(false);

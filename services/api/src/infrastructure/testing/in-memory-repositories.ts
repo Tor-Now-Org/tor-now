@@ -19,6 +19,7 @@ import {
   addDays,
   compareLocalDate,
   dayOfWeek,
+  displayName,
   localTime,
 } from "@tor-now/domain";
 import { SEARCH } from "../../config.ts";
@@ -60,14 +61,15 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         // sign-in has to tell "closed" from "unknown".
         return store.users.find((user) => user.phone === phone) ?? null;
       },
-      async create({ phone, name, birthDate }) {
+      async create({ phone, givenName, familyName, birthDate }) {
         if (store.users.some((user) => user.phone === phone)) {
           throw new DomainError("CONFLICT", "That phone number is already registered");
         }
         const user: User = {
           id: asId(nextId("user")),
           phone,
-          name,
+          givenName,
+          familyName,
           birthDate,
           deletedAt: null,
           anonymisedAt: null,
@@ -81,7 +83,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         const user = requireUser(id);
         return replaceUser({
           ...user,
-          ...(changes.name === undefined ? {} : { name: changes.name }),
+          ...(changes.givenName === undefined ? {} : { givenName: changes.givenName }),
+          ...(changes.familyName === undefined ? {} : { familyName: changes.familyName }),
           ...(changes.birthDate === undefined ? {} : { birthDate: changes.birthDate }),
         });
       },
@@ -97,7 +100,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         return replaceUser({
           ...user,
           phone: `anonymised:${nextId("erased")}`,
-          name: "משתמש שהוסר",
+          givenName: "משתמש שהוסר",
+          familyName: null,
           birthDate: null,
           deletedAt: user.deletedAt ?? now(),
           anonymisedAt: now(),
@@ -112,7 +116,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         const matching = store.users.filter(
           (user) =>
             query === null ||
-            user.name.toLowerCase().includes(query.toLowerCase()) ||
+            displayName(user).toLowerCase().includes(query.toLowerCase()) ||
             user.phone.includes(query),
         );
         return matching.slice(page.offset, page.offset + page.limit);
@@ -540,7 +544,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             );
             return {
               appointment,
-              customerName: customer?.name ?? "",
+              customerName: customer === undefined ? "" : displayName(customer),
               customerPhone: customer?.phone ?? "",
               businessName: business?.name ?? "",
               businessPhone: business?.phone ?? "",

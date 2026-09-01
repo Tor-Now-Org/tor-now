@@ -243,7 +243,15 @@ export const signIn = async (
   name: string | null = "Tester",
 ) => {
   await test.services.auth.requestCode(phone);
-  const result = await test.services.auth.verifyCode(phone, "111111", name);
+  // Tests name people the way people are usually named: one word, or two.
+  const [givenName, ...rest] = (name ?? "").split(" ").filter((part) => part !== "");
+  const result = await test.services.auth.verifyCode(
+    phone,
+    "111111",
+    givenName === undefined
+      ? null
+      : { givenName, familyName: rest.length === 0 ? null : rest.join(" ") },
+  );
   return {
     token: result.token,
     user: result.user,

@@ -1,5 +1,6 @@
 import {
   formatInstant,
+  displayName,
   formatLocalTime,
   toMajorUnits,
   type Appointment,
@@ -121,7 +122,10 @@ export const appointmentWithCustomerOut = (
 export const userOut = (user: User) => ({
   id: user.id,
   phone: user.phone,
-  name: user.name,
+  givenName: user.givenName,
+  familyName: user.familyName,
+  /** Joined once, here, so every client shows the same thing. */
+  name: displayName(user),
   birthDate: user.birthDate,
   isAdministrator: user.isAdministrator,
   deleted: user.deletedAt !== null,

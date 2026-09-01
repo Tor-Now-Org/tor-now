@@ -38,10 +38,10 @@ export const userRepository = (tx: Transaction): UserRepository => ({
     return row === undefined ? null : toUser(row);
   },
 
-  async create({ phone, name, birthDate }) {
+  async create({ phone, givenName, familyName, birthDate }) {
     const rows = await tx<Row[]>`
-      insert into app_user (phone, name, birth_date)
-      values (${phone}, ${name}, ${birthDate})
+      insert into app_user (phone, given_name, family_name, birth_date)
+      values (${phone}, ${givenName}, ${familyName}, ${birthDate})
       returning *`;
     return one(rows, toUser, "User");
   },
@@ -49,7 +49,8 @@ export const userRepository = (tx: Transaction): UserRepository => ({
   async update(id, changes) {
     const rows = await tx<Row[]>`
       update app_user set
-        name = coalesce(${changes.name ?? null}, name),
+        given_name = coalesce(${changes.givenName ?? null}, given_name),
+        family_name = ${changes.familyName === undefined ? tx`family_name` : changes.familyName},
         birth_date = ${changes.birthDate === undefined ? tx`birth_date` : changes.birthDate}
       where id = ${id} and deleted_at is null
       returning *`;
@@ -87,7 +88,13 @@ export const userRepository = (tx: Transaction): UserRepository => ({
   async list(page: Page, query) {
     const rows = await tx<Row[]>`
       select * from app_user
-      where ${query === null ? tx`true` : tx`(name ilike ${"%" + query + "%"} or phone like ${"%" + query + "%"})`}
+      where ${
+        query === null
+          ? tx`true`
+          : tx`(given_name ilike ${"%" + query + "%"}
+                or coalesce(family_name, '') ilike ${"%" + query + "%"}
+                or phone like ${"%" + query + "%"})`
+      }
       order by created_at desc
       limit ${page.limit} offset ${page.offset}`;
     return rows.map(toUser);

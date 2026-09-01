@@ -26,7 +26,7 @@ const anAdministrator = async (): Promise<{ token: string; phone: string }> => {
   });
   const session = await call<{ token: string; user: { id: string } }>("/auth/verify", {
     method: "POST",
-    body: { phone, code, name: "הנהלה" },
+    body: { phone, code, name: { givenName: "הנהלה", familyName: null } },
   });
 
   // The flag and the allowlist are set out of band, exactly as the seeding
@@ -54,7 +54,7 @@ test.describe("who may reach the panel", () => {
     });
     const session = await call<{ token: string }>("/auth/verify", {
       method: "POST",
-      body: { phone, code, name: "רגיל" },
+      body: { phone, code, name: { givenName: "רגיל", familyName: null } },
     });
 
     await page.addInitScript(

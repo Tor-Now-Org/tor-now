@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { parseInstant } from "@tor-now/domain";
+import { displayName, parseInstant } from "@tor-now/domain";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
 
@@ -251,7 +251,7 @@ describe("the owner's customers", () => {
       shop.owner.actor,
       shop.business.id,
     );
-    expect(customers.map((person) => person.name)).toEqual(["דנה"]);
+    expect(customers.map(displayName)).toEqual(["דנה"]);
   });
 
   it("counts a late cancellation against the record", async () => {

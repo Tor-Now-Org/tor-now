@@ -24,6 +24,8 @@ export type VerifyLabels = {
   nameBody: string;
   firstName: string;
   firstPlaceholder: string;
+  lastName: string;
+  lastPlaceholder: string;
 };
 
 /** The API returns the code only on a deployment with no delivery channel. */
@@ -41,7 +43,8 @@ export const VerifyPanel = ({
 }) => {
   const [phone, setPhone] = useState("+972");
   const [code, setCode] = useState("");
-  const [name, setName] = useState("");
+  const [givenName, setGivenName] = useState("");
+  const [familyName, setFamilyName] = useState("");
   const [stage, setStage] = useState<"phone" | "code">("phone");
   const [devCode, setDevCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -71,7 +74,12 @@ export const VerifyPanel = ({
       const session = await api.verifyCode(
         phone.trim(),
         code.trim(),
-        name.trim() === "" ? null : name.trim(),
+        givenName.trim() === ""
+          ? null
+          : {
+              givenName: givenName.trim(),
+              familyName: familyName.trim() === "" ? null : familyName.trim(),
+            },
       );
       onVerified(session.token, session.user);
     } catch (cause) {
@@ -122,11 +130,22 @@ export const VerifyPanel = ({
             onChange={(event) => setCode(event.target.value)}
           />
           <Field
-            id="verify-name"
+            id="verify-given-name"
             label={labels.firstName}
             placeholder={labels.firstPlaceholder}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
+            autoComplete="given-name"
+            value={givenName}
+            onChange={(event) => setGivenName(event.target.value)}
+          />
+          {/* Optional: a customer who gives only a first name is still a
+              customer, and the business has something to call them. */}
+          <Field
+            id="verify-family-name"
+            label={labels.lastName}
+            placeholder={labels.lastPlaceholder}
+            autoComplete="family-name"
+            value={familyName}
+            onChange={(event) => setFamilyName(event.target.value)}
           />
           {devCode !== null && <Note>{developmentCodeNotice(devCode)}</Note>}
           {error !== null && <Critical>{error}</Critical>}

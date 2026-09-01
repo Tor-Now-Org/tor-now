@@ -36,6 +36,7 @@ const call = async (path, { method = "GET", body, token } = {}) => {
 
 /** ADR 0004: the same two steps for everybody, seeded or not. */
 const signIn = async (phone, name) => {
+  const [givenName, ...rest] = name.split(" ").filter((part) => part !== "");
   const { code } = await call("/auth/request-code", { method: "POST", body: { phone } });
   if (code === undefined) {
     throw new Error(
@@ -43,7 +44,17 @@ const signIn = async (phone, name) => {
         "delivery channel configured and cannot be seeded without receiving it.",
     );
   }
-  return call("/auth/verify", { method: "POST", body: { phone, code, name } });
+  return call("/auth/verify", {
+    method: "POST",
+    body: {
+      phone,
+      code,
+      name: {
+        givenName: givenName ?? name,
+        familyName: rest.length === 0 ? null : rest.join(" "),
+      },
+    },
+  });
 };
 
 const WEEKDAYS_SUN_TO_THU = [0, 1, 2, 3, 4];

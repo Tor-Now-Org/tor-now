@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { instant } from "@tor-now/domain";
+import { displayName, instant } from "@tor-now/domain";
 import { VERIFICATION } from "../config.ts";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness } from "../infrastructure/testing/scenarios.ts";
@@ -21,9 +21,13 @@ describe("verification", () => {
     const result = await test.services.auth.requestCode(phone);
     expect(result.expiresInSeconds).toBe(VERIFICATION.lifetimeSeconds);
 
-    const session = await test.services.auth.verifyCode(phone, "111111", "חדש");
+    const session = await test.services.auth.verifyCode(phone, "111111", {
+      givenName: "חדש",
+      familyName: null,
+    });
     expect(session.isNewUser).toBe(true);
     expect(session.user.phone).toBe(phone);
+    expect(session.user.givenName).toBe("חדש");
   });
 
   it("signs in a number it already knows, without creating a second user", async () => {
@@ -32,7 +36,7 @@ describe("verification", () => {
 
     expect(test.store.users.filter((user) => user.phone === phone)).toHaveLength(1);
     // The name from the first sign-in is kept; a later one does not rewrite it.
-    expect(again.user.name).toBe("ראשון");
+    expect(again.user.givenName).toBe("ראשון");
   });
 
   it("refuses a wrong code and counts the attempt against that code", async () => {
@@ -123,10 +127,11 @@ describe("the person's own profile", () => {
     const test = harness();
     const person = await signIn(test, "+972500000042", "לפני");
     const updated = await test.services.profile.updateProfile(person.actor, {
-      name: "אחרי",
+      givenName: "אחרי",
+      familyName: "כהן",
       birthDate: "1990-04-01",
     });
-    expect(updated.name).toBe("אחרי");
+    expect(displayName(updated)).toBe("אחרי כהן");
     expect(updated.birthDate).toBe("1990-04-01");
     expect(test.store.audit.some((entry) => entry.action === "USER_UPDATED")).toBe(true);
   });

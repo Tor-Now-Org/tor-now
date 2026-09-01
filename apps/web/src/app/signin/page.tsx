@@ -54,6 +54,8 @@ export default function SignInPage() {
                 nameBody: copy.nameBody,
                 firstName: copy.firstName,
                 firstPlaceholder: copy.firstPlaceholder,
+                lastName: copy.lastName,
+                lastPlaceholder: copy.lastPlaceholder,
               }}
               errorText={errorText}
               onVerified={(token, verified) => {

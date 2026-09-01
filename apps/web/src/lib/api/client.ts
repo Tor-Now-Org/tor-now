@@ -136,7 +136,11 @@ export const api = {
       body: { phone },
     }),
 
-  verifyCode: (phone: string, code: string, name: string | null) =>
+  verifyCode: (
+    phone: string,
+    code: string,
+    name: { givenName: string; familyName: string | null } | null,
+  ) =>
     request<SessionDto>("/auth/verify", {
       method: "POST",
       body: { phone, code, name },
@@ -146,7 +150,11 @@ export const api = {
 
   updateProfile: (
     token: string,
-    changes: { name?: string; birthDate?: string | null },
+    changes: {
+      givenName?: string;
+      familyName?: string | null;
+      birthDate?: string | null;
+    },
   ) => request<UserDto>("/me", { method: "PATCH", body: changes, token }),
 
   deleteAccount: (token: string) =>

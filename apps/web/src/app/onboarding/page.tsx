@@ -108,6 +108,8 @@ export default function OnboardingPage() {
               nameBody: copy.detailsBody,
               firstName: copy.bizName,
               firstPlaceholder: copy.serviceNamePlaceholder,
+              lastName: copy.bizName,
+              lastPlaceholder: copy.serviceNamePlaceholder,
             }}
             errorText={errorText}
             onVerified={signIn}

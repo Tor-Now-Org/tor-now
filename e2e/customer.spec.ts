@@ -89,6 +89,7 @@ test.describe("finding and booking", () => {
 
     await page.getByLabel("הקוד שקיבלתם").fill(code);
     await page.getByLabel("שם פרטי").fill("דנה");
+    await page.getByLabel("שם משפחה").fill("כהן");
     await page.getByRole("button", { name: "אישור הקוד" }).click();
 
     await expect(page.getByRole("button", { name: "אישור התור" })).toBeVisible({

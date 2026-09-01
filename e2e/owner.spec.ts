@@ -66,7 +66,7 @@ test.describe("the owner's day", () => {
     });
     const customer = await call<{ token: string }>("/auth/verify", {
       method: "POST",
-      body: { phone: customerPhone, code, name: "דנה כהן" },
+      body: { phone: customerPhone, code, name: { givenName: "דנה", familyName: "כהן" } },
     });
     const days = await call<{ slots: { startAt: string }[] }[]>(
       `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
@@ -107,7 +107,7 @@ test.describe("the owner's day", () => {
     });
     const customer = await call<{ token: string }>("/auth/verify", {
       method: "POST",
-      body: { phone: customerPhone, code, name: "לא הגיע" },
+      body: { phone: customerPhone, code, name: { givenName: "לא", familyName: "הגיע" } },
     });
     const days = await call<{ slots: { startAt: string }[] }[]>(
       `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { parseLocalDate } from "@tor-now/domain";
+import { displayName, parseLocalDate } from "@tor-now/domain";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
 
@@ -152,7 +152,7 @@ describe("administrator scope", () => {
     );
 
     // ADR 0008: name, birth date and phone go; the row stays.
-    expect(erased.name).not.toBe("דנה כהן");
+    expect(displayName(erased)).not.toBe("דנה כהן");
     expect(erased.phone).not.toBe("+972500000002");
     expect(erased.birthDate).toBeNull();
     expect(erased.anonymisedAt).not.toBeNull();
@@ -221,7 +221,7 @@ describe("administrator scope", () => {
       true,
     );
     expect(restored.anonymisedAt).not.toBeNull();
-    expect(restored.name).not.toBe("דנה");
+    expect(displayName(restored)).not.toBe("דנה");
   });
 
   it("deactivates a business only once the grace period has elapsed", async () => {
