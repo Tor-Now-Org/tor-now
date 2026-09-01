@@ -4,6 +4,11 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build --workspace @tor-now/web",
   "outputDirectory": "apps/web/.next",
+  "build": {
+    "env": {
+      "VERCEL_PREVIEW_FEEDBACK_ENABLED": "0"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

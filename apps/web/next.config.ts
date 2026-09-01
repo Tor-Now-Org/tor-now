@@ -8,7 +8,6 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   transpilePackages: ["@tor-now/domain"],
   reactStrictMode: true,
-  eslint: { ignoreDuringBuilds: true },
 };
 
 export default config;
