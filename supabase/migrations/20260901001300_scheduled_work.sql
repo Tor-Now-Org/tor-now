@@ -7,10 +7,12 @@
 -- constraint: a cron job reaching into the tables directly would be exactly the
 -- ad-hoc script the ADR warns produces no audit trail.
 --
--- That means cron has to authenticate. It gets its own credential rather than
--- borrowing the service role key: the secret is generated here, never leaves
--- the database, and is read by both sides from the same place — so there is no
--- value for an operator to copy, paste or leak.
+-- That means cron has to reach the API and authenticate to it, and neither half
+-- of "where, and as whom" belongs in a migration. Both live in one table the
+-- client roles cannot reach: the secret is generated here and never leaves the
+-- database, so there is no value for an operator to copy or leak, and the URL
+-- is set once per deployment because a migration cannot know which deployment
+-- it is being applied to.
 -- pg_cron and pg_net are Supabase platform extensions. Everything below is
 -- deployment configuration rather than schema, so on a plain Postgres — a CI
 -- service container, or a developer's laptop — this migration says so and
@@ -28,13 +30,17 @@ begin
 end $$;
 
 create table if not exists app.job_credential (
-  id      boolean primary key default true check (id),
-  secret  text    not null,
-  created_at timestamptz not null default now()
+  id           boolean primary key default true check (id),
+  secret       text    not null,
+  api_base_url text,
+  created_at   timestamptz not null default now()
 );
 
 comment on table app.job_credential is
-  'The single credential scheduled work presents to the API. One row, enforced by the primary key.';
+  'How scheduled work reaches the API: where to post, and what to present. One row, enforced by the primary key.';
+
+comment on column app.job_credential.api_base_url is
+  'e.g. https://<project-ref>.supabase.co/functions/v1/api. Set per deployment; there is no sensible default.';
 
 insert into app.job_credential (secret)
 -- Unqualified: pgcrypto sits in `extensions` on Supabase and in `public`
@@ -55,6 +61,29 @@ $$;
 
 revoke all on function app.job_secret() from public, anon, authenticated;
 
+create or replace function app.job_target(job_path text)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = app, pg_temp
+as $$
+declare
+  base text;
+begin
+  select api_base_url into base from app.job_credential where id;
+  if base is null or btrim(base) = '' then
+    -- Loud rather than silent: a job posting to a guessed URL would look like
+    -- it ran, and the outbox would quietly stop draining.
+    raise exception
+      'app.job_credential.api_base_url is not set; scheduled work has nowhere to post';
+  end if;
+  return rtrim(base, '/') || '/jobs/' || job_path;
+end;
+$$;
+
+revoke all on function app.job_target(text) from public, anon, authenticated;
+
 -- Defined only where pg_net is, since it calls net.http_post by name.
 create or replace function app.run_scheduled_job(job_path text)
 returns bigint
@@ -70,7 +99,7 @@ begin
   execute format(
     'select net.http_post(url := %L, headers := %L::jsonb, body := %L::jsonb,'
     || ' timeout_milliseconds := 20000)',
-    'https://boiqhhckvypicjfpeuem.supabase.co/functions/v1/api/jobs/' || job_path,
+    app.job_target(job_path),
     jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || app.job_secret()

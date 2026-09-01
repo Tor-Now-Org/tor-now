@@ -93,5 +93,22 @@ begin
     raise exception 'INVARIANT BROKEN: a fresh appointment was already reminded';
   end if;
 
+  -- Where scheduled work posts is configuration, not schema. A fresh database
+  -- knows the shape of a job and nothing about the deployment it landed in, so
+  -- asking for a target before one is set has to fail loudly — a job that
+  -- posted to a guessed URL would look like it ran while the outbox quietly
+  -- stopped draining.
+  if (select api_base_url from app.job_credential where id) is not null then
+    raise exception 'INVARIANT BROKEN: a migration decided where jobs post';
+  end if;
+  v_failed := false;
+  begin
+    perform app.job_target('outbox');
+  exception when others then v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'INVARIANT BROKEN: job_target invented a URL rather than refusing';
+  end if;
+
   raise exception 'ALL_INVARIANTS_HELD';
 end $$;
