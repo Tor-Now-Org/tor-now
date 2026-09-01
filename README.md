@@ -84,22 +84,68 @@ mode is live. **This is the first thing to change before real customers.**
 ## Checks
 
 ```bash
-npm run check                                   # 114 unit tests, three typecheck projects
-psql "$SUPABASE_DB_URL" -f supabase/tests/invariants.sql   # succeeds on ALL_INVARIANTS_HELD
-node scripts/seed.mjs                           # demo data, through the API
+npm run typecheck    # four projects: domain, API, end-to-end, interface
+npm run lint         # what the compiler cannot see
+npm test             # 225 unit and integration tests
+npm run test:db      # the same, plus the repository contract against a real Postgres
+npm run test:e2e     # 22 journeys through the whole stack
 ```
 
-`invariants.sql` proves the things that live in the database rather than in
-application code — the exclusion constraint, buffer enforcement, cancelled slots
-becoming rebookable, the append-only audit trail, and the composite foreign key
-that stops a Resource being borrowed by another Business. It rolls itself back.
+`test:db` and `test:e2e` each start a throwaway Postgres, apply every migration
+exactly as written, and take it down again — so a migration that only works on
+Supabase fails locally rather than at deploy time. Both need `initdb` and
+`pg_ctl` on the path.
+
+### How the tests are arranged
+
+**The domain** is tested as pure functions: timezone conversion across a
+daylight-saving transition, the greedy walk, the three schedule layers, the
+booking window, cancellation and billing.
+
+**The repository seam** has one contract suite run against two implementations —
+in memory always, and against Postgres whenever one is reachable. A seam is only
+real if both sides behave alike, and the two Row Level Security faults in this
+system reached production for want of exactly that.
+
+**The application and HTTP layers** run against the in-memory adapters, wired by
+the same composition the Edge Function uses, so the wiring is under test too.
+Hono's `app.request` exercises routing, validation and error translation without
+a socket.
+
+**End to end** runs the built interface against the real API served by Node,
+against a real database. Tests are written in terms of what a person sees, so a
+test that breaks is a change a user would also have noticed.
+
+```bash
+psql "$DATABASE_URL" -f supabase/tests/invariants.sql   # succeeds on ALL_INVARIANTS_HELD
+node scripts/seed.mjs                                   # demo data, through the API
+```
+
+`invariants.sql` proves what lives in the database rather than in application
+code — the exclusion constraint, buffer enforcement, cancelled slots becoming
+rebookable, the append-only audit trail, the composite foreign key that stops a
+Resource being borrowed by another Business, and that an erasure clears a name
+without orphaning the appointments that refer to it. It rolls itself back.
+
+## Continuous integration
+
+Seven checks are required before a pull request can merge: types, lint, ruff,
+unit and integration tests, end-to-end, security and CodeQL.
+
+The security job fails on a high-severity dependency advisory, scans the whole
+history for secrets, and rebuilds `supabase/functions/api/index.js` to fail if
+the committed artifact has drifted from its sources — deployment pins that file
+by commit, so a stale one would ship code that is not in the pull request.
+
+There is no Python here, so the ruff job detects that and says so. It will lint
+the first `.py` file the day one appears.
 
 ## Scheduled work
 
-Three cron jobs, defined in the `scheduled_work` migration and driven by
-`pg_cron`: draining the notification outbox every minute, pruning the audit log
-nightly, and deactivating businesses whose subscription lapsed past its grace
-period. They call the Edge Function rather than writing SQL directly, because
+Four cron jobs, defined in the `scheduled_work` migration and driven by
+`pg_cron`: draining the notification outbox every minute, sending reminders
+hourly, pruning the audit log nightly, and deactivating businesses whose
+subscription lapsed past its grace period. They call the Edge Function rather than writing SQL directly, because
 ADR 0006 makes "every write goes through a decorated repository" a standing
 constraint — a cron job reaching into the tables is exactly the ad-hoc script
 that ADR warns produces no audit trail.
