@@ -10,7 +10,7 @@ the twelve decisions everything here rests on. If something in the code looks
 arbitrary, the ADR that made it is the place to look.
 
 - **Interface** — https://tor-now-tor-now.vercel.app
-- **API** — https://boiqhhckvypicjfpeuem.supabase.co/functions/v1/api
+- **API** — https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api
 
 ## Layout
 
@@ -47,17 +47,47 @@ deployed one above.
 [`vercel.json`](./vercel.json) describes the build so the settings live in the
 repository rather than in a dashboard.
 
-**The API** is bundled and then pinned:
+**The API** is bundled, committed, and deployed by
+[`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) on every push
+to `main`:
 
 ```bash
 npm run build:api    # services/api/src → supabase/functions/api/index.js
 git commit && git push
 ```
 
-then deploy an entry point that imports the artifact at that commit SHA.
-Supabase resolves and inlines the import when it builds the function, so the
-running function has no dependency on GitHub — and what runs is exactly what is
-in git at that revision.
+The workflow rebuilds the bundle and refuses to deploy if the committed artifact
+differs from the build of `services/api/src`, so what runs is exactly what is in
+git at that revision. It needs two repository secrets — `SUPABASE_ACCESS_TOKEN`
+and `SUPABASE_DB_PASSWORD` — and without them it reports what it would have done
+and succeeds, so a fork is not blocked by a secret it cannot have.
+
+### Where it runs
+
+The database is in `eu-central-1` (Frankfurt), which is where it belongs: the
+Edge Function runs near the customer, and every read is a round trip between the
+two. It began life in `ap-northeast-1` (Tokyo), where that round trip measured
+228ms — search took four seconds and opening a business took eleven, almost all
+of it spent crossing the planet rather than doing work. Distance to the database
+is the platform's dominant latency term, so a future region change is a
+performance decision, not an administrative one.
+
+### Setting up a new deployment
+
+Two things are per-deployment configuration rather than schema, and neither
+belongs in a migration:
+
+```sql
+-- where scheduled work posts (pg_cron → pg_net → the API)
+update app.job_credential
+set api_base_url = 'https://<project-ref>.supabase.co/functions/v1/api'
+where id;
+```
+
+and `NEXT_PUBLIC_API_URL` on the Vercel project, which points the interface at
+that same API. Both have no sensible default: `app.job_target` raises rather
+than guess, so a misconfigured deployment fails loudly instead of quietly
+posting nowhere.
 
 ### Configuration
 

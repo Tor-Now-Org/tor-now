@@ -15,7 +15,7 @@
  */
 
 const API = process.argv[2] ?? process.env.API_URL ??
-  "https://boiqhhckvypicjfpeuem.supabase.co/functions/v1/api";
+  "https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api";
 
 const call = async (path, { method = "GET", body, token } = {}) => {
   const response = await fetch(`${API}${path}`, {

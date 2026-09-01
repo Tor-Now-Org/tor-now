@@ -1,0 +1,16 @@
+# What the Supabase GitHub integration reads on every push to `main`.
+#
+# The dashboard decides which project a branch deploys to; this file describes
+# what to deploy, so the function's settings live in the repository rather than
+# in a dashboard where nothing reviews them.
+project_id = "kbybnveitlxkffqptvqm"
+
+[functions.api]
+# ADR 0004 and ADR 0007: the function authenticates its own callers — a phone
+# number, a code, and a session token it signs itself. The platform's JWT gate
+# would demand a Supabase key the browser does not have, so it is off, and this
+# is the deliberate statement of that.
+verify_jwt = false
+# The committed artifact, not the sources: services/api/scripts/bundle.mjs
+# builds it, and the Deploy workflow refuses a build that has drifted from it.
+entrypoint = "./functions/api/index.js"
