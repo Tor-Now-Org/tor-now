@@ -238,7 +238,6 @@ export default function OnboardingPage() {
                 add: copy.photoAdd,
                 replace: copy.photoReplace,
                 remove: copy.photoRemove,
-                tooLarge: copy.photoTooLarge,
                 notAnImage: copy.photoNotAnImage,
               }}
             />

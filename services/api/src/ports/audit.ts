@@ -41,6 +41,8 @@ export const AUDIT_ACTIONS = {
   dateOverrideChanged: "DATE_OVERRIDE_CHANGED",
   blockCreated: "BLOCK_CREATED",
   blockDeleted: "BLOCK_DELETED",
+  businessPhotoChanged: "BUSINESS_PHOTO_CHANGED",
+  businessPhotoRemoved: "BUSINESS_PHOTO_REMOVED",
   userUpdated: "USER_UPDATED",
   userDeleted: "USER_DELETED",
   userRestored: "USER_RESTORED",

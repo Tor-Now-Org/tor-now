@@ -362,7 +362,7 @@ const ownerRoutes = (services: Services) => {
     const slot = photoSlotParam(context);
     const contentType = (context.req.header("content-type") ?? "").split(";")[0]?.trim() ?? "";
     const bytes = new Uint8Array(await context.req.arrayBuffer());
-    const photo = await services.business.addPhoto(
+    const photo = await services.business.putPhoto(
       actorOf(context),
       idParam(context, "businessId"),
       { slot, bytes, contentType },

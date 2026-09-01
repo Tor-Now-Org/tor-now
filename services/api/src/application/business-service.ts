@@ -1,6 +1,5 @@
 import {
   BUSINESS_DEFAULTS,
-  freeSlots,
   money,
   subscriptionStateOn,
   todayIn,
@@ -53,9 +52,16 @@ export type RegistrationInput = {
   }[];
 };
 
-/** The object key a photo is stored under. Never guessed, always recorded. */
+/**
+ * The object key a photo is stored under. Never guessed, always recorded.
+ *
+ * Random rather than timestamped: replacing a photo uploads the new bytes and
+ * then drops the old ones by path, so two uploads that produced the same path
+ * would end with the remove deleting the picture that had just replaced it. A
+ * clock reading is not unique enough to be an identity, and this needs to be.
+ */
 const pathFor = (businessId: BusinessId, slot: PhotoSlot, contentType: string) =>
-  `${businessId}/${slot}-${Date.now()}.${EXTENSIONS[contentType] ?? "bin"}`;
+  `${businessId}/${slot}-${crypto.randomUUID()}.${EXTENSIONS[contentType] ?? "bin"}`;
 
 const EXTENSIONS: Readonly<Record<string, string>> = Object.freeze({
   "image/jpeg": "jpg",
@@ -291,14 +297,20 @@ export const businessService = ({
   },
 
   /**
-   * Adds one photo to one slot.
+   * Puts one photo in one slot, replacing whatever was there.
    *
-   * The bytes go to the store first and the row second, because the opposite
-   * order can leave a row pointing at nothing — a broken picture on a public
-   * page. This order can leave an object with no row, which is invisible and
-   * costs a few kilobytes; of the two failures it is plainly the better one.
+   * Replacing rather than refusing is what the verb says, and it is also the
+   * only safe way to do it: the alternative is the interface deleting the old
+   * photo and then uploading the new one, which leaves the business with an
+   * empty slot if the second call fails. Here the new bytes are stored first,
+   * the swap is one transaction, and the old bytes are dropped only once
+   * nothing refers to them any more.
+   *
+   * The bytes go up before the row for the same reason as ever: a row pointing
+   * at nothing is a broken picture on a public page, while an object nobody
+   * references is invisible and costs a few kilobytes.
    */
-  async addPhoto(
+  async putPhoto(
     actor: Actor,
     businessId: BusinessId,
     input: {
@@ -323,19 +335,11 @@ export const businessService = ({
       );
     }
 
-    // Ownership and the free slot are read before anything is uploaded, so a
-    // stranger's bytes never reach the bucket at all.
-    const free = await unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
-      const existing =
-        await repositories.businessPhotos.listForBusiness(businessId);
-      return freeSlots(existing.map((photo) => photo.slot));
-    });
-    if (!free.includes(input.slot)) {
-      throw validationFailed("That photo slot is already taken", {
-        slot: input.slot,
-      });
-    }
+    // Ownership is settled before anything is uploaded, so a stranger's bytes
+    // never reach the bucket at all.
+    await unitOfWork.run(actor, ({ repositories }) =>
+      loadOwnedBusiness(repositories, actor, businessId),
+    );
 
     const stored = await photos.put({
       path: pathFor(businessId, input.slot, input.contentType),
@@ -344,19 +348,37 @@ export const businessService = ({
     });
 
     try {
-      return await unitOfWork.run(actor, async ({ repositories }) => {
-        await loadOwnedBusiness(repositories, actor, businessId);
-        return repositories.businessPhotos.create({
-          businessId,
-          slot: input.slot,
-          storagePath: stored.path,
-          contentType: input.contentType,
-          byteSize: input.bytes.byteLength,
-        });
-      });
+      const { written, replaced } = await unitOfWork.run(
+        actor,
+        async ({ repositories }) => {
+          await loadOwnedBusiness(repositories, actor, businessId);
+          const current =
+            (await repositories.businessPhotos.listForBusiness(businessId)).find(
+              (photo) => photo.slot === input.slot,
+            ) ?? null;
+          // Read and swapped inside one transaction, so two owners putting a
+          // photo in the same slot at once cannot both keep theirs.
+          if (current !== null) {
+            await repositories.businessPhotos.delete(current.id);
+          }
+          return {
+            written: await repositories.businessPhotos.create({
+              businessId,
+              slot: input.slot,
+              storagePath: stored.path,
+              contentType: input.contentType,
+              byteSize: input.bytes.byteLength,
+            }),
+            replaced: current,
+          };
+        },
+      );
+
+      if (replaced !== null) await photos.remove(replaced.storagePath);
+      return written;
     } catch (cause) {
-      // The slot was free a moment ago and is not now, or the write failed for
-      // any other reason. Either way nothing points at these bytes.
+      // Nothing points at the bytes just uploaded, and whatever was in the slot
+      // before is still there and still referenced.
       await photos.remove(stored.path);
       throw cause;
     }

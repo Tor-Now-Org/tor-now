@@ -44,15 +44,12 @@ export const PHOTO_SLOTS = Object.freeze({
   lastExtra: 3,
 });
 
-export const MAXIMUM_PHOTOS = PHOTO_SLOTS.lastExtra + 1;
-
 export type PhotoSlot = 0 | 1 | 2 | 3;
 
-export const isCover = (slot: PhotoSlot): boolean => slot === PHOTO_SLOTS.cover;
+/** Every slot, in the order they are shown. The cover leads. */
+export const PHOTO_SLOTS_IN_ORDER: readonly PhotoSlot[] = Object.freeze([0, 1, 2, 3]);
 
-/** The slots a Business has not filled, in the order they should be offered. */
-export const freeSlots = (taken: readonly PhotoSlot[]): readonly PhotoSlot[] =>
-  ([0, 1, 2, 3] as const).filter((slot) => !taken.includes(slot));
+export const MAXIMUM_PHOTOS = PHOTO_SLOTS_IN_ORDER.length;
 
 /**
  * A picture of a Business. The bytes are elsewhere, and where exactly is not

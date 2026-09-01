@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { asId, displayName, MAXIMUM_PHOTOS, parseInstant } from "@tor-now/domain";
+import { displayName, MAXIMUM_PHOTOS, parseInstant } from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
@@ -294,7 +294,7 @@ describe("business photos", () => {
 
   it("puts the cover in slot zero and hands back where it lives", async () => {
     const shop = await anEstablishedBusiness(test);
-    const photo = await test.services.business.addPhoto(
+    const photo = await test.services.business.putPhoto(
       shop.owner.actor,
       shop.business.id,
       { slot: 0, bytes: aPhoto(), contentType: "image/jpeg" },
@@ -306,10 +306,10 @@ describe("business photos", () => {
     expect(test.photos.read?.(photo.storagePath)?.bytes).toHaveLength(64);
   });
 
-  it("takes a cover and three more, and then no more", async () => {
+  it("takes a cover and three more, and a fifth replaces rather than adds", async () => {
     const shop = await anEstablishedBusiness(test);
     for (const slot of [0, 1, 2, 3] as const) {
-      await test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+      await test.services.business.putPhoto(shop.owner.actor, shop.business.id, {
         slot,
         bytes: aPhoto(),
         contentType: "image/png",
@@ -319,19 +319,43 @@ describe("business photos", () => {
       await test.services.business.listPhotos(shop.owner.actor, shop.business.id),
     ).toHaveLength(MAXIMUM_PHOTOS);
 
-    await expect(
-      test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
-        slot: 1,
-        bytes: aPhoto(),
-        contentType: "image/png",
-      }),
-    ).rejects.toThrow(/slot/i);
+    // There is no fifth slot to fill, so putting one more replaces slot one.
+    const replacement = await test.services.business.putPhoto(
+      shop.owner.actor,
+      shop.business.id,
+      { slot: 1, bytes: aPhoto(128), contentType: "image/png" },
+    );
+    const held = await test.services.business.listPhotos(
+      shop.owner.actor,
+      shop.business.id,
+    );
+    expect(held).toHaveLength(MAXIMUM_PHOTOS);
+    expect(held.find((photo) => photo.slot === 1)?.id).toBe(replacement.id);
+    expect(replacement.byteSize).toBe(128);
+  });
+
+  it("replacing drops the bytes of the photo it replaced", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const first = await test.services.business.putPhoto(
+      shop.owner.actor,
+      shop.business.id,
+      { slot: 0, bytes: aPhoto(), contentType: "image/jpeg" },
+    );
+    const second = await test.services.business.putPhoto(
+      shop.owner.actor,
+      shop.business.id,
+      { slot: 0, bytes: aPhoto(32), contentType: "image/jpeg" },
+    );
+
+    expect(second.storagePath).not.toBe(first.storagePath);
+    expect(test.photos.read?.(first.storagePath)).toBeNull();
+    expect(test.photos.read?.(second.storagePath)?.bytes).toHaveLength(32);
   });
 
   it("refuses a file that is not one of the image types", async () => {
     const shop = await anEstablishedBusiness(test);
     await expect(
-      test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+      test.services.business.putPhoto(shop.owner.actor, shop.business.id, {
         slot: 0,
         bytes: aPhoto(),
         contentType: "application/pdf",
@@ -342,7 +366,7 @@ describe("business photos", () => {
   it("refuses an empty file and one over the limit", async () => {
     const shop = await anEstablishedBusiness(test);
     const add = (bytes: Uint8Array) =>
-      test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+      test.services.business.putPhoto(shop.owner.actor, shop.business.id, {
         slot: 0,
         bytes,
         contentType: "image/jpeg",
@@ -357,7 +381,7 @@ describe("business photos", () => {
     const stranger = await signIn(test, "+972500000099");
 
     await expect(
-      test.services.business.addPhoto(stranger.actor, shop.business.id, {
+      test.services.business.putPhoto(stranger.actor, shop.business.id, {
         slot: 0,
         bytes: aPhoto(),
         contentType: "image/jpeg",
@@ -367,46 +391,45 @@ describe("business photos", () => {
     expect(test.store.businessPhotos).toHaveLength(0);
   });
 
-  it("leaves no orphaned bytes when the row cannot be written", async () => {
+  it("leaves no orphaned bytes, and the old photo, when the swap fails", async () => {
     const shop = await anEstablishedBusiness(test);
+    const original = await test.services.business.putPhoto(
+      shop.owner.actor,
+      shop.business.id,
+      { slot: 0, bytes: aPhoto(), contentType: "image/jpeg" },
+    );
 
-    // Two owners uploading into the same slot at once. The second reads the
-    // slot as free, and by the time its bytes are up the first has taken it —
-    // so the row fails and the bytes must not be left behind.
+    // Ownership is settled before the upload and checked again inside the
+    // transaction that swaps the rows. Losing it in between — an owner removed
+    // while they were choosing a file — is what fails the second check.
     const realPut = test.photos.put.bind(test.photos);
-    let stored: string | null = null;
+    let uploaded: string | null = null;
     test.photos.put = async (input) => {
       const result = await realPut(input);
-      stored = result.path;
-      store.businessPhotos.push({
-        id: asId("00000000-0000-4000-8000-00000000dead"),
-        businessId: shop.business.id,
-        slot: 2,
-        storagePath: "somebody-else.jpg",
-        contentType: "image/jpeg",
-        byteSize: 1,
-      });
+      uploaded = result.path;
+      test.store.memberships = [];
       return result;
     };
-    const store = test.store;
 
     await expect(
-      test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
-        slot: 2,
-        bytes: aPhoto(),
+      test.services.business.putPhoto(shop.owner.actor, shop.business.id, {
+        slot: 0,
+        bytes: aPhoto(999),
         contentType: "image/jpeg",
       }),
     ).rejects.toThrow();
 
-    expect(stored).not.toBeNull();
-    expect(test.photos.read?.(stored as unknown as string)).toBeNull();
-    // Exactly the winner's row, and no second one.
+    // The bytes nobody can reach are gone...
+    expect(uploaded).not.toBeNull();
+    expect(test.photos.read?.(uploaded as unknown as string)).toBeNull();
+    // ...and the photo the business already had is untouched.
     expect(test.store.businessPhotos).toHaveLength(1);
+    expect(test.photos.read?.(original.storagePath)?.bytes).toHaveLength(64);
   });
 
   it("deleting a photo frees its slot and drops the bytes", async () => {
     const shop = await anEstablishedBusiness(test);
-    const photo = await test.services.business.addPhoto(
+    const photo = await test.services.business.putPhoto(
       shop.owner.actor,
       shop.business.id,
       { slot: 3, bytes: aPhoto(), contentType: "image/webp" },
@@ -427,7 +450,7 @@ describe("business photos", () => {
   it("a customer looking at the business sees its photos, cover first", async () => {
     const shop = await anEstablishedBusiness(test);
     for (const slot of [2, 0] as const) {
-      await test.services.business.addPhoto(shop.owner.actor, shop.business.id, {
+      await test.services.business.putPhoto(shop.owner.actor, shop.business.id, {
         slot,
         bytes: aPhoto(),
         contentType: "image/jpeg",

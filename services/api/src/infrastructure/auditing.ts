@@ -3,6 +3,7 @@ import { AUDIT_ACTIONS, type AuditSink } from "../ports/audit.ts";
 import type {
   AppointmentRepository,
   BlockRepository,
+  BusinessPhotoRepository,
   BusinessRepository,
   DateOverrideRepository,
   Repositories,
@@ -236,6 +237,42 @@ export const auditedBlocks = (
   },
 });
 
+/**
+ * ADR 0006 makes "every write goes through a decorated repository" a standing
+ * constraint, and a photo is a write like any other: what a business shows to
+ * customers changed, and who changed it is worth being able to answer.
+ */
+export const auditedBusinessPhotos = (
+  inner: BusinessPhotoRepository,
+  context: Context,
+): BusinessPhotoRepository => ({
+  ...inner,
+  async create(photo) {
+    const created = await inner.create(photo);
+    await record(
+      context,
+      AUDIT_ACTIONS.businessPhotoChanged,
+      "BusinessPhoto",
+      created.id,
+      null,
+      created,
+    );
+    return created;
+  },
+  async delete(id) {
+    const before = await inner.findById(id);
+    await inner.delete(id);
+    await record(
+      context,
+      AUDIT_ACTIONS.businessPhotoRemoved,
+      "BusinessPhoto",
+      id,
+      before,
+      null,
+    );
+  },
+});
+
 export const auditedUsers = (
   inner: UserRepository,
   context: Context,
@@ -293,6 +330,7 @@ export const withAuditing = (
   ...repositories,
   users: auditedUsers(repositories.users, context),
   businesses: auditedBusinesses(repositories.businesses, context),
+  businessPhotos: auditedBusinessPhotos(repositories.businessPhotos, context),
   resources: auditedResources(repositories.resources, context),
   services: auditedServices(repositories.services, context),
   workingHours: auditedWorkingHours(repositories.workingHours, context),

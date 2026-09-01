@@ -250,10 +250,58 @@ test.describe("photos", () => {
    * decodes it — the picker re-encodes through a canvas, so a file that is not
    * genuinely an image never reaches the API.
    */
+  const photosOf = async (businessId: string) =>
+    (await call<{ photos: { id: string; slot: number }[] }>(`/businesses/${businessId}`)).photos;
+
   const A_PNG = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
     "base64",
   );
+
+  test("the business panel replaces and removes photos, and the customer sees it", async ({ page }) => {
+    const phone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `עסק לעריכה ${Date.now()}`,
+      ownerPhone: phone,
+    });
+    await signInDirectly(page, phone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    // The panel lives behind the business tab, beside services and settings.
+    await page.getByRole("button", { name: "העסק", exact: true }).click();
+    await page.getByRole("button", { name: "תמונות", exact: true }).click();
+    await expect(page.getByText("תמונה ראשית")).toBeVisible();
+
+    const files = page.locator('input[type="file"]');
+    await files.nth(0).setInputFiles({ name: "cover.png", mimeType: "image/png", buffer: A_PNG });
+    // The cover is there, and the tile now offers to replace rather than add.
+    await expect(page.getByRole("button", { name: "החלפה" })).toBeVisible({ timeout: 15_000 });
+    const first = await photosOf(shop.business.id);
+    expect(first).toHaveLength(1);
+
+    // Replacing is one action, and the slot stays a slot.
+    await files.nth(0).setInputFiles({ name: "other.png", mimeType: "image/png", buffer: A_PNG });
+    await expect(async () => {
+      const after = await photosOf(shop.business.id);
+      expect(after).toHaveLength(1);
+      expect(after[0]?.id).not.toBe(first[0]?.id);
+    }).toPass({ timeout: 15_000 });
+
+    // And removing means removed, not pending.
+    await page.getByRole("button", { name: "הסרה" }).first().click();
+    await expect(async () => {
+      expect(await photosOf(shop.business.id)).toHaveLength(0);
+    }).toPass({ timeout: 15_000 });
+
+    // The customer's page follows: no photos, no gallery.
+    await page.goto("/");
+    await ready(page);
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(shop.business.name.slice(0, 8));
+    await page.getByText(shop.business.name).first().click();
+    await expect(page.getByText(shop.service.name).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("region", { name: "תמונות מהעסק" })).toHaveCount(0);
+  });
 
   test("a cover chosen in the wizard is on the business page afterwards", async ({ page }) => {
     const phone = uniquePhone();

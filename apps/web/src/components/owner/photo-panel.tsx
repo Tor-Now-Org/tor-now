@@ -1,45 +1,36 @@
 "use client";
 
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  MAXIMUM_PHOTOS,
   PHOTO_SLOTS,
   PHOTO_SLOTS_IN_ORDER,
   type PhotoSlot,
 } from "@tor-now/domain";
+import { api } from "@/lib/api/client.ts";
+import { isApiError } from "@/lib/api/errors.ts";
+import type { BusinessPhotoDto } from "@/lib/api/types.ts";
 import { shrinkForUpload } from "@/lib/photos.ts";
+import { Critical, Spinner } from "../ui.tsx";
 
 /**
- * Choosing the pictures a business shows.
+ * Managing the photos of a business that already exists.
  *
- * The wizard runs before the business exists, so nothing is uploaded here —
- * the chosen files are held and sent once registration returns an id. That
- * also means a person can change their mind about a photo without a round trip
- * for each attempt.
+ * The wizard's picker holds files and uploads them at the end, because there
+ * is nothing to upload them to yet. Here the business is real, so every choice
+ * takes effect immediately — which is what an owner expects from a settings
+ * screen, and what makes "delete" mean deleted rather than pending.
  *
- * Files are re-encoded on the way in, by the same helper the settings screen
- * uses — see lib/photos.ts for why.
+ * Replacing is one request, not a delete followed by an upload: the API puts
+ * the new photo in the slot and drops the old one, so a failure leaves the
+ * business with the picture it already had rather than with none.
  */
-
-export type ChosenPhoto = {
-  readonly slot: PhotoSlot;
-  readonly file: Blob;
-  /** An object URL, for showing what was chosen. Released when the picker goes. */
-  readonly preview: string;
-};
-
-export const PhotoPicker = ({
-  chosen,
-  onChange,
+export const PhotoPanel = ({
+  token,
+  businessId,
   labels,
 }: {
-  chosen: readonly ChosenPhoto[];
-  /**
-   * An updater rather than a value: re-encoding a photo takes a moment, and
-   * choosing two in quick succession would otherwise have both of them read the
-   * same list and the second one overwrite the first.
-   */
-  onChange: Dispatch<SetStateAction<readonly ChosenPhoto[]>>;
+  token: string;
+  businessId: string;
   labels: {
     cover: string;
     coverHint: string;
@@ -51,20 +42,27 @@ export const PhotoPicker = ({
     notAnImage: string;
   };
 }) => {
+  const [photos, setPhotos] = useState<BusinessPhotoDto[] | null>(null);
+  const [working, setWorking] = useState<PhotoSlot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputs = useRef(new Map<PhotoSlot, HTMLInputElement | null>());
 
-  // Object URLs are released together when the picker goes away. Releasing a
-  // replaced one at the moment of replacement would mean a side effect inside a
-  // state updater, which React is free to run twice.
-  const live = useRef(new Set<string>());
+  const load = useCallback(async () => {
+    try {
+      setPhotos(await api.businessPhotos(token, businessId));
+    } catch {
+      setPhotos([]);
+    }
+  }, [token, businessId]);
+
   useEffect(() => {
-    const urls = live.current;
-    return () => {
-      for (const url of urls) URL.revokeObjectURL(url);
-      urls.clear();
-    };
-  }, []);
+    void load();
+  }, [load]);
+
+  const fail = (cause: unknown) =>
+    setError(
+      isApiError(cause) ? cause.message : labels.notAnImage,
+    );
 
   const put = async (slot: PhotoSlot, file: File | undefined) => {
     if (file === undefined) return;
@@ -73,52 +71,64 @@ export const PhotoPicker = ({
       return;
     }
     setError(null);
+    setWorking(slot);
     try {
-      const shrunk = await shrinkForUpload(file);
-      const preview = URL.createObjectURL(shrunk);
-      live.current.add(preview);
-      onChange((previous) => [
-        ...previous.filter((photo) => photo.slot !== slot),
-        { slot, file: shrunk, preview },
-      ]);
-    } catch {
-      setError(labels.notAnImage);
+      await api.uploadBusinessPhoto(token, businessId, slot, await shrinkForUpload(file));
+      await load();
+    } catch (cause) {
+      fail(cause);
+    } finally {
+      setWorking(null);
     }
   };
 
-  const drop = (slot: PhotoSlot) => {
-    onChange((previous) => previous.filter((photo) => photo.slot !== slot));
+  const drop = async (photo: BusinessPhotoDto) => {
+    setError(null);
+    setWorking(photo.slot);
+    try {
+      await api.deleteBusinessPhoto(token, businessId, photo.id);
+      await load();
+    } catch (cause) {
+      fail(cause);
+    } finally {
+      setWorking(null);
+    }
   };
 
+  if (photos === null) return <Spinner />;
+
   const tile = (slot: PhotoSlot) => {
-    const photo = chosen.find((candidate) => candidate.slot === slot);
-    const isCoverSlot = slot === PHOTO_SLOTS.cover;
+    const photo = photos.find((candidate) => candidate.slot === slot);
+    const busy = working === slot;
     return (
       <div key={slot} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <button
           type="button"
+          disabled={busy}
           onClick={() => inputs.current.get(slot)?.click()}
-          aria-label={photo === undefined ? `${labels.add} ${slot + 1}` : `${labels.replace} ${slot + 1}`}
+          aria-label={photo === undefined ? labels.add : labels.replace}
           style={{
-            position: "relative",
             width: "100%",
-            aspectRatio: isCoverSlot ? "16 / 9" : "1 / 1",
+            aspectRatio: slot === PHOTO_SLOTS.cover ? "16 / 9" : "1 / 1",
             borderRadius: 16,
             border: `1px ${photo === undefined ? "dashed" : "solid"} var(--line)`,
             background: photo === undefined ? "var(--sunken)" : "var(--raised)",
             overflow: "hidden",
             padding: 0,
+            opacity: busy ? 0.5 : 1,
           }}
         >
           {photo === undefined ? (
-            <span style={{ color: "var(--faint)", fontSize: 13 }}>{labels.add}</span>
+            <span style={{ color: "var(--faint)", fontSize: 13 }}>
+              {busy ? "…" : labels.add}
+            </span>
           ) : (
-            /* A plain img: this is an object URL for a file the person chose a
-               moment ago, so there is nothing to optimise and no host to
-               configure. */
+            /* The address the API gave us; there is no build-time host to
+               configure and nothing to pre-size. */
             <img
-              src={photo.preview}
+              src={photo.url}
               alt=""
+              loading="lazy"
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           )}
@@ -138,7 +148,8 @@ export const PhotoPicker = ({
         {photo !== undefined && (
           <button
             type="button"
-            onClick={() => drop(slot)}
+            disabled={busy}
+            onClick={() => void drop(photo)}
             style={{ fontSize: 12.5, color: "var(--critical)", minHeight: 32 }}
           >
             {labels.remove}
@@ -150,6 +161,8 @@ export const PhotoPicker = ({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {error !== null && <Critical>{error}</Critical>}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <span className="label">{labels.cover}</span>
         <span className="hint">{labels.coverHint}</span>
@@ -162,15 +175,13 @@ export const PhotoPicker = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: `repeat(${MAXIMUM_PHOTOS - 1}, minmax(0, 1fr))`,
+            gridTemplateColumns: `repeat(${PHOTO_SLOTS_IN_ORDER.length - 1}, minmax(0, 1fr))`,
             gap: 10,
           }}
         >
           {PHOTO_SLOTS_IN_ORDER.filter((slot) => slot !== PHOTO_SLOTS.cover).map(tile)}
         </div>
       </div>
-
-      {error !== null && <p className="crit" style={{ margin: 0 }}>{error}</p>}
     </div>
   );
 };

@@ -14,9 +14,10 @@ import type {
 import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
+import { PhotoPanel } from "./photo-panel.tsx";
 import { Button, Card, Critical, Field, Note, Sheet, Spinner, Warning } from "../ui.tsx";
 
-type Panel = "services" | "resources" | "settings" | "billing";
+type Panel = "services" | "resources" | "photos" | "settings" | "billing";
 
 const MINOR_UNITS_PER_MAJOR = 100;
 
@@ -87,7 +88,7 @@ export const BusinessPanel = ({
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {(["services", "resources", "settings", "billing"] as const).map((candidate) => (
+        {(["services", "resources", "photos", "settings", "billing"] as const).map((candidate) => (
           <button
             key={candidate}
             className="chip"
@@ -101,6 +102,7 @@ export const BusinessPanel = ({
           >
             {candidate === "services" ? copy.services
               : candidate === "resources" ? copy.resources
+              : candidate === "photos" ? copy.photos
               : candidate === "settings" ? copy.settings
               : copy.billing}
           </button>
@@ -157,6 +159,23 @@ export const BusinessPanel = ({
           ))}
           <Button intent="quiet" onClick={() => setNewResource("")}>{copy.add}</Button>
         </>
+      )}
+
+      {panel === "photos" && (
+        <PhotoPanel
+          token={token}
+          businessId={business.id}
+          labels={{
+            cover: copy.photoCover,
+            coverHint: copy.photoCoverHint,
+            more: copy.photoMore,
+            moreHint: copy.photoMoreHint,
+            add: copy.photoAdd,
+            replace: copy.photoReplace,
+            remove: copy.photoRemove,
+            notAnImage: copy.photoNotAnImage,
+          }}
+        />
       )}
 
       {panel === "settings" && (

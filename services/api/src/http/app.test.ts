@@ -313,6 +313,22 @@ describe("business photos over HTTP", () => {
     expect((await api.getBytes(photo.url)).status).toBe(404);
   });
 
+  it("putting a photo in a taken slot replaces it", async () => {
+    const api = httpHarness();
+    const { owner, businessId } = await anOwnerWithABusiness(api);
+    const path = `/businesses/${businessId}/photos/0`;
+
+    const first = (await api.putBytes(path, A_PICTURE, "image/png", owner.token)).body as { id: string; url: string };
+    const bigger = new Uint8Array([...A_PICTURE, 9, 9, 9]);
+    const second = (await api.putBytes(path, bigger, "image/png", owner.token)).body as { id: string; url: string };
+
+    expect(second.id).not.toBe(first.id);
+    expect((await api.get(`/businesses/${businessId}/photos`, owner.token)).body).toHaveLength(1);
+    // The old object is gone and the new one serves.
+    expect((await api.getBytes(first.url)).status).toBe(404);
+    expect([...(await api.getBytes(second.url)).bytes]).toEqual([...bigger]);
+  });
+
   it("a customer sees the photos on the business, cover first", async () => {
     const api = httpHarness();
     const { owner, businessId } = await anOwnerWithABusiness(api);
