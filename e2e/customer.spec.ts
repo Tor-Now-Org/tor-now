@@ -261,6 +261,51 @@ test.describe("leaving", () => {
   });
 });
 
+test.describe("the way in", () => {
+  test("the header offers a way in before anyone has signed in", async ({ page }) => {
+    await page.goto("/");
+    await ready(page);
+
+    // The same corner as the account circle, because it is the same control.
+    const wayIn = page.getByRole("button", { name: "כניסה או הרשמה" });
+    await expect(wayIn).toBeVisible();
+    await expect(page.getByRole("button", { name: "החשבון שלי" })).toHaveCount(0);
+
+    await wayIn.click();
+    await expect(page.getByLabel("מספר טלפון")).toBeVisible();
+  });
+
+  test("signing in from the header leaves you where you were", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `דלת כניסה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+
+    await page.goto("/");
+    await ready(page);
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(shop.business.name.slice(0, 8));
+    await page.getByText(shop.business.name).first().click();
+    await expect(page.getByText(shop.service.name).first()).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("button", { name: "כניסה או הרשמה" }).click();
+    await page.getByLabel("מספר טלפון").fill(uniquePhone());
+    await page.getByRole("button", { name: "שליחת קוד" }).click();
+
+    const notice = page.getByText(/code is returned here: (\d+)/);
+    await expect(notice).toBeVisible({ timeout: 15_000 });
+    const code = (await notice.textContent())?.match(/(\d{4,8})/)?.[1] ?? "";
+    await page.getByLabel("הקוד שקיבלתם").fill(code);
+    await page.getByRole("button", { name: "אישור הקוד" }).click();
+    await page.getByRole("button", { name: "ממשיכים" }).click();
+
+    // Still on the business they were reading, now with an account.
+    await expect(page.getByRole("button", { name: "החשבון שלי" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(shop.service.name).first()).toBeVisible();
+  });
+});
+
 test.describe("signing in again", () => {
   /**
    * The complaint that produced this: a customer who had already given their

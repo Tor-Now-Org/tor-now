@@ -39,6 +39,8 @@ export default function CustomerApp() {
   const [business, setBusiness] = useState<BusinessDto | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
+  /** Where the person was heading when sign-in interrupted them, if anywhere. */
+  const [signInIntent, setSignInIntent] = useState<Screen | null>(null);
   const [owned, setOwned] = useState<BusinessDto[]>([]);
 
   useEffect(() => {
@@ -53,6 +55,7 @@ export default function CustomerApp() {
 
   const requireSession = (next: Screen) => {
     if (token === null) {
+      setSignInIntent(next);
       setSignInOpen(true);
       return;
     }
@@ -78,7 +81,18 @@ export default function CustomerApp() {
               onClick={() => setDrawerOpen(true)}
               label={copy.account}
             />
-          ) : undefined
+          ) : (
+            // The way in, from the screen a stranger actually lands on. Signing
+            // in from here is not on the way to anywhere, so it returns the
+            // person to whatever they were already looking at.
+            <AccountButton
+              onClick={() => {
+                setSignInIntent(null);
+                setSignInOpen(true);
+              }}
+              label={copy.signInOrUp}
+            />
+          )
         }
       />
 
@@ -170,7 +184,10 @@ export default function CustomerApp() {
           onVerified={(newToken, newUser) => {
             signIn(newToken, newUser);
             setSignInOpen(false);
-            setScreen("mine");
+            if (signInIntent !== null) {
+              setScreen(signInIntent);
+              setSignInIntent(null);
+            }
           }}
         />
       </Sheet>

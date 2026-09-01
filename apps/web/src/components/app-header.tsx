@@ -95,12 +95,36 @@ export const AppHeader = ({
   );
 };
 
+/** The glyph the circle wears when it does not yet stand for anybody. */
+const PersonGlyph = () => (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="12" cy="8.6" r="3.6" stroke="currentColor" strokeWidth="1.9" />
+    <path
+      d="M5 19.4c.9-3.4 3.7-5.2 7-5.2s6.1 1.8 7 5.2"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+/**
+ * The same circle in the same corner, whoever is looking.
+ *
+ * Signed in it carries an initial and opens the account; signed out it carries
+ * a person and opens sign-in — one control with two states rather than a
+ * control that is simply absent, which is what left a first-time visitor with
+ * no way into the system from the front door. The signed-out state is drawn
+ * quieter, because a filled circle in that corner reads as an account that
+ * already exists.
+ */
 export const AccountButton = ({
   initial,
   onClick,
   label,
 }: {
-  initial: string;
+  /** Absent when nobody is signed in. */
+  initial?: string;
   onClick: () => void;
   label: string;
 }) => (
@@ -113,13 +137,16 @@ export const AccountButton = ({
       width: 40,
       height: 40,
       borderRadius: 999,
-      background: "var(--accent-soft)",
-      color: "var(--accent-strong)",
+      background: initial === undefined ? "var(--raised)" : "var(--accent-soft)",
+      color: initial === undefined ? "var(--muted)" : "var(--accent-strong)",
       fontFamily: "Rubik, sans-serif",
       fontSize: 16,
-      border: "1px solid oklch(52% 0.123 245/.25)",
+      border:
+        initial === undefined
+          ? "1px solid var(--line)"
+          : "1px solid oklch(52% 0.123 245/.25)",
     }}
   >
-    {initial}
+    {initial ?? <PersonGlyph />}
   </button>
 );
