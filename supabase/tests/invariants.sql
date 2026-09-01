@@ -8,7 +8,7 @@ do $$
 declare
   v_user uuid; v_biz uuid; v_res uuid; v_svc uuid; v_failed boolean;
 begin
-  insert into app_user (phone, name) values ('+972500000001', 'invariant probe') returning id into v_user;
+  insert into app_user (phone, given_name) values ('+972500000001', 'invariant probe') returning id into v_user;
   insert into business (name, phone) values ('probe business', '+972500000002') returning id into v_biz;
   insert into resource (business_id, name) values (v_biz, 'probe chair') returning id into v_res;
   insert into service (business_id, name, duration_minutes, price_minor)
@@ -71,6 +71,27 @@ begin
   exception when foreign_key_violation then v_failed := true;
   end;
   if not v_failed then raise exception 'INVARIANT BROKEN: a resource crossed businesses'; end if;
+
+  -- ADR 0014: erasure clears what identifies a person and keeps the row, so
+  -- the appointment above still points at it.
+  perform app.anonymise_user(v_user);
+  if exists (select 1 from app_user where id = v_user and given_name = 'invariant probe') then
+    raise exception 'INVARIANT BROKEN: erasure left the name behind';
+  end if;
+  if not exists (select 1 from app_user where id = v_user and anonymised_at is not null) then
+    raise exception 'INVARIANT BROKEN: erasure did not record itself';
+  end if;
+  if not exists (select 1 from appointment where customer_id = v_user) then
+    raise exception 'INVARIANT BROKEN: erasure orphaned an appointment';
+  end if;
+
+  -- ADR 0005: a reminder is written once, which is what the stamp is for.
+  if exists (
+    select 1 from appointment
+    where customer_id = v_user and reminder_enqueued_at is not null
+  ) then
+    raise exception 'INVARIANT BROKEN: a fresh appointment was already reminded';
+  end if;
 
   raise exception 'ALL_INVARIANTS_HELD';
 end $$;
