@@ -153,8 +153,11 @@ jobs:
       # The API is the same code the Edge Function runs, served by Node.
       - name: Start the API
         run: |
+          # Generated, not written down. The database it signs against lives for
+          # the length of this job, and a literal here would be indistinguishable
+          # from a real leak — to a reader and to the scanner below.
           SUPABASE_DB_URL="$TEST_DATABASE_URL" \
-          SUPABASE_JWT_SECRET="continuous-integration-signing-secret-0" \
+          SUPABASE_JWT_SECRET="$(openssl rand -hex 32)" \
           VERIFICATION_TRANSPORT=LOG NOTIFICATION_TRANSPORT=LOG PORT=8787 \
             node services/api/dist/server.mjs > /tmp/api.log 2>&1 &
           npx wait-on -t 60000 http://127.0.0.1:8787/api/health

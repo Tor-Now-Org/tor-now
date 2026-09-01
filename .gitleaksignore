@@ -1,0 +1,12 @@
+# Findings that are real in shape but were never real secrets.
+#
+# Each line is a fingerprint from `gitleaks detect`, and each one needs a reason
+# above it. Nothing goes here to make a build green — if a value ever protected
+# anything, it gets rotated instead.
+
+# A placeholder signing secret written into the CI workflow when it was first
+# added. It only ever signed tokens against the throwaway Postgres that job
+# creates and destroys, so it protected nothing and there is nothing to rotate.
+# It is gone from HEAD: the workflow now generates one per run, which is why
+# this is a history-only finding.
+7a9dcb2cb73c6aee60ab452adbb8c597ee8bbd42:.github/workflows/pull-request.yml:generic-api-key:157

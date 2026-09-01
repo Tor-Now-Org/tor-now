@@ -57,8 +57,10 @@ export E2E_BASE_URL="http://127.0.0.1:$WEB_PORT"
 export NEXT_PUBLIC_API_URL="$E2E_API_URL"
 
 echo "→ API on $API_PORT"
+# Generated per run: the database it signs against is thrown away at the end,
+# and a literal secret in a script is a literal secret in a repository.
 SUPABASE_DB_URL="$TEST_DATABASE_URL" \
-SUPABASE_JWT_SECRET="end-to-end-suite-signing-secret-000" \
+SUPABASE_JWT_SECRET="$(openssl rand -hex 32)" \
 VERIFICATION_TRANSPORT=LOG \
 NOTIFICATION_TRANSPORT=LOG \
 PORT="$API_PORT" \
