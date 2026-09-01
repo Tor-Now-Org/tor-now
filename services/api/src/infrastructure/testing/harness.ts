@@ -225,7 +225,7 @@ export const harness = (options: { now?: Instant } = {}) => {
         exposeCode: true,
       }),
       profile: profileService({ unitOfWork }),
-      discovery: discoveryService({ unitOfWork, availability }),
+      discovery: discoveryService({ unitOfWork, clock, strategy: greedyWalk }),
       availability,
       booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
       business: businessService({ unitOfWork, clock }),

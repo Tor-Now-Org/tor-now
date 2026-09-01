@@ -1,20 +1,20 @@
 import {
+  END_OF_DAY,
+  MIDNIGHT,
   notFound,
+  zonedToInstant,
   type Business,
   type BusinessId,
+  type Clock,
   type LocalDate,
   type Resource,
   type Service,
+  type SlotGenerationStrategy,
+  type TimeZone,
 } from "@tor-now/domain";
 import { SEARCH } from "../config.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
-import type { AvailabilityQuery, DaySlots } from "./availability-service.ts";
-
-/** Just the part of the availability service this one needs. */
-type AvailabilityReader = (
-  actor: Actor,
-  query: AvailabilityQuery,
-) => Promise<readonly DaySlots[]>;
+import { availabilityFor, type DaySlots } from "./availability-service.ts";
 
 /**
  * ADR 0011: search is the platform's front door. A Business is discoverable the
@@ -39,12 +39,20 @@ export type BusinessProfile = {
   readonly availability?: readonly DaySlots[];
 };
 
+/** Midnight to midnight in the Business's own zone, not the server's. */
+const dayBoundsIn = (date: LocalDate, zone: TimeZone) => ({
+  start: zonedToInstant(date, MIDNIGHT, zone),
+  end: zonedToInstant(date, END_OF_DAY, zone),
+});
+
 export const discoveryService = ({
   unitOfWork,
-  availability,
+  clock,
+  strategy,
 }: {
   unitOfWork: UnitOfWork;
-  availability: { forRange: AvailabilityReader };
+  clock: Clock;
+  strategy?: SlotGenerationStrategy;
 }) => ({
   /** Below the minimum length, trigram ranking is noise; say nothing instead. */
   async search(actor: Actor, query: string): Promise<readonly Business[]> {
@@ -89,13 +97,25 @@ export const discoveryService = ({
 
       return {
         ...profile,
-        availability: await availability.forRange(actor, {
-          businessId,
-          serviceId: service.id,
-          resourceId: resource.id,
-          from: range.from,
-          to: range.to,
-        }),
+        // In this transaction, on this connection, and with the three entities
+        // it would otherwise re-read handed straight to it.
+        availability: await availabilityFor(
+          repositories,
+          { clock, ...(strategy === undefined ? {} : { strategy }) },
+          {
+            businessId,
+            serviceId: service.id,
+            resourceId: resource.id,
+            from: range.from,
+            to: range.to,
+          },
+          {
+            business,
+            service,
+            resource,
+            dayBounds: (date) => dayBoundsIn(date, business.timeZone),
+          },
+        ),
       };
     });
   },

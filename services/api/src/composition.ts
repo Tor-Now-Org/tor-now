@@ -93,7 +93,7 @@ export const compose = (
     }),
 
     profile: profileService({ unitOfWork }),
-    discovery: discoveryService({ unitOfWork, availability }),
+    discovery: discoveryService({ unitOfWork, clock, strategy: greedyWalk }),
     availability,
     booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
     business: businessService({ unitOfWork, clock }),

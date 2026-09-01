@@ -48,54 +48,72 @@ export type AvailabilityQuery = {
  * are loaded once for the whole span and resolved per date in memory, which is
  * what makes a two-week calendar a constant number of round trips.
  */
+/**
+ * The computation, over repositories the caller already has.
+ *
+ * Separated from the service so a request that needs availability *and*
+ * something else can do both in one transaction. Opening a second one costs a
+ * second connection, and a connection to a distant database is the most
+ * expensive thing in a request.
+ */
+export const availabilityFor = async (
+  repositories: Repositories,
+  dependencies: { clock: Clock; strategy?: SlotGenerationStrategy },
+  query: AvailabilityQuery,
+  /** Pass these when the caller has already loaded them, to save three reads. */
+  known?: Awaited<ReturnType<typeof loadContext>>,
+): Promise<readonly DaySlots[]> => {
+  const context = known ?? (await loadContext(repositories, query));
+  const now = dependencies.clock.now();
+
+  const dates = datesBetween(query.from, query.to);
+  const spanStart = context.dayBounds(dates[0] ?? query.from).start;
+  const spanEnd = context.dayBounds(dates[dates.length - 1] ?? query.to).end;
+
+  // One group, not two: none of these four depends on another, and each extra
+  // group is another round trip the customer waits through.
+  const [blocks, occupied, workingHours, overrides] = await Promise.all([
+    repositories.blocks.blockedBetween(query.resourceId, spanStart, spanEnd),
+    repositories.appointments.occupiedBetween(query.resourceId, spanStart, spanEnd),
+    repositories.workingHours.listForResource(query.resourceId),
+    repositories.dateOverrides.listForResource(query.resourceId, query.from, query.to),
+  ]);
+
+  return dates.map((date) => {
+    const availability = availableSlotsOn(
+      {
+        business: context.business,
+        resource: context.resource,
+        service: context.service,
+        date,
+        workingHours,
+        overrides,
+        blocks,
+        occupied,
+        now,
+      },
+      dependencies.strategy,
+    );
+    return {
+      date,
+      emptyReason: availability.emptyReason,
+      slots: availability.slots.map((slot) => ({
+        startAt: formatInstant(slot.startAt),
+        endAt: formatInstant(slot.endAt),
+      })),
+    };
+  });
+};
+
 export const availabilityService = (dependencies: {
   unitOfWork: UnitOfWork;
   clock: Clock;
   strategy?: SlotGenerationStrategy;
 }) => ({
   async forRange(actor: Actor, query: AvailabilityQuery): Promise<readonly DaySlots[]> {
-    return dependencies.unitOfWork.run(actor, async ({ repositories }) => {
-      const context = await loadContext(repositories, query);
-      const now = dependencies.clock.now();
-
-      const dates = datesBetween(query.from, query.to);
-      const spanStart = context.dayBounds(dates[0] ?? query.from).start;
-      const spanEnd = context.dayBounds(dates[dates.length - 1] ?? query.to).end;
-
-      // One group, not two: none of these four depends on another, and each
-      // extra group is another round trip the customer waits through.
-      const [blocks, occupied, workingHours, overrides] = await Promise.all([
-        repositories.blocks.blockedBetween(query.resourceId, spanStart, spanEnd),
-        repositories.appointments.occupiedBetween(query.resourceId, spanStart, spanEnd),
-        repositories.workingHours.listForResource(query.resourceId),
-        repositories.dateOverrides.listForResource(query.resourceId, query.from, query.to),
-      ]);
-
-      return dates.map((date) => {
-        const availability = availableSlotsOn(
-          {
-            business: context.business,
-            resource: context.resource,
-            service: context.service,
-            date,
-            workingHours,
-            overrides,
-            blocks,
-            occupied,
-            now,
-          },
-          dependencies.strategy,
-        );
-        return {
-          date,
-          emptyReason: availability.emptyReason,
-          slots: availability.slots.map((slot) => ({
-            startAt: formatInstant(slot.startAt),
-            endAt: formatInstant(slot.endAt),
-          })),
-        };
-      });
-    });
+    return dependencies.unitOfWork.run(actor, ({ repositories }) =>
+      availabilityFor(repositories, dependencies, query),
+    );
   },
 
   /** The first date, in the Business's own timezone, a calendar should open on. */

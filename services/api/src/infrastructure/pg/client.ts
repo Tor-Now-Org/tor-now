@@ -11,6 +11,18 @@ export type Transaction = postgres.TransactionSql;
  */
 export type Queryable = Sql | Transaction;
 
+const POOL = Object.freeze({
+  /** Enough for the widest fan-out a single request makes. */
+  maxConnections: 4,
+  /**
+   * Opening a connection to a distant database costs seconds, so an idle one is
+   * kept far longer than a request lasts: a customer clicking through a booking
+   * reuses the connection their search opened instead of paying for it again.
+   */
+  idleSeconds: 600,
+  connectSeconds: 15,
+});
+
 /**
  * ADR 0007: `supabase-js` speaks to PostgREST and offers no transactions, so
  * the domain layer connects to Postgres directly through Supavisor.
@@ -22,9 +34,9 @@ export type Queryable = Sql | Transaction;
 export const createPool = (databaseUrl: string): Sql =>
   postgres(databaseUrl, {
     prepare: false,
-    max: 4,
-    idle_timeout: 20,
-    connect_timeout: 15,
+    max: POOL.maxConnections,
+    idle_timeout: POOL.idleSeconds,
+    connect_timeout: POOL.connectSeconds,
     onnotice: () => {},
   });
 
