@@ -5,6 +5,7 @@ import {
   MIDNIGHT,
   notFound,
   parseInstant,
+  addDays,
   parseLocalDate,
   validationFailed,
   zonedToInstant,
@@ -12,10 +13,21 @@ import {
   type Block,
   type BlockId,
   type BusinessId,
+  type LocalDate,
   type ResourceId,
   type User,
 } from "@tor-now/domain";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
+
+/**
+ * How long the month containing this date is. Derived rather than tabulated, so
+ * February is right in a leap year without the table knowing which years those
+ * are.
+ */
+const daysInMonthOf = (date: LocalDate): number => {
+  const [year, month] = date.split("-").map(Number);
+  return new Date(Date.UTC(year ?? 1970, month ?? 1, 0)).getUTCDate();
+};
 import { loadOwnedBusiness, loadOwnedResource } from "./authorization.ts";
 
 /**
@@ -33,7 +45,75 @@ export type CalendarDay = {
   readonly blocks: readonly Block[];
 };
 
+/** One square of the month grid. */
+export type MonthDay = {
+  readonly date: LocalDate;
+  readonly appointments: number;
+  readonly blocks: number;
+};
+
 export const calendarService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => ({
+  /**
+   * A month at a glance: how many appointments stand on each day, and whether
+   * any of it is blocked out.
+   *
+   * Counts rather than appointments, because the grid draws numbers. Reading
+   * the appointments to count them would fetch a month of rows and hydrate a
+   * customer for each one — a page of work to draw a page of digits.
+   *
+   * The month is bounded in the Business's own zone, so the first and last
+   * squares hold what the owner would call the first and last of the month
+   * wherever the server happens to be.
+   */
+  async month(
+    actor: Actor,
+    businessId: BusinessId,
+    resourceId: ResourceId,
+    firstOfMonth: string,
+  ): Promise<readonly MonthDay[]> {
+    const first = parseLocalDate(firstOfMonth);
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      const business = await loadOwnedBusiness(repositories, actor, businessId);
+      await loadOwnedResource(repositories, businessId, resourceId);
+
+      const start = zonedToInstant(first, MIDNIGHT, business.timeZone);
+      const afterLast = zonedToInstant(
+        addDays(first, daysInMonthOf(first)),
+        MIDNIGHT,
+        business.timeZone,
+      );
+
+      const [appointments, blocks] = await Promise.all([
+        repositories.appointments.countsByLocalDay(
+          resourceId,
+          start,
+          afterLast,
+          business.timeZone,
+        ),
+        repositories.blocks.countsByLocalDay(
+          resourceId,
+          start,
+          afterLast,
+          business.timeZone,
+        ),
+      ]);
+
+      const countFor = (counts: readonly { date: LocalDate; count: number }[], date: LocalDate) =>
+        counts.find((entry) => entry.date === date)?.count ?? 0;
+
+      // Every day of the month, including the empty ones: the grid draws them
+      // all, and a gap in the answer would become a gap in the calendar.
+      return Array.from({ length: daysInMonthOf(first) }, (_, offset) => {
+        const date = addDays(first, offset);
+        return {
+          date,
+          appointments: countFor(appointments, date),
+          blocks: countFor(blocks, date),
+        };
+      });
+    });
+  },
+
   async day(
     actor: Actor,
     businessId: BusinessId,

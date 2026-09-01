@@ -104,12 +104,24 @@ export const MyAppointments = () => {
           {past.map((appointment) => (
             <Card key={appointment.id} style={{ display: "flex", flexDirection: "column", gap: 6, opacity: 0.72 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                <span style={{ flex: 1, fontWeight: 500 }}>{appointment.serviceName}</span>
+                <span
+                  className={appointment.status === "CANCELLED" ? "cancelled" : undefined}
+                  style={{ flex: 1, fontWeight: 500 }}
+                >
+                  {appointment.serviceName}
+                </span>
                 {appointment.status === "CANCELLED" && (
                   <span className="hint">{copy.cancelled}</span>
                 )}
               </div>
-              <span className="hint">{formatWhen(appointment)}</span>
+              {/* The word says what happened; the strike makes it visible
+                  without reading. Not on the label itself, which would be a
+                  cancelled cancellation. */}
+              <span
+                className={appointment.status === "CANCELLED" ? "cancelled hint" : "hint"}
+              >
+                {formatWhen(appointment)}
+              </span>
             </Card>
           ))}
         </div>

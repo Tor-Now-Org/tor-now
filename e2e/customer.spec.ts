@@ -345,6 +345,45 @@ test.describe("the way in", () => {
   });
 });
 
+test.describe("a cancelled appointment", () => {
+  test("stays on the list, struck through rather than gone", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `ביטול ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    const phone = uniquePhone();
+    const { token } = await signInDirectly(page, phone, "דנה כהן");
+
+    const [day] = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
+    );
+    const slot = day?.slots[0]?.startAt ?? "";
+    const booking = await call<{ id: string }>("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: slot,
+        customerNote: null,
+      },
+    });
+    await call(`/appointments/${booking.id}/cancel`, { method: "POST", token });
+
+    await page.goto("/");
+    await ready(page);
+    await page.getByRole("button", { name: "התורים שלי" }).click();
+
+    // Still listed — a customer wants to see that it was called off, not find
+    // it silently missing — and struck through so that reads without reading.
+    const struck = page.locator(".cancelled").first();
+    await expect(struck).toBeVisible({ timeout: 15_000 });
+    await expect(struck).toHaveCSS("text-decoration-line", "line-through");
+  });
+});
+
 test.describe("what a form will not accept", () => {
   test("signing up asks for both halves of a name and will not go on without them", async ({ page }) => {
     await page.goto("/");

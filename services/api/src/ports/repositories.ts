@@ -24,6 +24,7 @@ import type {
   Service,
   ServiceId,
   Subscription,
+  TimeZone,
   User,
   UserId,
   WorkingHours,
@@ -40,6 +41,16 @@ import type {
  */
 
 export type Page = { readonly limit: number; readonly offset: number };
+
+/**
+ * One day of a month overview. Cancelled appointments are not counted: the
+ * number is meant to answer "how busy is this day", and a called-off booking
+ * is not.
+ */
+export type DayCount = {
+  readonly date: LocalDate;
+  readonly count: number;
+};
 
 export type UserRepository = {
   findById(id: UserId): Promise<User | null>;
@@ -212,6 +223,13 @@ export type BlockRepository = {
     from: Instant,
     to: Instant,
   ): Promise<readonly Block[]>;
+  /** As the appointment repository counts, for the same grid. */
+  countsByLocalDay(
+    resourceId: ResourceId,
+    from: Instant,
+    to: Instant,
+    timeZone: TimeZone,
+  ): Promise<readonly DayCount[]>;
   create(block: {
     resourceId: ResourceId;
     businessId: BusinessId;
@@ -261,6 +279,21 @@ export type AppointmentRepository = {
     from: Instant,
     to: Instant,
   ): Promise<readonly Appointment[]>;
+  /**
+   * How many appointments fall on each day of a span, counted in the Business's
+   * own zone rather than the server's.
+   *
+   * A month overview wants one number per day and nothing else. Reading the
+   * appointments themselves to count them would fetch a month of rows and then
+   * hydrate a customer for each of them, which is a page of work to draw a
+   * grid of numbers.
+   */
+  countsByLocalDay(
+    resourceId: ResourceId,
+    from: Instant,
+    to: Instant,
+    timeZone: TimeZone,
+  ): Promise<readonly DayCount[]>;
   listForBusinessBetween(
     businessId: BusinessId,
     from: Instant,

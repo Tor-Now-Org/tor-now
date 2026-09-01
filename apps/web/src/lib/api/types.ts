@@ -53,6 +53,14 @@ export type BusinessProfileDto = {
   availability?: DayAvailabilityDto[];
 };
 
+/** One square of the owner's month grid. */
+export type MonthDayDto = {
+  date: string;
+  /** Appointments that still stand; a cancelled one is not counted. */
+  appointments: number;
+  blocks: number;
+};
+
 export type SlotDto = { startAt: string; endAt: string };
 
 /** ADR 0012: why a day is empty decides what the interface offers instead. */

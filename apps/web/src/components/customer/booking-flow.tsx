@@ -180,6 +180,14 @@ export const BookingFlow = ({
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <h1 style={{ fontSize: 22 }}>{business.name}</h1>
         {business.address !== null && <span className="hint">{business.address}</span>}
+        {/* What the business says about itself, in its own words. Below the
+            address because that is the fact a customer scans for first, and
+            above the services because it is context for them. */}
+        {business.description !== null && business.description.trim() !== "" && (
+          <p style={{ margin: "6px 0 0", fontSize: 14.5, color: "var(--muted)", lineHeight: 1.6 }}>
+            {business.description}
+          </p>
+        )}
       </div>
 
       {!business.active && <Warning>{copy.inactiveBanner}</Warning>}

@@ -192,6 +192,16 @@ export const dateRangeSchema = z.object({
 
 export const calendarDaySchema = z.object({ date: localDateSchema });
 
+/**
+ * A month is given as its first day rather than as "2026-09", so one date type
+ * crosses the wire instead of two and the API never has to guess a day.
+ */
+export const calendarMonthSchema = z.object({
+  firstOfMonth: localDateSchema.refine((value) => value.endsWith("-01"), {
+    message: "A month is identified by its first day, e.g. 2026-09-01",
+  }),
+});
+
 /** Both or neither; a half-given range is a mistake, not a default. */
 export const optionalDateRangeSchema = z
   .object({

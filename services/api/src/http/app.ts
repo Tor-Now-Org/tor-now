@@ -521,6 +521,17 @@ const ownerRoutes = (services: Services) => {
     });
   });
 
+  owner.get("/:businessId/resources/:resourceId/calendar/month", async (context) => {
+    const { firstOfMonth } = parseQuery(context, schema.calendarMonthSchema);
+    const days = await services.calendar.month(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "resourceId"),
+      firstOfMonth,
+    );
+    return context.json(days);
+  });
+
   owner.post("/:businessId/resources/:resourceId/blocks", async (context) => {
     const body = await parseBody(context, schema.blockSchema);
     return context.json(

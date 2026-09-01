@@ -131,3 +131,19 @@ export const partOfDay = (isoInstant: string, timeZone: string): PartOfDay => {
   if (hour < PART_OF_DAY_BOUNDARIES.eveningStartsAtHour) return "noon";
   return "evening";
 };
+
+/**
+ * "September 2026", in the reader's language. Built from the first of the
+ * month at noon UTC, which is far enough from either boundary that no zone
+ * turns it into the month before or after.
+ */
+export const monthName = (
+  firstOfMonth: string,
+  timeZone: string,
+  language: string,
+): string =>
+  new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
+    timeZone,
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${firstOfMonth}T12:00:00Z`));

@@ -14,6 +14,7 @@ import {
   toService,
   toWorkingHours,
   type Row,
+  toLocalDate,
 } from "./mappers.ts";
 
 const one = <T>(rows: readonly Row[], map: (row: Row) => T, entity: string): T => {
@@ -225,6 +226,22 @@ export const blockRepository = (tx: Transaction): BlockRepository => ({
     return rows.map((row) => ({
       startAt: instant(new Date(row["start_at"] as string).getTime()),
       endAt: instant(new Date(row["end_at"] as string).getTime()),
+    }));
+  },
+
+  async countsByLocalDay(resourceId, from, to, timeZone) {
+    const rows = await tx<Row[]>`
+      select (start_at at time zone ${timeZone})::date as on_date,
+             count(*)::int as count
+      from block
+      where resource_id = ${resourceId}
+        and start_at >= ${new Date(from)}
+        and start_at < ${new Date(to)}
+      group by 1
+      order by 1`;
+    return rows.map((row) => ({
+      date: toLocalDate(row["on_date"]),
+      count: Number(row["count"]),
     }));
   },
 

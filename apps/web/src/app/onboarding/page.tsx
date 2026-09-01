@@ -80,6 +80,7 @@ export default function OnboardingPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState(user?.phone ?? "+972");
   const [address, setAddress] = useState("");
+  const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<readonly ChosenPhoto[]>([]);
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
   const leave = (field: string) =>
@@ -151,6 +152,7 @@ export default function OnboardingPage() {
           checkText(name, TEXT_RULES.businessName),
           checkPhone(phone),
           checkText(address, TEXT_RULES.address),
+          checkText(description, TEXT_RULES.description),
         )
       : // Photos are optional, so this step never blocks.
         step === "photos"
@@ -179,7 +181,7 @@ export default function OnboardingPage() {
         name: name.trim(),
         phone: phone.trim(),
         address: address.trim() === "" ? null : address.trim(),
-        description: null,
+        description: description.trim() === "" ? null : description.trim(),
         resourceNames: resources.map((r) => r.trim()).filter((r) => r.length > 0),
         services: services
           .filter((service) => service.name.trim().length > 0)
@@ -267,6 +269,17 @@ export default function OnboardingPage() {
                 problem={problem.text(address, TEXT_RULES.address, touched.has("address"))}
                 onBlur={() => leave("address")}
                 onChange={(e) => setAddress(e.target.value)}
+              />
+              {/* Optional, and said to be: a business that has nothing to add
+                  should not feel it has left something blank. */}
+              <Field
+                id="biz-description"
+                label={copy.bizDescription}
+                hint={copy.bizDescriptionHint}
+                value={description}
+                problem={problem.text(description, TEXT_RULES.description, touched.has("description"))}
+                onBlur={() => leave("description")}
+                onChange={(e) => setDescription(e.target.value)}
               />
             </Card>
           </>

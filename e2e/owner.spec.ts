@@ -244,6 +244,85 @@ const today = (): string =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
 
 
+test.describe("the month view", () => {
+  test("shows how busy each day is, and opens the day that is clicked", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `יומן חודשי ${Date.now()}`,
+      ownerPhone,
+    });
+
+    // Two on one day, so the square carries a number rather than a mark.
+    const when = (hour: number) => {
+      const now = new Date();
+      return new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 2, hour, 0),
+      ).toISOString();
+    };
+    for (const hour of [6, 8]) {
+      const customer = uniquePhone();
+      const { code } = await call<{ code: string }>("/auth/request-code", {
+        method: "POST",
+        body: { phone: customer },
+      });
+      const { token } = await call<{ token: string }>("/auth/verify", {
+        method: "POST",
+        body: { phone: customer, code, name: { givenName: "דנה", familyName: "כהן" } },
+      });
+      await call("/appointments", {
+        method: "POST",
+        token,
+        body: {
+          businessId: shop.business.id,
+          serviceId: shop.service.id,
+          resourceId: shop.resource.id,
+          startAt: when(hour),
+          customerNote: null,
+        },
+      });
+    }
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await page.getByRole("button", { name: "חודש", exact: true }).click();
+
+    // The day with two bookings is labelled as such, and clicking it opens it.
+    const busyDay = page.getByRole("button", { name: /2 תורים/ });
+    await expect(busyDay).toBeVisible({ timeout: 15_000 });
+    await busyDay.click();
+
+    await expect(page.getByText("2 תורים")).toBeVisible();
+    await expect(page.getByText("דנה כהן").first()).toBeVisible();
+  });
+
+  test("jumps straight to a date without walking there", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `קפיצה ${Date.now()}`,
+      ownerPhone,
+    });
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    // Far enough ahead that the day strip does not reach it.
+    const far = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    await page.locator("#jump-to-date").fill(far);
+
+    await page.getByRole("button", { name: "חודש", exact: true }).click();
+    // The month followed the date rather than staying where it was.
+    await expect(page.getByRole("button", { name: new RegExp(`^${far}`) })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+      { timeout: 15_000 },
+    );
+  });
+});
+
 test.describe("photos", () => {
   /**
    * A one-pixel PNG. Small enough to write here, real enough that the browser

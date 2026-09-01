@@ -11,6 +11,9 @@ import {
   type Appointment,
   type Business,
   type BusinessPhoto,
+  type Instant,
+  type LocalDate,
+  type TimeZone,
   type Membership,
   type Resource,
   type Service,
@@ -19,6 +22,7 @@ import {
   GRACE_PERIOD_DAYS,
   addDays,
   compareLocalDate,
+  instantToZoned,
   dayOfWeek,
   displayName,
   localTime,
@@ -37,6 +41,25 @@ import type { Store } from "./in-memory-store.ts";
  * does — a double booking has to fail in both implementations or the seam is
  * lying.
  */
+
+/**
+ * The same grouping the database does, done here: an instant belongs to the
+ * local day it falls on in the Business's zone, not the server's.
+ */
+const countByLocalDay = (
+  starts: readonly Instant[],
+  timeZone: TimeZone,
+): readonly { date: LocalDate; count: number }[] => {
+  const perDay = new Map<LocalDate, number>();
+  for (const start of starts) {
+    const date = instantToZoned(start, timeZone).date;
+    perDay.set(date, (perDay.get(date) ?? 0) + 1);
+  }
+  return [...perDay.entries()]
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => compareLocalDate(a.date, b.date));
+};
+
 export const inMemoryRepositories = (store: Store): Repositories => {
   const nextId = store.nextId;
   const now = () => instant(Date.now());
@@ -493,6 +516,20 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           )
           .map((block) => ({ startAt: block.startAt, endAt: block.endAt }));
       },
+      async countsByLocalDay(resourceId, from, to, timeZone) {
+        return countByLocalDay(
+          store.blocks
+            .filter(
+              (block) =>
+                block.resourceId === resourceId &&
+                block.startAt >= from &&
+                block.startAt < to,
+            )
+            .map((block) => block.startAt),
+          timeZone,
+        );
+      },
+
       async listForResourceBetween(resourceId, from, to) {
         return store.blocks.filter(
           (block) =>
@@ -534,6 +571,20 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             startAt: appointment.startAt,
             occupiedUntil: appointment.occupiedUntil,
           }));
+      },
+      async countsByLocalDay(resourceId, from, to, timeZone) {
+        return countByLocalDay(
+          store.appointments
+            .filter(
+              (appointment) =>
+                appointment.resourceId === resourceId &&
+                appointment.startAt >= from &&
+                appointment.startAt < to &&
+                appointment.status !== "CANCELLED",
+            )
+            .map((appointment) => appointment.startAt),
+          timeZone,
+        );
       },
       async listForResourceBetween(resourceId, from, to) {
         return store.appointments

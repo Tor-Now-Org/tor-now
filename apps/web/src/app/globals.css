@@ -304,6 +304,49 @@ body {
   .toast { position: absolute; bottom: 26px; }
 }
 
+/* One square of the owner's month grid. Square-ish rather than tall, so a month
+   fits a phone without scrolling and a business can see the shape of it. */
+.month-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  aspect-ratio: 1 / 1;
+  min-height: 42px;
+  border-style: solid;
+  border-radius: 11px;
+  transition: background .13s ease, border-color .13s ease;
+}
+.month-day:hover { border-color: var(--accent); }
+.month-day-count { font-size: 11px; font-weight: 700; line-height: 1; }
+.month-day-blocked {
+  position: absolute;
+  inset-block-end: 5px;
+  inset-inline-end: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+}
+
+@media (min-width: 1024px) {
+  .month-day { min-height: 56px; border-radius: 13px; }
+  .month-day-count { font-size: 12px; }
+}
+
+/* A cancelled appointment is struck through and greyed, wherever it is listed:
+   it still happened, and the customer and the business both want to see that
+   it was called off rather than have it quietly disappear. Struck *and* grey,
+   because a strike alone is easy to miss at this size and grey alone reads as
+   "past" rather than "cancelled". */
+.cancelled {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  color: var(--faint);
+}
+.cancelled .hint { color: var(--faint); }
+
 /* ---------------------------------------------------------------------------
  * The business gallery.
  *

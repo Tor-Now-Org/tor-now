@@ -61,7 +61,7 @@ const nullableInstant = (value: unknown) =>
   value === null || value === undefined ? null : toInstant(value);
 
 /** Postgres `date` arrives as a Date in UTC; only its calendar day matters. */
-const toLocalDate = (value: unknown) => {
+export const toLocalDate = (value: unknown) => {
   const iso =
     value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
   return parseLocalDate(iso);

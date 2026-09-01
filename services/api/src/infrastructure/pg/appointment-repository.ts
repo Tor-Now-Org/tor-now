@@ -1,7 +1,7 @@
 import { asId, DomainError, instant, notFound } from "@tor-now/domain";
 import type { AppointmentRepository } from "../../ports/repositories.ts";
 import { errorCodeOf, PG_ERRORS, type Transaction } from "./client.ts";
-import { toAppointment, type Row } from "./mappers.ts";
+import { toAppointment, toLocalDate, type Row } from "./mappers.ts";
 
 const one = (rows: readonly Row[]) => {
   const row = rows[0];
@@ -27,6 +27,29 @@ export const appointmentRepository = (
       appointmentId: asId(String(row["appointment_id"])),
       startAt: instant(new Date(row["start_at"] as string).getTime()),
       occupiedUntil: instant(new Date(row["occupied_until"] as string).getTime()),
+    }));
+  },
+
+  /**
+   * Grouped by the Business's own calendar day. Postgres does the conversion,
+   * because the boundary between one day and the next is a property of the zone
+   * and doing it here would mean fetching every row to find out which day it
+   * fell on.
+   */
+  async countsByLocalDay(resourceId, from, to, timeZone) {
+    const rows = await tx<Row[]>`
+      select (start_at at time zone ${timeZone})::date as on_date,
+             count(*)::int as count
+      from appointment
+      where resource_id = ${resourceId}
+        and start_at >= ${new Date(from)}
+        and start_at < ${new Date(to)}
+        and status <> 'CANCELLED'
+      group by 1
+      order by 1`;
+    return rows.map((row) => ({
+      date: toLocalDate(row["on_date"]),
+      count: Number(row["count"]),
     }));
   },
 

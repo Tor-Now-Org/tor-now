@@ -8,6 +8,7 @@ import type {
   BusinessPhotoDto,
   BusinessProfileDto,
   BusinessSummaryDto,
+  MonthDayDto,
   CalendarDayDto,
   CustomerRecordDto,
   DayAvailabilityDto,
@@ -164,6 +165,17 @@ export const api = {
       birthDate?: string | null;
     },
   ) => request<UserDto>("/me", { method: "PATCH", body: changes, token }),
+
+  calendarMonth: (
+    token: string,
+    businessId: string,
+    resourceId: string,
+    firstOfMonth: string,
+  ) =>
+    request<MonthDayDto[]>(
+      `/businesses/${businessId}/resources/${resourceId}/calendar/month`,
+      { token, query: { firstOfMonth } },
+    ),
 
   businessPhotos: (token: string, businessId: string) =>
     request<BusinessPhotoDto[]>(`/businesses/${businessId}/photos`, { token }),

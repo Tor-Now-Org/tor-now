@@ -7,6 +7,7 @@ import {
   money,
   parseInstant,
   parseLocalDate,
+  timeZone,
   type Instant,
   type PhotoSlot,
 } from "@tor-now/domain";
@@ -482,6 +483,99 @@ export const describeRepositoryContract = (
         const context = await aBookableBusiness(repositories, "05002");
         await repositories.services.delete(context.service.id);
         expect(await repositories.services.findById(context.service.id)).toBeNull();
+      });
+    });
+
+    // --- Month counts ---------------------------------------------------
+
+    it("counts a day by the business's own zone, not the server's", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "4101");
+        // 21:30 UTC is already the next day in Jerusalem, which is the whole
+        // point of asking the database to group by the zone.
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-01T21:30:00Z", "2026-09-01T22:00:00Z", "2026-09-01T22:10:00Z"),
+        );
+
+        const counts = await repositories.appointments.countsByLocalDay(
+          context.resource.id,
+          parseInstant("2026-09-01T00:00:00Z"),
+          parseInstant("2026-09-30T21:00:00Z"),
+          timeZone("Asia/Jerusalem"),
+        );
+        expect(counts).toEqual([{ date: parseLocalDate("2026-09-02"), count: 1 }]);
+      });
+    });
+
+    it("does not count a cancelled appointment as a busy day", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "4102");
+        const booked = await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-08T09:00:00Z", "2026-09-08T09:30:00Z", "2026-09-08T09:40:00Z"),
+        );
+        const zone = timeZone("Asia/Jerusalem");
+        const span = [
+          parseInstant("2026-09-01T00:00:00Z"),
+          parseInstant("2026-09-30T21:00:00Z"),
+        ] as const;
+
+        expect(
+          await repositories.appointments.countsByLocalDay(context.resource.id, span[0], span[1], zone),
+        ).toHaveLength(1);
+
+        await repositories.appointments.update(booked.id, {
+          status: "CANCELLED",
+          cancelledAt: parseInstant("2026-09-07T09:00:00Z"),
+          cancelledBy: "CUSTOMER",
+        });
+
+        expect(
+          await repositories.appointments.countsByLocalDay(context.resource.id, span[0], span[1], zone),
+        ).toEqual([]);
+      });
+    });
+
+    it("counts several on one day as one day with several", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "4103");
+        for (const hour of ["09", "11", "13"]) {
+          await repositories.appointments.create(
+            anAppointmentAt(
+              context,
+              `2026-09-15T${hour}:00:00Z`,
+              `2026-09-15T${hour}:30:00Z`,
+              `2026-09-15T${hour}:40:00Z`,
+            ),
+          );
+        }
+        const counts = await repositories.appointments.countsByLocalDay(
+          context.resource.id,
+          parseInstant("2026-09-01T00:00:00Z"),
+          parseInstant("2026-09-30T21:00:00Z"),
+          timeZone("Asia/Jerusalem"),
+        );
+        expect(counts).toEqual([{ date: parseLocalDate("2026-09-15"), count: 3 }]);
+      });
+    });
+
+    it("counts blocks the same way, so a day off shows on the grid", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "4104");
+        await repositories.blocks.create({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          startAt: parseInstant("2026-09-20T06:00:00Z"),
+          endAt: parseInstant("2026-09-20T14:00:00Z"),
+          reason: "חופשה",
+        });
+        expect(
+          await repositories.blocks.countsByLocalDay(
+            context.resource.id,
+            parseInstant("2026-09-01T00:00:00Z"),
+            parseInstant("2026-09-30T21:00:00Z"),
+            timeZone("Asia/Jerusalem"),
+          ),
+        ).toEqual([{ date: parseLocalDate("2026-09-20"), count: 1 }]);
       });
     });
 
