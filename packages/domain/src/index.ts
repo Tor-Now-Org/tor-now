@@ -6,6 +6,7 @@ export * from "./time/index.ts";
 export * from "./model/ids.ts";
 export * from "./model/money.ts";
 export * from "./model/business.ts";
+export * from "./model/text.ts";
 export * from "./model/schedule.ts";
 export * from "./model/appointment.ts";
 export * from "./model/user.ts";

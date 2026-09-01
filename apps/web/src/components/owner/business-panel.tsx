@@ -13,7 +13,14 @@ import type {
 } from "@/lib/api/types.ts";
 import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { TEXT_RULES } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
+import {
+  blocking,
+  checkPhone,
+  checkText,
+  useFieldProblem,
+} from "@/lib/use-field-problem.ts";
 import { PhotoPanel } from "./photo-panel.tsx";
 import { Button, Card, Critical, Field, Note, Sheet, Spinner, Warning } from "../ui.tsx";
 
@@ -53,6 +60,7 @@ export const BusinessPanel = ({
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const problem = useFieldProblem();
 
   const load = useCallback(async () => {
     try {
@@ -183,12 +191,17 @@ export const BusinessPanel = ({
           <span className="label">{copy.publicDetails}</span>
           <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <Field id="s-name" label={copy.fName} hint={copy.fNameHint} value={settings.name}
+              problem={problem.text(settings.name, TEXT_RULES.businessName)}
               onChange={(e) => { setSettings({ ...settings, name: e.target.value }); setSaved(false); }} />
-            <Field id="s-phone" label={copy.fPhone} hint={copy.fPhoneHint} dir="ltr" value={settings.phone}
+            <Field id="s-phone" label={copy.fPhone} hint={copy.fPhoneHint} dir="ltr" type="tel" inputMode="tel"
+              value={settings.phone}
+              problem={problem.phone(settings.phone)}
               onChange={(e) => { setSettings({ ...settings, phone: e.target.value }); setSaved(false); }} />
             <Field id="s-address" label={copy.fAddress} hint={copy.fAddressHint} value={settings.address ?? ""}
+              problem={problem.text(settings.address ?? "", TEXT_RULES.address)}
               onChange={(e) => { setSettings({ ...settings, address: e.target.value }); setSaved(false); }} />
             <Field id="s-desc" label={copy.fDescription} hint={copy.fDescriptionHint} value={settings.description ?? ""}
+              problem={problem.text(settings.description ?? "", TEXT_RULES.description)}
               onChange={(e) => { setSettings({ ...settings, description: e.target.value }); setSaved(false); }} />
             <Field id="s-tz" label={copy.fTimezone} hint={copy.fTimezoneHint} value={settings.timeZone} readOnly disabled />
           </Card>
@@ -231,6 +244,12 @@ export const BusinessPanel = ({
                 setSaved(true);
               })
             }
+            disabled={blocking(
+              checkText(settings.name, TEXT_RULES.businessName),
+              checkPhone(settings.phone),
+              checkText(settings.address ?? "", TEXT_RULES.address),
+              checkText(settings.description ?? "", TEXT_RULES.description),
+            )}
           >
             {copy.save}
           </Button>
@@ -265,6 +284,7 @@ export const BusinessPanel = ({
             <h2 style={{ fontSize: 19 }}>{editing.id === undefined ? copy.newService : copy.editService}</h2>
             <Note>{copy.serviceFormHint}</Note>
             <Field id="svc-name" label={copy.serviceName} placeholder={copy.serviceNamePlaceholder}
+              problem={problem.text(editing?.name ?? "", TEXT_RULES.serviceName)}
               value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             <Field id="svc-duration" label={copy.durationMinutes} hint={copy.durationHint} type="number"
               value={editing.durationMinutes ?? 30}
@@ -278,10 +298,8 @@ export const BusinessPanel = ({
               onChange={(e) =>
                 setEditing({ ...editing, bufferMinutes: e.target.value === "" ? null : Number(e.target.value) })
               } />
-            {(editing.name ?? "").trim() === "" && <Critical>{copy.serviceInvalid}</Critical>}
             <Button
               busy={busy}
-              disabled={(editing.name ?? "").trim() === ""}
               onClick={() =>
                 act(() =>
                   editing.id === undefined
@@ -299,6 +317,7 @@ export const BusinessPanel = ({
                       }),
                 )
               }
+              disabled={checkText(editing.name ?? "", TEXT_RULES.serviceName) !== null}
             >
               {copy.save}
             </Button>
@@ -317,8 +336,10 @@ export const BusinessPanel = ({
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <h2 style={{ fontSize: 19 }}>{copy.resources}</h2>
             <Field id="res-name" label={copy.resources} placeholder={copy.resourceNamePlaceholder}
+              problem={problem.text(newResource ?? "", TEXT_RULES.resourceName)}
               value={newResource} onChange={(e) => setNewResource(e.target.value)} />
-            <Button busy={busy} disabled={newResource.trim() === ""}
+            <Button busy={busy}
+              disabled={checkText(newResource, TEXT_RULES.resourceName) !== null}
               onClick={() => act(() => api.createResource(token, business.id, newResource.trim()))}>
               {copy.add}
             </Button>

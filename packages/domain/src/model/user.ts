@@ -74,3 +74,25 @@ export type Customer = {
   readonly user: User;
   readonly membership: Membership;
 };
+
+/**
+ * The name given to someone who has verified a number but not yet said who
+ * they are. Sign-in creates the row first and asks second, so this is what
+ * stands in between — and what `needsName` looks for.
+ */
+export const UNNAMED = "אורח";
+
+/**
+ * True while a User still owes the system a name.
+ *
+ * Sign-up asks for both halves and will not finish without them, but the row
+ * exists from the moment the code is checked — so someone who closes the sheet
+ * on the name step leaves an account behind with nothing but a phone number.
+ * They are a returning user on their next visit and would never be asked again,
+ * which is exactly the gap this closes: the question is asked of anyone who has
+ * not answered it, not only of a row created a moment ago.
+ */
+export const needsName = (user: {
+  readonly givenName: string;
+  readonly familyName: string | null;
+}): boolean => user.givenName.trim() === UNNAMED || user.familyName === null;

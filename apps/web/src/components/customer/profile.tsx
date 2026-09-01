@@ -5,7 +5,13 @@ import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
+import { TEXT_RULES } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
+import {
+  blocking,
+  checkText,
+  useFieldProblem,
+} from "@/lib/use-field-problem.ts";
 import { SignOutButton } from "../sign-out.tsx";
 import { Button, Card, Critical, Field, Note, Sheet } from "../ui.tsx";
 
@@ -26,6 +32,10 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const problem = useFieldProblem();
+  const givenProblem = problem.text(givenName, TEXT_RULES.personName);
+  const familyProblem = problem.text(familyName, TEXT_RULES.personName);
+
   if (token === null || user === null) return null;
 
   const save = async () => {
@@ -34,7 +44,7 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
     try {
       await api.updateProfile(token, {
         givenName: givenName.trim(),
-        familyName: familyName.trim() === "" ? null : familyName.trim(),
+        familyName: familyName.trim(),
         birthDate: birthDate.trim() === "" ? null : birthDate.trim(),
       });
       await refresh();
@@ -75,6 +85,7 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
           label={copy.firstName}
           autoComplete="given-name"
           value={givenName}
+          problem={givenProblem}
           onChange={(event) => { setGivenName(event.target.value); setSaved(false); }}
         />
         <Field
@@ -82,6 +93,7 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
           label={copy.lastName}
           autoComplete="family-name"
           value={familyName}
+          problem={familyProblem}
           onChange={(event) => { setFamilyName(event.target.value); setSaved(false); }}
         />
         <Field
@@ -95,7 +107,16 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
         <Note>{copy.phoneLocked}</Note>
         {error !== null && <Critical>{error}</Critical>}
         {saved && <p className="hint" style={{ margin: 0 }} role="status">{copy.profileSaved}</p>}
-        <Button onClick={save} busy={busy}>{copy.saveDetails}</Button>
+        <Button
+          onClick={save}
+          busy={busy}
+          disabled={blocking(
+            checkText(givenName, TEXT_RULES.personName),
+            checkText(familyName, TEXT_RULES.personName),
+          )}
+        >
+          {copy.saveDetails}
+        </Button>
       </Card>
 
       <SignOutButton label={copy.signOut} onSignedOut={onSignedOut} />

@@ -3,6 +3,7 @@ import {
   forbidden,
   instant,
   parseLocalDate,
+  UNNAMED,
   unauthenticated,
   type Clock,
   type LocalDate,
@@ -141,7 +142,7 @@ export const authService = (dependencies: AuthDependencies) => ({
           phone,
           // Sign-in asks for a first name and accepts the answer; someone who
           // gives none is still a customer, and can fill it in later.
-          givenName: name?.givenName.trim() || "אורח",
+          givenName: name?.givenName.trim() || UNNAMED,
           familyName: name?.familyName?.trim() || null,
           birthDate: null,
         }));

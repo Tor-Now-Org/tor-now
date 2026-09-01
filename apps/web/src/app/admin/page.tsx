@@ -16,7 +16,9 @@ import type {
 } from "@/lib/api/types.ts";
 import { formatLocalDate } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { TEXT_RULES } from "@tor-now/domain";
 import { useSession } from "@/lib/session.tsx";
+import { checkPhone, useFieldProblem } from "@/lib/use-field-problem.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
@@ -53,6 +55,7 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const problem = useFieldProblem();
   const [openBusiness, setOpenBusiness] = useState<BusinessSummaryDto | null>(null);
   const [billing, setBilling] = useState<{
     subscription: SubscriptionDto;
@@ -426,15 +429,20 @@ export default function AdminPage() {
             {edits !== null && (
               <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <Field id="edit-name" label={copy.fName} value={edits.name}
+                  problem={problem.text(edits.name, TEXT_RULES.businessName)}
                   onChange={(event) => setEdits({ ...edits, name: event.target.value })} />
-                <Field id="edit-phone" label={copy.fPhone} dir="ltr" value={edits.phone}
+                <Field id="edit-phone" label={copy.fPhone} dir="ltr" type="tel" inputMode="tel" value={edits.phone}
+                  problem={problem.phone(edits.phone)}
                   onChange={(event) => setEdits({ ...edits, phone: event.target.value })} />
                 <Field id="edit-address" label={copy.fAddress} value={edits.address}
+                  problem={problem.text(edits.address, TEXT_RULES.address)}
                   onChange={(event) => setEdits({ ...edits, address: event.target.value })} />
                 <Field id="edit-description" label={copy.fDescription} value={edits.description}
+                  problem={problem.text(edits.description, TEXT_RULES.description)}
                   onChange={(event) => setEdits({ ...edits, description: event.target.value })} />
                 <Field id="edit-reason" label={copy.editReason} placeholder={copy.editReasonPlaceholder}
                   hint={copy.editReasonHint} value={editReason}
+                  problem={problem.text(editReason, TEXT_RULES.auditReason, editReason !== "")}
                   onChange={(event) => setEditReason(event.target.value)} />
                 <Button
                   busy={busy}
@@ -536,6 +544,7 @@ export default function AdminPage() {
               placeholder={erasureCopy.reasonPlaceholder}
               hint={erasureCopy.reasonHint}
               value={erasing.reason}
+              problem={problem.text(erasing.reason, TEXT_RULES.auditReason, erasing.reason !== "")}
               onChange={(event) => setErasing({ ...erasing, reason: event.target.value })}
             />
             <Button
@@ -559,9 +568,12 @@ export default function AdminPage() {
         {newAllowed !== null && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <h2 style={{ fontSize: 19 }}>{copy.allowlist}</h2>
-            <Field id="allow-phone" label={copy.phone} dir="ltr" value={newAllowed}
+            <Field id="allow-phone" label={copy.phone} dir="ltr" type="tel" inputMode="tel" value={newAllowed}
+              problem={problem.phone(newAllowed, newAllowed !== "")}
               onChange={(e) => setNewAllowed(e.target.value)} />
-            <Button busy={busy} onClick={() => act(() => api.adminAddToAllowlist(token, newAllowed.trim(), null))}>
+            <Button busy={busy}
+              disabled={checkPhone(newAllowed) !== null}
+              onClick={() => act(() => api.adminAddToAllowlist(token, newAllowed.trim(), null))}>
               {copy.add}
             </Button>
           </div>

@@ -60,18 +60,53 @@ export const Card = ({
   </div>
 );
 
+/**
+ * A labelled input that can say what is wrong with it.
+ *
+ * The problem is shown under the field rather than collected at the top of the
+ * form, because that is where the answer has to change, and it is tied to the
+ * input by aria-describedby so it is announced rather than merely drawn. It
+ * replaces the hint while it is showing: two lines of small grey text competing
+ * under one field help nobody.
+ */
 export const Field = ({
   label,
   hint,
+  problem,
   id,
   ...rest
-}: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) => (
-  <label htmlFor={id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-    <span className="label">{label}</span>
-    <input {...rest} id={id} className="field" />
-    {hint !== undefined && <span className="hint">{hint}</span>}
-  </label>
-);
+}: InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+  hint?: string;
+  /** Already in the reader's language; see lib/i18n/field-problems.ts. */
+  problem?: string | null;
+}) => {
+  const wrong = problem !== undefined && problem !== null;
+  const describedBy = wrong ? `${id ?? ""}-problem` : undefined;
+  return (
+    <label htmlFor={id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span className="label">{label}</span>
+      <input
+        {...rest}
+        id={id}
+        className="field"
+        aria-invalid={wrong ? true : undefined}
+        aria-describedby={describedBy}
+        style={wrong ? { ...rest.style, borderColor: "var(--critical)" } : rest.style}
+      />
+      {wrong ? (
+        <span
+          id={describedBy}
+          style={{ fontSize: 12, color: "var(--critical)", lineHeight: 1.5 }}
+        >
+          {problem}
+        </span>
+      ) : (
+        hint !== undefined && <span className="hint">{hint}</span>
+      )}
+    </label>
+  );
+};
 
 export const Select = ({
   label,

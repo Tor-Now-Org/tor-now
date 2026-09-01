@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { needsName, TEXT_RULES } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
+import {
+  blocking,
+  checkPhone,
+  checkText,
+  useFieldProblem,
+} from "@/lib/use-field-problem.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type { UserDto } from "@/lib/api/types.ts";
 import { Button, Critical, Field, Note } from "./ui.tsx";
@@ -63,6 +70,18 @@ export const VerifyPanel = ({
   const [devCode, setDevCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Nothing is marked wrong until it has been left, so the first character of a
+   * phone number is not greeted with a complaint that it is not one yet.
+   */
+  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
+  const leave = (field: string) =>
+    setTouched((previous) => new Set(previous).add(field));
+
+  const problem = useFieldProblem();
+  const phoneProblem = problem.phone(phone, touched.has("phone"));
+  const givenProblem = problem.text(givenName, TEXT_RULES.personName, touched.has("given"));
+  const familyProblem = problem.text(familyName, TEXT_RULES.personName, touched.has("family"));
 
   const fail = (cause: unknown) =>
     setError(isApiError(cause) ? errorText(cause.code) : errorText("INTERNAL"));
@@ -88,7 +107,10 @@ export const VerifyPanel = ({
       // No name here: nobody has been asked for one yet, and a returning
       // customer never will be.
       const verified = await api.verifyCode(phone.trim(), code.trim(), null);
-      if (!verified.isNewUser) {
+      // Not `isNewUser`: someone who closed this sheet on the name step last
+      // time is a returning user with no name, and would otherwise never be
+      // asked again.
+      if (!needsName(verified.user)) {
         onVerified(verified.token, verified.user);
         return;
       }
@@ -102,22 +124,19 @@ export const VerifyPanel = ({
   };
 
   /**
-   * The name is the last step rather than a gate: someone who leaves it empty
-   * is signed in regardless, under the placeholder the API gives them, and the
-   * profile screen is where they change their mind.
+   * Both halves are required. The account exists by now — the code was checked
+   * to get here — so this saves a name onto it rather than creating anything,
+   * and until it succeeds the app is never handed the session.
    */
   const saveName = async () => {
     if (session === null) return;
-    if (givenName.trim() === "") {
-      onVerified(session.token, session.user);
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
       const named = await api.updateProfile(session.token, {
         givenName: givenName.trim(),
-        familyName: familyName.trim() === "" ? null : familyName.trim(),
+        // Required here, so it is never the null that means "not asked yet".
+        familyName: familyName.trim(),
       });
       onVerified(session.token, named);
     } catch (cause) {
@@ -148,11 +167,17 @@ export const VerifyPanel = ({
             autoComplete="tel"
             dir="ltr"
             value={phone}
+            problem={phoneProblem}
+            onBlur={() => leave("phone")}
             onChange={(event) => setPhone(event.target.value)}
           />
           {labels.notHeld !== undefined && <Note>{labels.notHeld}</Note>}
           {error !== null && <Critical>{error}</Critical>}
-          <Button onClick={send} busy={busy} disabled={phone.trim().length < 10}>
+          <Button
+            onClick={send}
+            busy={busy}
+            disabled={checkPhone(phone) !== null}
+          >
             {labels.sendCode}
           </Button>
         </>
@@ -180,19 +205,30 @@ export const VerifyPanel = ({
             label={labels.firstName}
             autoComplete="given-name"
             value={givenName}
+            problem={givenProblem}
+            onBlur={() => leave("given")}
             onChange={(event) => setGivenName(event.target.value)}
           />
-          {/* Optional: a customer who gives only a first name is still a
-              customer, and the business has something to call them. */}
+          {/* Both halves are required: a business looking at tomorrow's diary
+              needs more than a first name to tell two customers apart. */}
           <Field
             id="verify-family-name"
             label={labels.lastName}
             autoComplete="family-name"
             value={familyName}
+            problem={familyProblem}
+            onBlur={() => leave("family")}
             onChange={(event) => setFamilyName(event.target.value)}
           />
           {error !== null && <Critical>{error}</Critical>}
-          <Button onClick={saveName} busy={busy}>
+          <Button
+            onClick={saveName}
+            busy={busy}
+            disabled={blocking(
+              checkText(givenName, TEXT_RULES.personName),
+              checkText(familyName, TEXT_RULES.personName),
+            )}
+          >
             {labels.saveName}
           </Button>
         </>

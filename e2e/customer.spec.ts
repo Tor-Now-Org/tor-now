@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
+  call,
   ready,
   signInDirectly,
   uniquePhone,
@@ -332,6 +333,8 @@ test.describe("the way in", () => {
     const code = (await notice.textContent())?.match(/(\d{4,8})/)?.[1] ?? "";
     await page.getByLabel("הקוד שקיבלתם").fill(code);
     await page.getByRole("button", { name: "אישור הקוד" }).click();
+    await page.getByLabel("שם פרטי").fill("דנה");
+    await page.getByLabel("שם משפחה").fill("כהן");
     await page.getByRole("button", { name: "ממשיכים" }).click();
 
     // Still on the business they were reading, now with an account.
@@ -339,6 +342,71 @@ test.describe("the way in", () => {
       timeout: 15_000,
     });
     await expect(page.getByText(shop.service.name).first()).toBeVisible();
+  });
+});
+
+test.describe("what a form will not accept", () => {
+  test("signing up asks for both halves of a name and will not go on without them", async ({ page }) => {
+    await page.goto("/");
+    await ready(page);
+    await page.getByRole("button", { name: "כניסה או הרשמה" }).click();
+
+    // A local number is the mistake people actually make, and it is refused
+    // before the code is ever sent.
+    const phone = page.getByLabel("מספר טלפון");
+    await phone.fill("0501234567");
+    await phone.blur();
+    await expect(page.getByText(/פורמט בינלאומי/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "שליחת קוד" })).toBeDisabled();
+
+    await phone.fill(uniquePhone());
+    await expect(page.getByRole("button", { name: "שליחת קוד" })).toBeEnabled();
+    await page.getByRole("button", { name: "שליחת קוד" }).click();
+
+    const notice = page.getByText(/code is returned here: (\d+)/);
+    await expect(notice).toBeVisible({ timeout: 15_000 });
+    const code = (await notice.textContent())?.match(/(\d{4,8})/)?.[1] ?? "";
+    await page.getByLabel("הקוד שקיבלתם").fill(code);
+    await page.getByRole("button", { name: "אישור הקוד" }).click();
+
+    // Neither half may be skipped.
+    const goOn = page.getByRole("button", { name: "ממשיכים" });
+    await expect(goOn).toBeDisabled();
+    await page.getByLabel("שם פרטי").fill("יעל");
+    await expect(goOn).toBeDisabled();
+    await page.getByLabel("שם משפחה").fill("אבידן");
+    await expect(goOn).toBeEnabled();
+
+    await goOn.click();
+    await expect(page.getByRole("button", { name: "החשבון שלי" })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("someone who abandoned the name step is asked again, not let through", async ({ page }) => {
+    // A row with a verified number and no name: exactly what closing the sheet
+    // on the name step leaves behind.
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    await call("/auth/verify", { method: "POST", body: { phone, code } });
+
+    await page.goto("/");
+    await ready(page);
+    await page.getByRole("button", { name: "כניסה או הרשמה" }).click();
+    await page.getByLabel("מספר טלפון").fill(phone);
+    await page.getByRole("button", { name: "שליחת קוד" }).click();
+
+    const notice = page.getByText(/code is returned here: (\d+)/);
+    await expect(notice).toBeVisible({ timeout: 15_000 });
+    const again = (await notice.textContent())?.match(/(\d{4,8})/)?.[1] ?? "";
+    await page.getByLabel("הקוד שקיבלתם").fill(again);
+    await page.getByRole("button", { name: "אישור הקוד" }).click();
+
+    // Returning, but still nameless — so the question comes round again.
+    await expect(page.getByLabel("שם פרטי")).toBeVisible({ timeout: 15_000 });
   });
 });
 

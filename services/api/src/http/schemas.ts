@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PHONE_PATTERN, TEXT_RULES, type TextRule } from "@tor-now/domain";
 import { PAGINATION } from "../config.ts";
 
 /**
@@ -8,11 +9,20 @@ import { PAGINATION } from "../config.ts";
  * unchecked one.
  */
 
+/**
+ * The rules themselves live in the domain, so the browser refuses exactly what
+ * this refuses and can say so before the request is made.
+ */
+const text = (rule: TextRule) =>
+  rule.min === 0
+    ? z.string().trim().max(rule.max)
+    : z.string().trim().min(rule.min).max(rule.max);
+
 /** E.164, which is also what the database's CHECK constraint enforces. */
 export const phoneSchema = z
   .string()
   .trim()
-  .regex(/^\+[1-9]\d{7,14}$/, "A phone number must be in international form, e.g. +972501234567");
+  .regex(PHONE_PATTERN, "A phone number must be in international form, e.g. +972501234567");
 
 const localTimeSchema = z
   .string()
@@ -29,20 +39,23 @@ const uuidSchema = z.string().uuid();
 export const requestCodeSchema = z.object({ phone: phoneSchema });
 
 const personName = z.object({
-  givenName: z.string().trim().min(1).max(80),
-  familyName: z.string().trim().min(1).max(80).nullable().default(null),
+  givenName: text(TEXT_RULES.personName),
+  familyName: text(TEXT_RULES.personName).nullable().default(null),
 });
 
 export const verifyCodeSchema = z.object({
   phone: phoneSchema,
-  code: z.string().trim().regex(/^\d{4,8}$/),
+  code: z
+    .string()
+    .trim()
+    .regex(new RegExp(`^\\d{${TEXT_RULES.code.min},${TEXT_RULES.code.max}}$`)),
   /**
    * Accepts either shape. The screens send the two halves; a caller that only
    * has a single name — the seed script, an older client — sends a string and
    * it becomes the given name.
    */
   name: z
-    .union([personName, z.string().trim().min(1).max(80)])
+    .union([personName, text(TEXT_RULES.personName)])
     .nullable()
     .default(null)
     .transform((value) =>
@@ -55,8 +68,8 @@ export const verifyCodeSchema = z.object({
 });
 
 export const updateProfileSchema = z.object({
-  givenName: z.string().trim().min(1).max(80).optional(),
-  familyName: z.string().trim().min(1).max(80).nullable().optional(),
+  givenName: text(TEXT_RULES.personName).optional(),
+  familyName: text(TEXT_RULES.personName).nullable().optional(),
   birthDate: localDateSchema.nullable().optional(),
 });
 
@@ -92,16 +105,16 @@ const workingHoursEntrySchema = z
   });
 
 export const registerBusinessSchema = z.object({
-  name: z.string().trim().min(2).max(80),
+  name: text(TEXT_RULES.businessName),
   phone: phoneSchema,
   timeZone: z.string().min(1).optional(),
-  description: z.string().trim().max(500).nullable().default(null),
-  address: z.string().trim().max(200).nullable().default(null),
-  resourceNames: z.array(z.string().trim().min(1).max(60)).min(1),
+  description: text(TEXT_RULES.description).nullable().default(null),
+  address: text(TEXT_RULES.address).nullable().default(null),
+  resourceNames: z.array(text(TEXT_RULES.resourceName)).min(1),
   services: z
     .array(
       z.object({
-        name: z.string().trim().min(1).max(80),
+        name: text(TEXT_RULES.serviceName),
         durationMinutes: z.number().int().min(5).max(1440),
         priceMinor: z.number().int().min(0),
         bufferMinutes: z.number().int().min(0).max(240).nullable().default(null),
@@ -112,11 +125,11 @@ export const registerBusinessSchema = z.object({
 });
 
 export const updateBusinessSchema = z.object({
-  name: z.string().trim().min(2).max(80).optional(),
+  name: text(TEXT_RULES.businessName).optional(),
   phone: phoneSchema.optional(),
   timeZone: z.string().min(1).optional(),
-  description: z.string().trim().max(500).nullable().optional(),
-  address: z.string().trim().max(200).nullable().optional(),
+  description: text(TEXT_RULES.description).nullable().optional(),
+  address: text(TEXT_RULES.address).nullable().optional(),
   defaultBufferMinutes: z.number().int().min(0).max(240).optional(),
   minimumNoticeMinutes: z.number().int().min(0).max(43200).optional(),
   bookingHorizonDays: z.number().int().min(1).max(365).optional(),
@@ -124,7 +137,7 @@ export const updateBusinessSchema = z.object({
 });
 
 export const serviceSchema = z.object({
-  name: z.string().trim().min(1).max(80),
+  name: text(TEXT_RULES.serviceName),
   durationMinutes: z.number().int().min(5).max(1440),
   priceMinor: z.number().int().min(0),
   bufferMinutes: z.number().int().min(0).max(240).nullable().default(null),
@@ -135,11 +148,11 @@ export const serviceUpdateSchema = serviceSchema.partial().extend({
 });
 
 export const resourceSchema = z.object({
-  name: z.string().trim().min(1).max(60),
+  name: text(TEXT_RULES.resourceName),
 });
 
 export const resourceUpdateSchema = z.object({
-  name: z.string().trim().min(1).max(60).optional(),
+  name: text(TEXT_RULES.resourceName).optional(),
   active: z.boolean().optional(),
 });
 
@@ -169,7 +182,7 @@ export const overrideSchema = z.object({
 export const blockSchema = z.object({
   startAt: instantSchema,
   endAt: instantSchema,
-  reason: z.string().trim().max(200).default(""),
+  reason: text(TEXT_RULES.reason).default(""),
 });
 
 export const dateRangeSchema = z.object({
@@ -204,12 +217,12 @@ export const subscriptionUpdateSchema = z.object({
 
 export const adminBusinessUpdateSchema = updateBusinessSchema.extend({
   /** ADR 0010: an edit on the owner's behalf records why it was made. */
-  reason: z.string().trim().min(3).max(200),
+  reason: z.string().trim().min(TEXT_RULES.auditReason.min).max(TEXT_RULES.auditReason.max),
 });
 
 /** ADR 0008: an erasure records why it was carried out, and cannot be undone. */
 export const erasureSchema = z.object({
-  reason: z.string().trim().min(3).max(200),
+  reason: z.string().trim().min(TEXT_RULES.auditReason.min).max(TEXT_RULES.auditReason.max),
   confirm: z.literal(true),
 });
 

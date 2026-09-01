@@ -12,7 +12,9 @@ import type {
 } from "@/lib/api/types.ts";
 import { addDaysTo, formatLocalDate, timeIn, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { TEXT_RULES } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
+import { useFieldProblem } from "@/lib/use-field-problem.ts";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
 
 /**
@@ -36,6 +38,7 @@ export const Schedule = ({
   const copy = useCopy("owner");
   const { language } = useLanguage();
   const errorText = useErrorText();
+  const problem = useFieldProblem();
 
   const [layer, setLayer] = useState<Layer>("hours");
   const [resource, setResource] = useState<ResourceDto | null>(null);
@@ -384,6 +387,7 @@ export const Schedule = ({
               </div>
             )}
             <Field id="block-reason" label={copy.reason} placeholder={copy.reasonPlaceholder} value={editingBlock.reason}
+              problem={problem.text(editingBlock.reason, TEXT_RULES.reason)}
               onChange={(e) => setEditingBlock({ ...editingBlock, reason: e.target.value })} hint={copy.reasonHint} />
             <Button
               busy={busy}

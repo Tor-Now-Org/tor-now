@@ -8,7 +8,14 @@ import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppHeader } from "@/components/app-header.tsx";
+import { TEXT_RULES } from "@tor-now/domain";
 import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
+import {
+  blocking,
+  checkPhone,
+  checkText,
+  useFieldProblem,
+} from "@/lib/use-field-problem.ts";
 import { Button, Card, Critical, Field, Note, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 
@@ -74,6 +81,10 @@ export default function OnboardingPage() {
   const [phone, setPhone] = useState(user?.phone ?? "+972");
   const [address, setAddress] = useState("");
   const [photos, setPhotos] = useState<readonly ChosenPhoto[]>([]);
+  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
+  const leave = (field: string) =>
+    setTouched((previous) => new Set(previous).add(field));
+  const problem = useFieldProblem();
   const [resources, setResources] = useState<string[]>([""]);
   const [services, setServices] = useState<DraftService[]>([
     { name: "", durationMinutes: DEFAULT_SERVICE_MINUTES, priceMinor: 0, bufferMinutes: null },
@@ -136,14 +147,28 @@ export default function OnboardingPage() {
 
   const canContinue =
     step === "details"
-      ? name.trim().length >= 2 && /^\+[1-9]\d{7,14}$/.test(phone.trim())
+      ? !blocking(
+          checkText(name, TEXT_RULES.businessName),
+          checkPhone(phone),
+          checkText(address, TEXT_RULES.address),
+        )
       : // Photos are optional, so this step never blocks.
         step === "photos"
         ? true
         : step === "resources"
-        ? resources.some((resource) => resource.trim().length > 0)
+        ? resources.some((resource) => resource.trim().length > 0) &&
+          !blocking(
+            ...resources
+              .filter((resource) => resource.trim().length > 0)
+              .map((resource) => checkText(resource, TEXT_RULES.resourceName)),
+          )
         : step === "services"
-          ? services.some((service) => service.name.trim().length > 0)
+          ? services.some((service) => service.name.trim().length > 0) &&
+            !blocking(
+              ...services
+                .filter((service) => service.name.trim().length > 0)
+                .map((service) => checkText(service.name, TEXT_RULES.serviceName)),
+            )
           : hours.some((day) => day.open);
 
   const finish = async () => {
@@ -216,11 +241,34 @@ export default function OnboardingPage() {
           <>
             <StepHeading title={copy.detailsTitle} body={copy.detailsBody} />
             <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <Field id="biz-name" label={copy.bizName} value={name} onChange={(e) => setName(e.target.value)} />
-              <Field id="biz-phone" label="טלפון" dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} />
-              <Field id="biz-address" label={copy.address} value={address} onChange={(e) => setAddress(e.target.value)} />
+              <Field
+                id="biz-name"
+                label={copy.bizName}
+                value={name}
+                problem={problem.text(name, TEXT_RULES.businessName, touched.has("name"))}
+                onBlur={() => leave("name")}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <Field
+                id="biz-phone"
+                label={signInCopy.phoneLabel}
+                type="tel"
+                inputMode="tel"
+                dir="ltr"
+                value={phone}
+                problem={problem.phone(phone, touched.has("phone"))}
+                onBlur={() => leave("phone")}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+              <Field
+                id="biz-address"
+                label={copy.address}
+                value={address}
+                problem={problem.text(address, TEXT_RULES.address, touched.has("address"))}
+                onBlur={() => leave("address")}
+                onChange={(e) => setAddress(e.target.value)}
+              />
             </Card>
-            <Note>{copy.noQueue}</Note>
           </>
         )}
 
@@ -254,6 +302,12 @@ export default function OnboardingPage() {
                     id={`resource-${position}`}
                     label={copy.calendarName}
                     value={resource}
+                    problem={problem.text(
+                      resource,
+                      TEXT_RULES.resourceName,
+                      touched.has(`resource-${position}`) && resource.trim() !== "",
+                    )}
+                    onBlur={() => leave(`resource-${position}`)}
                     onChange={(event) =>
                       setResources(resources.map((r, i) => (i === position ? event.target.value : r)))
                     }
@@ -285,6 +339,12 @@ export default function OnboardingPage() {
                   label={copy.serviceName}
                   placeholder={copy.serviceNamePlaceholder}
                   value={service.name}
+                  problem={problem.text(
+                    service.name,
+                    TEXT_RULES.serviceName,
+                    touched.has(`service-${position}`) && service.name.trim() !== "",
+                  )}
+                  onBlur={() => leave(`service-${position}`)}
                   onChange={(event) =>
                     setServices(services.map((s, i) => (i === position ? { ...s, name: event.target.value } : s)))
                   }
