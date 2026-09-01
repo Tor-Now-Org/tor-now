@@ -1,4 +1,4 @@
-# Tor Now
+# Tor Panuy · תור פנוי
 
 A multi-tenant appointment booking platform. Service businesses publish their
 availability; customers find a business and book a time slot against it.
@@ -6,10 +6,11 @@ availability; customers find a business and book a time slot against it.
 The design was written down before the code. [`CONTEXT.md`](./CONTEXT.md) is the
 domain glossary, [`CONTEXT-MAP.md`](./CONTEXT-MAP.md) names the two bounded
 contexts and the single seam between them, and [`docs/adr/`](./docs/adr) records
-the twelve decisions everything here rests on. If something in the code looks
+the fifteen decisions everything here rests on. If something in the code looks
 arbitrary, the ADR that made it is the place to look.
 
-- **Interface** — https://tor-now-tor-now.vercel.app
+- **Interface** — https://tor-now-tor-now.vercel.app (the Vercel project is
+  still named `tor-now`; renaming it moves this URL)
 - **API** — https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api
 
 ## Layout

@@ -5,7 +5,10 @@ import { defineConfig, devices } from "@playwright/test";
  * API served by Node, and the built interface. Nothing is stubbed, and nothing
  * touches the deployed environment — scripts/e2e.sh brings the stack up.
  *
- * The viewport is a phone, because the design is a phone.
+ * Two viewports. The phone is the design's centre of gravity and every
+ * journey runs there; the desktop project runs the same journeys against the
+ * wider layout, where the navigation is a side rail rather than a bottom bar.
+ * A test that passes on one and fails on the other is the point of having both.
  */
 const BASE_URL = process.env["E2E_BASE_URL"] ?? "http://127.0.0.1:3100";
 
@@ -31,6 +34,14 @@ export default defineConfig({
     {
       name: "mobile",
       use: { ...devices["Pixel 7"], baseURL: BASE_URL },
+    },
+    {
+      name: "desktop",
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: BASE_URL,
+        viewport: { width: 1440, height: 900 },
+      },
     },
   ],
 });

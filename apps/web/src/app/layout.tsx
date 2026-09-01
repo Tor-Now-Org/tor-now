@@ -6,7 +6,7 @@ import { SessionProvider } from "@/lib/session.tsx";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "תורNow",
+  title: "תור פנוי · Tor Panuy",
   description:
     "התור הבא שלך, בלי טלפונים ובלי הודעות. מחפשים עסק, רואים מתי הוא פנוי, ותופסים תור.",
 };

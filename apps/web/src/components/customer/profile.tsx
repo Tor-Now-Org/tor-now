@@ -6,6 +6,7 @@ import { isApiError } from "@/lib/api/errors.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
+import { SignOutButton } from "../sign-out.tsx";
 import { Button, Card, Critical, Field, Note, Sheet } from "../ui.tsx";
 
 /**
@@ -94,6 +95,8 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
         {saved && <p className="hint" style={{ margin: 0 }} role="status">{copy.profileSaved}</p>}
         <Button onClick={save} busy={busy}>{copy.saveDetails}</Button>
       </Card>
+
+      <SignOutButton label={copy.signOut} hint={copy.signOutHint} onSignedOut={onSignedOut} />
 
       <button
         onClick={() => setDeleting(true)}

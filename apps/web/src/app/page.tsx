@@ -16,6 +16,7 @@ import { BookingFlow } from "@/components/customer/booking-flow.tsx";
 import { BusinessSearch } from "@/components/customer/business-search.tsx";
 import { MyAppointments } from "@/components/customer/my-appointments.tsx";
 import { Profile } from "@/components/customer/profile.tsx";
+import { SignOutButton } from "@/components/sign-out.tsx";
 import { Button, Card, Note, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
@@ -32,7 +33,7 @@ export default function CustomerApp() {
   const copy = useCopy("customer");
   const router = useRouter();
   const errorText = useErrorText();
-  const { token, user, loading, signIn, signOut } = useSession();
+  const { token, user, loading, signIn } = useSession();
 
   const [screen, setScreen] = useState<Screen>("search");
   const [business, setBusiness] = useState<BusinessDto | null>(null);
@@ -75,7 +76,7 @@ export default function CustomerApp() {
             <AccountButton
               initial={user.name.trim().charAt(0) || "?"}
               onClick={() => setDrawerOpen(true)}
-              label={copy.usingAs}
+              label={copy.account}
             />
           ) : undefined
         }
@@ -139,16 +140,14 @@ export default function CustomerApp() {
           <Button intent="quiet" onClick={() => { setDrawerOpen(false); setScreen("profile"); }}>
             {copy.profile}
           </Button>
-          <Button
-            intent="quiet"
-            onClick={() => {
-              signOut();
+          <SignOutButton
+            label={copy.signOut}
+            hint={copy.signOutHint}
+            onSignedOut={() => {
               setDrawerOpen(false);
               setScreen("search");
             }}
-          >
-            {copy.backToCustomer}
-          </Button>
+          />
         </div>
       </Sheet>
 

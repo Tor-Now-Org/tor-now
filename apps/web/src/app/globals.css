@@ -1,5 +1,5 @@
 /*
- * The design system, ported verbatim from the Tor-Now Screens canvas. The
+ * The design system, ported verbatim from the Screens canvas. The
  * tokens, the one button system and the bottom navigation are the artboards'
  * own — changing a value here changes it everywhere, which is the point of
  * their being tokens rather than literals in components.
@@ -26,6 +26,11 @@
   --critical:oklch(55% 0.170 22); --critical-soft:oklch(95% 0.030 22);
 
   --shadow:0 1px 2px oklch(25% 0.055 258/.05), 0 8px 24px -12px oklch(25% 0.055 258/.16);
+
+  /* Layout. The shell is the app's own width; the measure is how wide a column
+     of content is allowed to get inside it, which is a reading limit rather
+     than a container. Both are overridden at the desktop breakpoint. */
+  --shell:430px; --measure:430px; --rail:0px;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:"Heebo",ui-sans-serif,system-ui,sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
@@ -85,10 +90,11 @@ input,select{font:inherit;color:inherit}
   transition:background .16s ease}
 .navbtn.on .navico{background:var(--accent-soft)}
 .navbtn span.lbl{font-size:11px;font-weight:600;font-family:"Rubik",sans-serif;letter-spacing:-.01em}
-/* The wordmark keeps the logo's own direction whatever the UI is doing */
-.wordmark{display:inline-flex;align-items:baseline;gap:5px;direction:rtl;font-family:"Rubik",sans-serif;font-weight:600;letter-spacing:-.02em;line-height:1}
-.wordmark .he{color:#0A2450}
-.wordmark .now{background:linear-gradient(90deg,#1470AA,#22BFD4);-webkit-background-clip:text;background-clip:text;color:transparent}
+/* The wordmark carries its own direction, set per language on the element: a
+   name is not a sentence to be mirrored. */
+.wordmark{display:inline-flex;align-items:baseline;gap:5px;font-family:"Rubik",sans-serif;font-weight:600;letter-spacing:-.02em;line-height:1;white-space:nowrap}
+.wordmark-lead{color:#0A2450}
+.wordmark-trail{background:linear-gradient(90deg,#1470AA,#22BFD4);-webkit-background-clip:text;background-clip:text;color:transparent}
 
 /* ---------------------------------------------------------------------------
  * Additions the artboards imply but a static mockup never needs: the app shell
@@ -99,8 +105,9 @@ input,select{font:inherit;color:inherit}
 html, body { height: 100%; }
 
 body {
-  /* The artboards are 390x844. On a wider screen the app keeps that measure and
-     centres it, rather than stretching a layout designed for a thumb. */
+  /* The artboards are 390x844, and the phone is still the design's centre of
+     gravity. A wider viewport is treated as a different shape rather than a
+     bigger phone: see the desktop rules at the end of this file. */
   display: flex;
   justify-content: center;
   background: var(--sunken);
@@ -108,7 +115,7 @@ body {
 
 .app-shell {
   width: 100%;
-  max-width: 430px;
+  max-width: var(--shell);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -196,3 +203,109 @@ body {
   flex-shrink: 0;
 }
 
+
+/* ---------------------------------------------------------------------------
+ * Desktop.
+ *
+ * The application was a 430px column on every viewport, so a laptop showed a
+ * phone with grey either side of it. The screens themselves are right — a
+ * booking is a short, linear task and a thousand-pixel form is not an
+ * improvement — so what changes is the frame around them, not the content.
+ *
+ * Two things move. The shell widens and takes the navigation out of the
+ * thumb's reach and up the side, where a pointer already is; and content keeps
+ * a reading measure inside that wider shell rather than stretching to fill it.
+ * The markup is identical in both layouts: the same nav element is a bar or a
+ * rail depending only on the space it is given.
+ * ------------------------------------------------------------------------- */
+
+/* A tablet, or a half-screen window: more room, but not enough for a rail
+   beside a full measure. The shell breathes; the navigation stays put. */
+@media (min-width: 720px) {
+  :root { --shell: 560px; --measure: 520px; }
+}
+
+@media (min-width: 1024px) {
+  :root { --shell: 1120px; --measure: 720px; --rail: 244px; }
+
+  body { align-items: center; padding: 28px 24px; }
+
+  .app-shell {
+    /* Header across the top; the rail and the content share the row below it.
+       The nav is third in the DOM because on a phone it belongs at the bottom,
+       so both placements are stated rather than left to source order. */
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+    height: min(920px, calc(100svh - 56px));
+    border-radius: 24px;
+    overflow: hidden;
+  }
+  .app-shell > header { grid-column: 1 / -1; grid-row: 1; padding-inline: 26px; }
+  .app-shell > main   { grid-column: 2; grid-row: 2; }
+  .app-shell > .bottom-nav { grid-column: 1; grid-row: 2; }
+
+  /* A screen with no navigation — sign-in, onboarding — should not leave a
+     column of empty rail beside it. */
+  .app-shell:not(:has(> .bottom-nav)) { grid-template-columns: minmax(0, 1fr); }
+  .app-shell:not(:has(> .bottom-nav)) > main { grid-column: 1; }
+
+  /* The bar becomes a rail: items read as rows, aligned to the reading edge. */
+  .bottom-nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 14px 12px;
+    border-top: 0;
+    border-inline-end: 1px solid var(--line);
+    background: var(--sunken);
+    overflow-y: auto;
+  }
+  .navbtn {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    min-height: 46px;
+    padding: 0 12px;
+    border-radius: 12px;
+    transition: background .13s ease, color .13s ease;
+  }
+  .navbtn:hover { background: var(--raised); }
+  .navbtn.on { background: var(--accent-soft); }
+  /* In a rail the whole row carries the active state, so the pill behind the
+     icon would be a second highlight inside the first. */
+  .navbtn .navico { width: 22px; height: 22px; }
+  .navbtn.on .navico { background: none; }
+  .navbtn span.lbl { font-size: 13.5px; }
+
+  /* A reading measure inside a wider shell.
+     The column is narrowed, not the things inside it: an auto inline margin on
+     a flex child cancels its stretch, so capping each child instead would
+     shrink every card to the width of its own text. */
+  .app-shell > main {
+    width: min(100%, calc(var(--measure) + 2 * 18px));
+    justify-self: center;
+  }
+
+  /* A sheet on a phone rises from the bottom edge; with no bottom edge nearby
+     it is a dialog, and centring it is what a pointer expects. */
+  .sheet-backdrop { align-items: center; justify-content: center; padding: 28px; }
+  .sheet {
+    max-width: 520px;
+    border-radius: 22px;
+    max-height: 100%;
+    padding-bottom: 20px;
+    box-shadow: 0 32px 70px -30px oklch(25% 0.055 258 / 0.5);
+  }
+
+  /* The toast cleared the bottom bar, which is no longer there. */
+  .toast { position: absolute; bottom: 26px; }
+}
+
+/* A pointer is not a thumb: rows that are merely tappable on a phone should
+   also look reachable when there is a cursor to put on them. */
+@media (hover: hover) and (pointer: fine) {
+  .card button:hover, button.card:hover { border-color: var(--accent); }
+}

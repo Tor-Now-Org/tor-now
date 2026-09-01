@@ -101,7 +101,9 @@ test.describe("finding and booking", () => {
 
     // And it is in the customer's own list, at the time they picked.
     await page.getByRole("button", { name: "לתורים שלי" }).click();
-    await expect(page.getByText("התורים שלי")).toBeVisible();
+    // The heading, not the navigation item: they are the same two words, and on
+    // the desktop layout the rail keeps its label on screen beside the list.
+    await expect(page.getByRole("heading", { name: "התורים שלי" })).toBeVisible();
     if (chosen !== undefined) {
       await expect(page.getByText(chosen, { exact: false }).first()).toBeVisible();
     }
@@ -207,6 +209,45 @@ test.describe("a customer's own appointments", () => {
     await ready(page);
     await page.getByRole("button", { name: "התורים שלי" }).click();
     await expect(page.getByText("אין לכם תורים קרובים")).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+test.describe("leaving", () => {
+  /**
+   * There was no way out: the drawer's only sign-out control was labelled
+   * "back to customer", and the owner and administrator screens had none at
+   * all. The label is what the test asserts, because the action was never the
+   * part that was missing.
+   */
+  test("signs out from the account drawer and forgets the device", async ({ page }) => {
+    const phone = uniquePhone();
+    await signInDirectly(page, phone, "יעל אבידן");
+    await page.goto("/");
+    await ready(page);
+
+    await page.getByRole("button", { name: "החשבון שלי" }).click();
+    await page.getByRole("button", { name: "התנתקות" }).click();
+
+    // The account button is the header's only evidence of a session.
+    await expect(page.getByRole("button", { name: "החשבון שלי" })).toHaveCount(0);
+    // The stored token is what a reload would restore from, so checking it is
+    // gone is the durable half. A reload cannot be asserted here: the sign-in
+    // helper plants the token with addInitScript, which runs again on every
+    // navigation and would put it straight back.
+    expect(
+      await page.evaluate(() => window.localStorage.getItem("tor-now.session")),
+    ).toBeNull();
+  });
+
+  test("the same control is on the profile screen", async ({ page }) => {
+    await signInDirectly(page, uniquePhone(), "יעל אבידן");
+    await page.goto("/");
+    await ready(page);
+
+    await page.getByRole("button", { name: "החשבון שלי" }).click();
+    await page.getByRole("button", { name: "הפרטים שלי" }).click();
+
+    await expect(page.getByRole("button", { name: "התנתקות" })).toBeVisible();
   });
 });
 

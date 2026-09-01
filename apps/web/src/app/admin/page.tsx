@@ -18,7 +18,8 @@ import { formatLocalDate } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { AppHeader } from "@/components/app-header.tsx";
+import { AccountButton, AppHeader } from "@/components/app-header.tsx";
+import { SignOutButton } from "@/components/sign-out.tsx";
 import { BottomNav, BuildingIcon, PeopleIcon, ShieldIcon } from "@/components/bottom-nav.tsx";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } from "@/components/ui.tsx";
 
@@ -51,6 +52,7 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [openBusiness, setOpenBusiness] = useState<BusinessSummaryDto | null>(null);
   const [billing, setBilling] = useState<{
     subscription: SubscriptionDto;
@@ -137,7 +139,17 @@ export default function AdminPage() {
 
   return (
     <>
-      <AppHeader languageLabel={copy.langSwitch} title={copy.platformAdmin} />
+      <AppHeader
+        languageLabel={copy.langSwitch}
+        title={copy.platformAdmin}
+        trailing={
+          <AccountButton
+            initial={user.name.trim().charAt(0) || "?"}
+            onClick={() => setDrawerOpen(true)}
+            label={copy.account}
+          />
+        }
+      />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0, padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 14 }}>
         {/* Every screen here runs over a connection that bypasses tenant
@@ -296,6 +308,18 @@ export default function AdminPage() {
           { id: "system", label: copy.system, icon: <ShieldIcon /> },
         ]}
       />
+
+      <Sheet open={drawerOpen} onClose={() => setDrawerOpen(false)} labelledBy="admin-drawer-title">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <h2 id="admin-drawer-title" style={{ fontSize: 19 }}>{copy.usingAs}</h2>
+          <Card style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span style={{ fontWeight: 600 }}>{copy.platformAdmin}</span>
+            <span className="hint" dir="ltr">{user.phone}</span>
+          </Card>
+          <Button intent="quiet" onClick={() => router.push("/")}>{copy.asCustomer}</Button>
+          <SignOutButton label={copy.signOut} hint={copy.signOutHint} />
+        </div>
+      </Sheet>
 
       <Sheet open={openBusiness !== null} onClose={() => setOpenBusiness(null)}>
         {openBusiness !== null && (

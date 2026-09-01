@@ -13,3 +13,8 @@ coverage/
 e2e/.results/
 playwright-report/
 services/api/dist/
+
+# Next writes these on every dev run, from a template inside the installed
+# version. Generated, and regenerated — not something to review in a diff.
+apps/web/AGENTS.md
+apps/web/CLAUDE.md

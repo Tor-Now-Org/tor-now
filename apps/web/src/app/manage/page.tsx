@@ -7,6 +7,7 @@ import type { BusinessDto, ResourceDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
+import { SignOutButton } from "@/components/sign-out.tsx";
 import {
   BottomNav,
   BuildingIcon,
@@ -104,7 +105,7 @@ function ManageApp() {
             <AccountButton
               initial={user.name.trim().charAt(0) || "?"}
               onClick={() => setDrawerOpen(true)}
-              label={copy.usingAs}
+              label={copy.account}
             />
           ) : undefined
         }
@@ -164,6 +165,7 @@ function ManageApp() {
             ))}
           <Button onClick={() => router.push("/")}>{copy.asCustomer}</Button>
           <Note>{copy.oneIdentity}</Note>
+          <SignOutButton label={copy.signOut} hint={copy.signOutHint} />
         </div>
       </Sheet>
     </>

@@ -1,5 +1,5 @@
 /*
- * The interface copy, lifted from the Tor-Now Screens canvas rather than
+ * The interface copy, lifted from the Screens canvas rather than
  * rewritten. Every string below is the one the design was approved with.
  *
  * Namespaced by screen because the same short key means different things in
@@ -45,6 +45,9 @@ const customer = {
     "openBusinessBody": "נגדיר יחד את פרטי העסק, מי נותן את השירות, אילו שירותים ומתי אתם פתוחים. מרגע הסיום העסק מופיע בחיפוש.",
     "oneIdentity": "זהות אחת, מספר טלפון אחד. מה שאתם יכולים לעשות נגזר מהקשר שלכם לכל עסק בנפרד — לא מ״סוג משתמש״.",
     "usingAs": "במה אתם משתמשים עכשיו",
+    "account": "החשבון שלי",
+    "signOut": "התנתקות",
+    "signOutHint": "המכשיר הזה ישכח אתכם. הכניסה חזרה היא אותו מספר טלפון וקוד חדש — שום דבר לא נמחק.",
     "asCustomer": "כלקוח",
     "asCustomerHint": "חיפוש עסקים והתורים שקבעתם",
     "manageIt": "מעבר לניהול העסק",
@@ -137,6 +140,9 @@ const customer = {
     "openBusinessBody": "We set up the business details, who provides the service, which services and when you are open. The moment you finish it appears in search.",
     "oneIdentity": "One identity, one phone number. What you may do follows from your relationship to each business separately — not from a \"user type\".",
     "usingAs": "What you are using now",
+    "account": "Your account",
+    "signOut": "Sign out",
+    "signOutHint": "This device forgets you. Signing back in is the same phone number and a new code — nothing is deleted.",
     "asCustomer": "As a customer",
     "asCustomerHint": "Finding businesses and the appointments you booked",
     "manageIt": "Switch to managing it",
@@ -383,6 +389,9 @@ const owner = {
     "upcomingHint": "אפשר להיכנס לתור ולהעביר, לבטל או לסמן שלא הגיע — בדיוק כמו מהיומן.",
     "oneIdentity": "זהות אחת, מספר טלפון אחד. מה שאתם יכולים לעשות נגזר מהקשר שלכם לכל עסק בנפרד — לא מ״סוג משתמש״.",
     "usingAs": "במה אתם משתמשים עכשיו",
+    "account": "החשבון שלי",
+    "signOut": "התנתקות",
+    "signOutHint": "המכשיר הזה ישכח אתכם. הכניסה חזרה היא אותו מספר טלפון וקוד חדש — שום דבר לא נמחק.",
     "managingNow": "אתם מנהלים את העסק הזה",
     "asCustomer": "כלקוח",
     "asCustomerHint": "חיפוש עסקים והתורים שקבעתם",
@@ -546,6 +555,9 @@ const owner = {
     "upcomingHint": "Open one to move it, cancel it or mark a no-show — exactly as from the day view.",
     "oneIdentity": "One identity, one phone number. What you may do follows from your relationship to each business separately — not from a \"user type\".",
     "usingAs": "What you are using now",
+    "account": "Your account",
+    "signOut": "Sign out",
+    "signOutHint": "This device forgets you. Signing back in is the same phone number and a new code — nothing is deleted.",
     "managingNow": "You manage this business",
     "asCustomer": "As a customer",
     "asCustomerHint": "Finding businesses and the appointments you booked",
@@ -700,6 +712,11 @@ const admin = {
   he: {
     "langSwitch": "EN",
     "platformAdmin": "הנהלת הפלטפורמה",
+    "account": "החשבון שלי",
+    "signOut": "התנתקות",
+    "signOutHint": "המכשיר הזה ישכח אתכם. הכניסה חזרה היא אותו מספר טלפון וקוד חדש — שום דבר לא נמחק.",
+    "usingAs": "במה אתם משתמשים עכשיו",
+    "asCustomer": "כלקוח",
     "back": "חזרה",
     "save": "שמירה",
     "delete": "מחיקה",
@@ -763,6 +780,11 @@ const admin = {
   en: {
     "langSwitch": "עב",
     "platformAdmin": "Platform administration",
+    "account": "Your account",
+    "signOut": "Sign out",
+    "signOutHint": "This device forgets you. Signing back in is the same phone number and a new code — nothing is deleted.",
+    "usingAs": "What you are using now",
+    "asCustomer": "As a customer",
     "back": "Back",
     "save": "Save",
     "delete": "Delete",
