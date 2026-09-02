@@ -59,15 +59,19 @@ export const cancelAppointment = (
  * before the fact by a named party.
  */
 export const markNoShow = (
-  appointment: Pick<Appointment, "status" | "endAt">,
+  appointment: Pick<Appointment, "status" | "startAt">,
   now: Instant,
 ): void => {
   if (appointment.status === "CANCELLED") {
     throw validationFailed("A cancelled appointment cannot be a no show");
   }
-  if (now < appointment.endAt) {
+  // The start, not the end. Somebody who has not walked in at the appointed
+  // time has not turned up, and the Business knows it then rather than half an
+  // hour later; making them wait out the slot before they can say so is the
+  // software being pedantic about a fact already settled.
+  if (now < appointment.startAt) {
     throw validationFailed(
-      "An appointment cannot be marked a no show before it has ended",
+      "An appointment cannot be marked a no show before it has started",
     );
   }
 };

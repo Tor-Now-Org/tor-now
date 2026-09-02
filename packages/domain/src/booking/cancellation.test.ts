@@ -78,16 +78,18 @@ describe("cancelAppointment", () => {
 });
 
 describe("no show", () => {
-  it("cannot be marked before the appointment has ended", () => {
-    expect(() => markNoShow(appointment, at("2026-09-01", "10:15"))).toThrow(
+  it("cannot be marked before the appointment has started", () => {
+    expect(() => markNoShow(appointment, at("2026-09-01", "09:59"))).toThrow(
       DomainError,
     );
   });
 
-  it("can be marked once it has ended", () => {
-    expect(() =>
-      markNoShow(appointment, at("2026-09-01", "10:30")),
-    ).not.toThrow();
+  it("can be marked from the appointed time, not only once the slot is over", () => {
+    // Somebody who has not walked in at ten has not turned up, and the business
+    // knows it then rather than half an hour later.
+    expect(() => markNoShow(appointment, at("2026-09-01", "10:00"))).not.toThrow();
+    expect(() => markNoShow(appointment, at("2026-09-01", "10:15"))).not.toThrow();
+    expect(() => markNoShow(appointment, at("2026-09-01", "10:30"))).not.toThrow();
   });
 
   it("cannot be marked on a cancelled appointment", () => {

@@ -58,11 +58,7 @@ export const AppointmentSheet = ({
   const now = instant(Date.now());
   const started =
     appointment !== null && hasStarted({ startAt: parseInstant(appointment.startAt) }, now);
-  const ended =
-    appointment !== null && outcomeOf(
-      { status: appointment.status, endAt: parseInstant(appointment.endAt) },
-      now,
-    ) === "FINISHED";
+
 
   const close = () => {
     setMoving(false);
@@ -159,9 +155,6 @@ export const AppointmentSheet = ({
           {appointment.status === "CONFIRMED" && started && (
             <Note>{copy.startedNote}</Note>
           )}
-          {appointment.status === "CONFIRMED" && !ended && (
-            <Note>{copy.noShowAfterNote}</Note>
-          )}
           {error !== null && <Critical>{error}</Critical>}
 
           {appointment.status === "CONFIRMED" && (
@@ -175,16 +168,20 @@ export const AppointmentSheet = ({
                   {copy.moveAppointment}
                 </Button>
               )}
-              <Button
-                intent="quiet"
-                onClick={() => act(() => api.markNoShow(token, appointment.id))}
-                busy={busy}
-                // Marking a no show before the appointment has ended is
-                // refused by the domain, so it is not offered either.
-                disabled={!ended}
-              >
-                {copy.markNoShow}
-              </Button>
+              {/* Only once it has begun. Before that there is nothing to say
+                  about whether anybody turned up, and an offer the domain would
+                  refuse is worse than no offer — it has to be taken to find
+                  out. From the appointed time it simply works, so it needs no
+                  explaining either. */}
+              {started && (
+                <Button
+                  intent="quiet"
+                  onClick={() => act(() => api.markNoShow(token, appointment.id))}
+                  busy={busy}
+                >
+                  {copy.markNoShow}
+                </Button>
+              )}
               <Button intent="danger" onClick={() => act(() => api.cancel(token, appointment.id))} busy={busy}>
                 {copy.cancelAppointment}
               </Button>
