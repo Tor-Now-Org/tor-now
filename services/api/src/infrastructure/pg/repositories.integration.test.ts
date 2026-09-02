@@ -1,4 +1,4 @@
-import { afterAll, describe, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { describeRepositoryContract } from "../../ports/repositories.contract.ts";
 import { createPool, type Transaction } from "./client.ts";
 import { appointmentRepository } from "./appointment-repository.ts";
@@ -43,6 +43,36 @@ if (databaseUrl === undefined || databaseUrl === "") {
     await sql.end({ timeout: 5 });
   });
 
+  /**
+   * Every repository method that exists, and every one the contract actually
+   * ran against this database.
+   *
+   * A repository method is hand-written SQL, and hand-written SQL is the one
+   * place in this codebase where renaming a column does not become a type
+   * error: a row is a bag of unknowns until the mapper reads it. Two statements
+   * have already gone wrong exactly that way, and neither surfaced until
+   * production — `dueForReminder` went on selecting a column the name split had
+   * renamed four migrations earlier, because no test ever executed it against a
+   * real database.
+   *
+   * So the guard is not a scan for column names, which would only find the
+   * mistakes somebody thought of. It is this: a method with no Postgres
+   * coverage fails the suite. Whether the SQL is *right* is still for the
+   * contract to say — but it can no longer be nobody's job to ask.
+   */
+  const reachable = new Set<string>();
+  const exercised = new Set<string>();
+
+  const recording = <T extends object>(name: string, repository: T): T => {
+    for (const method of Object.keys(repository)) reachable.add(`${name}.${method}`);
+    return new Proxy(repository, {
+      get: (target, property, receiver) => {
+        if (typeof property === "string") exercised.add(`${name}.${property}`);
+        return Reflect.get(target, property, receiver) as unknown;
+      },
+    });
+  };
+
   describeRepositoryContract("postgres", async () => {
     // A transaction held open for the length of one case, then rolled back.
     let release: () => void = () => {};
@@ -67,24 +97,40 @@ if (databaseUrl === undefined || databaseUrl === "") {
 
     return {
       repositories: {
-        users: userRepository(transaction),
-        businesses: businessRepository(transaction),
-        businessPhotos: businessPhotoRepository(transaction),
-        memberships: membershipRepository(transaction),
-        resources: resourceRepository(transaction),
-        services: serviceRepository(transaction),
-        workingHours: workingHoursRepository(transaction),
-        dateOverrides: dateOverrideRepository(transaction),
-        blocks: blockRepository(transaction),
-        appointments: appointmentRepository(transaction),
-        subscriptions: subscriptionRepository(transaction),
-        payments: paymentRepository(transaction),
-        administratorAllowlist: administratorAllowlistRepository(transaction),
+        users: recording("users", userRepository(transaction)),
+        businesses: recording("businesses", businessRepository(transaction)),
+        businessPhotos: recording("businessPhotos", businessPhotoRepository(transaction)),
+        memberships: recording("memberships", membershipRepository(transaction)),
+        resources: recording("resources", resourceRepository(transaction)),
+        services: recording("services", serviceRepository(transaction)),
+        workingHours: recording("workingHours", workingHoursRepository(transaction)),
+        dateOverrides: recording("dateOverrides", dateOverrideRepository(transaction)),
+        blocks: recording("blocks", blockRepository(transaction)),
+        appointments: recording("appointments", appointmentRepository(transaction)),
+        subscriptions: recording("subscriptions", subscriptionRepository(transaction)),
+        payments: recording("payments", paymentRepository(transaction)),
+        administratorAllowlist: recording(
+          "administratorAllowlist",
+          administratorAllowlistRepository(transaction),
+        ),
       },
       cleanUp: async () => {
         release();
       },
     };
+  });
+
+  // Declared last on purpose: vitest runs describe blocks in the order they are
+  // written, and this one asks what the suite above it did.
+  describe("statements nothing runs", () => {
+    it("has none: every repository method reaches Postgres at least once", () => {
+      const untouched = [...reachable]
+        .filter((method) => !exercised.has(method))
+        .sort();
+      // Naming them is the point. The failure should say which statement has
+      // never been executed, not merely that one has not.
+      expect(untouched).toEqual([]);
+    });
   });
 }
 

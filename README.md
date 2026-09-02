@@ -117,9 +117,9 @@ mode is live. **This is the first thing to change before real customers.**
 ```bash
 npm run typecheck    # four projects: domain, API, end-to-end, interface
 npm run lint         # what the compiler cannot see
-npm test             # 225 unit and integration tests
+npm test             # 287 unit and integration tests
 npm run test:db      # the same, plus the repository contract against a real Postgres
-npm run test:e2e     # 22 journeys through the whole stack
+npm run test:e2e     # 40 journeys, each at a phone and a desktop viewport
 ```
 
 `test:db` and `test:e2e` each start a throwaway Postgres, apply every migration
@@ -137,6 +137,17 @@ booking window, cancellation and billing.
 in memory always, and against Postgres whenever one is reachable. A seam is only
 real if both sides behave alike, and the two Row Level Security faults in this
 system reached production for want of exactly that.
+
+That suite carries a rule of its own: **a repository method that never reaches
+Postgres fails the build.** A repository method is hand-written SQL, and
+hand-written SQL is the one place here where renaming a column does not become a
+type error — a row is a bag of unknowns until the mapper reads it. Two
+statements have gone wrong exactly that way, and the second went on selecting a
+column the name split had renamed four migrations earlier, because nothing ever
+executed it. The check is not a scan for column names, which would only find the
+mistakes somebody thought of; it records which methods the contract actually
+called and names any that it did not. Adding a query therefore means adding the
+case that runs it.
 
 **The application and HTTP layers** run against the in-memory adapters, wired by
 the same composition the Edge Function uses, so the wiring is under test too.

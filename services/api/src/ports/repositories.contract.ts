@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   asId,
+  dayOfWeek,
   displayName,
   formatInstant,
+  localTime,
   isActive,
   money,
   parseInstant,
@@ -484,6 +486,255 @@ export const describeRepositoryContract = (
         const context = await aBookableBusiness(repositories, "05002");
         await repositories.services.delete(context.service.id);
         expect(await repositories.services.findById(context.service.id)).toBeNull();
+      });
+    });
+
+    // --- Reading back what was written -----------------------------------
+    //
+    // These say little about behaviour and a great deal about SQL. Every one of
+    // them is a statement that had never been executed against Postgres, which
+    // is how `dueForReminder` went on selecting a renamed column for four
+    // migrations. The integration suite now fails if a repository method is
+    // never reached from here, so this section is what keeps that honest.
+
+    it("reads a business, a resource and a service back by id and by owner", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7101");
+
+        expect(await repositories.resources.findById(context.resource.id)).toMatchObject({
+          id: context.resource.id,
+          name: "יומן",
+        });
+        expect(
+          await repositories.resources.listForBusiness(context.business.id),
+        ).toHaveLength(1);
+        expect(
+          await repositories.services.listForBusiness(context.business.id, true),
+        ).toHaveLength(1);
+        expect(
+          await repositories.businesses.list({ limit: 10, offset: 0 }, "עסק"),
+        ).not.toHaveLength(0);
+      });
+    });
+
+    it("updates a business, a resource and a service, and returns the new row", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7102");
+
+        expect(
+          await repositories.businesses.update(context.business.id, {
+            name: "שם חדש",
+            address: "הרצל 1",
+          }),
+        ).toMatchObject({ name: "שם חדש", address: "הרצל 1" });
+
+        expect(
+          await repositories.resources.update(context.resource.id, { name: "כיסא שני" }),
+        ).toMatchObject({ name: "כיסא שני" });
+
+        expect(
+          await repositories.services.update(context.service.id, {
+            name: "צבע",
+            price: money(25000),
+          }),
+        ).toMatchObject({ name: "צבע", price: 25000 });
+
+        // "A business keeps at least one calendar" is the service's rule, not
+        // the table's, so a second one can be made and removed here.
+        const spare = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "כיסא שני",
+        });
+        await repositories.resources.delete(spare.id);
+        expect(
+          await repositories.resources.listForBusiness(context.business.id),
+        ).toHaveLength(1);
+      });
+    });
+
+    it("finds a membership from either end", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7103");
+
+        expect(
+          await repositories.memberships.find(context.owner.id, context.business.id),
+        ).toMatchObject({ role: "OWNER" });
+        expect(await repositories.memberships.listForUser(context.owner.id)).toHaveLength(1);
+      });
+    });
+
+    it("reads an appointment back by id, by customer and by span", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7104");
+        const booked = await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-15T09:00:00Z", "2026-09-15T09:30:00Z", "2026-09-15T09:40:00Z"),
+        );
+        const span = [
+          parseInstant("2026-09-15T00:00:00Z"),
+          parseInstant("2026-09-16T00:00:00Z"),
+        ] as const;
+
+        expect(await repositories.appointments.findById(booked.id)).toMatchObject({
+          id: booked.id,
+        });
+        expect(
+          await repositories.appointments.listForCustomer(context.owner.id, {
+            limit: 10,
+            offset: 0,
+          }),
+        ).toHaveLength(1);
+        expect(
+          await repositories.appointments.listForCustomerAtBusiness(
+            context.owner.id,
+            context.business.id,
+          ),
+        ).toHaveLength(1);
+        expect(
+          await repositories.appointments.listForBusinessBetween(
+            context.business.id,
+            span[0],
+            span[1],
+          ),
+        ).toHaveLength(1);
+        expect(
+          await repositories.appointments.listForResourceBetween(
+            context.resource.id,
+            span[0],
+            span[1],
+          ),
+        ).toHaveLength(1);
+      });
+    });
+
+    it("lists and deletes a block, an override and a working-hours range", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7105");
+
+        const block = await repositories.blocks.create({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          startAt: parseInstant("2026-09-16T06:00:00Z"),
+          endAt: parseInstant("2026-09-16T08:00:00Z"),
+          reason: "ספק",
+        });
+        expect(
+          await repositories.blocks.listForResourceBetween(
+            context.resource.id,
+            parseInstant("2026-09-16T00:00:00Z"),
+            parseInstant("2026-09-17T00:00:00Z"),
+          ),
+        ).toHaveLength(1);
+        await repositories.blocks.delete(block.id);
+        expect(
+          await repositories.blocks.listForResourceBetween(
+            context.resource.id,
+            parseInstant("2026-09-16T00:00:00Z"),
+            parseInstant("2026-09-17T00:00:00Z"),
+          ),
+        ).toEqual([]);
+
+        const override = await repositories.dateOverrides.put({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          date: parseLocalDate("2026-09-17"),
+          note: null,
+          ranges: [{ startMinutes: 600, endMinutes: 720 }],
+        });
+        expect(
+          await repositories.dateOverrides.listForResource(
+            context.resource.id,
+            parseLocalDate("2026-09-17"),
+            parseLocalDate("2026-09-17"),
+          ),
+        ).toHaveLength(1);
+        await repositories.dateOverrides.delete(override.id);
+        expect(
+          await repositories.dateOverrides.listForResource(
+            context.resource.id,
+            parseLocalDate("2026-09-17"),
+            parseLocalDate("2026-09-17"),
+          ),
+        ).toEqual([]);
+
+        const hours = await repositories.workingHours.create({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          dayOfWeek: dayOfWeek(3),
+          startMinutes: localTime(540),
+          endMinutes: localTime(1020),
+        });
+        // The domain calls them start and end; only the column and the write
+        // are minutes, which is exactly the kind of seam worth reading back.
+        expect(
+          await repositories.workingHours.update(hours.id, {
+            startMinutes: localTime(540),
+            endMinutes: localTime(960),
+          }),
+        ).toMatchObject({ start: 540, end: 960 });
+        await repositories.workingHours.delete(hours.id);
+        expect(
+          await repositories.workingHours.listForResource(context.resource.id),
+        ).toEqual([]);
+      });
+    });
+
+    it("records a payment and reads it back", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7106");
+        const subscription = await repositories.subscriptions.findByBusiness(
+          context.business.id,
+        );
+        expect(subscription).not.toBeNull();
+
+        await repositories.payments.create({
+          subscriptionId: subscription!.id,
+          businessId: context.business.id,
+          amount: money(12000),
+          paidOn: parseLocalDate("2026-09-01"),
+          recordedBy: context.owner.id,
+          note: "העברה בנקאית",
+        });
+
+        const paid = await repositories.payments.listForBusiness(context.business.id);
+        expect(paid).toHaveLength(1);
+        expect(paid[0]).toMatchObject({ amount: 12000, note: "העברה בנקאית" });
+      });
+    });
+
+    it("reads a photo back by id", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7107");
+        const photo = await repositories.businessPhotos.create({
+          businessId: context.business.id,
+          slot: 0,
+          storagePath: `${context.business.id}/cover.jpg`,
+          contentType: "image/jpeg",
+          byteSize: 10,
+        });
+        expect(await repositories.businessPhotos.findById(photo.id)).toMatchObject({
+          id: photo.id,
+          slot: 0,
+        });
+      });
+    });
+
+    it("lists users and the administrator allowlist, and grants the flag", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7108");
+
+        expect(
+          await repositories.users.list({ limit: 10, offset: 0 }, null),
+        ).not.toHaveLength(0);
+        expect(
+          await repositories.users.setAdministrator(context.owner.id, true),
+        ).toMatchObject({ isAdministrator: true });
+
+        await repositories.administratorAllowlist.add(
+          context.owner.phone,
+          "contract",
+          context.owner.id,
+        );
+        expect(await repositories.administratorAllowlist.list()).not.toHaveLength(0);
       });
     });
 
