@@ -1,8 +1,10 @@
-# What the Supabase GitHub integration reads on every push to `main`.
+# What the Supabase GitHub integration reads on every push to a connected
+# branch — `main` into production, `dev` into the development project.
 #
 # The dashboard decides which project a branch deploys to; this file describes
 # what to deploy, so the function's settings live in the repository rather than
-# in a dashboard where nothing reviews them.
+# in a dashboard where nothing reviews them. That is why one ref below serves
+# two projects: it is what `supabase link` uses locally, not the deploy target.
 project_id = "kbybnveitlxkffqptvqm"
 
 [functions.api]
