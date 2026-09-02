@@ -181,7 +181,7 @@ export default function OnboardingPage() {
       const business = await api.registerBusiness(token, {
         name: name.trim(),
         phone: phone.trim(),
-        address: address.trim() === "" ? null : address.trim(),
+        address: address.trim(),
         description: description.trim() === "" ? null : description.trim(),
         resourceNames: resources.map((r) => r.trim()).filter((r) => r.length > 0),
         services: services
@@ -247,6 +247,7 @@ export default function OnboardingPage() {
               <Field
                 id="biz-name"
                 label={copy.bizName}
+                required
                 value={name}
                 problem={problem.text(name, TEXT_RULES.businessName, touched.has("name"))}
                 onBlur={() => leave("name")}
@@ -255,6 +256,7 @@ export default function OnboardingPage() {
               <Field
                 id="biz-phone"
                 label={signInCopy.phoneLabel}
+                required
                 type="tel"
                 inputMode="tel"
                 dir="ltr"
@@ -266,6 +268,7 @@ export default function OnboardingPage() {
               <Field
                 id="biz-address"
                 label={copy.address}
+                required
                 value={address}
                 problem={problem.text(address, TEXT_RULES.address, touched.has("address"))}
                 onBlur={() => leave("address")}
@@ -315,6 +318,7 @@ export default function OnboardingPage() {
                   <Field
                     id={`resource-${position}`}
                     label={copy.calendarName}
+                    required
                     value={resource}
                     problem={problem.text(
                       resource,
@@ -351,6 +355,7 @@ export default function OnboardingPage() {
                 <Field
                   id={`service-name-${position}`}
                   label={copy.serviceName}
+                  required
                   placeholder={copy.serviceNamePlaceholder}
                   value={service.name}
                   problem={problem.text(
@@ -367,6 +372,7 @@ export default function OnboardingPage() {
                   <Field
                     id={`service-minutes-${position}`}
                     label={copy.minutes}
+                    required
                     type="number"
                     inputMode="numeric"
                     value={service.durationMinutes}
@@ -377,6 +383,7 @@ export default function OnboardingPage() {
                   <Field
                     id={`service-price-${position}`}
                     label={copy.priceShekels}
+                    required
                     type="number"
                     inputMode="numeric"
                     value={service.priceMinor / 100}
@@ -385,6 +392,24 @@ export default function OnboardingPage() {
                     }
                   />
                 </div>
+                <Field
+                  id={`service-buffer-${position}`}
+                  label={copy.buffer}
+                  hint={copy.bufferHint}
+                  type="number"
+                  inputMode="numeric"
+                  value={service.bufferMinutes ?? ""}
+                  placeholder={copy.defaultBuffer}
+                  onChange={(event) =>
+                    setServices(
+                      services.map((s, i) =>
+                        i === position
+                          ? { ...s, bufferMinutes: event.target.value === "" ? null : Number(event.target.value) }
+                          : s,
+                      ),
+                    )
+                  }
+                />
                 {services.length > 1 && (
                   <button
                     onClick={() => setServices(services.filter((_s, i) => i !== position))}

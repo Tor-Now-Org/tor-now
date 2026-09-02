@@ -8,7 +8,7 @@ describe("text fields", () => {
   });
 
   it("lets an optional field be empty", () => {
-    expect(checkText("", TEXT_RULES.address)).toBeNull();
+    expect(checkText("", TEXT_RULES.description)).toBeNull();
   });
 
   it("measures what is left after trimming, not what was typed", () => {

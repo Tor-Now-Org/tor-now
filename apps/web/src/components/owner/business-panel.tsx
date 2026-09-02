@@ -121,7 +121,6 @@ export const BusinessPanel = ({
 
       {panel === "services" && (
         <>
-          <Note>{copy.servicesHint}</Note>
           {services.map((service) => (
             <Card key={service.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>

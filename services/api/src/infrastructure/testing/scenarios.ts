@@ -28,7 +28,7 @@ export const anEstablishedBusiness = async (test: Harness) => {
     name: "מספרת רן",
     phone: "+972500000001",
     description: null,
-    address: null,
+    address: "רחוב הרצל 1",
     resourceNames: ["רן"],
     services: [
       { name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null },

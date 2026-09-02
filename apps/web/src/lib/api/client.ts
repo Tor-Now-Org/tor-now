@@ -288,7 +288,7 @@ export const api = {
       name: string;
       phone: string;
       description: string | null;
-      address: string | null;
+      address: string;
       resourceNames: string[];
       services: {
         name: string;

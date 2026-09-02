@@ -27,7 +27,7 @@ export const TEXT_RULES = Object.freeze({
   businessName: { min: 2, max: 80 },
   serviceName: { min: 2, max: 80 },
   resourceName: { min: 1, max: 60 },
-  address: { min: 0, max: 120 },
+  address: { min: 1, max: 120 },
   description: { min: 0, max: 400 },
   note: { min: 0, max: 500 },
   reason: { min: 0, max: 200 },

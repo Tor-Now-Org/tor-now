@@ -37,7 +37,7 @@ export type RegistrationInput = {
   readonly phone: string;
   readonly timeZone?: string | undefined;
   readonly description?: string | null | undefined;
-  readonly address?: string | null | undefined;
+  readonly address: string;
   readonly resourceNames: readonly string[];
   readonly services: readonly {
     name: string;
@@ -96,7 +96,7 @@ export const businessService = ({
         phone: input.phone,
         timeZone: timeZone(input.timeZone ?? BUSINESS_DEFAULTS.timeZone),
         description: input.description ?? null,
-        address: input.address ?? null,
+        address: input.address,
       });
 
       await repositories.memberships.create(userId, business.id, "OWNER");

@@ -122,7 +122,7 @@ describe("availability", () => {
       name: "אחר",
       phone: "+972500000007",
       description: null,
-      address: null,
+      address: "רחוב אחר 2",
       resourceNames: ["א"],
       services: [{ name: "ש", durationMinutes: 30, priceMinor: 0, bufferMinutes: null }],
       workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],

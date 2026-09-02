@@ -74,18 +74,23 @@ export const Field = ({
   hint,
   problem,
   id,
+  required = false,
   ...rest
 }: InputHTMLAttributes<HTMLInputElement> & {
   label: string;
   hint?: string;
   /** Already in the reader's language; see lib/i18n/field-problems.ts. */
   problem?: string | null;
+  required?: boolean;
 }) => {
   const wrong = problem !== undefined && problem !== null;
   const describedBy = wrong ? `${id ?? ""}-problem` : undefined;
   return (
     <label htmlFor={id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span className="label">{label}</span>
+      <span className="label">
+        {label}
+        {required && <span aria-hidden="true"> *</span>}
+      </span>
       <input
         {...rest}
         id={id}

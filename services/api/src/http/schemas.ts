@@ -109,7 +109,7 @@ export const registerBusinessSchema = z.object({
   phone: phoneSchema,
   timeZone: z.string().min(1).optional(),
   description: text(TEXT_RULES.description).nullable().default(null),
-  address: text(TEXT_RULES.address).nullable().default(null),
+  address: text(TEXT_RULES.address),
   resourceNames: z.array(text(TEXT_RULES.resourceName)).min(1),
   services: z
     .array(
