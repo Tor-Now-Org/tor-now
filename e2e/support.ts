@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
  * The interactions the canvas declared, expressed once so the specs read as
@@ -209,6 +209,133 @@ export const aBusinessWithOpenHours = async (options: {
     service: profile.services[0]!,
     resource: profile.resources[0]!,
   };
+};
+
+/**
+ * The next time this business actually offers, whichever day that falls on.
+ *
+ * Journeys used to take the first slot on the day the screen opens, which made
+ * them depend on the hour the suite happened to run: ADR 0002's minimum notice
+ * pushes the earliest bookable time an hour out, so from late evening "today"
+ * has nothing left and every booking journey failed about the clock rather than
+ * the product. A customer in that position taps the next day, so the tests do
+ * too.
+ */
+export const theNextOfferedTime = async (
+  page: Page,
+): Promise<{ time: Locator; day: number }> => {
+  const times = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
+
+  for (let day = 0; day < DAYS_TO_TRY; day += 1) {
+    await showDay(page, day);
+    // Wait for the day to have answered — times, or the screen saying there are
+    // none — so a slow answer is never read as an empty one.
+    await expect(times.first().or(page.getByText(NO_TIMES))).toBeVisible({
+      timeout: SLOTS_APPEAR_WITHIN,
+    });
+    if ((await times.count()) > 0) return { time: times.first(), day };
+  }
+  throw new Error(`No time was offered on any of the next ${DAYS_TO_TRY} days.`);
+};
+
+/** Select one day of the strip by its distance from today. */
+export const showDay = async (page: Page, day: number): Promise<void> => {
+  if (day === 0) return;
+  await page.getByRole("radiogroup", { name: TODAY }).getByRole("radio").nth(day).click();
+};
+
+/** What the screen says instead of times. */
+const NO_TIMES = "אין תורים פנויים ביום הזה";
+
+/** The date strip names itself with the word on its first day. */
+const TODAY = "היום";
+/** Enough to clear a closed evening and a full tomorrow; short enough to fail fast. */
+const DAYS_TO_TRY = 3;
+const SLOTS_APPEAR_WITHIN = 15_000;
+
+/**
+ * The next start time this business offers, looking past today.
+ *
+ * Same reason as theNextOfferedTime, for the journeys that set an appointment
+ * up through the API rather than the screen: asking only about today gives an
+ * empty answer every evening, and the test then books `undefined`.
+ */
+export const theNextStart = async (shop: {
+  business: { id: string };
+  service: { id: string };
+  resource: { id: string };
+}): Promise<string> => {
+  const days = await call<{ slots: { startAt: string }[] }[]>(
+    `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+      `&resourceId=${shop.resource.id}&from=${aDayFromNow(0)}&to=${aDayFromNow(DAYS_TO_TRY - 1)}`,
+  );
+  const startAt = days.flatMap((day) => day.slots)[0]?.startAt;
+  if (startAt === undefined) {
+    throw new Error(`No time was offered in the next ${DAYS_TO_TRY} days.`);
+  }
+  return startAt;
+};
+
+/**
+ * A calendar day in the business's timezone, which is what the availability
+ * window is expressed in — not the machine's, which may be somewhere else.
+ */
+export const aDayFromNow = (days: number): string => {
+  const when = new Date();
+  when.setDate(when.getDate() + days);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: BUSINESS_TIMEZONE }).format(when);
+};
+
+const BUSINESS_TIMEZONE = "Asia/Jerusalem";
+
+/**
+ * Bring the day strip to the day an appointment actually falls on.
+ *
+ * Both calendars open on today. Once the journeys stopped assuming today has a
+ * free slot, the appointment they set up can be tomorrow's, and a screen still
+ * showing today would correctly show nothing.
+ */
+export const showTheDayOf = async (page: Page, startAt: string): Promise<void> => {
+  const wanted = new Intl.DateTimeFormat("en-CA", { timeZone: BUSINESS_TIMEZONE }).format(
+    new Date(startAt),
+  );
+  for (let day = 0; day < DAYS_TO_TRY; day += 1) {
+    if (aDayFromNow(day) !== wanted) continue;
+    if (day > 0) {
+      await page.getByRole("radiogroup", { name: TODAY }).getByRole("radio").nth(day).click();
+    }
+    return;
+  }
+  throw new Error(`${wanted} is not among the next ${DAYS_TO_TRY} days on the strip.`);
+};
+
+/**
+ * The start time behind a slot the screen is showing.
+ *
+ * Booking "the API's first slot" and then asserting about the screen's first
+ * slot assumes the two agree. They need not: the screen filters what it offers,
+ * so the API's earliest can be one the customer was never shown, and taking it
+ * removes nothing visible. Reading the time off the screen and finding that
+ * exact slot keeps the test about what a person can see.
+ */
+export const theStartShownAs = async (
+  shop: { business: { id: string }; service: { id: string }; resource: { id: string } },
+  label: string,
+): Promise<string> => {
+  const days = await call<{ slots: { startAt: string }[] }[]>(
+    `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+      `&resourceId=${shop.resource.id}&from=${aDayFromNow(0)}&to=${aDayFromNow(DAYS_TO_TRY - 1)}`,
+  );
+  const asShown = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BUSINESS_TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const found = days
+    .flatMap((day) => day.slots)
+    .find((slot) => asShown.format(new Date(slot.startAt)) === label);
+  if (found === undefined) throw new Error(`No offered slot reads as ${label}.`);
+  return found.startAt;
 };
 
 /** Waits for the app shell to have finished its first data load. */

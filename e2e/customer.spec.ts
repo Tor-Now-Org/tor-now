@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
   asTyped,
+  showDay,
+  theNextOfferedTime,
+  theStartShownAs,
+  theNextStart,
   call,
   ready,
   signInDirectly,
@@ -69,9 +73,8 @@ test.describe("finding and booking", () => {
     await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 8));
     await page.getByText(name, { exact: false }).first().click();
 
-    // The first offered time.
-    const firstSlot = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ }).first();
-    await expect(firstSlot).toBeVisible({ timeout: 20_000 });
+    // The next time on offer, which late in the evening is tomorrow's.
+    const { time: firstSlot } = await theNextOfferedTime(page);
     const chosen = (await firstSlot.textContent())?.trim();
     await firstSlot.click();
 
@@ -130,10 +133,10 @@ test.describe("finding and booking", () => {
     await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
     await page.getByText(name, { exact: false }).first().click();
 
+    const { time: offered, day } = await theNextOfferedTime(page);
     const slots = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
-    await expect(slots.first()).toBeVisible({ timeout: 20_000 });
     const before = await slots.count();
-    const takenLabel = (await slots.first().textContent())?.trim();
+    const takenLabel = (await offered.textContent())?.trim();
 
     // Someone else takes it, out of band.
     const phone = uniquePhone();
@@ -142,30 +145,34 @@ test.describe("finding and booking", () => {
     });
     const { code } = (await codeResponse.json()) as { code: string };
     const sessionResponse = await request.post(`${process.env["E2E_API_URL"] ?? "http://127.0.0.1:8787/api"}/auth/verify`, {
-      data: { phone, code, name: "אחר" },
+      data: { phone, code, name: { givenName: "אחר", familyName: "לגמרי" } },
     });
+    expect(sessionResponse.ok()).toBe(true);
     const session = (await sessionResponse.json()) as { token: string };
 
-    const availability = await request.get(
-      `${process.env["E2E_API_URL"] ?? "http://127.0.0.1:8787/api"}/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
-    );
-    const days = (await availability.json()) as { slots: { startAt: string }[] }[];
+    const startAt = await theStartShownAs(shop, takenLabel ?? "");
 
-    await request.post(`${process.env["E2E_API_URL"] ?? "http://127.0.0.1:8787/api"}/appointments`, {
+    // Asserted, because a booking that silently failed would leave the count
+    // unchanged and read as "the slot is still offered" — the very thing this
+    // test claims to prove.
+    const booked = await request.post(`${process.env["E2E_API_URL"] ?? "http://127.0.0.1:8787/api"}/appointments`, {
       headers: { Authorization: `Bearer ${session.token}` },
       data: {
         businessId: shop.business.id,
         serviceId: shop.service.id,
         resourceId: shop.resource.id,
-        startAt: days[0]!.slots[0]!.startAt,
+        startAt,
         customerNote: null,
       },
     });
+    expect(booked.ok(), await booked.text()).toBe(true);
 
     await page.reload();
     await ready(page);
     await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
     await page.getByText(name, { exact: false }).first().click();
+    // Back to the same day the count was taken on, which need not be today.
+    await showDay(page, day);
     await expect(slots.first()).toBeVisible({ timeout: 20_000 });
 
     expect(await slots.count()).toBe(before - 1);
@@ -182,9 +189,7 @@ test.describe("a customer's own appointments", () => {
     const phone = uniquePhone();
     const session = await signInDirectly(page, phone, "דנה");
 
-    const days = await (await fetch(
-      `${process.env["E2E_API_URL"] ?? "http://127.0.0.1:8787/api"}/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
-    )).json() as { slots: { startAt: string }[] }[];
+    const startAt = await theNextStart(shop);
 
     await fetch(`${process.env["E2E_API_URL"] ?? "http://127.0.0.1:8787/api"}/appointments`, {
       method: "POST",
@@ -196,7 +201,7 @@ test.describe("a customer's own appointments", () => {
         businessId: shop.business.id,
         serviceId: shop.service.id,
         resourceId: shop.resource.id,
-        startAt: days[0]!.slots[0]!.startAt,
+        startAt,
         customerNote: null,
       }),
     });
@@ -355,11 +360,7 @@ test.describe("a cancelled appointment", () => {
     const phone = uniquePhone();
     const { token } = await signInDirectly(page, phone, "דנה כהן");
 
-    const [day] = await call<{ slots: { startAt: string }[] }[]>(
-      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
-        `&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
-    );
-    const slot = day?.slots[0]?.startAt ?? "";
+    const slot = await theNextStart(shop);
     const booking = await call<{ id: string }>("/appointments", {
       method: "POST",
       token,
@@ -514,6 +515,3 @@ test.describe("both languages", () => {
     await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
   });
 });
-
-const today = (): string =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());

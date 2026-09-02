@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
+  aDayFromNow,
+  showTheDayOf,
+  theNextStart,
   call,
   ready,
   movedIntoThePast,
@@ -73,9 +76,7 @@ test.describe("the owner's day", () => {
       method: "POST",
       body: { phone: customerPhone, code, name: { givenName: "דנה", familyName: "כהן" } },
     });
-    const days = await call<{ slots: { startAt: string }[] }[]>(
-      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
-    );
+    const startAt = await theNextStart(shop);
     await call("/appointments", {
       method: "POST",
       token: customer.token,
@@ -83,7 +84,7 @@ test.describe("the owner's day", () => {
         businessId: shop.business.id,
         serviceId: shop.service.id,
         resourceId: shop.resource.id,
-        startAt: days[0]!.slots[0]!.startAt,
+        startAt,
         customerNote: null,
       },
     });
@@ -95,6 +96,7 @@ test.describe("the owner's day", () => {
 
     await page.goto("/manage");
     await ready(page);
+    await showTheDayOf(page, startAt);
 
     await expect(page.getByText("דנה כהן")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("תספורת").first()).toBeVisible();
@@ -114,9 +116,7 @@ test.describe("the owner's day", () => {
       method: "POST",
       body: { phone: customerPhone, code, name: { givenName: "לא", familyName: "הגיע" } },
     });
-    const days = await call<{ slots: { startAt: string }[] }[]>(
-      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
-    );
+    const startAt = await theNextStart(shop);
     await call("/appointments", {
       method: "POST",
       token: customer.token,
@@ -124,7 +124,7 @@ test.describe("the owner's day", () => {
         businessId: shop.business.id,
         serviceId: shop.service.id,
         resourceId: shop.resource.id,
-        startAt: days[0]!.slots[0]!.startAt,
+        startAt,
         customerNote: null,
       },
     });
@@ -135,6 +135,7 @@ test.describe("the owner's day", () => {
     );
     await page.goto("/manage");
     await ready(page);
+    await showTheDayOf(page, startAt);
 
     await page.getByRole("button", { name: /לא הגיע/ }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -173,14 +174,19 @@ test.describe("the schedule layers", () => {
     await expect(page.getByText(/יום חריג מחליף/)).toBeVisible();
     await page.getByRole("button", { name: "הוספת יום חריג" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByLabel("תאריך").fill(today());
+    // Tomorrow, not today: late in the evening today is already empty because
+    // the minimum notice has run past closing, and the reason under test —
+    // that the override closed the day — would be hidden behind TOO_SOON.
+    const closedDay = aDayFromNow(1);
+    await page.getByLabel("תאריך").fill(closedDay);
     await page.getByRole("button", { name: "סגור כל היום" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
     await expect(page.getByText("סגור כל היום").first()).toBeVisible({ timeout: 15_000 });
 
     // A closed day offers a customer nothing at all.
     const days = await call<{ slots: unknown[]; emptyReason: string | null }[]>(
-      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${closedDay}&to=${closedDay}`,
     );
     expect(days[0]?.slots).toEqual([]);
     expect(days[0]?.emptyReason).toBe("CLOSED");
@@ -248,9 +254,6 @@ const yesterday = (): string =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(
     new Date(Date.now() - 24 * 60 * 60 * 1000),
   );
-
-const today = (): string =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
 
 
 test.describe("the month view", () => {
@@ -328,11 +331,7 @@ test.describe("an appointment whose time has passed", () => {
       method: "POST",
       body: { phone: customerPhone, code, name: { givenName: "דנה", familyName: "כהן" } },
     });
-    const [day] = await call<{ slots: { startAt: string }[] }[]>(
-      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
-        `&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
-    );
-    const slot = day?.slots[0]?.startAt ?? "";
+    const slot = await theNextStart(shop);
     const booking = await call<{ id: string; startAt: string }>("/appointments", {
       method: "POST",
       token,
@@ -462,10 +461,7 @@ test.describe("a customer's own page", () => {
         name: { givenName: "דנה", familyName: "כהן" },
       },
     });
-    const [day] = await call<{ slots: { startAt: string }[] }[]>(
-      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
-        `&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
-    );
+    const startAt = await theNextStart(shop);
     await call("/appointments", {
       method: "POST",
       token,
@@ -473,7 +469,7 @@ test.describe("a customer's own page", () => {
         businessId: shop.business.id,
         serviceId: shop.service.id,
         resourceId: shop.resource.id,
-        startAt: day?.slots[0]?.startAt ?? "",
+        startAt,
         customerNote: null,
       },
     });
