@@ -8,6 +8,7 @@ import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
+import { SupportLink } from "@/components/support-link.tsx";
 import {
   BottomNav,
   BuildingIcon,
@@ -175,6 +176,7 @@ function ManageApp() {
           <Button onClick={() => router.push("/")}>{copy.asCustomer}</Button>
           <Note>{copy.oneIdentity}</Note>
           <SignOutButton label={copy.signOut} />
+          <SupportLink />
         </div>
       </Sheet>
     </>

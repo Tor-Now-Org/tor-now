@@ -964,6 +964,75 @@ const erasure = {
   },
 } as const;
 
+/**
+ * Support. Reachable without a session on purpose — the person most likely to
+ * need help is the one who could not get a code.
+ */
+const support = {
+  he: {
+    "langSwitch": "EN",
+    "title": "תמיכה",
+    "back": "חזרה",
+    "lede": "רוב הדברים נפתרים כאן בשתי דקות. אם לא — כותבים לנו וחוזרים אליכם.",
+    "answersLabel": "שאלות נפוצות",
+    "q_cancel": "איך מבטלים תור?",
+    "a_cancel": "בתורים שלי, נכנסים לתור ולוחצים ביטול. אם העסק הגדיר חלון ביטול וביטלתם בתוכו, זה יירשם כביטול בהתראה קצרה ויוצג לעסק — אבל הביטול עצמו אף פעם לא נחסם.",
+    "q_move": "איך משנים שעה של תור?",
+    "a_move": "שינוי שעה נעשה מול העסק. תור שכבר התחיל אי אפשר להזיז — אפשר רק לבטל אותו.",
+    "q_code": "לא קיבלתי קוד כניסה",
+    "a_code": "הקוד נשלח למספר שהקלדתם ותקף חמש דקות. כדאי לוודא שהמספר נכתב בפורמט בינלאומי, למשל ‎+972501234567, ולבקש קוד חדש.",
+    "q_hours": "יש לי עסק ואני רוצה לשנות שעות",
+    "a_hours": "במסך הניהול, בלשונית לוח זמנים. שינוי משפיע על שעות שיוצעו מכאן והלאה; תורים שכבר נקבעו שומרים את התנאים שלפיהם נקבעו.",
+    "reachLabel": "לדבר איתנו",
+    "whatsapp": "וואטסאפ",
+    "usually": "בדרך כלל תוך שעה",
+    "email": "אימייל",
+    "writeLabel": "לכתוב לנו",
+    "topicCustomer": "אני לקוח",
+    "topicOwner": "יש לי עסק",
+    "topicBug": "משהו לא עובד",
+    "messageLabel": "מה קרה?",
+    "messagePlaceholder": "אם זה נוגע לתור מסוים, כדאי לכתוב מתי הוא.",
+    "replyNote": "ההודעה תיפתח בוואטסאפ עם מה שכתבתם, ומשם ממשיכים בשיחה. ככה התשובה נשארת אצלכם בטלפון.",
+    "send": "פתיחת וואטסאפ עם ההודעה",
+    "supportLink": "תמיכה",
+    "builtWith": "נבנה באהבה ❤️ על ידי צוות תור פנוי",
+    "rights": "© 2026 תור פנוי · כל הזכויות שמורות",
+    "version": "גרסה 1.0",
+  },
+  en: {
+    "langSwitch": "עב",
+    "title": "Support",
+    "back": "Back",
+    "lede": "Most things are answered here in two minutes. If not, write to us and we will come back to you.",
+    "answersLabel": "Common questions",
+    "q_cancel": "How do I cancel an appointment?",
+    "a_cancel": "Under My appointments, open it and choose cancel. If the business set a cancellation window and you are inside it, it is recorded as a late cancellation and shown to them — but cancelling itself is never blocked.",
+    "q_move": "How do I change the time?",
+    "a_move": "Changing a time goes through the business. An appointment that has already started cannot be moved, only cancelled.",
+    "q_code": "My sign-in code never arrived",
+    "a_code": "The code goes to the number you typed and lasts five minutes. Check the number is in international form, for example +972501234567, and ask for a new one.",
+    "q_hours": "I have a business and want to change my hours",
+    "a_hours": "In the management screen, under Schedule. A change affects the times offered from now on; appointments already booked keep the terms they were booked under.",
+    "reachLabel": "Talk to us",
+    "whatsapp": "WhatsApp",
+    "usually": "Usually within the hour",
+    "email": "Email",
+    "writeLabel": "Write to us",
+    "topicCustomer": "I am a customer",
+    "topicOwner": "I have a business",
+    "topicBug": "Something is broken",
+    "messageLabel": "What happened?",
+    "messagePlaceholder": "If it is about one appointment, tell us when it is.",
+    "replyNote": "Your message opens in WhatsApp with what you wrote, and the conversation carries on there — so the answer stays on your own phone.",
+    "send": "Open WhatsApp with this message",
+    "supportLink": "Support",
+    "builtWith": "Built with ❤️ by the Tor Panuy team",
+    "rights": "© 2026 Tor Panuy · All rights reserved",
+    "version": "Version 1.0",
+  },
+} as const;
+
 export const DICTIONARIES = {
   customer,
   signIn,
@@ -971,6 +1040,7 @@ export const DICTIONARIES = {
   owner,
   admin,
   erasure,
+  support,
 } as const;
 
 export type Namespace = keyof typeof DICTIONARIES;

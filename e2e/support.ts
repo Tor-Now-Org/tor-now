@@ -71,6 +71,21 @@ export const makeAdministrator = async (phone: string): Promise<void> => {
 export const uniquePhone = (): string =>
   `+9725${String(Math.floor(Math.random() * 100_000_000)).padStart(8, "0")}`;
 
+/**
+ * The same number as a person types it.
+ *
+ * The sign-in field shows the country as a flag and takes only the nine digits
+ * after it, so a test that fills it with E.164 is typing something no customer
+ * ever would — and the field rightly refuses it. The API still speaks E.164, so
+ * the two forms have to come from one number.
+ *
+ * Only that field: a business's own phone number is typed in full.
+ */
+export const asTyped = (e164: string): string => e164.replace(PHONE_DIAL_CODE, "");
+
+/** The interface prints this beside the field instead of asking for it. */
+const PHONE_DIAL_CODE = "+972";
+
 export const call = async <T>(
   path: string,
   options: { method?: string; body?: unknown; token?: string } = {},
@@ -132,11 +147,23 @@ export const useEnglish = async (page: Page): Promise<void> => {
 };
 
 /** A business with hours on every weekday, so any day the test picks is open. */
+/**
+ * Open now, whatever "now" is.
+ *
+ * The default window is the whole day on purpose: journeys that book "the next
+ * offered time" have to find one, and a fixture that closed at 20:00 made the
+ * whole suite fail after eight in the evening — a failure about the clock the
+ * machine happened to be running on, not about the product. A test that is
+ * actually about opening hours passes its own.
+ */
+const ALL_DAY = Object.freeze({ start: "00:00", end: "23:59" });
+
 export const aBusinessWithOpenHours = async (options: {
   name: string;
   ownerPhone: string;
   serviceName?: string;
   durationMinutes?: number;
+  hours?: { start: string; end: string };
 }) => {
   const { code } = await call<{ code: string }>("/auth/request-code", {
     method: "POST",
@@ -166,8 +193,7 @@ export const aBusinessWithOpenHours = async (options: {
       ],
       workingHours: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
         dayOfWeek,
-        start: "08:00",
-        end: "20:00",
+        ...(options.hours ?? ALL_DAY),
       })),
     },
   });

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
+  asTyped,
   call,
   ready,
   signInDirectly,
@@ -80,7 +81,7 @@ test.describe("finding and booking", () => {
     await page.getByRole("button", { name: "אישור התור" }).click();
 
     await expect(page.getByText("מאמתים מספר טלפון")).toBeVisible();
-    await page.getByLabel("מספר טלפון").fill(uniquePhone());
+    await page.getByLabel("מספר טלפון").fill(asTyped(uniquePhone()));
     await page.getByRole("button", { name: "שליחת קוד" }).click();
 
     // The deployment has no delivery channel, so the code is on screen.
@@ -325,7 +326,7 @@ test.describe("the way in", () => {
     await expect(page.getByText(shop.service.name).first()).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("button", { name: "כניסה או הרשמה" }).click();
-    await page.getByLabel("מספר טלפון").fill(uniquePhone());
+    await page.getByLabel("מספר טלפון").fill(asTyped(uniquePhone()));
     await page.getByRole("button", { name: "שליחת קוד" }).click();
 
     const notice = page.getByText(/code is returned here: (\d+)/);
@@ -390,15 +391,15 @@ test.describe("what a form will not accept", () => {
     await ready(page);
     await page.getByRole("button", { name: "כניסה או הרשמה" }).click();
 
-    // A local number is the mistake people actually make, and it is refused
-    // before the code is ever sent.
+    // The country is a flag on the field, so what is typed is the local number
+    // and the mistake people actually make is a short one. It is refused before
+    // the code is ever sent.
     const phone = page.getByLabel("מספר טלפון");
-    await phone.fill("0501234567");
+    await phone.fill("05012");
     await phone.blur();
-    await expect(page.getByText(/פורמט בינלאומי/)).toBeVisible();
     await expect(page.getByRole("button", { name: "שליחת קוד" })).toBeDisabled();
 
-    await phone.fill(uniquePhone());
+    await phone.fill(asTyped(uniquePhone()));
     await expect(page.getByRole("button", { name: "שליחת קוד" })).toBeEnabled();
     await page.getByRole("button", { name: "שליחת קוד" }).click();
 
@@ -435,7 +436,7 @@ test.describe("what a form will not accept", () => {
     await page.goto("/");
     await ready(page);
     await page.getByRole("button", { name: "כניסה או הרשמה" }).click();
-    await page.getByLabel("מספר טלפון").fill(phone);
+    await page.getByLabel("מספר טלפון").fill(asTyped(phone));
     await page.getByRole("button", { name: "שליחת קוד" }).click();
 
     const notice = page.getByText(/code is returned here: (\d+)/);
@@ -469,7 +470,7 @@ test.describe("signing in again", () => {
     await expect(page.getByRole("button", { name: "החשבון שלי" })).toHaveCount(0);
 
     await page.getByRole("button", { name: "התורים שלי" }).click();
-    await page.getByLabel("מספר טלפון").fill(phone);
+    await page.getByLabel("מספר טלפון").fill(asTyped(phone));
     await page.getByRole("button", { name: "שליחת קוד" }).click();
 
     const notice = page.getByText(/code is returned here: (\d+)/);

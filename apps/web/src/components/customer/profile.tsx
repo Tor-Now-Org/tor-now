@@ -13,6 +13,7 @@ import {
   useFieldProblem,
 } from "@/lib/use-field-problem.ts";
 import { SignOutButton } from "../sign-out.tsx";
+import { SupportLink } from "../support-link.tsx";
 import { Button, Card, Critical, Field, Note, Sheet } from "../ui.tsx";
 
 /**
@@ -120,6 +121,8 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
       </Card>
 
       <SignOutButton label={copy.signOut} onSignedOut={onSignedOut} />
+
+      <SupportLink />
 
       <button
         onClick={() => setDeleting(true)}

@@ -148,9 +148,12 @@ test.describe("the owner's day", () => {
 
 test.describe("the schedule layers", () => {
   test("a range, a day off and a block each behave as ADR 0002 says", async ({ page }) => {
+    // This one is about opening hours, so it states its own rather than taking
+    // the fixture's all-day default.
     const shop = await aBusinessWithOpenHours({
       name: `שעות ${Date.now()}`,
       ownerPhone: uniquePhone(),
+      hours: { start: "08:00", end: "20:00" },
     });
     await page.addInitScript(
       ([key, token]) => window.localStorage.setItem(key as string, token as string),
@@ -603,6 +606,7 @@ test.describe("photos", () => {
 
     await page.getByLabel("שם העסק").fill(name);
     await page.getByLabel("טלפון").fill(phone);
+    await page.getByLabel("כתובת").fill("הרצל 2");
     await page.getByRole("button", { name: "המשך" }).click();
 
     // The cover, and one of the three optional ones.

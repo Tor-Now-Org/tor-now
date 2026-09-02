@@ -66,6 +66,7 @@ export default function SignInPage() {
             <Note>{copy.noteSame}</Note>
             {/* ADR 0010: the allowlist is a second, independent condition. */}
             <Note>{copy.noteAllowlist}</Note>
+
           </div>
         )}
       </main>

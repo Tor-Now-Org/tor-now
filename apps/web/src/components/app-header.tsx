@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Logo } from "./logo.tsx";
+import { HelpButton } from "./support-link.tsx";
 import { useLanguage } from "@/lib/i18n/index.tsx";
 
 /**
@@ -13,12 +14,16 @@ import { useLanguage } from "@/lib/i18n/index.tsx";
 export const AppHeader = ({
   onBack,
   backLabel,
+  showBackLabel = true,
   title,
   languageLabel,
   trailing,
 }: {
   onBack?: () => void;
+  /** The control's accessible name, drawn beside the chevron unless hidden. */
   backLabel?: string;
+  /** Off where the title already says where you are: then a chevron is enough. */
+  showBackLabel?: boolean;
   title?: string;
   languageLabel: string;
   trailing?: ReactNode;
@@ -41,6 +46,7 @@ export const AppHeader = ({
       {onBack !== undefined ? (
         <button
           onClick={onBack}
+          aria-label={backLabel}
           style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 44, flexShrink: 0 }}
         >
           <svg
@@ -59,7 +65,9 @@ export const AppHeader = ({
               strokeLinejoin="round"
             />
           </svg>
-          <span style={{ fontSize: 15, color: "var(--muted)" }}>{backLabel}</span>
+          {showBackLabel && backLabel !== undefined && (
+            <span style={{ fontSize: 15, color: "var(--muted)" }}>{backLabel}</span>
+          )}
         </button>
       ) : title !== undefined ? (
         <h1 style={{ fontSize: 17 }}>{title}</h1>
@@ -92,6 +100,9 @@ export const AppHeader = ({
           gap: 8,
         }}
       >
+        {/* Ahead of the language switch and the account: the least-used of the
+            three sits furthest from the thumb's easiest corner. */}
+        <HelpButton />
         <button
           onClick={toggleLanguage}
           style={{
