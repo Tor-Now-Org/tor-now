@@ -75,6 +75,7 @@ export const Field = ({
   problem,
   id,
   required = false,
+  startAdornment,
   ...rest
 }: InputHTMLAttributes<HTMLInputElement> & {
   label: string;
@@ -82,23 +83,57 @@ export const Field = ({
   /** Already in the reader's language; see lib/i18n/field-problems.ts. */
   problem?: string | null;
   required?: boolean;
+  /** Fixed content shown at the input's start, e.g. a country flag. */
+  startAdornment?: ReactNode;
 }) => {
   const wrong = problem !== undefined && problem !== null;
   const describedBy = wrong ? `${id ?? ""}-problem` : undefined;
+  const input = (
+    <input
+      {...rest}
+      id={id}
+      className="field"
+      aria-invalid={wrong ? true : undefined}
+      aria-describedby={describedBy}
+      style={{
+        ...(startAdornment !== undefined && { paddingLeft: 92 }),
+        ...rest.style,
+        ...(wrong && { borderColor: "var(--critical)" }),
+      }}
+    />
+  );
   return (
     <label htmlFor={id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <span className="label">
         {label}
         {required && <span aria-hidden="true"> *</span>}
       </span>
-      <input
-        {...rest}
-        id={id}
-        className="field"
-        aria-invalid={wrong ? true : undefined}
-        aria-describedby={describedBy}
-        style={wrong ? { ...rest.style, borderColor: "var(--critical)" } : rest.style}
-      />
+      {startAdornment !== undefined ? (
+        <span style={{ position: "relative" }}>
+          <span
+            aria-hidden="true"
+            dir="ltr"
+            style={{
+              position: "absolute",
+              left: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              fontSize: 15,
+              lineHeight: 1,
+              whiteSpace: "nowrap",
+              color: "var(--muted, #666)",
+            }}
+          >
+            {startAdornment}
+          </span>
+          {input}
+        </span>
+      ) : (
+        input
+      )}
       {wrong ? (
         <span
           id={describedBy}

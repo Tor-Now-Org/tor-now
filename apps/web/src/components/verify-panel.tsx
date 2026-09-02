@@ -3,13 +3,9 @@
 import { useState } from "react";
 import { needsName, TEXT_RULES } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
-import {
-  blocking,
-  checkPhone,
-  checkText,
-  useFieldProblem,
-} from "@/lib/use-field-problem.ts";
+import { blocking, checkText, useFieldProblem } from "@/lib/use-field-problem.ts";
 import { isApiError } from "@/lib/api/errors.ts";
+import { checkLocalPhone, PHONE_COUNTRY, toE164 } from "@/lib/phone.ts";
 import type { UserDto } from "@/lib/api/types.ts";
 import { Button, Critical, Field, Note } from "./ui.tsx";
 
@@ -60,7 +56,7 @@ export const VerifyPanel = ({
   onVerified: (token: string, user: UserDto) => void;
   errorText: (code: string) => string;
 }) => {
-  const [phone, setPhone] = useState("+972");
+  const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [givenName, setGivenName] = useState("");
   const [familyName, setFamilyName] = useState("");
@@ -79,7 +75,7 @@ export const VerifyPanel = ({
     setTouched((previous) => new Set(previous).add(field));
 
   const problem = useFieldProblem();
-  const phoneProblem = problem.phone(phone, touched.has("phone"));
+  const phoneProblem = problem.localPhone(phone, touched.has("phone"));
   const givenProblem = problem.text(givenName, TEXT_RULES.personName, touched.has("given"));
   const familyProblem = problem.text(familyName, TEXT_RULES.personName, touched.has("family"));
 
@@ -90,7 +86,7 @@ export const VerifyPanel = ({
     setBusy(true);
     setError(null);
     try {
-      const result = await api.requestCode(phone.trim());
+      const result = await api.requestCode(toE164(phone));
       setDevCode(result.code ?? null);
       setStage("code");
     } catch (cause) {
@@ -106,7 +102,7 @@ export const VerifyPanel = ({
     try {
       // No name here: nobody has been asked for one yet, and a returning
       // customer never will be.
-      const verified = await api.verifyCode(phone.trim(), code.trim(), null);
+      const verified = await api.verifyCode(toE164(phone), code.trim(), null);
       // Not `isNewUser`: someone who closed this sheet on the name step last
       // time is a returning user with no name, and would otherwise never be
       // asked again.
@@ -166,17 +162,24 @@ export const VerifyPanel = ({
             inputMode="tel"
             autoComplete="tel"
             dir="ltr"
+            startAdornment={
+              <>
+                <span style={{ fontSize: 24 }}>{PHONE_COUNTRY.flag}</span>
+                {PHONE_COUNTRY.dial}
+              </>
+            }
+            maxLength={9}
             value={phone}
             problem={phoneProblem}
             onBlur={() => leave("phone")}
-            onChange={(event) => setPhone(event.target.value)}
+            onChange={(event) => setPhone(event.target.value.replace(/\D/g, ""))}
           />
           {labels.notHeld !== undefined && <Note>{labels.notHeld}</Note>}
           {error !== null && <Critical>{error}</Critical>}
           <Button
             onClick={send}
             busy={busy}
-            disabled={checkPhone(phone) !== null}
+            disabled={checkLocalPhone(phone) !== null}
           >
             {labels.sendCode}
           </Button>

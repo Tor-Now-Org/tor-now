@@ -25,6 +25,12 @@ const SENTENCES: Readonly<
   },
 });
 
+/** Same problems, said for a field that holds only the digits after the flag. */
+const LOCAL_PHONE_NOT_A_PHONE: Readonly<Record<Language, string>> = Object.freeze({
+  he: "מספר טלפון נייד, למשל 0501234567",
+  en: "A mobile number, e.g. 0501234567",
+});
+
 /** Phone numbers carry no length rule of their own; the pattern is the rule. */
 const NO_RULE: TextRule = { min: 0, max: 0 };
 
@@ -34,3 +40,14 @@ export const sayProblem = (
   rule: TextRule = NO_RULE,
 ): string | null =>
   problem === null ? null : SENTENCES[language][problem](rule);
+
+/** Like sayProblem, but for a field that holds only the digits after the flag. */
+export const sayLocalPhoneProblem = (
+  language: Language,
+  problem: FieldProblem | null,
+): string | null =>
+  problem === null
+    ? null
+    : problem === "NOT_A_PHONE"
+      ? LOCAL_PHONE_NOT_A_PHONE[language]
+      : SENTENCES[language][problem](NO_RULE);

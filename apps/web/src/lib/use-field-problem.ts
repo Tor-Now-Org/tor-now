@@ -7,8 +7,9 @@ import {
   type FieldProblem,
   type TextRule,
 } from "@tor-now/domain";
+import { checkLocalPhone } from "./phone.ts";
 import { useLanguage } from "./i18n/index.tsx";
-import { sayProblem } from "./i18n/field-problems.ts";
+import { sayLocalPhoneProblem, sayProblem } from "./i18n/field-problems.ts";
 
 /**
  * Checking a field, and saying what is wrong with it.
@@ -36,7 +37,14 @@ export const useFieldProblem = () => {
     [language],
   );
 
-  return { text, phone };
+  /** For a field that holds the number without its country prefix. */
+  const localPhone = useCallback(
+    (value: string, show = true): string | null =>
+      show ? sayLocalPhoneProblem(language, checkLocalPhone(value)) : null,
+    [language],
+  );
+
+  return { text, phone, localPhone };
 };
 
 /** True when any of these values is unacceptable, whatever is being shown. */
