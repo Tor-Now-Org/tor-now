@@ -335,6 +335,11 @@ body {
   .month-day-count { font-size: 12px; }
 }
 
+/* An appointment whose time has passed. Grey, and nothing more: it is the
+   ordinary end of a booking rather than something that went wrong, so it
+   recedes without being crossed out the way a cancellation is. */
+.spent, .spent .hint { color: var(--faint); }
+
 /* A cancelled appointment is struck through and greyed, wherever it is listed:
    it still happened, and the customer and the business both want to see that
    it was called off rather than have it quietly disappear. Struck *and* grey,

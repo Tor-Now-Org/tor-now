@@ -236,6 +236,60 @@ describe("rescheduling", () => {
     );
   });
 
+  it("is refused once the appointment has started", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002");
+    const appointment = await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    // One minute past the hour: the time it was given has begun to be spent.
+    test.travelTo(parseInstant(TUESDAY_AT("09:01")));
+
+    await expect(
+      test.services.booking.reschedule(
+        shop.owner.actor,
+        appointment.id,
+        formatInstant(parseInstant(TUESDAY_AT("15:00"))),
+      ),
+    ).rejects.toMatchObject({ code: "ALREADY_STARTED" });
+
+    // What is left to do with it is to record what happened.
+    await expect(
+      test.services.booking.markNoShow(shop.owner.actor, appointment.id),
+    ).rejects.toThrow(/ended/);
+    test.travelTo(parseInstant(TUESDAY_AT("10:00")));
+    expect(
+      (await test.services.booking.markNoShow(shop.owner.actor, appointment.id)).status,
+    ).toBe("NO_SHOW");
+  });
+
+  it("is still allowed a minute before it starts", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000003");
+    const appointment = await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("11:00"),
+      customerNote: null,
+    });
+
+    test.travelTo(parseInstant(TUESDAY_AT("10:59")));
+    const moved = await test.services.booking.reschedule(
+      shop.owner.actor,
+      appointment.id,
+      formatInstant(parseInstant(TUESDAY_AT("14:00"))),
+    );
+    expect(formatInstant(moved.startAt)).toBe(TUESDAY_AT("14:00"));
+  });
+
   it("is refused to the customer whose appointment it is", async () => {
     const test = harness();
     const shop = await anEstablishedBusiness(test);

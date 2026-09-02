@@ -19,6 +19,7 @@ const STATUS_BY_CODE: Readonly<Record<DomainErrorCode, ContentfulStatusCode>> =
     // re-renders availability in place instead of losing the customer's work.
     SLOT_TAKEN: 409,
     ALREADY_CANCELLED: 409,
+    ALREADY_STARTED: 409,
     OUTSIDE_BOOKING_WINDOW: 422,
     OUTSIDE_WORKING_HOURS: 422,
     BUSINESS_INACTIVE: 422,

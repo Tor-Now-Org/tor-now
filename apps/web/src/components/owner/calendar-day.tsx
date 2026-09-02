@@ -15,7 +15,12 @@ import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { DateStrip } from "../date-strip.tsx";
-import { AppointmentSheet, StatusTag, isCancelled } from "./appointment-sheet.tsx";
+import {
+  AppointmentSheet,
+  StatusTag,
+  isCancelled,
+  isSpent,
+} from "./appointment-sheet.tsx";
 import { MonthGrid, firstOfMonthFor, shiftMonth } from "./month-grid.tsx";
 import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
 
@@ -216,13 +221,25 @@ export const CalendarDay = ({
                     day's list should not have to read every tag to see which
                     of these still stand. The tag itself is left alone. */}
                 <span
-                  className={isCancelled(appointment) ? "tab cancelled" : "tab"}
+                  className={
+                    isCancelled(appointment)
+                      ? "tab cancelled"
+                      : isSpent(appointment)
+                        ? "tab spent"
+                        : "tab"
+                  }
                   style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 15 }}
                 >
                   {timeIn(appointment.startAt, business.timeZone, language)}
                 </span>
                 <span
-                  className={isCancelled(appointment) ? "cancelled" : undefined}
+                  className={
+                    isCancelled(appointment)
+                      ? "cancelled"
+                      : isSpent(appointment)
+                        ? "spent"
+                        : undefined
+                  }
                   style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}
                 >
                   <span style={{ fontWeight: 500 }}>{appointment.customerName}</span>

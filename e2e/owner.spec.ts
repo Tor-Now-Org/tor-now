@@ -3,6 +3,7 @@ import {
   aBusinessWithOpenHours,
   call,
   ready,
+  movedIntoThePast,
   signInDirectly,
   uniquePhone,
 } from "./support.ts";
@@ -138,10 +139,10 @@ test.describe("the owner's day", () => {
     await page.getByRole("button", { name: /לא הגיע/ }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("button", { name: "העברת התור לשעה אחרת" })).toBeVisible();
-    // The appointment has not ended yet, so the mark is refused — and the
-    // refusal is shown to the owner rather than swallowed.
-    await page.getByRole("button", { name: "סימון שלא הגיע" }).click();
-    await expect(page.getByRole("alert").first()).toBeVisible();
+    // The appointment has not ended yet, so the mark is not on offer — and the
+    // reason is on screen rather than waiting behind a click that fails.
+    await expect(page.getByRole("button", { name: "סימון שלא הגיע" })).toBeDisabled();
+    await expect(page.getByText(/רק אחרי שהתור הסתיים/)).toBeVisible();
   });
 });
 
@@ -240,6 +241,11 @@ test.describe("the business panel", () => {
   });
 });
 
+const yesterday = (): string =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(
+    new Date(Date.now() - 24 * 60 * 60 * 1000),
+  );
+
 const today = (): string =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
 
@@ -297,6 +303,63 @@ test.describe("the month view", () => {
     await expect(page.getByText("דנה כהן").first()).toBeVisible();
   });
 
+});
+
+test.describe("an appointment whose time has passed", () => {
+  test("cannot be moved, only cancelled or marked a no show", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `עבר ${Date.now()}`,
+      ownerPhone,
+    });
+
+    // Booked for a moment that has already gone by. The booking window refuses
+    // that from outside, so it is written the way the past gets into a
+    // calendar in the first place: by time passing.
+    const customerPhone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone: customerPhone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone: customerPhone, code, name: { givenName: "דנה", familyName: "כהן" } },
+    });
+    const [day] = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
+    );
+    const slot = day?.slots[0]?.startAt ?? "";
+    const booking = await call<{ id: string; startAt: string }>("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: slot,
+        customerNote: null,
+      },
+    });
+    await movedIntoThePast(booking.id);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    // Yesterday, where the appointment now sits.
+    await page.getByRole("button", { name: "חודש", exact: true }).click();
+    await page.getByRole("button", { name: new RegExp(`^${yesterday()}`) }).click();
+
+    await page.getByText("דנה כהן").first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+
+    // The one thing it cannot be given is a different time.
+    await expect(page.getByRole("button", { name: "העברה לשעה אחרת" })).toHaveCount(0);
+    await expect(page.getByText(/כבר התחיל/)).toBeVisible();
+    // The two that remain.
+    await expect(page.getByRole("button", { name: "סימון שלא הגיע" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "ביטול התור" })).toBeEnabled();
+  });
 });
 
 test.describe("a customer's own page", () => {

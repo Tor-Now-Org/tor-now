@@ -19,5 +19,6 @@ export * from "./booking/slots.ts";
 export * from "./booking/availability.ts";
 export * from "./booking/booking.ts";
 export * from "./booking/cancellation.ts";
+export * from "./booking/outcome.ts";
 
 export * from "./billing/subscription.ts";

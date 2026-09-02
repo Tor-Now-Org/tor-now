@@ -1,9 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import {
+  hasStarted,
+  instant,
+  outcomeOf,
+  parseInstant,
+  type AppointmentOutcome,
+} from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type { BusinessDto, CalendarAppointmentDto, SlotDto } from "@/lib/api/types.ts";
+import type {
+  AppointmentStatus,
+  BusinessDto,
+  CalendarAppointmentDto,
+  SlotDto,
+} from "@/lib/api/types.ts";
 import { formatPrice, timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
@@ -41,6 +53,15 @@ export const AppointmentSheet = ({
   const [slots, setSlots] = useState<SlotDto[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const now = instant(Date.now());
+  const started =
+    appointment !== null && hasStarted({ startAt: parseInstant(appointment.startAt) }, now);
+  const ended =
+    appointment !== null && outcomeOf(
+      { status: appointment.status, endAt: parseInstant(appointment.endAt) },
+      now,
+    ) === "FINISHED";
 
   const close = () => {
     setMoving(false);
@@ -95,12 +116,36 @@ export const AppointmentSheet = ({
 
           {appointment.status === "NO_SHOW" && <Warning>{copy.noShowNote}</Warning>}
           {appointment.status === "CANCELLED" && <Note>{copy.cancelledNote}</Note>}
+          {/* Said before the buttons rather than after a refused click. A
+              control that is disabled and silent is the same problem as one
+              that fails when pressed — the person still does not know why. */}
+          {appointment.status === "CONFIRMED" && started && (
+            <Note>{copy.startedNote}</Note>
+          )}
+          {appointment.status === "CONFIRMED" && !ended && (
+            <Note>{copy.noShowAfterNote}</Note>
+          )}
           {error !== null && <Critical>{error}</Critical>}
 
           {appointment.status === "CONFIRMED" && (
             <>
-              <Button onClick={() => void loadMoveOptions(appointment)}>{copy.moveAppointment}</Button>
-              <Button intent="quiet" onClick={() => act(() => api.markNoShow(token, appointment.id))} busy={busy}>
+              {/* An appointment that has begun cannot be given a different
+                  time — the time it was given has been spent. What is left is
+                  to record what happened. The API refuses it too; this is not
+                  the only thing standing in the way. */}
+              {!started && (
+                <Button onClick={() => void loadMoveOptions(appointment)}>
+                  {copy.moveAppointment}
+                </Button>
+              )}
+              <Button
+                intent="quiet"
+                onClick={() => act(() => api.markNoShow(token, appointment.id))}
+                busy={busy}
+                // Marking a no show before the appointment has ended is
+                // refused by the domain, so it is not offered either.
+                disabled={!ended}
+              >
                 {copy.markNoShow}
               </Button>
               <Button intent="danger" onClick={() => act(() => api.cancel(token, appointment.id))} busy={busy}>
@@ -164,27 +209,60 @@ const Detail = ({ label, value }: { label: string; value: string }) => (
 export const isCancelled = (appointment: { status: string }): boolean =>
   appointment.status === "CANCELLED";
 
+/**
+ * What a listed appointment is, right now. One function so the owner's day, the
+ * customer's page and the customer's own list cannot disagree about which of
+ * these has already happened.
+ */
+export const outcomeOfDto = (appointment: {
+  status: AppointmentStatus;
+  endAt: string;
+}): AppointmentOutcome =>
+  outcomeOf(
+    { status: appointment.status, endAt: parseInstant(appointment.endAt) },
+    instant(Date.now()),
+  );
+
+/** Finished and cancelled are both spent; a list greys them the same way. */
+export const isSpent = (appointment: {
+  status: AppointmentStatus;
+  endAt: string;
+}): boolean => {
+  const outcome = outcomeOfDto(appointment);
+  return outcome === "FINISHED" || outcome === "CANCELLED";
+};
+
 export const StatusTag = ({
   appointment,
   copy,
 }: {
-  appointment: { status: string; lateCancellation: boolean };
-  copy: { lateTag: string; noShowTag: string; cancelledTag: string };
+  appointment: { status: AppointmentStatus; endAt: string; lateCancellation: boolean };
+  copy: { lateTag: string; noShowTag: string; cancelledTag: string; finishedTag: string };
 }) => {
-  if (appointment.status === "NO_SHOW") return <Tag text={copy.noShowTag} tone="caution" />;
-  if (appointment.status === "CANCELLED") return <Tag text={copy.cancelledTag} tone="critical" />;
+  const outcome = outcomeOfDto(appointment);
+  if (outcome === "NO_SHOW") return <Tag text={copy.noShowTag} tone="caution" />;
+  if (outcome === "CANCELLED") return <Tag text={copy.cancelledTag} tone="critical" />;
+  // Nobody marked this finished; the clock did. It is said quietly for the
+  // same reason — it is the ordinary end of an appointment, not an incident.
+  if (outcome === "FINISHED") return <Tag text={copy.finishedTag} tone="spent" />;
   if (appointment.lateCancellation) return <Tag text={copy.lateTag} tone="caution" />;
   return null;
 };
 
-const Tag = ({ text, tone }: { text: string; tone: "caution" | "critical" }) => (
+const Tag = ({
+  text,
+  tone,
+}: {
+  text: string;
+  tone: "caution" | "critical" | "spent";
+}) => (
   <span
     style={{
       fontSize: 11.5,
       padding: "4px 9px",
       borderRadius: 999,
-      background: `var(--${tone}-soft)`,
-      color: `var(--${tone})`,
+      background: tone === "spent" ? "var(--sunken)" : `var(--${tone}-soft)`,
+      color: tone === "spent" ? "var(--faint)" : `var(--${tone})`,
       whiteSpace: "nowrap",
     }}
   >

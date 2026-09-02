@@ -17,6 +17,7 @@ import {
   AppointmentSheet,
   StatusTag,
   isCancelled,
+  isSpent,
 } from "@/components/owner/appointment-sheet.tsx";
 import { CopyablePhone } from "@/components/owner/copyable-phone.tsx";
 import { Card, Critical, Empty, Note, Spinner } from "@/components/ui.tsx";
@@ -157,7 +158,13 @@ function CustomerPage({ customerId }: { customerId: string }) {
             >
               <Card style={{ width: "100%", display: "flex", alignItems: "center", gap: 10 }}>
                 <span
-                  className={isCancelled(appointment) ? "cancelled" : undefined}
+                  className={
+                    isCancelled(appointment)
+                      ? "cancelled"
+                      : isSpent(appointment)
+                        ? "spent"
+                        : undefined
+                  }
                   style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}
                 >
                   <span style={{ fontWeight: 500 }}>{appointment.serviceName}</span>

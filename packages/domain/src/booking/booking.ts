@@ -3,6 +3,7 @@ import type { Business, Resource, Service } from "../model/business.ts";
 import { occupiedMinutes } from "../model/business.ts";
 import type { ServiceId, UserId } from "../model/ids.ts";
 import { DomainError, validationFailed } from "../shared/errors.ts";
+import { hasStarted } from "./outcome.ts";
 import type { Instant } from "../time/instant.ts";
 import { addMinutesToInstant } from "../time/instant.ts";
 import type { LocalDate } from "../time/local-date.ts";
@@ -157,6 +158,15 @@ export const validateReschedule = (
 ): AppointmentDraft => {
   if (appointment.status !== "CONFIRMED") {
     throw validationFailed("Only a confirmed appointment can be rescheduled");
+  }
+  // An appointment that has begun cannot be given a different time: the time it
+  // was given has already been spent. What is left to do with it is to record
+  // what happened — it was attended, or it was not.
+  if (hasStarted(appointment, request.now)) {
+    throw new DomainError(
+      "ALREADY_STARTED",
+      "An appointment that has already started cannot be moved",
+    );
   }
   // The appointment being moved must not block its own new time.
   const withoutItself = {

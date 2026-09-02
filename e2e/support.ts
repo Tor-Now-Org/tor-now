@@ -35,6 +35,25 @@ export const closeDatabase = async (): Promise<void> => {
 };
 
 /**
+ * Drags an appointment back a day.
+ *
+ * A test cannot stand on the far side of an appointment any other way: the
+ * booking window refuses a past time from outside, and waiting for a real one
+ * to pass is not a test. This is the one place the suite writes to a table
+ * directly, and it does so to reproduce the only thing that ever puts an
+ * appointment in the past — time going by.
+ */
+export const movedIntoThePast = async (appointmentId: string): Promise<void> => {
+  const sql = database();
+  const at = (minutes: number) =>
+    new Date(Date.now() - 24 * 60 * 60 * 1000 + minutes * 60 * 1000).toISOString();
+  await sql`
+    update appointment
+    set start_at = ${at(0)}, end_at = ${at(30)}, occupied_until = ${at(40)}
+    where id = ${appointmentId}`;
+};
+
+/**
  * Sets both conditions ADR 0010 requires: the flag on the User and the number
  * on the allowlist. Either alone is deliberately not enough, which the sign-in
  * tests rely on.

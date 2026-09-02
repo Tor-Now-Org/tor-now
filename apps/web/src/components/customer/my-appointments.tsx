@@ -6,6 +6,7 @@ import { isApiError } from "@/lib/api/errors.ts";
 import type { AppointmentDto } from "@/lib/api/types.ts";
 import { formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { outcomeOfDto } from "../owner/appointment-sheet.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { Button, Card, Critical, Empty, Sheet, Spinner, Warning } from "../ui.tsx";
@@ -55,10 +56,12 @@ export const MyAppointments = () => {
 
   if (appointments === null) return <Spinner />;
 
+  // The same rule the owner's screens use, from the same function: an
+  // appointment is still ahead of you until it has ended. Splitting on the
+  // start instead would move one out of the list while the customer was
+  // sitting in it.
   const upcoming = appointments.filter(
-    (appointment) =>
-      appointment.status === "CONFIRMED" &&
-      new Date(appointment.startAt).getTime() > Date.now(),
+    (appointment) => outcomeOfDto(appointment) === "UPCOMING",
   );
   const past = appointments.filter((appointment) => !upcoming.includes(appointment));
 
@@ -105,20 +108,28 @@ export const MyAppointments = () => {
             <Card key={appointment.id} style={{ display: "flex", flexDirection: "column", gap: 6, opacity: 0.72 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
                 <span
-                  className={appointment.status === "CANCELLED" ? "cancelled" : undefined}
+                  className={
+                    appointment.status === "CANCELLED" ? "cancelled" : "spent"
+                  }
                   style={{ flex: 1, fontWeight: 500 }}
                 >
                   {appointment.serviceName}
                 </span>
-                {appointment.status === "CANCELLED" && (
-                  <span className="hint">{copy.cancelled}</span>
-                )}
+                <span className="hint">
+                  {appointment.status === "CANCELLED"
+                    ? copy.cancelled
+                    : outcomeOfDto(appointment) === "NO_SHOW"
+                      ? copy.didNotArrive
+                      : copy.finished}
+                </span>
               </div>
               {/* The word says what happened; the strike makes it visible
                   without reading. Not on the label itself, which would be a
                   cancelled cancellation. */}
               <span
-                className={appointment.status === "CANCELLED" ? "cancelled hint" : "hint"}
+                className={
+                  appointment.status === "CANCELLED" ? "cancelled hint" : "spent hint"
+                }
               >
                 {formatWhen(appointment)}
               </span>
