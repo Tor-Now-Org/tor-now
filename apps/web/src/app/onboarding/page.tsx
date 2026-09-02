@@ -40,6 +40,7 @@ type Step = (typeof STEPS)[number];
 const DEFAULT_SERVICE_MINUTES = 30;
 const DEFAULT_OPENING = { start: "09:00", end: "17:00" };
 /** Sunday to Thursday, the Israeli working week. */
+// test
 const DEFAULT_OPEN_DAYS = [0, 1, 2, 3, 4];
 
 type DraftService = {

@@ -13,7 +13,8 @@ coverage/
 e2e/.results/
 playwright-report/
 services/api/dist/
-
+.idea
+supabase/.temp/
 # Next writes these on every dev run, from a template inside the installed
 # version. Generated, and regenerated — not something to review in a diff.
 apps/web/AGENTS.md
