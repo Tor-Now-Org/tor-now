@@ -48,6 +48,6 @@ export const sayLocalPhoneProblem = (
 ): string | null =>
   problem === null
     ? null
-    : problem === "NOT_A_PHONE"
+    : problem === "NOT_A_PHONE" || problem === "TOO_SHORT"
       ? LOCAL_PHONE_NOT_A_PHONE[language]
       : SENTENCES[language][problem](NO_RULE);

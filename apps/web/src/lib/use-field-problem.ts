@@ -11,6 +11,9 @@ import { checkLocalPhone } from "./phone.ts";
 import { useLanguage } from "./i18n/index.tsx";
 import { sayLocalPhoneProblem, sayProblem } from "./i18n/field-problems.ts";
 
+/** Phone numbers carry no max of their own; the pattern is the rule beyond this min. */
+const PHONE_RULE: TextRule = { min: 9, max: 0 };
+
 /**
  * Checking a field, and saying what is wrong with it.
  *
@@ -33,7 +36,7 @@ export const useFieldProblem = () => {
 
   const phone = useCallback(
     (value: string, show = true): string | null =>
-      show ? sayProblem(language, checkPhone(value)) : null,
+      show ? sayProblem(language, checkPhone(value), PHONE_RULE) : null,
     [language],
   );
 

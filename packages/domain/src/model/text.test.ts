@@ -29,9 +29,9 @@ describe("phone numbers", () => {
     expect(checkPhone("  +447700900123 ")).toBeNull();
   });
 
-  it("says missing when there is nothing, and malformed when there is", () => {
+  it("says missing when there is nothing, and too short when there isn't enough", () => {
     expect(checkPhone("")).toBe("REQUIRED");
-    expect(checkPhone("+")).toBe("NOT_A_PHONE");
+    expect(checkPhone("+")).toBe("TOO_SHORT");
   });
 
   it("refuses a local number, which is the mistake people actually make", () => {
@@ -39,9 +39,9 @@ describe("phone numbers", () => {
     expect(checkPhone("050-123-4567")).toBe("NOT_A_PHONE");
   });
 
-  it("refuses a country code starting at zero, and anything too short or long", () => {
-    expect(checkPhone("+0501234567")).toBe("NOT_A_PHONE");
-    expect(checkPhone("+9725")).toBe("NOT_A_PHONE");
+  it("refuses anything too short, and a country code starting at zero or too long once long enough", () => {
+    expect(checkPhone("+9725")).toBe("TOO_SHORT");
+    expect(checkPhone("+050123456")).toBe("NOT_A_PHONE");
     expect(checkPhone(`+9${"7".repeat(15)}`)).toBe("NOT_A_PHONE");
   });
 });

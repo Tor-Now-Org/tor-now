@@ -337,6 +337,7 @@ const onboarding = {
     "bufferHint": "זמן התאוששות אחרי התור. הוא נתפס ביומן, אבל הלקוח לא רואה אותו.",
     "defaultBuffer": "ברירת מחדל",
     "days": ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"],
+    "account": "החשבון שלי",
   },
   en: {
     "dayShort": ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
@@ -400,6 +401,7 @@ const onboarding = {
     "bufferHint": "Recovery time after the appointment. It occupies the calendar, but the customer never sees it.",
     "defaultBuffer": "Business default",
     "days": ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
+    "account": "Your account",
   },
 } as const;
 

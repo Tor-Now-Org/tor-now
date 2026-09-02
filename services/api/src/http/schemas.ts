@@ -22,6 +22,7 @@ const text = (rule: TextRule) =>
 export const phoneSchema = z
   .string()
   .trim()
+  .min(10, "A phone number must be at least 9 digits")
   .regex(PHONE_PATTERN, "A phone number must be in international form, e.g. +972501234567");
 
 const localTimeSchema = z

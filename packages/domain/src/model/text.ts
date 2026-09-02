@@ -60,6 +60,7 @@ export const checkText = (value: string, rule: TextRule): FieldProblem | null =>
 export const checkPhone = (value: string): FieldProblem | null => {
   const trimmed = value.trim();
   if (trimmed.length === 0) return "REQUIRED";
+  if (trimmed.replace(/^\+/, "").length < 9) return "TOO_SHORT";
   return PHONE_PATTERN.test(trimmed) ? null : "NOT_A_PHONE";
 };
 

@@ -15,6 +15,13 @@ export const localDigits = (value: string): string =>
 export const toE164 = (local: string): string =>
   local.trim() === "" ? "" : `${PHONE_COUNTRY.dial}${localDigits(local)}`;
 
-/** Same rule the domain enforces on the full number, checked without the prefix. */
-export const checkLocalPhone = (local: string): FieldProblem | null =>
-  checkPhone(toE164(local));
+/**
+ * Same rule the domain enforces on the full number, checked without the
+ * prefix — the length must be judged on what the person actually typed, since
+ * the dial code padding it out to E.164 would otherwise hide a short entry.
+ */
+export const checkLocalPhone = (local: string): FieldProblem | null => {
+  if (local.trim() === "") return "REQUIRED";
+  if (localDigits(local).length < 9) return "TOO_SHORT";
+  return checkPhone(toE164(local));
+};

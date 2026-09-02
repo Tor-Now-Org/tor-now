@@ -1,23 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { AppHeader } from "@/components/app-header.tsx";
+import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
 import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
+import { SignOutButton } from "@/components/sign-out.tsx";
 import {
   blocking,
   checkPhone,
   checkText,
   useFieldProblem,
 } from "@/lib/use-field-problem.ts";
-import { Button, Card, Critical, Field, Note, Spinner } from "@/components/ui.tsx";
+import { Button, Card, Critical, Field, Note, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
+import type { BusinessDto } from "@/lib/api/types.ts";
 
 /**
  * ADR 0011: a Business is discoverable the moment it registers — there is no
@@ -73,9 +75,21 @@ export default function OnboardingPage() {
   const copy = useCopy("onboarding");
   // Signing in is one flow with one set of words, wherever it is reached from.
   const signInCopy = useCopy("signIn");
+  // The account drawer is the same dialog everywhere, so it reuses its copy too.
+  const customerCopy = useCopy("customer");
   const router = useRouter();
   const errorText = useErrorText();
   const { token, user, loading, signIn } = useSession();
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [owned, setOwned] = useState<BusinessDto[]>([]);
+  useEffect(() => {
+    if (token === null) {
+      setOwned([]);
+      return;
+    }
+    api.myBusinesses(token).then(setOwned).catch(() => setOwned([]));
+  }, [token]);
 
   const [step, setStep] = useState<Step>("details");
   const [name, setName] = useState("");
@@ -209,10 +223,53 @@ export default function OnboardingPage() {
     }
   };
 
+  const accountDrawer = (
+    <Sheet open={drawerOpen} onClose={() => setDrawerOpen(false)} labelledBy="drawer-title">
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <h2 id="drawer-title" style={{ fontSize: 19 }}>{customerCopy.usingAs}</h2>
+
+        <Card style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={{ fontWeight: 600 }}>{customerCopy.asCustomer}</span>
+          <span className="hint">{customerCopy.asCustomerHint}</span>
+        </Card>
+
+        {owned.map((mine) => (
+          <Button key={mine.id} onClick={() => router.push(`/manage?business=${mine.id}`)}>
+            {customerCopy.manageIt} · {mine.name}
+          </Button>
+        ))}
+
+        <Button intent="quiet" onClick={() => router.push("/?screen=profile")}>
+          {customerCopy.profile}
+        </Button>
+        <SignOutButton
+          label={customerCopy.signOut}
+          onSignedOut={() => {
+            setDrawerOpen(false);
+            router.push("/");
+          }}
+        />
+      </div>
+    </Sheet>
+  );
+
   if (live !== null) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} />
+        <AppHeader
+          languageLabel={copy.langSwitch}
+          onBack={() => router.push("/")}
+          backLabel={copy.back}
+          trailing={
+            user !== null ? (
+              <AccountButton
+                initial={user.name.trim().charAt(0) || "?"}
+                onClick={() => setDrawerOpen(true)}
+                label={copy.account}
+              />
+            ) : null
+          }
+        />
         <main className="scroll" style={{ flex: 1, padding: "40px 20px", display: "flex", flexDirection: "column", gap: 16, alignItems: "center", textAlign: "center" }}>
           <span className="chip" style={{ background: "var(--positive-soft)", color: "var(--positive)", border: "1px solid var(--positive)" }}>
             {copy.live}
@@ -221,6 +278,7 @@ export default function OnboardingPage() {
           <p className="hint" style={{ margin: 0 }}>{copy.liveBody}</p>
           <Button onClick={() => router.push(`/manage?business=${live}`)}>{copy.done}</Button>
         </main>
+        {accountDrawer}
       </>
     );
   }
@@ -230,9 +288,17 @@ export default function OnboardingPage() {
       <AppHeader
         languageLabel={copy.langSwitch}
         title={copy.wizardTitle}
-        {...(index > 0
-          ? { onBack: () => setStep(STEPS[index - 1] as Step), backLabel: copy.back }
-          : {})}
+        onBack={index > 0 ? () => setStep(STEPS[index - 1] as Step) : () => router.push("/")}
+        backLabel={copy.back}
+        trailing={
+          user !== null ? (
+            <AccountButton
+              initial={user.name.trim().charAt(0) || "?"}
+              onClick={() => setDrawerOpen(true)}
+              label={copy.account}
+            />
+          ) : null
+        }
       />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0, padding: "20px 18px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
@@ -583,6 +649,7 @@ export default function OnboardingPage() {
           {step === "hours" ? copy.finish : copy.next}
         </Button>
       </main>
+      {accountDrawer}
     </>
   );
 }

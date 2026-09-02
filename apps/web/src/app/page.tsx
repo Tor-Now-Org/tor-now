@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import type { BusinessDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
@@ -30,12 +30,24 @@ type Screen = "search" | "business" | "mine" | "profile";
  * wizard instead.
  */
 export default function CustomerApp() {
+  // useSearchParams needs a Suspense boundary for static rendering.
+  return (
+    <Suspense fallback={<Spinner />}>
+      <CustomerAppInner />
+    </Suspense>
+  );
+}
+
+function CustomerAppInner() {
   const copy = useCopy("customer");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const errorText = useErrorText();
   const { token, user, loading, signIn } = useSession();
 
-  const [screen, setScreen] = useState<Screen>("search");
+  const [screen, setScreen] = useState<Screen>(
+    searchParams.get("screen") === "profile" ? "profile" : "search",
+  );
   const [business, setBusiness] = useState<BusinessDto | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
