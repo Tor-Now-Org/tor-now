@@ -192,6 +192,11 @@ export const dateRangeSchema = z.object({
 
 export const calendarDaySchema = z.object({ date: localDateSchema });
 
+/** Below the minimum length the answer is noise, which the service also says. */
+export const appointmentSearchSchema = z.object({
+  q: z.string().trim().max(80).nullable().catch(null).default(null),
+});
+
 /**
  * A month is given as its first day rather than as "2026-09", so one date type
  * crosses the wire instead of two and the API never has to guess a day.

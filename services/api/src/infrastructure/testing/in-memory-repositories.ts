@@ -586,6 +586,33 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           timeZone,
         );
       },
+      async searchUpcoming(businessId, query, from, limit) {
+        const needle = query.toLowerCase();
+        return store.appointments
+          .filter(
+            (appointment) =>
+              appointment.businessId === businessId &&
+              appointment.status === "CONFIRMED" &&
+              appointment.startAt >= from,
+          )
+          .map((appointment) => ({
+            appointment,
+            customer: store.users.find((user) => user.id === appointment.customerId),
+          }))
+          .filter(
+            ({ customer }) =>
+              customer !== undefined &&
+              (displayName(customer).toLowerCase().includes(needle) ||
+                customer.phone.includes(query)),
+          )
+          .sort((left, right) => left.appointment.startAt - right.appointment.startAt)
+          .slice(0, limit)
+          .map(({ appointment, customer }) => ({
+            appointment,
+            customerName: displayName(customer as User),
+            customerPhone: (customer as User).phone,
+          }));
+      },
       async listForResourceBetween(resourceId, from, to) {
         return store.appointments
           .filter(

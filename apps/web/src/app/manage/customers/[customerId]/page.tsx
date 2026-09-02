@@ -10,6 +10,7 @@ import type {
   CalendarAppointmentDto,
   CustomerRecordDto,
 } from "@/lib/api/types.ts";
+import { formatPrice, timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
@@ -245,7 +246,8 @@ function CustomerPage({ customerId }: { customerId: string }) {
                     {dayAndTime(appointment.startAt)}
                   </span>
                   <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
-                    {appointment.serviceName} · {appointment.durationMinutes} {copy.minutesShort}
+                    {appointment.serviceName} · {appointment.durationMinutes}{" "}
+                    {copy.minutesShort} · {formatPrice(appointment.priceMinor, language, copy.free)}
                   </span>
                 </span>
                 <Chevron direction={direction} />
@@ -273,20 +275,47 @@ function CustomerPage({ customerId }: { customerId: string }) {
                 textAlign: "start",
               }}
             >
-              <span className="tab" style={{ fontSize: 13, width: 92, flexShrink: 0 }}>
-                {dateOnly(appointment.startAt)}
-              </span>
-              {/* The tag says what happened; the strike shows it. Only for a
-                  cancellation — the rest of this list is simply the past, and
-                  striking all of it would say nothing. */}
               <span
-                className={isCancelled(appointment) ? "cancelled" : undefined}
-                style={{ fontSize: 13.5, minWidth: 0 }}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 3,
+                  minWidth: 0,
+                }}
               >
-                {appointment.serviceName}
+                {/* The hour, not only the day: "was it the morning one?" is the
+                    question a customer on the phone actually asks. */}
+                <span className="tab" style={{ fontSize: 13 }}>
+                  {dateOnly(appointment.startAt)} · {timeIn(appointment.startAt, business.timeZone, language)}
+                </span>
+                {/* The tag says what happened; the strike shows it. Only for a
+                    cancellation — the rest of this list is simply the past, and
+                    striking all of it would say nothing. */}
+                <span
+                  className={isCancelled(appointment) ? "cancelled" : undefined}
+                  style={{ fontSize: 13.5 }}
+                >
+                  {appointment.serviceName}
+                </span>
               </span>
-              <span style={{ marginInlineStart: "auto", flexShrink: 0 }}>
+              <span
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  gap: 3,
+                  flexShrink: 0,
+                }}
+              >
                 <StatusTag appointment={appointment} copy={copy} />
+                {/* What it came to. A cancelled one was never paid, so the
+                    price on it would be a figure that never changed hands. */}
+                <span className="tab hint">
+                  {isCancelled(appointment)
+                    ? "—"
+                    : formatPrice(appointment.priceMinor, language, copy.free)}
+                </span>
               </span>
             </button>
           ))

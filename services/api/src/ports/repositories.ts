@@ -251,6 +251,13 @@ export type AppointmentDraft = Omit<
   | "createdAt"
 >;
 
+/** An appointment with the person who booked it, for a screen that lists both. */
+export type BookedAppointment = {
+  readonly appointment: Appointment;
+  readonly customerName: string;
+  readonly customerPhone: string;
+};
+
 /** An appointment and everyone a reminder about it needs to name. */
 export type AppointmentToRemind = {
   readonly appointment: Appointment;
@@ -294,6 +301,21 @@ export type AppointmentRepository = {
     to: Instant,
     timeZone: TimeZone,
   ): Promise<readonly DayCount[]>;
+  /**
+   * Appointments still to come at this Business whose customer matches a
+   * search, soonest first.
+   *
+   * A customer rings up about an appointment; the owner knows who is calling
+   * and not when it is. Without this the only way to it is to guess a date, or
+   * to page forward until it appears — which for something two months out is a
+   * search conducted by scrolling.
+   */
+  searchUpcoming(
+    businessId: BusinessId,
+    query: string,
+    from: Instant,
+    limit: number,
+  ): Promise<readonly BookedAppointment[]>;
   listForBusinessBetween(
     businessId: BusinessId,
     from: Instant,

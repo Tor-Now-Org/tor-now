@@ -13,10 +13,13 @@ import {
   type Block,
   type BlockId,
   type BusinessId,
+  type Clock,
   type LocalDate,
   type ResourceId,
   type User,
 } from "@tor-now/domain";
+import { SEARCH } from "../config.ts";
+import type { BookedAppointment } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 
 /**
@@ -52,7 +55,46 @@ export type MonthDay = {
   readonly blocks: number;
 };
 
-export const calendarService = ({ unitOfWork }: { unitOfWork: UnitOfWork }) => ({
+/** Enough to answer a phone call without becoming a page of its own. */
+const SEARCH_RESULTS = 25;
+
+export const calendarService = ({
+  unitOfWork,
+  clock,
+}: {
+  unitOfWork: UnitOfWork;
+  clock: Clock;
+}) => ({
+  /**
+   * Finding one appointment when the owner knows who, not when.
+   *
+   * The calendar answers "what is happening on this day", which is the wrong
+   * question when a customer rings up about something two months out: the owner
+   * would have to guess the date or page forward until it appeared. This
+   * answers "when is X coming in" instead, and hands back enough to open the
+   * appointment straight from the result.
+   *
+   * Only what is still to come. An owner searching mid-call is changing
+   * something, and there is nothing to change about a day that has gone.
+   */
+  async search(
+    actor: Actor,
+    businessId: BusinessId,
+    query: string,
+  ): Promise<readonly BookedAppointment[]> {
+    const trimmed = query.trim();
+    if (trimmed.length < SEARCH.minimumQueryLength) return [];
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      return repositories.appointments.searchUpcoming(
+        businessId,
+        trimmed,
+        clock.now(),
+        SEARCH_RESULTS,
+      );
+    });
+  },
+
   /**
    * A month at a glance: how many appointments stand on each day, and whether
    * any of it is blocked out.

@@ -362,6 +362,76 @@ test.describe("an appointment whose time has passed", () => {
   });
 });
 
+test.describe("finding one appointment", () => {
+  test("a name reaches an appointment months out, without paging to it", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `חיפוש ${Date.now()}`,
+      ownerPhone,
+    });
+    const customerPhone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone: customerPhone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone: customerPhone, code, name: { givenName: "אורית", familyName: "שגב" } },
+    });
+
+    // Far enough ahead that neither the day strip nor this month reaches it.
+    const far = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000);
+    far.setUTCHours(9, 0, 0, 0);
+    const day = far.toISOString().slice(0, 10);
+    const [available] = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+    );
+    const slot = available?.slots[0]?.startAt ?? "";
+    expect(slot).not.toBe("");
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: slot,
+        customerNote: null,
+      },
+    });
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    // The day the owner is looking at does not have it.
+    await expect(page.getByText("אורית שגב")).toHaveCount(0);
+
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("אורית");
+    await expect(page.getByText("אורית שגב")).toBeVisible({ timeout: 15_000 });
+
+    // And it opens straight into the same controls as the calendar.
+    await page.getByText("אורית שגב").click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("button", { name: "העברת התור לשעה אחרת" })).toBeVisible();
+  });
+
+  test("a phone number finds it too, and says so when nothing matches", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `חיפוש טלפון ${Date.now()}`,
+      ownerPhone,
+    });
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("0500000000");
+    await expect(page.getByText("לא נמצא תור מתאים")).toBeVisible({ timeout: 15_000 });
+  });
+});
+
 test.describe("a customer's own page", () => {
   /** A business, a customer, and one booking between them. */
   const aBookingFor = async (ownerPhone: string, customerPhone: string) => {

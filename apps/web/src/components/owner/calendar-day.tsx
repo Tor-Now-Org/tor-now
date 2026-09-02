@@ -10,7 +10,7 @@ import type {
   MonthDayDto,
   ResourceDto,
 } from "@/lib/api/types.ts";
-import { monthName, timeIn, todayIn } from "@/lib/format.ts";
+import { monthName, timeIn, todayIn, whenIn } from "@/lib/format.ts";
 import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
@@ -30,6 +30,8 @@ import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
  * believe a stale screen is current.
  */
 const VISIBLE_DAYS = 21;
+/** Long enough that a name is one request, short enough to feel immediate. */
+const SEARCH_SETTLE_MS = 250;
 
 export const CalendarDay = ({
   token,
@@ -69,6 +71,18 @@ export const CalendarDay = ({
    * Tuesday. Both end at the same day's list, so switching never loses the day.
    */
   const [view, setView] = useState<"days" | "month">("days");
+  /**
+   * Finding an appointment by who booked it.
+   *
+   * A customer rings up about a time two months out. The calendar answers "what
+   * is on this day", which is the wrong question — the owner knows the name and
+   * not the date, and paging forward until it appears is a search conducted by
+   * scrolling. While this box has something in it, it replaces the calendar
+   * rather than sitting beside it: the owner is looking for one appointment,
+   * not at a day.
+   */
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<CalendarAppointmentDto[] | null>(null);
   const [month, setMonth] = useState<MonthDayDto[] | null>(null);
   const firstOfMonth = firstOfMonthFor(date);
 
@@ -87,6 +101,30 @@ export const CalendarDay = ({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setFound(null);
+      return;
+    }
+    let current = true;
+    // A short wait, so typing a name is one request rather than one per letter.
+    const timer = window.setTimeout(() => {
+      api
+        .searchAppointments(token, business.id, trimmed)
+        .then((matches) => {
+          if (current) setFound(matches);
+        })
+        .catch(() => {
+          if (current) setFound([]);
+        });
+    }, SEARCH_SETTLE_MS);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [query, token, business.id]);
 
   useEffect(() => {
     if (view !== "month" || resource === null) {
@@ -129,6 +167,54 @@ export const CalendarDay = ({
         </div>
       )}
 
+      <input
+        className="field"
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={copy.findAppointment}
+        aria-label={copy.findAppointment}
+      />
+
+      {found !== null ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {found.length === 0 ? (
+            <Empty title={copy.noMatches} body={copy.findAppointmentHint} />
+          ) : (
+            <>
+              <span className="label">
+                {countOf(language, found.length, copy.appointmentsCount)}
+              </span>
+              {found.map((appointment) => (
+                <button
+                  key={appointment.id}
+                  onClick={() => setSelected(appointment)}
+                  style={{ textAlign: "start" }}
+                >
+                  <Card style={{ width: "100%", display: "flex", alignItems: "center", gap: 12 }}>
+                    <span
+                      style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{appointment.customerName}</span>
+                      <span className="hint">{appointment.serviceName}</span>
+                    </span>
+                    {/* The date is the answer here, so it leads rather than
+                        being assumed from which day is open. */}
+                    <span
+                      className="tab"
+                      style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 14 }}
+                    >
+                      {whenIn(appointment.startAt, business.timeZone, language)}
+                    </span>
+                  </Card>
+                </button>
+              ))}
+              <Note>{copy.findAppointmentHint}</Note>
+            </>
+          )}
+        </div>
+      ) : (
+      <>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ display: "flex", gap: 6 }}>
           {(["days", "month"] as const).map((candidate) => (
@@ -260,6 +346,8 @@ export const CalendarDay = ({
       )}
 
       <Note>{copy.refreshHint}</Note>
+      </>
+      )}
 
       <AppointmentSheet
         token={token}

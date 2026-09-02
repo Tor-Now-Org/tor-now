@@ -506,6 +506,24 @@ const ownerRoutes = (services: Services) => {
     return context.body(null, 204);
   });
 
+  owner.get("/:businessId/appointments", async (context) => {
+    const { q } = parseQuery(context, schema.appointmentSearchSchema);
+    const found = await services.calendar.search(
+      actorOf(context),
+      idParam(context, "businessId"),
+      q ?? "",
+    );
+    return context.json(
+      found.map((match) =>
+        wire.appointmentWithCustomerOut({
+          ...match.appointment,
+          customerName: match.customerName,
+          customerPhone: match.customerPhone,
+        }),
+      ),
+    );
+  });
+
   owner.get("/:businessId/resources/:resourceId/calendar", async (context) => {
     const { date } = parseQuery(context, schema.calendarDaySchema);
     const day = await services.calendar.day(

@@ -3,6 +3,7 @@ import {
   addDays,
   asId,
   displayName,
+  formatInstant,
   isActive,
   money,
   parseInstant,
@@ -483,6 +484,171 @@ export const describeRepositoryContract = (
         const context = await aBookableBusiness(repositories, "05002");
         await repositories.services.delete(context.service.id);
         expect(await repositories.services.findById(context.service.id)).toBeNull();
+      });
+    });
+
+    // --- Finding one appointment -----------------------------------------
+
+    it("finds an appointment by either half of the customer's name", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "6101");
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-11-20T09:00:00Z", "2026-11-20T09:30:00Z", "2026-11-20T09:40:00Z"),
+        );
+        const from = parseInstant("2026-09-01T00:00:00Z");
+
+        // Far enough ahead that no day view would have shown it.
+        const byGiven = await repositories.appointments.searchUpcoming(
+          context.business.id,
+          "בעלים",
+          from,
+          10,
+        );
+        expect(byGiven).toHaveLength(1);
+        expect(byGiven[0]?.customerName).toBe(displayName(context.owner));
+        expect(byGiven[0]?.customerPhone).toBe(context.owner.phone);
+
+        expect(
+          await repositories.appointments.searchUpcoming(
+            context.business.id,
+            context.owner.phone.slice(-6),
+            from,
+            10,
+          ),
+        ).toHaveLength(1);
+      });
+    });
+
+    it("offers nothing that has already been and gone", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "6102");
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-01T09:00:00Z", "2026-09-01T09:30:00Z", "2026-09-01T09:40:00Z"),
+        );
+        // An owner searching mid-call is changing something, and there is
+        // nothing to change about a day that has gone.
+        expect(
+          await repositories.appointments.searchUpcoming(
+            context.business.id,
+            "בעלים",
+            parseInstant("2026-09-02T00:00:00Z"),
+            10,
+          ),
+        ).toEqual([]);
+      });
+    });
+
+    it("offers nothing cancelled, and nothing from another business", async () => {
+      await withRepositories(async (repositories) => {
+        const mine = await aBookableBusiness(repositories, "6103");
+        const theirs = await aBookableBusiness(repositories, "6104");
+        const from = parseInstant("2026-09-01T00:00:00Z");
+
+        const booked = await repositories.appointments.create(
+          anAppointmentAt(mine, "2026-11-21T09:00:00Z", "2026-11-21T09:30:00Z", "2026-11-21T09:40:00Z"),
+        );
+        await repositories.appointments.create(
+          anAppointmentAt(theirs, "2026-11-21T11:00:00Z", "2026-11-21T11:30:00Z", "2026-11-21T11:40:00Z"),
+        );
+
+        expect(
+          await repositories.appointments.searchUpcoming(mine.business.id, "בעלים", from, 10),
+        ).toHaveLength(1);
+
+        await repositories.appointments.update(booked.id, {
+          status: "CANCELLED",
+          cancelledAt: parseInstant("2026-11-01T09:00:00Z"),
+          cancelledBy: "CUSTOMER",
+        });
+        expect(
+          await repositories.appointments.searchUpcoming(mine.business.id, "בעלים", from, 10),
+        ).toEqual([]);
+      });
+    });
+
+    it("returns the soonest first, which is the one being asked about", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "6105");
+        for (const day of ["2026-12-20", "2026-11-20", "2027-01-20"]) {
+          await repositories.appointments.create(
+            anAppointmentAt(context, `${day}T09:00:00Z`, `${day}T09:30:00Z`, `${day}T09:40:00Z`),
+          );
+        }
+        const found = await repositories.appointments.searchUpcoming(
+          context.business.id,
+          "בעלים",
+          parseInstant("2026-09-01T00:00:00Z"),
+          10,
+        );
+        expect(found.map((match) => formatInstant(match.appointment.startAt))).toEqual([
+          "2026-11-20T09:00:00.000Z",
+          "2026-12-20T09:00:00.000Z",
+          "2027-01-20T09:00:00.000Z",
+        ]);
+      });
+    });
+
+    // --- Reminders: ADR 0005 ---------------------------------------------
+
+    it("finds an appointment due a reminder, naming everyone it has to name", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "5101");
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-10T09:00:00Z", "2026-09-10T09:30:00Z", "2026-09-10T09:40:00Z"),
+        );
+
+        const due = await repositories.appointments.dueForReminder(
+          parseInstant("2026-09-10T08:00:00Z"),
+          parseInstant("2026-09-10T10:00:00Z"),
+          10,
+        );
+
+        expect(due).toHaveLength(1);
+        // Every field the message is built from. The customer's name is two
+        // columns joined, which is the part that broke silently when they were
+        // split and nothing here read it back.
+        expect(due[0]?.customerName).toBe(displayName(context.owner));
+        expect(due[0]?.customerPhone).toBe(context.owner.phone);
+        expect(due[0]?.businessName).toBe(context.business.name);
+        expect(due[0]?.businessPhone).toBe(context.business.phone);
+        expect(due[0]?.businessTimeZone).toBe(context.business.timeZone);
+      });
+    });
+
+    it("stops offering one once its reminder has been enqueued", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "5102");
+        const booked = await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-11T09:00:00Z", "2026-09-11T09:30:00Z", "2026-09-11T09:40:00Z"),
+        );
+        const window = [
+          parseInstant("2026-09-11T08:00:00Z"),
+          parseInstant("2026-09-11T10:00:00Z"),
+        ] as const;
+
+        await repositories.appointments.markReminderEnqueued([booked.id]);
+
+        // ADR 0005: the stamp is what makes the job safe to run as often as
+        // anyone likes.
+        expect(
+          await repositories.appointments.dueForReminder(window[0], window[1], 10),
+        ).toEqual([]);
+      });
+    });
+
+    it("does not remind about an appointment outside the window", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "5103");
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-12T15:00:00Z", "2026-09-12T15:30:00Z", "2026-09-12T15:40:00Z"),
+        );
+        expect(
+          await repositories.appointments.dueForReminder(
+            parseInstant("2026-09-12T08:00:00Z"),
+            parseInstant("2026-09-12T10:00:00Z"),
+            10,
+          ),
+        ).toEqual([]);
       });
     });
 

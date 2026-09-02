@@ -1,7 +1,22 @@
-import { asId, DomainError, instant, notFound } from "@tor-now/domain";
+import { asId, displayName, DomainError, instant, notFound } from "@tor-now/domain";
 import type { AppointmentRepository } from "../../ports/repositories.ts";
 import { errorCodeOf, PG_ERRORS, type Transaction } from "./client.ts";
-import { toAppointment, toLocalDate, type Row } from "./mappers.ts";
+import {
+  nullableText,
+  text,
+  toAppointment,
+  toLocalDate,
+  type Row,
+} from "./mappers.ts";
+
+/**
+ * The two halves of a name, as the mapper reads every other row's. Kept beside
+ * the query that joins them so the join and the reading cannot drift again.
+ */
+const toNameHalves = (row: Row) => ({
+  givenName: text(row["given_name"]),
+  familyName: nullableText(row["family_name"]),
+});
 
 const one = (rows: readonly Row[]) => {
   const row = rows[0];
@@ -53,6 +68,29 @@ export const appointmentRepository = (
     }));
   },
 
+  async searchUpcoming(businessId, query, from, limit) {
+    const like = `%${query}%`;
+    const rows = await tx<Row[]>`
+      select a.*, c.given_name, c.family_name, c.phone as customer_phone
+      from appointment a
+      join app_user c on c.id = a.customer_id
+      where a.business_id = ${businessId}
+        and a.status = 'CONFIRMED'
+        and a.start_at >= ${asDate(from)}
+        and (
+          c.given_name ilike ${like}
+          or coalesce(c.family_name, '') ilike ${like}
+          or c.phone like ${like}
+        )
+      order by a.start_at
+      limit ${limit}`;
+    return rows.map((row) => ({
+      appointment: toAppointment(row),
+      customerName: displayName(toNameHalves(row)),
+      customerPhone: text(row["customer_phone"]),
+    }));
+  },
+
   async listForResourceBetween(resourceId, from, to) {
     const rows = await tx<Row[]>`
       select * from appointment
@@ -98,7 +136,7 @@ export const appointmentRepository = (
   async dueForReminder(from, to, limit) {
     const rows = await tx<Row[]>`
       select a.*,
-             c.name  as customer_name,  c.phone as customer_phone,
+             c.given_name, c.family_name, c.phone as customer_phone,
              b.name  as business_name,  b.phone as business_phone,
              b.time_zone as business_time_zone
       from appointment a
@@ -114,7 +152,9 @@ export const appointmentRepository = (
 
     return rows.map((row) => ({
       appointment: toAppointment(row),
-      customerName: String(row["customer_name"]),
+      // The two halves are joined the way every other screen joins them, so a
+      // reminder names somebody the same as the calendar does.
+      customerName: displayName(toNameHalves(row)),
       customerPhone: String(row["customer_phone"]),
       businessName: String(row["business_name"]),
       businessPhone: String(row["business_phone"]),

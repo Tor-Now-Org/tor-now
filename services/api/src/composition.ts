@@ -111,7 +111,7 @@ export const compose = (
     availability,
     booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
     business: businessService({ unitOfWork, clock, photos }),
-    calendar: calendarService({ unitOfWork }),
+    calendar: calendarService({ unitOfWork, clock }),
     admin,
 
     outboxWorker: outboxWorker({ unitOfWork, notifier }),

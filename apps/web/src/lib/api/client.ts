@@ -9,6 +9,7 @@ import type {
   BusinessProfileDto,
   BusinessSummaryDto,
   MonthDayDto,
+  CalendarAppointmentDto,
   CalendarDayDto,
   CustomerRecordDto,
   DayAvailabilityDto,
@@ -166,6 +167,12 @@ export const api = {
       birthDate?: string | null;
     },
   ) => request<UserDto>("/me", { method: "PATCH", body: changes, token }),
+
+  searchAppointments: (token: string, businessId: string, q: string) =>
+    request<CalendarAppointmentDto[]>(`/businesses/${businessId}/appointments`, {
+      token,
+      query: { q },
+    }),
 
   calendarMonth: (
     token: string,

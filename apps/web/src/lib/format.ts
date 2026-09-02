@@ -147,3 +147,18 @@ export const monthName = (
     month: "long",
     year: "numeric",
   }).format(new Date(`${firstOfMonth}T12:00:00Z`));
+
+/** A day and an hour together, for a list where the date is the answer. */
+export const whenIn = (
+  iso: string,
+  timeZone: string,
+  language: string,
+): string =>
+  new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
+    timeZone,
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));

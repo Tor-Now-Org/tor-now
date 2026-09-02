@@ -36,13 +36,13 @@ export type Row = Record<string, unknown>;
  * updated the mapper for, and failing here is better than storing "[object
  * Object]" and discovering it later.
  */
-const text = (value: unknown): string => {
+export const text = (value: unknown): string => {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "bigint") return String(value);
   if (value instanceof Date) return value.toISOString();
   throw new Error(`Expected a text-like column value, got ${typeof value}`);
 };
-const nullableText = (value: unknown): string | null =>
+export const nullableText = (value: unknown): string | null =>
   value === null || value === undefined ? null : text(value);
 const int = (value: unknown): number => Number(value);
 const bool = (value: unknown): boolean => Boolean(value);

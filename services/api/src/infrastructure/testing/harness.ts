@@ -235,7 +235,7 @@ export const harness = (options: { now?: Instant } = {}) => {
       availability,
       booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
       business: businessService({ unitOfWork, clock, photos }),
-      calendar: calendarService({ unitOfWork }),
+      calendar: calendarService({ unitOfWork, clock }),
       admin,
       outboxWorker: outboxWorker({ unitOfWork, notifier }),
       reminders: reminderService({ unitOfWork, clock }),
