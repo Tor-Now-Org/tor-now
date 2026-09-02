@@ -3,14 +3,16 @@
 import { useState } from "react";
 
 /**
- * A customer's phone number, ready to be used rather than merely read.
+ * What a business does with a customer's number: ring it, or take it somewhere
+ * else. Both were a transcription job — read it off the screen, type it into
+ * the phone, hope.
  *
- * A business looking at this has one of two things in mind: ring them, or paste
- * the number somewhere else. Both were a transcription job — read it off the
- * screen, type it into the phone, hope. So the number is a call link and the
- * button beside it copies.
+ * The number itself is shown once, above, by whichever screen this sits on.
+ * Repeating it here to hang two buttons off it would say the same thing twice;
+ * the buttons name it in their labels instead, where a screen reader wants it
+ * and the layout does not.
  */
-export const CopyablePhone = ({
+export const PhoneActions = ({
   phone,
   labels,
 }: {
@@ -34,19 +36,10 @@ export const CopyablePhone = ({
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <a
-        href={`tel:${phone}`}
-        className="tab"
-        dir="ltr"
-        aria-label={`${labels.call} ${phone}`}
-        style={{ flex: 1, fontSize: 15, textAlign: "start" }}
-      >
-        {phone}
-      </a>
       <button
         type="button"
         onClick={() => void copy()}
-        aria-label={labels.copy}
+        aria-label={`${labels.copy} ${phone}`}
         className="chip"
         style={{
           border: "1px solid var(--line)",
@@ -60,7 +53,7 @@ export const CopyablePhone = ({
       <a
         href={`tel:${phone}`}
         className="chip"
-        aria-label={labels.call}
+        aria-label={`${labels.call} ${phone}`}
         style={{
           border: "1px solid var(--line)",
           background: "var(--raised)",

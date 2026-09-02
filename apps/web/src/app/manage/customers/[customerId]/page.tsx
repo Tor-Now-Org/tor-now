@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type {
+  AppointmentDto,
   BusinessDto,
   CalendarAppointmentDto,
   CustomerRecordDto,
@@ -17,23 +18,26 @@ import {
   AppointmentSheet,
   StatusTag,
   isCancelled,
-  isSpent,
+  outcomeOfDto,
 } from "@/components/owner/appointment-sheet.tsx";
-import { CopyablePhone } from "@/components/owner/copyable-phone.tsx";
-import { Card, Critical, Empty, Note, Spinner } from "@/components/ui.tsx";
+import { PhoneActions } from "@/components/owner/phone-actions.tsx";
+import { Card, Critical, Empty, Spinner } from "@/components/ui.tsx";
 
 /**
- * One customer, on a page of their own.
+ * One customer, laid out as the Screens canvas draws it: the initial in a
+ * rounded square beside the name and number, the counts as a plain list of
+ * label and value rather than a row of tiles, the appointments still to come as
+ * cards you can open, and everything that already happened as a quiet ruled
+ * list underneath.
  *
- * This was a bottom sheet, which is the wrong shape for it: the record is a
- * name, a phone number, three counts and a history that can run to dozens of
- * rows, and opening an appointment from inside it meant a sheet on top of a
- * sheet. A page has a back button, a URL an owner can keep open on a second
- * tab, and room for the history to be as long as it is.
+ * The two deliberate departures from the canvas are both things asked for
+ * since: the number is a call link with a copy button, and a past appointment
+ * opens too — the canvas only opens the upcoming ones, but cancelling or
+ * marking a no show is exactly what an owner needs a finished one for.
  */
 function CustomerPage({ customerId }: { customerId: string }) {
   const copy = useCopy("owner");
-  const { language } = useLanguage();
+  const { language, direction } = useLanguage();
   const router = useRouter();
   const params = useSearchParams();
   const { token, loading } = useSession();
@@ -64,8 +68,15 @@ function CustomerPage({ customerId }: { customerId: string }) {
     void load();
   }, [load]);
 
+  /**
+   * Back to the customers list, not to the calendar. The tab is in the URL for
+   * exactly this: the owner came from a list, and returning them to a different
+   * screen than the one they left is its own small betrayal.
+   */
   const back = () =>
-    router.push(businessId === null ? "/manage" : `/manage?business=${businessId}`);
+    router.push(
+      businessId === null ? "/manage" : `/manage?business=${businessId}&tab=customers`,
+    );
 
   if (loading) return <Spinner />;
 
@@ -83,7 +94,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
   if (record === null || business === null) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} onBack={back} backLabel={copy.back} />
+        <AppHeader languageLabel={copy.langSwitch} onBack={back} backLabel={copy.tabCustomers} />
         <main style={{ flex: 1, padding: 24 }}>
           {error === null ? <Spinner /> : <Critical>{error}</Critical>}
         </main>
@@ -91,16 +102,50 @@ function CustomerPage({ customerId }: { customerId: string }) {
     );
   }
 
-  const when = (iso: string) =>
-    new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
+  const locale = language === "he" ? "he-IL" : "en-GB";
+  const dayAndTime = (iso: string) =>
+    new Intl.DateTimeFormat(locale, {
       timeZone: business.timeZone,
+      weekday: "short",
       day: "numeric",
       month: "short",
-      year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
     }).format(new Date(iso));
+  const dateOnly = (iso: string) =>
+    new Intl.DateTimeFormat(locale, {
+      timeZone: business.timeZone,
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    }).format(new Date(iso));
+
+  const openable = (appointment: AppointmentDto) =>
+    setOpen({
+      ...appointment,
+      customerName: record.user.name,
+      customerPhone: record.user.phone,
+    });
+
+  // Soonest first for what is still to come, because that is the one being
+  // asked about; most recent first for what is done, because that is the one
+  // being remembered.
+  const upcoming = record.appointments
+    .filter((appointment) => outcomeOfDto(appointment) === "UPCOMING")
+    .sort((left, right) => left.startAt.localeCompare(right.startAt));
+  const history = record.appointments
+    .filter((appointment) => outcomeOfDto(appointment) !== "UPCOMING")
+    .sort((left, right) => right.startAt.localeCompare(left.startAt));
+
+  /**
+   * When they became a customer *here*. The account may be older — the same
+   * person books at other businesses with the same number — so this is the
+   * first time they booked with this one.
+   */
+  const earliest = [...record.appointments].sort((left, right) =>
+    left.startAt.localeCompare(right.startAt),
+  )[0];
 
   return (
     <>
@@ -108,7 +153,6 @@ function CustomerPage({ customerId }: { customerId: string }) {
         languageLabel={copy.langSwitch}
         onBack={back}
         backLabel={copy.tabCustomers}
-        title={record.user.name}
       />
 
       <main
@@ -116,7 +160,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
         style={{
           flex: 1,
           minHeight: 0,
-          padding: "16px 18px 28px",
+          padding: 16,
           display: "flex",
           flexDirection: "column",
           gap: 16,
@@ -124,59 +168,131 @@ function CustomerPage({ customerId }: { customerId: string }) {
       >
         {error !== null && <Critical>{error}</Critical>}
 
-        <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <CopyablePhone
-            phone={record.user.phone}
-            labels={{ call: copy.callCustomer, copy: copy.copyPhone, copied: copy.copied }}
-          />
-        </Card>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-          <Stat label={copy.total} value={record.appointments.length} />
-          <Stat label={copy.lateCancels} value={record.lateCancellations} />
-          <Stat label={copy.noShows} value={record.noShows} />
+        <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+          <span
+            aria-hidden="true"
+            style={{
+              display: "grid",
+              placeItems: "center",
+              width: 54,
+              height: 54,
+              flexShrink: 0,
+              borderRadius: 18,
+              background: "var(--accent-soft)",
+              color: "var(--accent-strong)",
+              fontFamily: "Rubik, sans-serif",
+              fontSize: 22,
+            }}
+          >
+            {record.user.name.trim().charAt(0) || "?"}
+          </span>
+          <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+            <h1 style={{ fontSize: 21 }}>{record.user.name}</h1>
+            <span className="tab" dir="ltr" style={{ fontSize: 13, color: "var(--muted)" }}>
+              {record.user.phone}
+            </span>
+          </span>
         </div>
 
-        <span className="label">{copy.history}</span>
-        {record.appointments.length === 0 ? (
+        {/* Not on the canvas: what an owner reaches for when a customer needs
+            ringing back. */}
+        <PhoneActions
+          phone={record.user.phone}
+          labels={{ call: copy.callCustomer, copy: copy.copyPhone, copied: copy.copied }}
+        />
+
+        <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 11 }}>
+          <Count label={copy.since} value={earliest === undefined ? "—" : dateOnly(earliest.startAt)} />
+          <Count label={copy.total} value={record.appointments.length} />
+          <Count
+            label={copy.lateCancels}
+            value={record.lateCancellations}
+            // The one number worth catching an eye, and only when there is one.
+            tone={record.lateCancellations > 0 ? "var(--caution)" : undefined}
+          />
+          <Count label={copy.noShows} value={record.noShows} />
+        </Card>
+
+        {upcoming.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <span style={{ fontSize: 12, color: "var(--faint)" }}>{copy.upcoming}</span>
+            {upcoming.map((appointment) => (
+              <button
+                key={appointment.id}
+                className="card"
+                onClick={() => openable(appointment)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  width: "100%",
+                  padding: "13px 14px",
+                }}
+              >
+                <span
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 3,
+                    textAlign: "start",
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    className="tab"
+                    style={{ fontSize: 14.5, fontWeight: 600, fontFamily: "Rubik, sans-serif" }}
+                  >
+                    {dayAndTime(appointment.startAt)}
+                  </span>
+                  <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
+                    {appointment.serviceName} · {appointment.durationMinutes} {copy.minutesShort}
+                  </span>
+                </span>
+                <Chevron direction={direction} />
+              </button>
+            ))}
+            <span className="hint">{copy.upcomingHint}</span>
+          </div>
+        )}
+
+        <span style={{ fontSize: 12, color: "var(--faint)" }}>{copy.history}</span>
+        {history.length === 0 ? (
           <Empty title={copy.noAppointments} body={copy.customerScopeNote} />
         ) : (
-          record.appointments.map((appointment) => (
+          history.map((appointment) => (
             <button
               key={appointment.id}
-              style={{ textAlign: "start" }}
-              // The same actions as the calendar, from where the owner is
-              // actually looking: a customer rings up, and the appointment is
-              // in front of you rather than three taps into a date.
-              onClick={() =>
-                setOpen({
-                  ...appointment,
-                  customerName: record.user.name,
-                  customerPhone: record.user.phone,
-                })
-              }
+              onClick={() => openable(appointment)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 0",
+                borderBottom: "1px solid var(--line)",
+                width: "100%",
+                textAlign: "start",
+              }}
             >
-              <Card style={{ width: "100%", display: "flex", alignItems: "center", gap: 10 }}>
-                <span
-                  className={
-                    isCancelled(appointment)
-                      ? "cancelled"
-                      : isSpent(appointment)
-                        ? "spent"
-                        : undefined
-                  }
-                  style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}
-                >
-                  <span style={{ fontWeight: 500 }}>{appointment.serviceName}</span>
-                  <span className="hint">{when(appointment.startAt)}</span>
-                </span>
+              <span className="tab" style={{ fontSize: 13, width: 92, flexShrink: 0 }}>
+                {dateOnly(appointment.startAt)}
+              </span>
+              {/* The tag says what happened; the strike shows it. Only for a
+                  cancellation — the rest of this list is simply the past, and
+                  striking all of it would say nothing. */}
+              <span
+                className={isCancelled(appointment) ? "cancelled" : undefined}
+                style={{ fontSize: 13.5, minWidth: 0 }}
+              >
+                {appointment.serviceName}
+              </span>
+              <span style={{ marginInlineStart: "auto", flexShrink: 0 }}>
                 <StatusTag appointment={appointment} copy={copy} />
-              </Card>
+              </span>
             </button>
           ))
         )}
 
-        <Note>{copy.customerScopeNote}</Note>
+        <p className="hint" style={{ margin: 0 }}>{copy.customerScopeNote}</p>
       </main>
 
       <AppointmentSheet
@@ -190,23 +306,45 @@ function CustomerPage({ customerId }: { customerId: string }) {
   );
 }
 
-const Stat = ({ label, value }: { label: string; value: number }) => (
-  <div
-    style={{
-      display: "flex",
-      flexDirection: "column",
-      gap: 2,
-      alignItems: "center",
-      padding: "12px 6px",
-      borderRadius: 14,
-      background: "var(--sunken)",
-    }}
-  >
-    <span className="tab" style={{ fontSize: 20, fontFamily: "Rubik, sans-serif", fontWeight: 600 }}>
+const Count = ({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  tone?: string | undefined;
+}) => (
+  <span style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+    <span style={{ color: "var(--faint)" }}>{label}</span>
+    <span className="tab" style={{ fontWeight: 500, ...(tone === undefined ? {} : { color: tone }) }}>
       {value}
     </span>
-    <span className="hint" style={{ textAlign: "center", fontSize: 11 }}>{label}</span>
-  </div>
+  </span>
+);
+
+/** Points the way the reader is going, which is not always right. */
+const Chevron = ({ direction }: { direction: "rtl" | "ltr" }) => (
+  <svg
+    width="17"
+    height="17"
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden="true"
+    style={{
+      marginInlineStart: "auto",
+      flexShrink: 0,
+      transform: direction === "rtl" ? "scaleX(-1)" : undefined,
+    }}
+  >
+    <path
+      d="m9 6 6 6-6 6"
+      stroke="var(--faint)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
 );
 
 export default function Page({

@@ -413,11 +413,33 @@ test.describe("a customer's own page", () => {
     // A page of its own, not a sheet over the list.
     await expect(page).toHaveURL(/\/manage\/customers\//, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "דנה כהן" })).toBeVisible();
+    // The canvas's card: the counts read as label and value, "customer since"
+    // among them, rather than a row of tiles.
+    await expect(page.getByText("לקוח מאז")).toBeVisible();
+    await expect(page.getByText("היסטוריית התורים")).toBeVisible();
 
     // The number dials, and can be taken away without transcribing it.
     await expect(page.getByRole("link", { name: new RegExp(customerPhone.replace("+", "\\+")) }))
       .toHaveAttribute("href", `tel:${customerPhone}`);
     await expect(page.getByRole("button", { name: "העתקה" })).toBeVisible();
+  });
+
+  test("going back returns to the customers list, not the calendar", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBookingFor(ownerPhone, uniquePhone());
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "לקוחות", exact: true }).click();
+    await page.getByText("דנה כהן").first().click();
+    await expect(page).toHaveURL(/\/manage\/customers\//, { timeout: 15_000 });
+
+    await page.getByRole("button", { name: "לקוחות" }).first().click();
+
+    // The list they left, not the day view the app opens on.
+    await expect(page).toHaveURL(/tab=customers/, { timeout: 15_000 });
+    await expect(page.getByPlaceholder("חיפוש לפי שם או טלפון")).toBeVisible();
   });
 
   test("an appointment can be cancelled from the customer's page", async ({ page, context }) => {

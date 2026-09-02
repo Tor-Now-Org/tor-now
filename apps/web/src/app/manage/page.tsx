@@ -21,7 +21,8 @@ import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
 import { Button, Card, Empty, Note, Sheet, Spinner } from "@/components/ui.tsx";
 
-type Tab = "day" | "schedule" | "business" | "customers";
+const TABS = ["day", "schedule", "business", "customers"] as const;
+type Tab = (typeof TABS)[number];
 
 /**
  * The owner application. The same person, the same sign-in — only the context
@@ -34,7 +35,15 @@ function ManageApp() {
   const params = useSearchParams();
   const { token, user, loading } = useSession();
 
-  const [tab, setTab] = useState<Tab>("day");
+  /**
+   * The tab is in the URL so a screen can send the owner back to the one they
+   * came from. Returning somebody to a different screen than the one they left
+   * is its own small betrayal, and the customer page leaves from the list.
+   */
+  const requestedTab = params.get("tab");
+  const [tab, setTab] = useState<Tab>(() =>
+    TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "day",
+  );
   const [businesses, setBusinesses] = useState<BusinessDto[] | null>(null);
   const [business, setBusiness] = useState<BusinessDto | null>(null);
   const [resources, setResources] = useState<ResourceDto[]>([]);

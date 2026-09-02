@@ -235,35 +235,71 @@ export const isSpent = (appointment: {
 export const StatusTag = ({
   appointment,
   copy,
+  nameUpcoming,
 }: {
   appointment: { status: AppointmentStatus; endAt: string; lateCancellation: boolean };
-  copy: { lateTag: string; noShowTag: string; cancelledTag: string; finishedTag: string };
+  copy: {
+    lateTag: string;
+    noShowTag: string;
+    cancelledTag: string;
+    happened: string;
+    booked: string;
+  };
+  /** The canvas's customer card labels an upcoming one too; a day's list does not. */
+  nameUpcoming?: boolean;
 }) => {
   const outcome = outcomeOfDto(appointment);
   if (outcome === "NO_SHOW") return <Tag text={copy.noShowTag} tone="caution" />;
   if (outcome === "CANCELLED") return <Tag text={copy.cancelledTag} tone="critical" />;
-  // Nobody marked this finished; the clock did. It is said quietly for the
-  // same reason — it is the ordinary end of an appointment, not an incident.
-  if (outcome === "FINISHED") return <Tag text={copy.finishedTag} tone="spent" />;
   if (appointment.lateCancellation) return <Tag text={copy.lateTag} tone="caution" />;
-  return null;
+  // Nobody marked this attended; the clock did. Said quietly, because it is the
+  // ordinary end of an appointment rather than an incident.
+  if (outcome === "FINISHED") return <Tag text={copy.happened} tone="neutral" />;
+  return nameUpcoming === true ? <Tag text={copy.booked} tone="positive" /> : null;
 };
+
+/** The canvas's tag: a soft ground, a hairline of the same hue, and the hue. */
+const TONES: Readonly<
+  Record<string, { background: string; border: string; color: string }>
+> = Object.freeze({
+  positive: {
+    background: "var(--positive-soft)",
+    border: "1px solid oklch(58% 0.115 214/.28)",
+    color: "var(--positive)",
+  },
+  caution: {
+    background: "var(--caution-soft)",
+    border: "1px solid oklch(63% 0.125 65/.3)",
+    color: "var(--caution)",
+  },
+  critical: {
+    background: "var(--critical-soft)",
+    border: "1px solid oklch(55% 0.170 22/.25)",
+    color: "var(--critical)",
+  },
+  neutral: {
+    background: "var(--sunken)",
+    border: "1px solid var(--line)",
+    color: "var(--muted)",
+  },
+});
 
 const Tag = ({
   text,
   tone,
 }: {
   text: string;
-  tone: "caution" | "critical" | "spent";
+  tone: "caution" | "critical" | "neutral" | "positive";
 }) => (
   <span
     style={{
-      fontSize: 11.5,
-      padding: "4px 9px",
+      display: "inline-flex",
+      padding: "4px 11px",
       borderRadius: 999,
-      background: tone === "spent" ? "var(--sunken)" : `var(--${tone}-soft)`,
-      color: tone === "spent" ? "var(--faint)" : `var(--${tone})`,
+      fontSize: 11.5,
+      fontWeight: 500,
       whiteSpace: "nowrap",
+      ...TONES[tone],
     }}
   >
     {text}
