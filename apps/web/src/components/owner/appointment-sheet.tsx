@@ -19,6 +19,7 @@ import type {
 import { formatPrice, timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
+import { PhoneActions } from "./phone-actions.tsx";
 import { Button, Card, Critical, Note, Sheet, Spinner, Warning } from "../ui.tsx";
 
 /**
@@ -108,9 +109,45 @@ export const AppointmentSheet = ({
               value={`${timeIn(appointment.startAt, business.timeZone, language)}–${timeIn(appointment.endAt, business.timeZone, language)}`}
             />
             <Detail label={copy.price} value={formatPrice(appointment.priceMinor, language, "—")} />
-            <Detail
-              label={copy.searchCustomer}
-              value={`${appointment.customerName} · ${appointment.customerPhone}`}
+          </Card>
+
+          {/* The customer, as a person rather than as a row.
+              This was a labelled field whose label was the customers list's
+              search placeholder — "search by name or phone" — reused because
+              it happened to contain both words. It read as an instruction, and
+              the name and the number were run together on one line with a dot
+              between them. They are what an owner looks at when the phone
+              rings, so they are the thing on the card, and the number is
+              ready to ring or to take away. */}
+          <Card style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span
+              aria-hidden="true"
+              style={{
+                display: "grid",
+                placeItems: "center",
+                width: 42,
+                height: 42,
+                flexShrink: 0,
+                borderRadius: 14,
+                background: "var(--accent-soft)",
+                color: "var(--accent-strong)",
+                fontFamily: "Rubik, sans-serif",
+                fontSize: 17,
+              }}
+            >
+              {appointment.customerName.trim().charAt(0) || "?"}
+            </span>
+            <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+              <span style={{ fontWeight: 600, fontSize: 15.5 }}>
+                {appointment.customerName}
+              </span>
+              <span className="tab" dir="ltr" style={{ fontSize: 13, color: "var(--muted)" }}>
+                {appointment.customerPhone}
+              </span>
+            </span>
+            <PhoneActions
+              phone={appointment.customerPhone}
+              labels={{ call: copy.callCustomer, copy: copy.copyPhone, copied: copy.copied }}
             />
           </Card>
 

@@ -415,6 +415,14 @@ test.describe("finding one appointment", () => {
     await page.getByText("אורית שגב").click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("button", { name: "העברת התור לשעה אחרת" })).toBeVisible();
+
+    // The customer reads as a person: a name, a number under it, and the two
+    // things an owner does with a number. Not a field labelled with the
+    // customers list's search placeholder, which is what it used to be.
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("אורית שגב")).toBeVisible();
+    await expect(sheet.getByText("חיפוש לפי שם או טלפון")).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: /העתקה/ })).toBeVisible();
   });
 
   test("a phone number finds it too, and says so when nothing matches", async ({ page }) => {
