@@ -297,29 +297,85 @@ test.describe("the month view", () => {
     await expect(page.getByText("דנה כהן").first()).toBeVisible();
   });
 
-  test("jumps straight to a date without walking there", async ({ page }) => {
-    const ownerPhone = uniquePhone();
+});
+
+test.describe("a customer's own page", () => {
+  /** A business, a customer, and one booking between them. */
+  const aBookingFor = async (ownerPhone: string, customerPhone: string) => {
     const shop = await aBusinessWithOpenHours({
-      name: `קפיצה ${Date.now()}`,
+      name: `לקוחות ${Date.now()}`,
       ownerPhone,
     });
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone: customerPhone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: {
+        phone: customerPhone,
+        code,
+        name: { givenName: "דנה", familyName: "כהן" },
+      },
+    });
+    const [day] = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${today()}&to=${today()}`,
+    );
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: day?.slots[0]?.startAt ?? "",
+        customerNote: null,
+      },
+    });
+    return shop;
+  };
+
+  test("opens as a page, with the number ready to call or copy", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const customerPhone = uniquePhone();
+    const shop = await aBookingFor(ownerPhone, customerPhone);
+
     await signInDirectly(page, ownerPhone, "בעלים");
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
+    await page.getByRole("button", { name: "לקוחות", exact: true }).click();
+    await page.getByText("דנה כהן").first().click();
 
-    // Far enough ahead that the day strip does not reach it.
-    const far = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
-    await page.locator("#jump-to-date").fill(far);
+    // A page of its own, not a sheet over the list.
+    await expect(page).toHaveURL(/\/manage\/customers\//, { timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "דנה כהן" })).toBeVisible();
 
-    await page.getByRole("button", { name: "חודש", exact: true }).click();
-    // The month followed the date rather than staying where it was.
-    await expect(page.getByRole("button", { name: new RegExp(`^${far}`) })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-      { timeout: 15_000 },
-    );
+    // The number dials, and can be taken away without transcribing it.
+    await expect(page.getByRole("link", { name: new RegExp(customerPhone.replace("+", "\\+")) }))
+      .toHaveAttribute("href", `tel:${customerPhone}`);
+    await expect(page.getByRole("button", { name: "העתקה" })).toBeVisible();
+  });
+
+  test("an appointment can be cancelled from the customer's page", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const ownerPhone = uniquePhone();
+    const shop = await aBookingFor(ownerPhone, uniquePhone());
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "לקוחות", exact: true }).click();
+    await page.getByText("דנה כהן").first().click();
+    await expect(page).toHaveURL(/\/manage\/customers\//, { timeout: 15_000 });
+
+    // The same actions the calendar offers, from where the owner is looking.
+    await page.getByText(shop.service.name).first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("button", { name: "ביטול התור" }).click();
+
+    // The history keeps it, struck through, exactly as the customer sees it.
+    await expect(page.locator(".cancelled").first()).toBeVisible({ timeout: 15_000 });
   });
 });
 

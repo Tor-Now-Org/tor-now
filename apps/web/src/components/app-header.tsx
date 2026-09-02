@@ -41,7 +41,7 @@ export const AppHeader = ({
       {onBack !== undefined ? (
         <button
           onClick={onBack}
-          style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 44 }}
+          style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 44, flexShrink: 0 }}
         >
           <svg
             width="19"
@@ -65,6 +65,23 @@ export const AppHeader = ({
         <h1 style={{ fontSize: 17 }}>{title}</h1>
       ) : (
         <Logo />
+      )}
+
+      {/* A detail page wants both: the way back, and what you are looking at.
+          Previously the title was only reachable when there was nothing to go
+          back to, which is the one case a page does not have a subject. */}
+      {onBack !== undefined && title !== undefined && (
+        <h1
+          style={{
+            fontSize: 17,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {title}
+        </h1>
       )}
 
       <span
