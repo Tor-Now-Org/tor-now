@@ -139,10 +139,10 @@ test.describe("the owner's day", () => {
     await page.getByRole("button", { name: /לא הגיע/ }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("button", { name: "העברת התור לשעה אחרת" })).toBeVisible();
-    // The appointment has not ended yet, so the mark is not on offer — and the
-    // reason is on screen rather than waiting behind a click that fails.
-    await expect(page.getByRole("button", { name: "סימון שלא הגיע" })).toBeDisabled();
-    await expect(page.getByText(/רק אחרי שהתור הסתיים/)).toBeVisible();
+    // The appointment has not started, so there is nothing to say yet about
+    // whether anybody turned up: the control is absent rather than offered and
+    // refused, and nothing explains an absence that needs no explaining.
+    await expect(page.getByRole("button", { name: "סימון שלא הגיע" })).toHaveCount(0);
   });
 });
 
@@ -359,7 +359,7 @@ test.describe("an appointment whose time has passed", () => {
     // The one thing it cannot be given is a different time.
     await expect(page.getByRole("button", { name: "העברה לשעה אחרת" })).toHaveCount(0);
     await expect(page.getByText(/כבר התחיל/)).toBeVisible();
-    // The two that remain.
+    // The two that remain, both on offer because the time has come and gone.
     await expect(page.getByRole("button", { name: "סימון שלא הגיע" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "ביטול התור" })).toBeEnabled();
   });
@@ -418,6 +418,14 @@ test.describe("finding one appointment", () => {
     await page.getByText("אורית שגב").click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("button", { name: "העברת התור לשעה אחרת" })).toBeVisible();
+
+    // The customer reads as a person: a name, a number under it, and the two
+    // things an owner does with a number. Not a field labelled with the
+    // customers list's search placeholder, which is what it used to be.
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("אורית שגב")).toBeVisible();
+    await expect(sheet.getByText("חיפוש לפי שם או טלפון")).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: /העתקה/ })).toBeVisible();
   });
 
   test("a phone number finds it too, and says so when nothing matches", async ({ page }) => {

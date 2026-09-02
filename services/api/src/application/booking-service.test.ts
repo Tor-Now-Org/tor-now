@@ -259,14 +259,29 @@ describe("rescheduling", () => {
       ),
     ).rejects.toMatchObject({ code: "ALREADY_STARTED" });
 
-    // What is left to do with it is to record what happened.
-    await expect(
-      test.services.booking.markNoShow(shop.owner.actor, appointment.id),
-    ).rejects.toThrow(/ended/);
-    test.travelTo(parseInstant(TUESDAY_AT("10:00")));
+    // What is left to do with it is to record what happened — and that is
+    // available from the appointed time, not once the slot has run out.
     expect(
       (await test.services.booking.markNoShow(shop.owner.actor, appointment.id)).status,
     ).toBe("NO_SHOW");
+  });
+
+  it("will not take a no show before the appointment has started", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000004");
+    const appointment = await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    test.travelTo(parseInstant(TUESDAY_AT("08:59")));
+    await expect(
+      test.services.booking.markNoShow(shop.owner.actor, appointment.id),
+    ).rejects.toThrow(/started/);
   });
 
   it("is still allowed a minute before it starts", async () => {
