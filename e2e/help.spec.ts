@@ -23,26 +23,24 @@ test.describe("support", () => {
     await expect(page.getByText("נכנסים לתור ולוחצים ביטול", { exact: false })).toBeVisible();
   });
 
-  test("carries the chosen topic and the message into WhatsApp", async ({ page }) => {
+  test("offers WhatsApp and email, each ready to open", async ({ page }) => {
     await page.goto("/support");
 
-    await page.getByRole("button", { name: "יש לי עסק", exact: true }).click();
-    await page.getByLabel("מה קרה?").fill("צריך לשנות שעות פתיחה");
+    // Both are real destinations, not text to copy out by hand.
+    const whatsapp = page.getByRole("link", { name: /וואטסאפ/ });
+    await expect(whatsapp).toHaveAttribute("href", /^https:\/\/wa\.me\/\d+$/);
 
-    const send = page.getByRole("link", { name: /וואטסאפ עם ההודעה/ });
-    const href = await send.getAttribute("href");
-    expect(href).toContain("wa.me");
-    expect(decodeURIComponent(href ?? "")).toContain("יש לי עסק: צריך לשנות שעות פתיחה");
+    const email = page.getByRole("link", { name: /אימייל/ });
+    await expect(email).toHaveAttribute("href", /^mailto:.+@.+/);
   });
 
-  test("will not hand over an empty message", async ({ page }) => {
+  test("asks nobody to fill in a form", async ({ page }) => {
+    // Support is two ways of reaching a person. A message box here would
+    // promise a reply from somewhere nothing reads.
     await page.goto("/support");
 
-    // No message, no destination: an empty hand-off would open WhatsApp on a
-    // blank conversation, which is worse than not opening it.
-    const send = page.getByText("פתיחת וואטסאפ עם ההודעה");
-    await expect(send).toHaveAttribute("aria-disabled", "true");
-    expect(await send.getAttribute("href")).toBeNull();
+    await expect(page.locator("textarea")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /שליחה|לשלוח/ })).toHaveCount(0);
   });
 
   test("rides in the header of the screen somebody is stuck on", async ({ page }) => {

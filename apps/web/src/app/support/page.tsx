@@ -2,12 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { TEXT_RULES } from "@tor-now/domain";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { SUPPORT, emailLink, whatsappLink } from "@/lib/support.ts";
-import { useFieldProblem } from "@/lib/use-field-problem.ts";
 import { AppHeader } from "@/components/app-header.tsx";
-import { Card, MultilineField, Note } from "@/components/ui.tsx";
+import { Card } from "@/components/ui.tsx";
 import { Wordmark } from "@/components/logo.tsx";
 
 /**
@@ -26,21 +24,8 @@ type Question = (typeof QUESTIONS)[number];
 export default function SupportPage() {
   const copy = useCopy("support");
   const router = useRouter();
-  const problem = useFieldProblem();
 
   const [open, setOpen] = useState<Question | null>(null);
-  const [topic, setTopic] = useState<"customer" | "owner" | "bug">("customer");
-  const [message, setMessage] = useState("");
-
-  const topics = [
-    { id: "customer", label: copy.topicCustomer },
-    { id: "owner", label: copy.topicOwner },
-    { id: "bug", label: copy.topicBug },
-  ] as const;
-
-  /** What the message says before the person's own words. */
-  const composed = () =>
-    `${topics.find((candidate) => candidate.id === topic)?.label ?? ""}: ${message.trim()}`;
 
   return (
     <>
@@ -218,60 +203,6 @@ export default function SupportPage() {
               <span style={{ fontSize: 14.5, fontWeight: 600 }}>{copy.email}</span>
               <span className="tab hint" dir="ltr">{SUPPORT.email}</span>
             </span>
-          </a>
-        </div>
-
-        {/*
-         * The message is composed here and handed to WhatsApp, rather than
-         * posted to a queue of our own. A ticket the person cannot see, in a
-         * system with nowhere to show it to them, would be a worse promise than
-         * a conversation they keep on their own phone.
-         */}
-        <span className="label">{copy.writeLabel}</span>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            {topics.map((candidate) => {
-              const picked = candidate.id === topic;
-              return (
-                <button
-                  key={candidate.id}
-                  className="chip"
-                  aria-pressed={picked}
-                  onClick={() => setTopic(candidate.id)}
-                  style={{
-                    background: picked ? "var(--accent-soft)" : "var(--raised)",
-                    color: picked ? "var(--accent-strong)" : "var(--muted)",
-                    border: `1px solid ${picked ? "var(--accent)" : "var(--line)"}`,
-                  }}
-                >
-                  {candidate.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <MultilineField
-            id="support-message"
-            label={copy.messageLabel}
-            placeholder={copy.messagePlaceholder}
-            value={message}
-            problem={problem.text(message, TEXT_RULES.note, message !== "")}
-            onChange={(event) => setMessage(event.target.value)}
-          />
-
-          <Note>{copy.replyNote}</Note>
-
-          {/* Without words there is nowhere to go: the control keeps its place
-              but carries no destination, rather than opening WhatsApp on a
-              blank conversation. */}
-          <a
-            {...(message.trim() === ""
-              ? { "aria-disabled": true }
-              : { href: whatsappLink(composed()), target: "_blank", rel: "noreferrer" })}
-            className={message.trim() === "" ? "quiet" : "primary"}
-            style={{ textDecoration: "none" }}
-          >
-            {copy.send}
           </a>
         </div>
 
