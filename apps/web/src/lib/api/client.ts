@@ -12,7 +12,9 @@ import type {
   CalendarAppointmentDto,
   CalendarDayDto,
   CustomerRecordDto,
+  CustomerDto,
   DayAvailabilityDto,
+  MyAppointmentDto,
   OverrideDto,
   PaymentDto,
   RequestCodeDto,
@@ -210,7 +212,7 @@ export const api = {
     request<void>("/me", { method: "DELETE", token }),
 
   myAppointments: (token: string) =>
-    request<AppointmentDto[]>("/me/appointments", { token }),
+    request<MyAppointmentDto[]>("/me/appointments", { token }),
 
   myBusinesses: (token: string) =>
     request<BusinessDto[]>("/me/businesses", { token }),
@@ -482,7 +484,18 @@ export const api = {
     }>(`/businesses/${businessId}/subscription`, { token }),
 
   listCustomers: (token: string, businessId: string) =>
-    request<UserDto[]>(`/businesses/${businessId}/customers`, { token }),
+    request<CustomerDto[]>(`/businesses/${businessId}/customers`, { token }),
+
+  setCustomerBlocked: (
+    token: string,
+    businessId: string,
+    customerId: string,
+    blocked: boolean,
+  ) =>
+    request<{ blocked: boolean }>(
+      `/businesses/${businessId}/customers/${customerId}/blocked`,
+      { method: "PATCH", body: { blocked }, token },
+    ),
 
   customerRecord: (token: string, businessId: string, customerId: string) =>
     request<CustomerRecordDto>(

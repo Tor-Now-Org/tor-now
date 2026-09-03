@@ -134,6 +134,12 @@ export type MembershipRepository = {
   ): Promise<Membership>;
   /** Creates a customer Membership only if one does not already exist. */
   ensureCustomer(userId: UserId, businessId: BusinessId): Promise<Membership>;
+  /** Blocks or unblocks a customer at one Business. */
+  setBlocked(
+    userId: UserId,
+    businessId: BusinessId,
+    blockedAt: Instant | null,
+  ): Promise<Membership>;
 };
 
 export type ResourceRepository = {
@@ -258,6 +264,12 @@ export type BookedAppointment = {
   readonly customerPhone: string;
 };
 
+/** A customer's own appointment, with the business named for display (e.g. "add to calendar"). */
+export type AppointmentWithBusiness = {
+  readonly appointment: Appointment;
+  readonly businessName: string;
+};
+
 /** An appointment and everyone a reminder about it needs to name. */
 export type AppointmentToRemind = {
   readonly appointment: Appointment;
@@ -325,6 +337,11 @@ export type AppointmentRepository = {
     customerId: UserId,
     page: Page,
   ): Promise<readonly Appointment[]>;
+  /** As listForCustomer, with the business name attached for a customer-facing screen. */
+  listForCustomerWithBusiness(
+    customerId: UserId,
+    page: Page,
+  ): Promise<readonly AppointmentWithBusiness[]>;
   listForCustomerAtBusiness(
     customerId: UserId,
     businessId: BusinessId,

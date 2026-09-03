@@ -38,6 +38,32 @@ describe("booking", () => {
     expect(membership?.role).toBe("CUSTOMER");
   });
 
+  it("refuses a booking from a customer this business has blocked", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const request = {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    };
+
+    // Booking is what makes them a customer, so they must book once first.
+    await test.services.booking.book(customer.actor, request);
+    await test.services.calendar.setCustomerBlocked(
+      shop.owner.actor,
+      shop.business.id,
+      customer.user.id,
+      true,
+    );
+
+    await expect(
+      test.services.booking.book(customer.actor, { ...request, startAt: TUESDAY_AT("10:00") }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("refuses a time the engine does not offer", async () => {
     const shop = await anEstablishedBusiness(test);
     const customer = await signIn(test, "+972500000002");

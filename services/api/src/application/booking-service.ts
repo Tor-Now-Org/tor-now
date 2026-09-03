@@ -3,8 +3,10 @@ import {
   clearNoShow,
   displayName,
   END_OF_DAY,
+  forbidden,
   formatInstant,
   instantToZoned,
+  isBlocked,
   markNoShow,
   MIDNIGHT,
   notFound,
@@ -24,7 +26,11 @@ import {
 } from "@tor-now/domain";
 import { PAGINATION } from "../config.ts";
 import { TEMPLATES, type OutboundMessage } from "../ports/notifier.ts";
-import type { Page, Repositories } from "../ports/repositories.ts";
+import type {
+  AppointmentWithBusiness,
+  Page,
+  Repositories,
+} from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { loadContext } from "./availability-service.ts";
 import { requireOwnership, requireUser } from "./authorization.ts";
@@ -118,8 +124,15 @@ export const bookingService = (dependencies: {
         );
 
         // Booking is what makes the customer relationship (CONTEXT.md:
-        // "Customer" is always relative to a Business).
-        await repositories.memberships.ensureCustomer(customerId, context.business.id);
+        // "Customer" is always relative to a Business). A Business that has
+        // blocked this customer keeps the row and refuses the booking.
+        const membership = await repositories.memberships.ensureCustomer(
+          customerId,
+          context.business.id,
+        );
+        if (isBlocked(membership)) {
+          throw forbidden("This business is not accepting bookings from you");
+        }
 
         const appointment = await repositories.appointments.create(draft);
         const customer = await repositories.users.findById(customerId);
@@ -271,10 +284,10 @@ export const bookingService = (dependencies: {
     async myAppointments(
       actor: Actor,
       page: Page = { limit: PAGINATION.defaultPageSize, offset: 0 },
-    ): Promise<readonly Appointment[]> {
+    ): Promise<readonly AppointmentWithBusiness[]> {
       const userId = requireUser(actor);
       return unitOfWork.run(actor, ({ repositories }) =>
-        repositories.appointments.listForCustomer(userId, page),
+        repositories.appointments.listForCustomerWithBusiness(userId, page),
       );
     },
   };

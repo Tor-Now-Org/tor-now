@@ -252,7 +252,7 @@ describe("the owner's customers", () => {
       shop.owner.actor,
       shop.business.id,
     );
-    expect(customers.map(displayName)).toEqual(["דנה"]);
+    expect(customers.map((customer) => displayName(customer.user))).toEqual(["דנה"]);
   });
 
   it("shows an owner who booked at their own business", async () => {
@@ -275,7 +275,7 @@ describe("the owner's customers", () => {
       shop.owner.actor,
       shop.business.id,
     );
-    expect(customers.map((customer) => customer.id)).toContain(shop.owner.user.id);
+    expect(customers.map((customer) => customer.user.id)).toContain(shop.owner.user.id);
   });
 
   it("shows a customer whose only appointment was cancelled", async () => {
@@ -298,7 +298,7 @@ describe("the owner's customers", () => {
       shop.owner.actor,
       shop.business.id,
     );
-    expect(customers.map(displayName)).toContain("יעל");
+    expect(customers.map((customer) => displayName(customer.user))).toContain("יעל");
   });
 
   it("counts a late cancellation against the record", async () => {

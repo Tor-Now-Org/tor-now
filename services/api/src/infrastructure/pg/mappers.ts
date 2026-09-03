@@ -112,6 +112,7 @@ export const toMembership = (row: Row): Membership => ({
   businessId: asId(text(row["business_id"])),
   role: text(row["role"]) as Membership["role"],
   createdAt: toInstant(row["created_at"]),
+  blockedAt: nullableInstant(row["blocked_at"]),
 });
 
 export const toResource = (row: Row): Resource => ({

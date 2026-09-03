@@ -102,6 +102,10 @@ export type AppointmentDto = {
   createdAt: string;
 };
 
+export type MyAppointmentDto = AppointmentDto & {
+  businessName: string;
+};
+
 export type CalendarAppointmentDto = AppointmentDto & {
   customerName: string;
   customerPhone: string;
@@ -163,8 +167,19 @@ export type CalendarDayDto = {
   blocks: BlockDto[];
 };
 
+/** A User as one Business sees them: the person, plus their standing there. */
+export type CustomerDto = UserDto & { blocked: boolean };
+
 export type CustomerRecordDto = {
   user: UserDto;
+  /** Blocked from booking at this Business. Per-business, like the record itself. */
+  blocked: boolean;
+  /**
+   * Whether blocking is even a question here. False for an owner who booked at
+   * their own business: they reach this page through the customer list, but
+   * hold the OWNER role and cannot be barred from their own chair.
+   */
+  blockable?: boolean;
   appointments: AppointmentDto[];
   lateCancellations: number;
   noShows: number;

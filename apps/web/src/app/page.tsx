@@ -10,18 +10,20 @@ import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import {
   BottomNav,
   CalendarIcon,
+  ClockIcon,
   SearchIcon,
 } from "@/components/bottom-nav.tsx";
 import { BookingFlow } from "@/components/customer/booking-flow.tsx";
 import { BusinessSearch } from "@/components/customer/business-search.tsx";
 import { MyAppointments } from "@/components/customer/my-appointments.tsx";
 import { Profile } from "@/components/customer/profile.tsx";
+import { VisitedBusinesses } from "@/components/customer/visited-businesses.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
 import { Button, Card, Note, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 
-type Screen = "search" | "business" | "mine" | "profile";
+type Screen = "search" | "business" | "mine" | "visited" | "profile";
 
 /**
  * The customer application. One identity and two contexts: the drawer offers
@@ -64,6 +66,25 @@ function CustomerAppInner() {
   }, [token]);
 
   if (loading) return <Spinner />;
+
+  /**
+   * Opening a business from a list, which needs its full profile first.
+   *
+   * Written once because two lists want it, and awaited rather than left to
+   * float: a rejected fetch used to make the tap do nothing at all, with the
+   * failure going nowhere a person or a log could see it.
+   */
+  const openBusiness = (businessId: string) => {
+    void api
+      .businessProfile(businessId)
+      .then((profile) => {
+        setBusiness(profile.business);
+        setScreen("business");
+      })
+      .catch((cause: unknown) => {
+        console.error("[business] could not be opened", { businessId, cause });
+      });
+  };
 
   const requireSession = (next: Screen) => {
     if (token === null) {
@@ -120,16 +141,26 @@ function CustomerAppInner() {
         {showingBusiness && (
           <BookingFlow business={business} onFinished={() => setScreen("mine")} />
         )}
-        {screen === "mine" && <MyAppointments />}
+        {screen === "mine" && (
+          <MyAppointments
+            onOpenBusiness={openBusiness}
+          />
+        )}
+        {screen === "visited" && (
+          <VisitedBusinesses
+            onOpenBusiness={openBusiness}
+          />
+        )}
         {screen === "profile" && <Profile onSignedOut={() => setScreen("search")} />}
       </main>
 
       <BottomNav
         current={screen === "business" ? "search" : screen === "profile" ? "mine" : screen}
-        onSelect={(id) => (id === "mine" ? requireSession("mine") : setScreen("search"))}
+        onSelect={(id) => (id === "search" ? setScreen("search") : requireSession(id as Screen))}
         items={[
           { id: "search", label: copy.tabSearch, icon: <SearchIcon /> },
           { id: "mine", label: copy.tabMine, icon: <CalendarIcon /> },
+          { id: "visited", label: copy.tabVisited, icon: <ClockIcon /> },
         ]}
       />
 

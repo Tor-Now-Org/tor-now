@@ -134,7 +134,7 @@ export const createApp = (services: Services) => {
   app.get("/me/appointments", async (context) => {
     const page = parseQuery(context, schema.pageSchema);
     const appointments = await services.booking.myAppointments(actorOf(context), page);
-    return context.json(appointments.map(wire.appointmentOut));
+    return context.json(appointments.map(wire.appointmentWithBusinessOut));
   });
 
   app.get("/me/businesses", async (context) => {
@@ -593,7 +593,18 @@ const ownerRoutes = (services: Services) => {
       actorOf(context),
       idParam(context, "businessId"),
     );
-    return context.json(customers.map(wire.userOut));
+    return context.json(customers.map(wire.customerOut));
+  });
+
+  owner.patch("/:businessId/customers/:customerId/blocked", async (context) => {
+    const { blocked } = await parseBody(context, schema.blockedFlagSchema);
+    const membership = await services.calendar.setCustomerBlocked(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "customerId"),
+      blocked,
+    );
+    return context.json({ blocked: membership.blockedAt !== null });
   });
 
   owner.get("/:businessId/customers/:customerId", async (context) => {
@@ -604,6 +615,8 @@ const ownerRoutes = (services: Services) => {
     );
     return context.json({
       user: wire.userOut(record.user),
+      blocked: record.blocked,
+      blockable: record.blockable,
       appointments: record.appointments.map(wire.appointmentOut),
       lateCancellations: record.lateCancellations,
       noShows: record.noShows,

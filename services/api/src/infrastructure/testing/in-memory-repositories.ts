@@ -313,6 +313,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           businessId,
           role,
           createdAt: now(),
+          blockedAt: null,
         };
         store.memberships = [...store.memberships, membership];
         return membership;
@@ -330,9 +331,22 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           businessId,
           role: "CUSTOMER",
           createdAt: now(),
+          blockedAt: null,
         };
         store.memberships = [...store.memberships, membership];
         return membership;
+      },
+      async setBlocked(userId, businessId, blockedAt) {
+        const existing = store.memberships.find(
+          (membership) =>
+            membership.userId === userId && membership.businessId === businessId,
+        );
+        if (existing === undefined) throw notFound("Membership", userId);
+        const updated: Membership = { ...existing, blockedAt };
+        store.memberships = store.memberships.map((membership) =>
+          membership === existing ? updated : membership,
+        );
+        return updated;
       },
     },
 
@@ -636,6 +650,19 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           .filter((appointment) => appointment.customerId === customerId)
           .sort((left, right) => right.startAt - left.startAt)
           .slice(page.offset, page.offset + page.limit);
+      },
+      async listForCustomerWithBusiness(customerId, page) {
+        return store.appointments
+          .filter((appointment) => appointment.customerId === customerId)
+          .sort((left, right) => right.startAt - left.startAt)
+          .slice(page.offset, page.offset + page.limit)
+          .map((appointment) => {
+            const business = store.businesses.find(
+              (candidate) => candidate.id === appointment.businessId,
+            );
+            if (business === undefined) throw notFound("Business", appointment.businessId);
+            return { appointment, businessName: business.name };
+          });
       },
       async listForCustomerAtBusiness(customerId, businessId) {
         return store.appointments.filter(

@@ -218,11 +218,10 @@ export const membershipRepository = (tx: Transaction): MembershipRepository => (
    * must not create a second one. The unique pair constraint settles the race
    * between two concurrent first bookings.
    *
-   * `do nothing` rather than a no-op `do update`: an update would need an
-   * update policy on membership, and there is deliberately none — a role is
-   * granted or removed, never edited in place. It also means an owner booking
-   * at their own business keeps the OWNER role rather than being demoted by
-   * their own booking.
+   * `do nothing` rather than a no-op `do update`: a role is granted or
+   * removed, never edited in place. It also means an owner booking at their
+   * own business keeps the OWNER role rather than being demoted by their own
+   * booking — and that a blocked customer re-booking does not clear the block.
    */
   async ensureCustomer(userId, businessId) {
     const inserted = await tx<Row[]>`
@@ -237,6 +236,15 @@ export const membershipRepository = (tx: Transaction): MembershipRepository => (
       select * from membership
       where user_id = ${userId} and business_id = ${businessId}`;
     return one(existing, toMembership, "Membership");
+  },
+
+  async setBlocked(userId, businessId, blockedAt) {
+    const rows = await tx<Row[]>`
+      update membership
+      set blocked_at = ${blockedAt === null ? null : new Date(blockedAt)}
+      where user_id = ${userId} and business_id = ${businessId}
+      returning *`;
+    return one(rows, toMembership, "Membership");
   },
 });
 

@@ -14,6 +14,7 @@ import {
   type BlockId,
   type BusinessId,
   type Clock,
+  type Customer,
   type LocalDate,
   type ResourceId,
   type User,
@@ -245,18 +246,55 @@ export const calendarService = ({
       // otherwise be missing from their own list. The memberships stay in the
       // union so that a relationship recorded without a surviving appointment
       // is not quietly dropped.
-      const [memberships, booked] = [
-        await repositories.memberships.listForBusiness(businessId, "CUSTOMER"),
-        await repositories.appointments.customerIdsFor(businessId),
-      ];
-      const ids = [
-        ...new Set([...memberships.map((membership) => membership.userId), ...booked]),
-      ];
+      const memberships = await repositories.memberships.listForBusiness(
+        businessId,
+        "CUSTOMER",
+      );
+      const booked = await repositories.appointments.customerIdsFor(businessId);
+      const asCustomer = new Map(
+        memberships.map((membership) => [membership.userId, membership] as const),
+      );
+      const ids = [...new Set([...asCustomer.keys(), ...booked])];
       const users = await loadCustomers(repositories, ids);
+
       return ids
-        .map((id) => users.get(id))
-        .filter((user): user is User => user !== undefined && user.deletedAt === null)
-        .sort(compareByName);
+        .map((id) => ({
+          user: users.get(id),
+          // Null for someone who has booked but holds no customer membership
+          // here — the owner. There is no standing to carry, and nothing to
+          // block: you cannot bar yourself from your own chair.
+          membership: asCustomer.get(id) ?? null,
+        }))
+        .filter(
+          (customer): customer is Customer =>
+            customer.user !== undefined && customer.user.deletedAt === null,
+        )
+        .sort((left, right) => compareByName(left.user, right.user));
+    });
+  },
+
+  /**
+   * Blocking is per-Business, like the Membership it is recorded on: the same
+   * person may be blocked here and welcome elsewhere. Existing appointments
+   * stand — a block stops the next booking, it does not cancel the last one.
+   */
+  async setCustomerBlocked(
+    actor: Actor,
+    businessId: BusinessId,
+    customerId: User["id"],
+    blocked: boolean,
+  ) {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      const membership = await repositories.memberships.find(customerId, businessId);
+      if (membership === null || membership.role !== "CUSTOMER") {
+        throw notFound("Customer", customerId);
+      }
+      return repositories.memberships.setBlocked(
+        customerId,
+        businessId,
+        blocked ? clock.now() : null,
+      );
     });
   },
 
@@ -282,6 +320,11 @@ export const calendarService = ({
 
       return {
         user,
+        blocked: membership.blockedAt !== null,
+        // An owner reaching their own record through the customer list holds
+        // the OWNER role, and setCustomerBlocked rightly refuses it. Say so
+        // here rather than offering a control that can only fail.
+        blockable: membership.role === "CUSTOMER",
         appointments,
         lateCancellations: appointments.filter(
           (appointment) => appointment.lateCancellation,

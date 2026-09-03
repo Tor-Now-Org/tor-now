@@ -230,7 +230,7 @@ export const Schedule = ({
       {layer === "blocks" && (
         <>
           <Note>{copy.blockNote}</Note>
-          {blocks.length === 0 && <Empty title={copy.noAppointments} body={copy.blockFormHint} />}
+          {blocks.length === 0 && <Empty title={copy.noBlocks} body={copy.blockFormHint} />}
           {blocks.map((block) => (
             <Card key={block.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>

@@ -4,10 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import { useRouter } from "next/navigation";
-import type { BusinessDto, UserDto } from "@/lib/api/types.ts";
+import type { BusinessDto, CustomerDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
+import { Card, Chip, Critical, Empty, Note, Spinner } from "../ui.tsx";
+
+/** Blocking is per-Business, so a standing is too: here, not everywhere. */
+type Standing = "ALL" | "ACTIVE" | "BLOCKED";
 
 /**
  * A Business's customers. "Customer" is always relative to a Business — the
@@ -25,8 +28,9 @@ export const Customers = ({
   const errorText = useErrorText();
   const router = useRouter();
 
-  const [customers, setCustomers] = useState<UserDto[] | null>(null);
+  const [customers, setCustomers] = useState<CustomerDto[] | null>(null);
   const [query, setQuery] = useState("");
+  const [standing, setStanding] = useState<Standing>("ALL");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -44,17 +48,34 @@ export const Customers = ({
   if (customers === null) return <Spinner />;
 
   const needle = query.trim().toLowerCase();
-  const shown =
-    needle === ""
-      ? customers
-      : customers.filter(
-          (customer) =>
-            customer.name.toLowerCase().includes(needle) ||
-            customer.phone.includes(needle),
-        );
+  const shown = customers.filter(
+    (customer) =>
+      (standing === "ALL" || customer.blocked === (standing === "BLOCKED")) &&
+      (needle === "" ||
+        customer.name.toLowerCase().includes(needle) ||
+        customer.phone.includes(needle)),
+  );
+
+  const filters = [
+    ["ALL", copy.allCustomers],
+    ["ACTIVE", copy.activeCustomer],
+    ["BLOCKED", copy.blockedCustomer],
+  ] as const;
 
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        {filters.map(([value, label]) => (
+          <Chip
+            key={value}
+            selected={standing === value}
+            onClick={() => setStanding(value)}
+          >
+            {label}
+          </Chip>
+        ))}
+      </div>
+
       <input
         className="field"
         value={query}
@@ -66,7 +87,7 @@ export const Customers = ({
       {error !== null && <Critical>{error}</Critical>}
 
       {shown.length === 0 ? (
-        <Empty title={copy.noAppointments} body={copy.customerListNote} />
+        <Empty title={copy.noCustomers} body={copy.customerListNote} />
       ) : (
         shown.map((customer) => (
           <button
@@ -83,6 +104,12 @@ export const Customers = ({
             <Card style={{ width: "100%", display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontWeight: 500 }}>{customer.name}</span>
+                <span
+                  className="hint"
+                  style={customer.blocked ? { color: "var(--critical)" } : undefined}
+                >
+                  {customer.blocked ? copy.blockedCustomer : copy.activeCustomer}
+                </span>
                 <span className="hint tab" dir="ltr">{customer.phone}</span>
               </span>
             </Card>

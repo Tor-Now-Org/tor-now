@@ -67,12 +67,23 @@ export type Membership = {
   readonly businessId: BusinessId;
   readonly role: MembershipRole;
   readonly createdAt: Instant;
+  /** Set by the Business to stop this customer booking there. Null means active. */
+  readonly blockedAt: Instant | null;
 };
+
+export const isBlocked = (membership: Pick<Membership, "blockedAt">): boolean =>
+  membership.blockedAt !== null;
 
 /** A User seen through a Membership with the customer role. */
 export type Customer = {
   readonly user: User;
-  readonly membership: Membership;
+  /**
+   * Null for someone who has booked here while holding another role — an owner
+   * taking an appointment in their own chair. They are a customer of this
+   * Business by having booked; they simply have no customer membership to
+   * carry standing on.
+   */
+  readonly membership: Membership | null;
 };
 
 /**
