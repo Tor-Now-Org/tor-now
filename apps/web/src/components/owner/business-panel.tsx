@@ -132,7 +132,29 @@ export const BusinessPanel = ({
                     ` · ${copy.buffer} ${service.bufferMinutes} ${copy.minutesShort}`}
                 </span>
               </span>
-              <span className="hint">{service.active ? copy.shown : copy.hidden}</span>
+              {/* A service's standing is a thing the owner changes, not a label
+                  they read. Hiding used to be reachable only through "remove"
+                  inside the editor — which withdraws a booked service but
+                  permanently deletes one nobody has booked yet, and offered no
+                  way back either way. */}
+              <button
+                className="chip"
+                aria-pressed={!service.active}
+                style={{
+                  border: `1px solid ${service.active ? "var(--line)" : "var(--accent)"}`,
+                  background: service.active ? "var(--raised)" : "var(--accent-soft)",
+                  color: service.active ? "var(--muted)" : "var(--accent-strong)",
+                }}
+                onClick={() =>
+                  void act(() =>
+                    api.updateService(token, business.id, service.id, {
+                      active: !service.active,
+                    }),
+                  )
+                }
+              >
+                {service.active ? copy.hideService : copy.showService}
+              </button>
               <button className="chip" style={{ border: "1px solid var(--line)" }} onClick={() => setEditing(service)}>
                 {copy.editService}
               </button>

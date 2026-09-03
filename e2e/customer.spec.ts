@@ -150,7 +150,7 @@ test.describe("finding and booking", () => {
     expect(sessionResponse.ok()).toBe(true);
     const session = (await sessionResponse.json()) as { token: string };
 
-    const startAt = await theStartShownAs(shop, takenLabel ?? "");
+    const startAt = await theStartShownAs(shop, takenLabel ?? "", day);
 
     // Asserted, because a booking that silently failed would leave the count
     // unchanged and read as "the slot is still offered" — the very thing this

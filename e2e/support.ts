@@ -321,10 +321,16 @@ export const showTheDayOf = async (page: Page, startAt: string): Promise<void> =
 export const theStartShownAs = async (
   shop: { business: { id: string }; service: { id: string }; resource: { id: string } },
   label: string,
+  day: number,
 ): Promise<string> => {
+  // One day, not the whole window. A business open daily offers the same clock
+  // time on every one of them, so searching the window and taking the first
+  // match booked today's 09:00 while the screen was showing tomorrow's — the
+  // day under test then lost nothing, and the count came back unchanged.
+  const on = aDayFromNow(day);
   const days = await call<{ slots: { startAt: string }[] }[]>(
     `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
-      `&resourceId=${shop.resource.id}&from=${aDayFromNow(0)}&to=${aDayFromNow(DAYS_TO_TRY - 1)}`,
+      `&resourceId=${shop.resource.id}&from=${on}&to=${on}`,
   );
   const asShown = new Intl.DateTimeFormat("en-GB", {
     timeZone: BUSINESS_TIMEZONE,
@@ -334,7 +340,7 @@ export const theStartShownAs = async (
   const found = days
     .flatMap((day) => day.slots)
     .find((slot) => asShown.format(new Date(slot.startAt)) === label);
-  if (found === undefined) throw new Error(`No offered slot reads as ${label}.`);
+  if (found === undefined) throw new Error(`No slot on ${on} reads as ${label}.`);
   return found.startAt;
 };
 

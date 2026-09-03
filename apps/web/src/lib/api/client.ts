@@ -33,14 +33,32 @@ import type {
  * written once.
  */
 
+/** One Supabase project per environment, each serving the API from its own ref. */
+const API_OF = Object.freeze({
+  production: "https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api",
+  development: "https://rhwkoodeeqyuwfymxwqa.supabase.co/functions/v1/api",
+});
+
 /**
  * The API's own address. Public by nature — it is the URL a browser calls — so
  * it is configuration rather than a secret, and has a working default so the
- * app runs against the deployed API with nothing set.
+ * app runs with nothing set.
+ *
+ * What that default is depends on where this is running, and the old one was
+ * production everywhere. A preview that lost NEXT_PUBLIC_API_URL therefore
+ * looked fine and wrote to real customer data: a test booking made against a
+ * branch would appear in somebody's actual calendar. Only a deployment Vercel
+ * itself calls production gets the production API now; a preview, and a laptop,
+ * fall back to development, where a mistake costs nothing.
+ *
+ * NEXT_PUBLIC_API_URL still wins over both, so an environment can always be
+ * pointed somewhere else deliberately.
  */
 export const API_BASE_URL =
   process.env["NEXT_PUBLIC_API_URL"] ??
-  "https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api";
+  (process.env["NEXT_PUBLIC_VERCEL_ENV"] === "production"
+    ? API_OF.production
+    : API_OF.development);
 
 export type Session = { token: string; user: UserDto };
 

@@ -181,19 +181,71 @@ test.describe("the schedule layers", () => {
     await page.getByLabel("תאריך").fill(closedDay);
     await page.getByRole("button", { name: "סגור כל היום" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    // The sheet closing is what says the save went through. "סגור כל היום" is
+    // also the button inside it, so matching that text proved nothing and let
+    // the availability below be read before the override had landed.
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
     await expect(page.getByText("סגור כל היום").first()).toBeVisible({ timeout: 15_000 });
 
     // A closed day offers a customer nothing at all.
-    const days = await call<{ slots: unknown[]; emptyReason: string | null }[]>(
-      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
-        `&resourceId=${shop.resource.id}&from=${closedDay}&to=${closedDay}`,
-    );
-    expect(days[0]?.slots).toEqual([]);
-    expect(days[0]?.emptyReason).toBe("CLOSED");
+    await expect
+      .poll(
+        async () => {
+          const days = await call<{ slots: unknown[]; emptyReason: string | null }[]>(
+            `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+              `&resourceId=${shop.resource.id}&from=${closedDay}&to=${closedDay}`,
+          );
+          return { slots: days[0]?.slots.length ?? -1, reason: days[0]?.emptyReason };
+        },
+        { timeout: 15_000 },
+      )
+      .toEqual({ slots: 0, reason: "CLOSED" });
   });
 });
 
 test.describe("the business panel", () => {
+  test("hides a service from customers, and brings it back", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `הסתרה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+
+    // Hiding is its own control. It used to be reachable only through the
+    // editor's "remove", which deletes a service nobody has booked yet — and
+    // offered no way back from either outcome.
+    await page.getByRole("button", { name: "הסתרה" }).first().click();
+    await expect(page.getByRole("button", { name: "הצגה" }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const whileHidden = await call<{ services: { name: string }[] }>(
+      `/businesses/${shop.business.id}`,
+    );
+    expect(whileHidden.services.map((service) => service.name)).not.toContain(
+      shop.service.name,
+    );
+
+    // And back again, which was impossible before: a withdrawn service could
+    // never be offered a second time.
+    await page.getByRole("button", { name: "הצגה" }).first().click();
+    await expect(page.getByRole("button", { name: "הסתרה" }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const whenShown = await call<{ services: { name: string }[] }>(
+      `/businesses/${shop.business.id}`,
+    );
+    expect(whenShown.services.map((service) => service.name)).toContain(shop.service.name);
+  });
+
   test("adds a service, and the customer can then book it", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `שירותים ${Date.now()}`,
