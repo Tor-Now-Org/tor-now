@@ -167,8 +167,13 @@ export type CalendarDayDto = {
   blocks: BlockDto[];
 };
 
+/** A User as one Business sees them: the person, plus their standing there. */
+export type CustomerDto = UserDto & { blocked: boolean };
+
 export type CustomerRecordDto = {
   user: UserDto;
+  /** Blocked from booking at this Business. Per-business, like the record itself. */
+  blocked: boolean;
   appointments: AppointmentDto[];
   lateCancellations: number;
   noShows: number;

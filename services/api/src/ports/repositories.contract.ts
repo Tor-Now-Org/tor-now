@@ -228,6 +228,39 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("blocks a customer, and re-booking does not clear the block", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "02003");
+        const customer = await repositories.users.create({
+          phone: "+972500002223",
+          givenName: "רוני",
+          familyName: null,
+          birthDate: null,
+        });
+        await repositories.memberships.ensureCustomer(customer.id, context.business.id);
+
+        const blocked = await repositories.memberships.setBlocked(
+          customer.id,
+          context.business.id,
+          AT("2026-09-01T09:00:00Z"),
+        );
+        expect(blocked.blockedAt).not.toBeNull();
+
+        const again = await repositories.memberships.ensureCustomer(
+          customer.id,
+          context.business.id,
+        );
+        expect(again.blockedAt).not.toBeNull();
+
+        const cleared = await repositories.memberships.setBlocked(
+          customer.id,
+          context.business.id,
+          null,
+        );
+        expect(cleared.blockedAt).toBeNull();
+      });
+    });
+
     // --- Appointments: ADR 0003 ----------------------------------------
 
     it("refuses an appointment overlapping a confirmed one", async () => {

@@ -313,6 +313,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           businessId,
           role,
           createdAt: now(),
+          blockedAt: null,
         };
         store.memberships = [...store.memberships, membership];
         return membership;
@@ -330,9 +331,22 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           businessId,
           role: "CUSTOMER",
           createdAt: now(),
+          blockedAt: null,
         };
         store.memberships = [...store.memberships, membership];
         return membership;
+      },
+      async setBlocked(userId, businessId, blockedAt) {
+        const existing = store.memberships.find(
+          (membership) =>
+            membership.userId === userId && membership.businessId === businessId,
+        );
+        if (existing === undefined) throw notFound("Membership", userId);
+        const updated: Membership = { ...existing, blockedAt };
+        store.memberships = store.memberships.map((membership) =>
+          membership === existing ? updated : membership,
+        );
+        return updated;
       },
     },
 

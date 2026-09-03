@@ -252,7 +252,7 @@ describe("the owner's customers", () => {
       shop.owner.actor,
       shop.business.id,
     );
-    expect(customers.map(displayName)).toEqual(["דנה"]);
+    expect(customers.map((customer) => displayName(customer.user))).toEqual(["דנה"]);
   });
 
   it("counts a late cancellation against the record", async () => {

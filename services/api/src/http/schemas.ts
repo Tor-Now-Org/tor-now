@@ -251,6 +251,8 @@ export const activeFlagSchema = z.object({ active: z.boolean() });
 
 export const administratorFlagSchema = z.object({ isAdministrator: z.boolean() });
 
+export const blockedFlagSchema = z.object({ blocked: z.boolean() });
+
 export const pageSchema = z.object({
   limit: z.coerce
     .number()

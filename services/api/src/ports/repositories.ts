@@ -134,6 +134,12 @@ export type MembershipRepository = {
   ): Promise<Membership>;
   /** Creates a customer Membership only if one does not already exist. */
   ensureCustomer(userId: UserId, businessId: BusinessId): Promise<Membership>;
+  /** Blocks or unblocks a customer at one Business. */
+  setBlocked(
+    userId: UserId,
+    businessId: BusinessId,
+    blockedAt: Instant | null,
+  ): Promise<Membership>;
 };
 
 export type ResourceRepository = {

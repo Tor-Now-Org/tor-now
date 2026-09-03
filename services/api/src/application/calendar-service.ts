@@ -14,6 +14,7 @@ import {
   type BlockId,
   type BusinessId,
   type Clock,
+  type Customer,
   type LocalDate,
   type ResourceId,
   type User,
@@ -248,9 +249,37 @@ export const calendarService = ({
         memberships.map((membership) => membership.userId),
       );
       return memberships
-        .map((membership) => users.get(membership.userId))
-        .filter((user): user is User => user !== undefined && user.deletedAt === null)
-        .sort(compareByName);
+        .map((membership) => ({ user: users.get(membership.userId), membership }))
+        .filter(
+          (customer): customer is Customer =>
+            customer.user !== undefined && customer.user.deletedAt === null,
+        )
+        .sort((left, right) => compareByName(left.user, right.user));
+    });
+  },
+
+  /**
+   * Blocking is per-Business, like the Membership it is recorded on: the same
+   * person may be blocked here and welcome elsewhere. Existing appointments
+   * stand — a block stops the next booking, it does not cancel the last one.
+   */
+  async setCustomerBlocked(
+    actor: Actor,
+    businessId: BusinessId,
+    customerId: User["id"],
+    blocked: boolean,
+  ) {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      const membership = await repositories.memberships.find(customerId, businessId);
+      if (membership === null || membership.role !== "CUSTOMER") {
+        throw notFound("Customer", customerId);
+      }
+      return repositories.memberships.setBlocked(
+        customerId,
+        businessId,
+        blocked ? clock.now() : null,
+      );
     });
   },
 
@@ -276,6 +305,7 @@ export const calendarService = ({
 
       return {
         user,
+        blocked: membership.blockedAt !== null,
         appointments,
         lateCancellations: appointments.filter(
           (appointment) => appointment.lateCancellation,

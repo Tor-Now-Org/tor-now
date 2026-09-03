@@ -22,7 +22,7 @@ import {
   outcomeOfDto,
 } from "@/components/owner/appointment-sheet.tsx";
 import { PhoneActions } from "@/components/owner/phone-actions.tsx";
-import { Card, Critical, Empty, Spinner } from "@/components/ui.tsx";
+import { Button, Card, Critical, Empty, Note, Spinner } from "@/components/ui.tsx";
 
 /**
  * One customer, laid out as the Screens canvas draws it: the initial in a
@@ -49,6 +49,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
   const [business, setBusiness] = useState<BusinessDto | null>(null);
   const [record, setRecord] = useState<CustomerRecordDto | null>(null);
   const [open, setOpen] = useState<CalendarAppointmentDto | null>(null);
+  const [blocking, setBlocking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -68,6 +69,20 @@ function CustomerPage({ customerId }: { customerId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** A block stops the next booking; it does not touch the ones already made. */
+  const toggleBlocked = async (blocked: boolean) => {
+    if (token === null || businessId === null) return;
+    setBlocking(true);
+    try {
+      await api.setCustomerBlocked(token, businessId, customerId, blocked);
+      await load();
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    } finally {
+      setBlocking(false);
+    }
+  };
 
   /**
    * Back to the customers list, not to the calendar. The tab is in the URL for
@@ -213,6 +228,15 @@ function CustomerPage({ customerId }: { customerId: string }) {
           />
           <Count label={copy.noShows} value={record.noShows} />
         </Card>
+
+        <Button
+          intent={record.blocked ? "quiet" : "danger"}
+          busy={blocking}
+          onClick={() => void toggleBlocked(!record.blocked)}
+        >
+          {record.blocked ? copy.unblockCustomer : copy.blockCustomer}
+        </Button>
+        <Note>{copy.blockedNote}</Note>
 
         {upcoming.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>

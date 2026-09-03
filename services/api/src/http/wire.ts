@@ -12,6 +12,7 @@ import {
   type Resource,
   type Service,
   type Subscription,
+  type Customer,
   type User,
   type WorkingHours,
 } from "@tor-now/domain";
@@ -157,6 +158,12 @@ export const userOut = (user: User) => ({
   deleted: user.deletedAt !== null,
   anonymised: user.anonymisedAt !== null,
   createdAt: formatInstant(user.createdAt),
+});
+
+/** A User as their Business sees them: the person, plus their standing here. */
+export const customerOut = (customer: Customer) => ({
+  ...userOut(customer.user),
+  blocked: customer.membership.blockedAt !== null,
 });
 
 export const subscriptionOut = (subscription: Subscription) => ({
