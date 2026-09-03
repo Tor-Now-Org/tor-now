@@ -347,8 +347,8 @@ export const businessService = ({
       contentType: input.contentType,
     });
 
-    try {
-      const { written, replaced } = await unitOfWork.run(
+    const swap = async () =>
+      await unitOfWork.run(
         actor,
         async ({ repositories }) => {
           await loadOwnedBusiness(repositories, actor, businessId);
@@ -374,14 +374,30 @@ export const businessService = ({
         },
       );
 
-      if (replaced !== null) await photos.remove(replaced.storagePath);
-      return written;
-    } catch (cause) {
+    const { written, replaced } = await swap().catch(async (cause: unknown) => {
       // Nothing points at the bytes just uploaded, and whatever was in the slot
       // before is still there and still referenced.
       await photos.remove(stored.path);
       throw cause;
+    });
+
+    // Past this point the change has committed. Dropping the object the new
+    // photo supersedes is tidying up, not part of the change, so a failure
+    // here must not fail the call: the compensating delete above would take
+    // away the bytes the committed row points at, leaving the business with a
+    // photo that renders as nothing. An object left behind costs storage; that
+    // is the smaller harm, and it is said out loud rather than swallowed.
+    if (replaced !== null) {
+      try {
+        await photos.remove(replaced.storagePath);
+      } catch (cause) {
+        console.error("[photos] superseded object left behind", {
+          path: replaced.storagePath,
+          cause,
+        });
+      }
     }
+    return written;
   },
 
   async deletePhoto(

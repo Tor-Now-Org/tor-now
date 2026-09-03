@@ -427,6 +427,33 @@ describe("business photos", () => {
     expect(test.photos.read?.(original.storagePath)?.bytes).toHaveLength(64);
   });
 
+  it("keeps the new photo when the old one's bytes cannot be tidied away", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const original = await test.services.business.putPhoto(
+      shop.owner.actor,
+      shop.business.id,
+      { slot: 0, bytes: aPhoto(), contentType: "image/jpeg" },
+    );
+
+    // The rows have already been swapped by the time the superseded object is
+    // dropped. If that drop is allowed to fail the call, the compensating
+    // delete removes the bytes the committed row points at, and the business
+    // is left with a photo that renders as nothing.
+    test.photos.remove = async (path) => {
+      if (path === original.storagePath) throw new Error("Storage refused the delete");
+    };
+
+    const replacement = await test.services.business.putPhoto(
+      shop.owner.actor,
+      shop.business.id,
+      { slot: 0, bytes: aPhoto(32), contentType: "image/jpeg" },
+    );
+
+    expect(test.store.businessPhotos).toHaveLength(1);
+    expect(test.store.businessPhotos[0]?.id).toBe(replacement.id);
+    expect(test.photos.read?.(replacement.storagePath)?.bytes).toHaveLength(32);
+  });
+
   it("deleting a photo frees its slot and drops the bytes", async () => {
     const shop = await anEstablishedBusiness(test);
     const photo = await test.services.business.putPhoto(

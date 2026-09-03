@@ -76,6 +76,31 @@ describe("the storage adapter", () => {
     await expect(store(OPAQUE_KEY, send).remove("biz/gone.jpg")).resolves.toBeUndefined();
   });
 
+  it("treats it as removed however Storage chooses to say it", async () => {
+    // What Supabase actually answers for a missing object: a 400 whose body
+    // carries the 404. Reading only the transport status made "already gone"
+    // look like a refusal, and the caller then undid work that had committed.
+    const send = (() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            statusCode: "404",
+            error: "not_found",
+            message: "Object not found",
+            code: "NoSuchKey",
+          }),
+          { status: 400 },
+        ),
+      )) as unknown as typeof fetch;
+    await expect(store(OPAQUE_KEY, send).remove("biz/gone.jpg")).resolves.toBeUndefined();
+  });
+
+  it("still says so loudly when Storage refuses the delete for another reason", async () => {
+    const send = (() =>
+      Promise.resolve(new Response("forbidden", { status: 403 }))) as unknown as typeof fetch;
+    await expect(store(OPAQUE_KEY, send).remove("biz/0.jpg")).rejects.toThrow(/403/);
+  });
+
   it("says so loudly when Storage refuses", async () => {
     const send = (() =>
       Promise.resolve(new Response("nope", { status: 403 }))) as unknown as typeof fetch;

@@ -72,14 +72,34 @@ export const supabaseStoragePhotos = (
         method: "DELETE",
         headers: authorization,
       });
+      if (response.ok) return;
+      const said = await response.text();
       // Already gone is the state we wanted; anything else is worth hearing
       // about, because the row is about to be deleted either way and an
       // orphaned object cannot be found again afterwards.
-      if (!response.ok && response.status !== 404) {
-        throw new Error(
-          `Storage refused the delete (${response.status}): ${await response.text()}`,
-        );
-      }
+      //
+      // Storage says "gone" in two ways, and only one of them is a 404 status:
+      // a missing object comes back as 400 with the 404 inside the body.
+      // Reading the status alone made that look like a refusal.
+      if (response.status === 404 || saysMissing(said)) return;
+      throw new Error(`Storage refused the delete (${response.status}): ${said}`);
     },
   };
+};
+
+/** Storage's own words for an object that is not there. */
+const MISSING = new Set(["not_found", "NoSuchKey"]);
+
+const saysMissing = (body: string): boolean => {
+  try {
+    const said = JSON.parse(body) as { statusCode?: string; error?: string; code?: string };
+    return (
+      said.statusCode === "404" ||
+      (said.error !== undefined && MISSING.has(said.error)) ||
+      (said.code !== undefined && MISSING.has(said.code))
+    );
+  } catch {
+    // Not JSON, so it is not one of Storage's structured answers.
+    return false;
+  }
 };
