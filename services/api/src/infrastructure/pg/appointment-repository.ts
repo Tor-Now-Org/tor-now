@@ -126,6 +126,15 @@ export const appointmentRepository = (
     return rows.map(toAppointment);
   },
 
+  async customerIdsFor(businessId) {
+    // Every status: a cancelled appointment ends a booking, not a
+    // relationship, and the owner still has to be able to find that person.
+    const rows = await tx<{ customer_id: string }[]>`
+      select distinct customer_id from appointment
+      where business_id = ${businessId}`;
+    return rows.map((row) => asId(row.customer_id));
+  },
+
   /**
    * One query rather than one per appointment: a reminder names the customer
    * and the business, and the job may be handling a hundred of them.

@@ -539,6 +539,36 @@ test.describe("a customer's own page", () => {
     // The history keeps it, struck through, exactly as the customer sees it.
     await expect(page.locator(".cancelled").first()).toBeVisible({ timeout: 15_000 });
   });
+
+  test("an owner who books in their own chair is on their own list", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `בעלים לקוח ${Date.now()}`,
+      ownerPhone,
+    });
+
+    // A one-person business takes appointments with itself; the owner holds the
+    // OWNER role there, which is what used to keep them out of the list.
+    const startAt = await theNextStart(shop);
+    await call("/appointments", {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt,
+        customerNote: null,
+      },
+    });
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "לקוחות", exact: true }).click();
+
+    await expect(page.getByText("בעלים").first()).toBeVisible({ timeout: 15_000 });
+  });
 });
 
 test.describe("photos", () => {

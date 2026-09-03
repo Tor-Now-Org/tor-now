@@ -606,6 +606,21 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("names everyone who has booked, whatever their role is here", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7105");
+        // The booker is this business's own owner, which is the case the
+        // customer list used to miss.
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-16T09:00:00Z", "2026-09-16T09:30:00Z", "2026-09-16T09:40:00Z"),
+        );
+
+        expect(
+          await repositories.appointments.customerIdsFor(context.business.id),
+        ).toEqual([context.owner.id]);
+      });
+    });
+
     it("lists and deletes a block, an override and a working-hours range", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "7105");

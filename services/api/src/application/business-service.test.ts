@@ -255,6 +255,52 @@ describe("the owner's customers", () => {
     expect(customers.map(displayName)).toEqual(["דנה"]);
   });
 
+  it("shows an owner who booked at their own business", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+
+    // A person holds one role per Business, and booking never demotes an owner
+    // to customer. Reading the list off that role therefore hid anyone who was
+    // both — the owner who takes an appointment in their own chair, which is
+    // exactly what a one-person business does all day.
+    await test.services.booking.book(shop.owner.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("11:00"),
+      customerNote: null,
+    });
+
+    const customers = await test.services.calendar.customers(
+      shop.owner.actor,
+      shop.business.id,
+    );
+    expect(customers.map((customer) => customer.id)).toContain(shop.owner.user.id);
+  });
+
+  it("shows a customer whose only appointment was cancelled", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000004", "יעל");
+
+    const appointment = await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("12:00"),
+      customerNote: null,
+    });
+    await test.services.booking.cancel(customer.actor, appointment.id);
+
+    // Cancelling ends an appointment, not a relationship: the owner still needs
+    // to find this person to talk to them about it.
+    const customers = await test.services.calendar.customers(
+      shop.owner.actor,
+      shop.business.id,
+    );
+    expect(customers.map(displayName)).toContain("יעל");
+  });
+
   it("counts a late cancellation against the record", async () => {
     const test = harness();
     const shop = await anEstablishedBusiness(test);

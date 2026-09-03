@@ -239,16 +239,22 @@ export const calendarService = ({
   async customers(actor: Actor, businessId: BusinessId) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       await loadOwnedBusiness(repositories, actor, businessId);
-      const memberships = await repositories.memberships.listForBusiness(
-        businessId,
-        "CUSTOMER",
-      );
-      const users = await loadCustomers(
-        repositories,
-        memberships.map((membership) => membership.userId),
-      );
-      return memberships
-        .map((membership) => users.get(membership.userId))
+      // Two sources for one question. Booking is what makes the relationship,
+      // so anyone who has booked belongs here — including an owner who takes an
+      // appointment in their own chair, who holds the OWNER role and would
+      // otherwise be missing from their own list. The memberships stay in the
+      // union so that a relationship recorded without a surviving appointment
+      // is not quietly dropped.
+      const [memberships, booked] = [
+        await repositories.memberships.listForBusiness(businessId, "CUSTOMER"),
+        await repositories.appointments.customerIdsFor(businessId),
+      ];
+      const ids = [
+        ...new Set([...memberships.map((membership) => membership.userId), ...booked]),
+      ];
+      const users = await loadCustomers(repositories, ids);
+      return ids
+        .map((id) => users.get(id))
         .filter((user): user is User => user !== undefined && user.deletedAt === null)
         .sort(compareByName);
     });

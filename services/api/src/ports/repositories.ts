@@ -330,6 +330,16 @@ export type AppointmentRepository = {
     businessId: BusinessId,
   ): Promise<readonly Appointment[]>;
   /**
+   * Everyone who has ever booked here, whatever else they are to this Business.
+   *
+   * The customer list used to be read off the CUSTOMER membership, but a person
+   * holds one role per Business and booking deliberately never demotes an
+   * owner — so an owner who takes an appointment in their own chair was absent
+   * from their own customer list. Booking is what makes the relationship
+   * (CONTEXT.md), so booking is what this asks about.
+   */
+  customerIdsFor(businessId: BusinessId): Promise<readonly UserId[]>;
+  /**
    * Confirmed appointments starting inside the window that have not had a
    * reminder written yet (ADR 0005). Returned with the customer attached,
    * because a reminder is addressed to a person.

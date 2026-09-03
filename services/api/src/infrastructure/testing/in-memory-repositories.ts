@@ -644,6 +644,16 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             appointment.businessId === businessId,
         );
       },
+
+      async customerIdsFor(businessId) {
+        return [
+          ...new Set(
+            store.appointments
+              .filter((appointment) => appointment.businessId === businessId)
+              .map((appointment) => appointment.customerId),
+          ),
+        ];
+      },
       async dueForReminder(from, to, limit) {
         return store.appointments
           .filter(
