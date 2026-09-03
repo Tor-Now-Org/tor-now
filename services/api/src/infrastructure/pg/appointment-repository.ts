@@ -118,6 +118,20 @@ export const appointmentRepository = (
     return rows.map(toAppointment);
   },
 
+  async listForCustomerWithBusiness(customerId, page) {
+    const rows = await tx<Row[]>`
+      select a.*, b.name as business_name
+      from appointment a
+      join business b on b.id = a.business_id
+      where a.customer_id = ${customerId}
+      order by a.start_at desc
+      limit ${page.limit} offset ${page.offset}`;
+    return rows.map((row) => ({
+      appointment: toAppointment(row),
+      businessName: text(row["business_name"]),
+    }));
+  },
+
   async listForCustomerAtBusiness(customerId, businessId) {
     const rows = await tx<Row[]>`
       select * from appointment

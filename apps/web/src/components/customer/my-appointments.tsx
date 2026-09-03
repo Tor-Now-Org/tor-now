@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type { AppointmentDto } from "@/lib/api/types.ts";
+import type { MyAppointmentDto } from "@/lib/api/types.ts";
 import { formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { outcomeOfDto } from "../owner/appointment-sheet.tsx";
@@ -16,14 +16,18 @@ import { Button, Card, Critical, Empty, Sheet, Spinner, Warning } from "../ui.ts
  * The Cancellation Window governs what they are warned about, never whether the
  * button works: a customer may always cancel.
  */
-export const MyAppointments = () => {
+export const MyAppointments = ({
+  onOpenBusiness,
+}: {
+  onOpenBusiness: (businessId: string) => void;
+}) => {
   const copy = useCopy("customer");
   const { language } = useLanguage();
   const { token } = useSession();
   const errorText = useErrorText();
 
-  const [appointments, setAppointments] = useState<AppointmentDto[] | null>(null);
-  const [cancelling, setCancelling] = useState<AppointmentDto | null>(null);
+  const [appointments, setAppointments] = useState<MyAppointmentDto[] | null>(null);
+  const [cancelling, setCancelling] = useState<MyAppointmentDto | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,7 +69,7 @@ export const MyAppointments = () => {
   );
   const past = appointments.filter((appointment) => !upcoming.includes(appointment));
 
-  const formatWhen = (appointment: AppointmentDto) =>
+  const formatWhen = (appointment: MyAppointmentDto) =>
     new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
       weekday: "long",
       day: "numeric",
@@ -74,6 +78,17 @@ export const MyAppointments = () => {
       minute: "2-digit",
       hour12: false,
     }).format(new Date(appointment.startAt));
+
+  // ponytail: Google's own URL scheme, no calendar API/dependency needed.
+  const openInGoogleCalendar = (appointment: MyAppointmentDto) => {
+    const toGoogleStamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+    const params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: `${appointment.serviceName} - ${appointment.businessName}`,
+      dates: `${toGoogleStamp(appointment.startAt)}/${toGoogleStamp(appointment.endAt)}`,
+    });
+    window.open(`https://calendar.google.com/calendar/render?${params}`, "_blank");
+  };
 
   return (
     <div style={{ padding: "22px 18px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
@@ -89,13 +104,19 @@ export const MyAppointments = () => {
         <Card key={appointment.id} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span style={{ flex: 1, fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 16 }}>
-              {appointment.serviceName}
+              {appointment.serviceName} - {appointment.businessName}
             </span>
             <span className="tab" style={{ fontSize: 14 }}>
               {formatPrice(appointment.priceMinor, language, copy.free)}
             </span>
           </div>
           <span className="hint">{formatWhen(appointment)}</span>
+          <Button intent="primary" onClick={() => openInGoogleCalendar(appointment)}>
+            {copy.addToCalendar}
+          </Button>
+          <Button intent="quiet" onClick={() => onOpenBusiness(appointment.businessId)}>
+            {copy.navigateToBusiness}
+          </Button>
           <Button intent="quiet" onClick={() => setCancelling(appointment)}>
             {copy.cancelAppointment}
           </Button>
@@ -113,7 +134,7 @@ export const MyAppointments = () => {
                   }
                   style={{ flex: 1, fontWeight: 500 }}
                 >
-                  {appointment.serviceName}
+                  {appointment.serviceName} - {appointment.businessName}
                 </span>
                 <span className="hint">
                   {appointment.status === "CANCELLED"
@@ -123,9 +144,6 @@ export const MyAppointments = () => {
                       : copy.finished}
                 </span>
               </div>
-              {/* The word says what happened; the strike makes it visible
-                  without reading. Not on the label itself, which would be a
-                  cancelled cancellation. */}
               <span
                 className={
                   appointment.status === "CANCELLED" ? "cancelled hint" : "spent hint"

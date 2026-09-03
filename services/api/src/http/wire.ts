@@ -133,6 +133,18 @@ export const appointmentWithCustomerOut = (
   customerPhone: appointment.customerPhone,
 });
 
+/** A customer's own list names the business, e.g. for an "add to calendar" title. */
+export const appointmentWithBusinessOut = ({
+  appointment,
+  businessName,
+}: {
+  appointment: Appointment;
+  businessName: string;
+}) => ({
+  ...appointmentOut(appointment),
+  businessName,
+});
+
 export const userOut = (user: User) => ({
   id: user.id,
   phone: user.phone,

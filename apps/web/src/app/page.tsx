@@ -120,7 +120,16 @@ function CustomerAppInner() {
         {showingBusiness && (
           <BookingFlow business={business} onFinished={() => setScreen("mine")} />
         )}
-        {screen === "mine" && <MyAppointments />}
+        {screen === "mine" && (
+          <MyAppointments
+            onOpenBusiness={(businessId) => {
+              api.businessProfile(businessId).then((profile) => {
+                setBusiness(profile.business);
+                setScreen("business");
+              });
+            }}
+          />
+        )}
         {screen === "profile" && <Profile onSignedOut={() => setScreen("search")} />}
       </main>
 

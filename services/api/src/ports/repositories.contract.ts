@@ -584,6 +584,12 @@ export const describeRepositoryContract = (
           }),
         ).toHaveLength(1);
         expect(
+          await repositories.appointments.listForCustomerWithBusiness(context.owner.id, {
+            limit: 10,
+            offset: 0,
+          }),
+        ).toMatchObject([{ businessName: context.business.name }]);
+        expect(
           await repositories.appointments.listForCustomerAtBusiness(
             context.owner.id,
             context.business.id,

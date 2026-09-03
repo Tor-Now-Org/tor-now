@@ -13,6 +13,7 @@ import type {
   CalendarDayDto,
   CustomerRecordDto,
   DayAvailabilityDto,
+  MyAppointmentDto,
   OverrideDto,
   PaymentDto,
   RequestCodeDto,
@@ -210,7 +211,7 @@ export const api = {
     request<void>("/me", { method: "DELETE", token }),
 
   myAppointments: (token: string) =>
-    request<AppointmentDto[]>("/me/appointments", { token }),
+    request<MyAppointmentDto[]>("/me/appointments", { token }),
 
   myBusinesses: (token: string) =>
     request<BusinessDto[]>("/me/businesses", { token }),

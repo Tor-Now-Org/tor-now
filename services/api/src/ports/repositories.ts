@@ -258,6 +258,12 @@ export type BookedAppointment = {
   readonly customerPhone: string;
 };
 
+/** A customer's own appointment, with the business named for display (e.g. "add to calendar"). */
+export type AppointmentWithBusiness = {
+  readonly appointment: Appointment;
+  readonly businessName: string;
+};
+
 /** An appointment and everyone a reminder about it needs to name. */
 export type AppointmentToRemind = {
   readonly appointment: Appointment;
@@ -325,6 +331,11 @@ export type AppointmentRepository = {
     customerId: UserId,
     page: Page,
   ): Promise<readonly Appointment[]>;
+  /** As listForCustomer, with the business name attached for a customer-facing screen. */
+  listForCustomerWithBusiness(
+    customerId: UserId,
+    page: Page,
+  ): Promise<readonly AppointmentWithBusiness[]>;
   listForCustomerAtBusiness(
     customerId: UserId,
     businessId: BusinessId,

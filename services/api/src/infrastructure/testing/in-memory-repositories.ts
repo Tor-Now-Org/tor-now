@@ -637,6 +637,19 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           .sort((left, right) => right.startAt - left.startAt)
           .slice(page.offset, page.offset + page.limit);
       },
+      async listForCustomerWithBusiness(customerId, page) {
+        return store.appointments
+          .filter((appointment) => appointment.customerId === customerId)
+          .sort((left, right) => right.startAt - left.startAt)
+          .slice(page.offset, page.offset + page.limit)
+          .map((appointment) => {
+            const business = store.businesses.find(
+              (candidate) => candidate.id === appointment.businessId,
+            );
+            if (business === undefined) throw notFound("Business", appointment.businessId);
+            return { appointment, businessName: business.name };
+          });
+      },
       async listForCustomerAtBusiness(customerId, businessId) {
         return store.appointments.filter(
           (appointment) =>

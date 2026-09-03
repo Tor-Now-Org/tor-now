@@ -24,7 +24,11 @@ import {
 } from "@tor-now/domain";
 import { PAGINATION } from "../config.ts";
 import { TEMPLATES, type OutboundMessage } from "../ports/notifier.ts";
-import type { Page, Repositories } from "../ports/repositories.ts";
+import type {
+  AppointmentWithBusiness,
+  Page,
+  Repositories,
+} from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { loadContext } from "./availability-service.ts";
 import { requireOwnership, requireUser } from "./authorization.ts";
@@ -271,10 +275,10 @@ export const bookingService = (dependencies: {
     async myAppointments(
       actor: Actor,
       page: Page = { limit: PAGINATION.defaultPageSize, offset: 0 },
-    ): Promise<readonly Appointment[]> {
+    ): Promise<readonly AppointmentWithBusiness[]> {
       const userId = requireUser(actor);
       return unitOfWork.run(actor, ({ repositories }) =>
-        repositories.appointments.listForCustomer(userId, page),
+        repositories.appointments.listForCustomerWithBusiness(userId, page),
       );
     },
   };

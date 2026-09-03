@@ -134,7 +134,7 @@ export const createApp = (services: Services) => {
   app.get("/me/appointments", async (context) => {
     const page = parseQuery(context, schema.pageSchema);
     const appointments = await services.booking.myAppointments(actorOf(context), page);
-    return context.json(appointments.map(wire.appointmentOut));
+    return context.json(appointments.map(wire.appointmentWithBusinessOut));
   });
 
   app.get("/me/businesses", async (context) => {
