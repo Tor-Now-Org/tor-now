@@ -226,6 +226,10 @@ test.describe("the business panel", () => {
       timeout: 15_000,
     });
 
+    // And it says so on the row, not only on the control: the owner should be
+    // able to tell at a glance which of their services customers can book.
+    await expect(page.getByText("מוסתר").first()).toBeVisible();
+
     const whileHidden = await call<{ services: { name: string }[] }>(
       `/businesses/${shop.business.id}`,
     );

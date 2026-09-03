@@ -22,7 +22,7 @@ import {
   useFieldProblem,
 } from "@/lib/use-field-problem.ts";
 import { PhotoPanel } from "./photo-panel.tsx";
-import { Button, Card, Critical, Field, Note, Sheet, Spinner, Warning } from "../ui.tsx";
+import { Button, Card, Critical, Field, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
 
 type Panel = "services" | "resources" | "photos" | "settings" | "billing";
 
@@ -122,10 +122,42 @@ export const BusinessPanel = ({
       {panel === "services" && (
         <>
           {services.map((service) => (
-            <Card key={service.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontWeight: 600 }}>{service.name}</span>
-                <span className="hint tab">
+            // A withdrawn service is still the owner's, so it stays on the
+            // list — but it must not read as one that customers can book.
+            // Greyed and set on a sunken ground so it recedes, and named as
+            // hidden in words, because grey alone reads as "disabled" or
+            // "still loading" rather than "you took this off the menu".
+            <Card
+              key={service.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                ...(service.active
+                  ? {}
+                  : { background: "var(--sunken)", borderStyle: "dashed" }),
+              }}
+            >
+              <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      ...(service.active ? {} : { color: "var(--faint)" }),
+                    }}
+                  >
+                    {service.name}
+                  </span>
+                  {!service.active && <Tag text={copy.hidden} tone="neutral" />}
+                </span>
+                <span className="hint tab" style={service.active ? undefined : { opacity: 0.7 }}>
                   {service.durationMinutes} {copy.minutesShort} ·{" "}
                   {formatPrice(service.priceMinor, language, "—")}
                   {service.bufferMinutes !== null &&
@@ -141,9 +173,13 @@ export const BusinessPanel = ({
                 className="chip"
                 aria-pressed={!service.active}
                 style={{
+                  // Quiet while it is on offer — taking something off the menu
+                  // should not be the loudest thing on the row — and the clear
+                  // way back once it is not.
                   border: `1px solid ${service.active ? "var(--line)" : "var(--accent)"}`,
                   background: service.active ? "var(--raised)" : "var(--accent-soft)",
                   color: service.active ? "var(--muted)" : "var(--accent-strong)",
+                  fontWeight: service.active ? 400 : 600,
                 }}
                 onClick={() =>
                   void act(() =>

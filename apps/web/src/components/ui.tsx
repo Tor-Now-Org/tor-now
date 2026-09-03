@@ -280,3 +280,58 @@ export const Rows = ({ children }: { children: ReactNode }) => (
     {children}
   </div>
 );
+
+/**
+ * A small pill that names a state.
+ *
+ * Shared rather than owned by one screen: an appointment's outcome and a
+ * service's standing are the same idea to a reader — a word that says what this
+ * row is, in a colour that says how much to worry about it.
+ */
+const TONES: Readonly<
+  Record<string, { background: string; border: string; color: string }>
+> = Object.freeze({
+  positive: {
+    background: "var(--positive-soft)",
+    border: "1px solid oklch(58% 0.115 214/.28)",
+    color: "var(--positive)",
+  },
+  caution: {
+    background: "var(--caution-soft)",
+    border: "1px solid oklch(63% 0.125 65/.3)",
+    color: "var(--caution)",
+  },
+  critical: {
+    background: "var(--critical-soft)",
+    border: "1px solid oklch(55% 0.170 22/.25)",
+    color: "var(--critical)",
+  },
+  neutral: {
+    background: "var(--sunken)",
+    border: "1px solid var(--line)",
+    color: "var(--muted)",
+  },
+});
+
+export const Tag = ({
+  text,
+  tone,
+}: {
+  text: string;
+  tone: "caution" | "critical" | "neutral" | "positive";
+}) => (
+  <span
+    style={{
+      display: "inline-flex",
+      padding: "4px 11px",
+      borderRadius: 999,
+      fontSize: 11.5,
+      fontWeight: 500,
+      whiteSpace: "nowrap",
+      ...TONES[tone],
+    }}
+  >
+    {text}
+  </span>
+);
+

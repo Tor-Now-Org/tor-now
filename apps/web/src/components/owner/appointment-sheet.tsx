@@ -20,7 +20,7 @@ import { formatPrice, timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { PhoneActions } from "./phone-actions.tsx";
-import { Button, Card, Critical, Note, Sheet, Spinner, Warning } from "../ui.tsx";
+import { Button, Card, Critical, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
 
 /**
  * What an owner can do to one appointment: move it, mark a no show, take the
@@ -293,49 +293,3 @@ export const StatusTag = ({
 };
 
 /** The canvas's tag: a soft ground, a hairline of the same hue, and the hue. */
-const TONES: Readonly<
-  Record<string, { background: string; border: string; color: string }>
-> = Object.freeze({
-  positive: {
-    background: "var(--positive-soft)",
-    border: "1px solid oklch(58% 0.115 214/.28)",
-    color: "var(--positive)",
-  },
-  caution: {
-    background: "var(--caution-soft)",
-    border: "1px solid oklch(63% 0.125 65/.3)",
-    color: "var(--caution)",
-  },
-  critical: {
-    background: "var(--critical-soft)",
-    border: "1px solid oklch(55% 0.170 22/.25)",
-    color: "var(--critical)",
-  },
-  neutral: {
-    background: "var(--sunken)",
-    border: "1px solid var(--line)",
-    color: "var(--muted)",
-  },
-});
-
-const Tag = ({
-  text,
-  tone,
-}: {
-  text: string;
-  tone: "caution" | "critical" | "neutral" | "positive";
-}) => (
-  <span
-    style={{
-      display: "inline-flex",
-      padding: "4px 11px",
-      borderRadius: 999,
-      fontSize: 11.5,
-      fontWeight: 500,
-      whiteSpace: "nowrap",
-      ...TONES[tone],
-    }}
-  >
-    {text}
-  </span>
-);
