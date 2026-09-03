@@ -3,11 +3,17 @@ name: Pull request
 # Every job here is required to pass before a pull request can merge. They run
 # in parallel and each one owns a single question, so a red build names the
 # problem rather than sending someone to read a log.
+#
+# Both long-lived branches, and pushes as well as pull requests: dev used to be
+# ungated, so work that went straight onto it — which is how the team works —
+# reached a deployed environment without lint, types or a single test having
+# run. Whatever is unchecked on dev arrives at main later as somebody else's
+# surprise.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   push:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
