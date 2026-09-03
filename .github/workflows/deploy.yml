@@ -59,7 +59,7 @@ jobs:
             echo "::notice::No SUPABASE_ACCESS_TOKEN; skipping the Supabase deploy."
           fi
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         if: steps.credentials.outputs.present == 'true'
         with:
           version: latest
