@@ -10,18 +10,20 @@ import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import {
   BottomNav,
   CalendarIcon,
+  ClockIcon,
   SearchIcon,
 } from "@/components/bottom-nav.tsx";
 import { BookingFlow } from "@/components/customer/booking-flow.tsx";
 import { BusinessSearch } from "@/components/customer/business-search.tsx";
 import { MyAppointments } from "@/components/customer/my-appointments.tsx";
 import { Profile } from "@/components/customer/profile.tsx";
+import { VisitedBusinesses } from "@/components/customer/visited-businesses.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
 import { Button, Card, Note, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 
-type Screen = "search" | "business" | "mine" | "profile";
+type Screen = "search" | "business" | "mine" | "visited" | "profile";
 
 /**
  * The customer application. One identity and two contexts: the drawer offers
@@ -130,15 +132,26 @@ function CustomerAppInner() {
             }}
           />
         )}
+        {screen === "visited" && (
+          <VisitedBusinesses
+            onOpenBusiness={(businessId) => {
+              api.businessProfile(businessId).then((profile) => {
+                setBusiness(profile.business);
+                setScreen("business");
+              });
+            }}
+          />
+        )}
         {screen === "profile" && <Profile onSignedOut={() => setScreen("search")} />}
       </main>
 
       <BottomNav
         current={screen === "business" ? "search" : screen === "profile" ? "mine" : screen}
-        onSelect={(id) => (id === "mine" ? requireSession("mine") : setScreen("search"))}
+        onSelect={(id) => (id === "search" ? setScreen("search") : requireSession(id as Screen))}
         items={[
           { id: "search", label: copy.tabSearch, icon: <SearchIcon /> },
           { id: "mine", label: copy.tabMine, icon: <CalendarIcon /> },
+          { id: "visited", label: copy.tabVisited, icon: <ClockIcon /> },
         ]}
       />
 
