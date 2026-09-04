@@ -629,6 +629,23 @@ export const describeRepositoryContract = (
           ),
         ).toHaveLength(1);
         expect(
+          await repositories.appointments.hasConfirmedForServiceBetween(
+            context.owner.id,
+            booked.serviceId,
+            span[0],
+            span[1],
+          ),
+        ).toBe(true);
+        // The day before holds nothing, so the span is what decides the answer.
+        expect(
+          await repositories.appointments.hasConfirmedForServiceBetween(
+            context.owner.id,
+            booked.serviceId,
+            parseInstant("2026-09-14T00:00:00Z"),
+            span[0],
+          ),
+        ).toBe(false);
+        expect(
           await repositories.appointments.listForBusinessBetween(
             context.business.id,
             span[0],

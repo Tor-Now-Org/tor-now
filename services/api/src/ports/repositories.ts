@@ -347,6 +347,19 @@ export type AppointmentRepository = {
     businessId: BusinessId,
   ): Promise<readonly Appointment[]>;
   /**
+   * Whether this customer already holds a confirmed appointment for this
+   * Service inside the span. Asked once per booking, so it answers with a
+   * boolean rather than the rows: the caller only needs to know that one
+   * exists, and reading a customer's history to find out is a page of work to
+   * decide a yes or no.
+   */
+  hasConfirmedForServiceBetween(
+    customerId: UserId,
+    serviceId: ServiceId,
+    from: Instant,
+    to: Instant,
+  ): Promise<boolean>;
+  /**
    * Everyone who has ever booked here, whatever else they are to this Business.
    *
    * The customer list used to be read off the CUSTOMER membership, but a person

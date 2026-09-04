@@ -38,6 +38,96 @@ describe("booking", () => {
     expect(membership?.role).toBe("CUSTOMER");
   });
 
+  it("refuses a second booking for the same service on the same day", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const request = {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    };
+    await test.services.booking.book(customer.actor, request);
+
+    await expect(
+      test.services.booking.book(customer.actor, { ...request, startAt: TUESDAY_AT("11:00") }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("allows a different service at the same business on the same day", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const other = await test.services.business.createService(
+      shop.owner.actor,
+      shop.business.id,
+      { name: "צביעה", durationMinutes: 30, priceMinor: 12000, bufferMinutes: null },
+    );
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const request = {
+      businessId: shop.business.id,
+      resourceId: shop.resource.id,
+      customerNote: null,
+    };
+    await test.services.booking.book(customer.actor, {
+      ...request,
+      serviceId: shop.service.id,
+      startAt: TUESDAY_AT("09:00"),
+    });
+
+    const second = await test.services.booking.book(customer.actor, {
+      ...request,
+      serviceId: other.id,
+      startAt: TUESDAY_AT("11:00"),
+    });
+    expect(second.status).toBe("CONFIRMED");
+  });
+
+  it("allows the same service again on a different day", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const request = {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    };
+    await test.services.booking.book(customer.actor, request);
+
+    const nextWeek = formatInstant(
+      (parseInstant(TUESDAY_AT("09:00")) + 7 * 24 * 60 * 60 * 1000) as never,
+    );
+    const second = await test.services.booking.book(customer.actor, {
+      ...request,
+      startAt: nextWeek,
+    });
+    expect(second.status).toBe("CONFIRMED");
+  });
+
+  it("lets a cancelled booking be replaced on the same day", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const request = {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    };
+    const first = await test.services.booking.book(customer.actor, request);
+    await test.services.booking.cancel(customer.actor, first.id);
+
+    const second = await test.services.booking.book(customer.actor, {
+      ...request,
+      startAt: TUESDAY_AT("11:00"),
+    });
+    expect(second.status).toBe("CONFIRMED");
+  });
+
   it("refuses a booking from a customer this business has blocked", async () => {
     const shop = await anEstablishedBusiness(test);
     const customer = await signIn(test, "+972500000002", "דנה");

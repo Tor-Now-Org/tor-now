@@ -140,6 +140,18 @@ export const appointmentRepository = (
     return rows.map(toAppointment);
   },
 
+  async hasConfirmedForServiceBetween(customerId, serviceId, from, to) {
+    const rows = await tx<{ found: boolean }[]>`
+      select exists (
+        select 1 from appointment
+        where customer_id = ${customerId}
+          and service_id = ${serviceId}
+          and status = 'CONFIRMED'
+          and start_at >= ${asDate(from)} and start_at < ${asDate(to)}
+      ) as found`;
+    return rows[0]?.found === true;
+  },
+
   async customerIdsFor(businessId) {
     // Every status: a cancelled appointment ends a booking, not a
     // relationship, and the owner still has to be able to find that person.

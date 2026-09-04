@@ -111,6 +111,9 @@ export const BookingFlow = ({
 
   useEffect(() => {
     setSlot(null);
+    // A booking error belongs to the choice that produced it; changing the
+    // service, calendar or day makes it stale.
+    setError(null);
     // The profile may already have answered this exact question. Skip it once,
     // then forget — every later change of service, calendar or day is a real
     // request, because availability is never assumed to have stayed still.

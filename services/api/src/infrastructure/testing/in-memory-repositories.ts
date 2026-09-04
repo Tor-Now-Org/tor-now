@@ -672,6 +672,17 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
       },
 
+      async hasConfirmedForServiceBetween(customerId, serviceId, from, to) {
+        return store.appointments.some(
+          (appointment) =>
+            appointment.customerId === customerId &&
+            appointment.serviceId === serviceId &&
+            appointment.status === "CONFIRMED" &&
+            appointment.startAt >= from &&
+            appointment.startAt < to,
+        );
+      },
+
       async customerIdsFor(businessId) {
         return [
           ...new Set(

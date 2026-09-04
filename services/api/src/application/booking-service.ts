@@ -2,6 +2,7 @@ import {
   cancelAppointment,
   clearNoShow,
   displayName,
+  DomainError,
   END_OF_DAY,
   forbidden,
   formatInstant,
@@ -64,7 +65,7 @@ const scheduleForDay = async (
     repositories.appointments.occupiedBetween(context.resource.id, dayStart, dayEnd),
   ]);
 
-  return { workingHours, overrides, blocks, occupied };
+  return { schedule: { workingHours, overrides, blocks, occupied }, dayStart, dayEnd };
 };
 
 const notificationFor = (
@@ -107,7 +108,11 @@ export const bookingService = (dependencies: {
       return unitOfWork.run(actor, async (session) => {
         const { repositories } = session;
         const context = await loadContext(repositories, input);
-        const schedule = await scheduleForDay(repositories, context, startAt);
+        const { schedule, dayStart, dayEnd } = await scheduleForDay(
+          repositories,
+          context,
+          startAt,
+        );
 
         const draft = validateBooking(
           {
@@ -132,6 +137,30 @@ export const bookingService = (dependencies: {
         );
         if (isBlocked(membership)) {
           throw forbidden("This business is not accepting bookings from you");
+        }
+
+        // One appointment per Service per day. Another Service on the same day
+        // is fine — the limit is on repeating the same thing, not on visiting.
+        //
+        // ponytail: application-level only, so two simultaneous requests can
+        // both pass. The database constraint that would close that race needs
+        // the local day of a timestamptz in the Business's zone, which is not
+        // an immutable expression; add it if double bookings appear in fact.
+        const clash = await repositories.appointments.hasConfirmedForServiceBetween(
+          customerId,
+          draft.serviceId,
+          dayStart,
+          dayEnd,
+        );
+        if (clash) {
+          throw new DomainError(
+            "CONFLICT",
+            "You already have an appointment for this service on that day",
+            {
+              serviceName: draft.serviceName,
+              date: instantToZoned(startAt, context.business.timeZone).date,
+            },
+          );
         }
 
         const appointment = await repositories.appointments.create(draft);
@@ -218,7 +247,7 @@ export const bookingService = (dependencies: {
           serviceId: appointment.serviceId,
           resourceId: appointment.resourceId,
         });
-        const schedule = await scheduleForDay(repositories, context, startAt);
+        const { schedule } = await scheduleForDay(repositories, context, startAt);
 
         const draft = validateReschedule(
           appointment,
