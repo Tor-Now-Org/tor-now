@@ -13,10 +13,10 @@ import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.t
 import { SignOutButton } from "@/components/sign-out.tsx";
 import {
   blocking,
-  checkPhone,
   checkText,
   useFieldProblem,
 } from "@/lib/use-field-problem.ts";
+import { checkLocalPhone, fromE164, PHONE_COUNTRY, toE164 } from "@/lib/phone.ts";
 import { Button, Card, Critical, Field, Note, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import type { BusinessDto } from "@/lib/api/types.ts";
@@ -93,7 +93,7 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState<Step>("details");
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState(user?.phone ?? "+972");
+  const [phone, setPhone] = useState(user !== null ? fromE164(user.phone) : "");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<readonly ChosenPhoto[]>([]);
@@ -165,7 +165,7 @@ export default function OnboardingPage() {
     step === "details"
       ? !blocking(
           checkText(name, TEXT_RULES.businessName),
-          checkPhone(phone),
+          checkLocalPhone(phone),
           checkText(address, TEXT_RULES.address),
           checkText(description, TEXT_RULES.description),
         )
@@ -194,7 +194,7 @@ export default function OnboardingPage() {
     try {
       const business = await api.registerBusiness(token, {
         name: name.trim(),
-        phone: phone.trim(),
+        phone: toE164(phone),
         address: address.trim(),
         description: description.trim() === "" ? null : description.trim(),
         resourceNames: resources.map((r) => r.trim()).filter((r) => r.length > 0),
@@ -325,11 +325,19 @@ export default function OnboardingPage() {
                 required
                 type="tel"
                 inputMode="tel"
+                autoComplete="tel"
                 dir="ltr"
+                startAdornment={
+                  <>
+                    <span style={{ fontSize: 24 }}>{PHONE_COUNTRY.flag}</span>
+                    {PHONE_COUNTRY.dial}
+                  </>
+                }
+                maxLength={9}
                 value={phone}
-                problem={problem.phone(phone, touched.has("phone"))}
+                problem={problem.localPhone(phone, touched.has("phone"))}
                 onBlur={() => leave("phone")}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
               />
               <Field
                 id="biz-address"
