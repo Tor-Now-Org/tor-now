@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { Logo } from "./logo.tsx";
 import { HelpButton } from "./support-link.tsx";
 import { useLanguage } from "@/lib/i18n/index.tsx";
@@ -29,6 +30,7 @@ export const AppHeader = ({
   trailing?: ReactNode;
 }) => {
   const { toggleLanguage, direction } = useLanguage();
+  const router = useRouter();
 
   return (
     <header
@@ -72,7 +74,9 @@ export const AppHeader = ({
       ) : title !== undefined ? (
         <h1 style={{ fontSize: 17 }}>{title}</h1>
       ) : (
-        <Logo />
+        <button onClick={() => router.push("/")} style={{ display: "flex", alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+          <Logo />
+        </button>
       )}
 
       {/* A detail page wants both: the way back, and what you are looking at.
