@@ -114,7 +114,7 @@ export const compose = (
     calendar: calendarService({ unitOfWork, clock }),
     admin,
 
-    outboxWorker: outboxWorker({ unitOfWork, notifier }),
+    outboxWorker: outboxWorker({ unitOfWork, notifier, clock }),
     reminders: reminderService({ unitOfWork, clock }),
     measureDatabase: () => measureDatabase(sql),
     pruneAuditLog: () => pruneAuditLog(sql),

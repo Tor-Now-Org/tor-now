@@ -49,6 +49,18 @@ export const REMINDERS = Object.freeze({
 export const OUTBOX = Object.freeze({
   batchSize: 50,
   maxAttempts: 5,
+  /**
+   * How long a failed message waits before the next attempt, by attempt number.
+   * Spelled out rather than computed: the shape of a retry schedule is a
+   * decision about how long an outage may last, and a list says what that
+   * decision was. The last value repeats if there are more attempts than
+   * entries.
+   *
+   * Roughly two hours end to end, against a cron that ticks every minute —
+   * which without this meant five attempts inside five minutes and then
+   * abandonment.
+   */
+  retryAfterMinutes: [1, 5, 15, 60] as const,
 });
 
 /** ADR 0006: audit rows are retained for one year. */

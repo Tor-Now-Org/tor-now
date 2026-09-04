@@ -63,5 +63,11 @@ export type Outbox = {
   enqueue(message: OutboundMessage): Promise<void>;
   claimPending(limit: number): Promise<readonly OutboxEntry[]>;
   markSent(id: string, via: DeliveryChannel): Promise<void>;
-  markFailed(id: string, reason: string, giveUp: boolean): Promise<void>;
+  /**
+   * `retryAfter` is when this may be attempted again, or null when there is
+   * nothing left to try and the message is abandoned. One argument rather than
+   * a boolean and a time, because "give up" and "wait until" are the same
+   * decision seen from two sides.
+   */
+  markFailed(id: string, reason: string, retryAfter: Instant | null): Promise<void>;
 };

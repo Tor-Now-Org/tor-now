@@ -83,12 +83,17 @@ export const harness = (options: { now?: Instant } = {}) => {
           attempts: 0,
           status: "PENDING",
           via: null,
+          retryAfter: null,
         },
       ];
     },
     async claimPending(limit) {
       return store.outbox
-        .filter((entry) => entry.status === "PENDING")
+        .filter(
+          (entry) =>
+            entry.status === "PENDING" &&
+            (entry.retryAfter === null || entry.retryAfter <= clock.now()),
+        )
         .slice(0, limit)
         .map((entry) => ({
           id: entry.id,
@@ -102,10 +107,15 @@ export const harness = (options: { now?: Instant } = {}) => {
         entry.id === id ? { ...entry, status: "SENT", via, attempts: entry.attempts + 1 } : entry,
       );
     },
-    async markFailed(id, _reason, giveUp) {
+    async markFailed(id, _reason, retryAfter) {
       store.outbox = store.outbox.map((entry) =>
         entry.id === id
-          ? { ...entry, status: giveUp ? "FAILED" : "PENDING", attempts: entry.attempts + 1 }
+          ? {
+              ...entry,
+              status: retryAfter === null ? "FAILED" : "PENDING",
+              attempts: entry.attempts + 1,
+              retryAfter,
+            }
           : entry,
       );
     },
@@ -198,8 +208,11 @@ export const harness = (options: { now?: Instant } = {}) => {
   };
 
   const delivered: string[] = [];
+  /** Set by a test that wants delivery to fail, so retries can be exercised. */
+  let refuseDelivery: string | null = null;
   const notifier: Notifier = {
     async deliver(message) {
+      if (refuseDelivery !== null) return { delivered: false, reason: refuseDelivery };
       delivered.push(message.template);
       return { delivered: true, via: "LOG" };
     },
@@ -217,6 +230,10 @@ export const harness = (options: { now?: Instant } = {}) => {
     },
     sentCodes: sent,
     deliveredTemplates: delivered,
+    /** Makes every delivery fail with this reason, or stops when given null. */
+    refuseDeliveries: (reason: string | null) => {
+      refuseDelivery = reason;
+    },
     tokens: verifier,
     photos,
     services: {
@@ -237,7 +254,7 @@ export const harness = (options: { now?: Instant } = {}) => {
       business: businessService({ unitOfWork, clock, photos }),
       calendar: calendarService({ unitOfWork, clock }),
       admin,
-      outboxWorker: outboxWorker({ unitOfWork, notifier }),
+      outboxWorker: outboxWorker({ unitOfWork, notifier, clock }),
       reminders: reminderService({ unitOfWork, clock }),
     },
   };

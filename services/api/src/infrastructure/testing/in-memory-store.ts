@@ -44,7 +44,15 @@ export type Store = {
   payments: Payment[];
   allowlist: { phone: string; note: string | null }[];
   audit: (AuditEntry & { occurredAt: number })[];
-  outbox: { id: string; message: OutboundMessage; attempts: number; status: string; via: string | null }[];
+  outbox: {
+    id: string;
+    message: OutboundMessage;
+    attempts: number;
+    status: string;
+    via: string | null;
+    /** When a failed message may be tried again; null when it never failed. */
+    retryAfter: number | null;
+  }[];
   verificationCodes: VerificationCodeRecord[];
 };
 

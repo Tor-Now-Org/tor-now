@@ -31,6 +31,7 @@ export const outbox = (tx: Transaction): Outbox => ({
     const rows = await tx<Row[]>`
       select * from notification_outbox
       where status = 'PENDING'
+        and (retry_after is null or retry_after <= now())
       order by created_at
       limit ${limit}
       for update skip locked`;
@@ -54,12 +55,13 @@ export const outbox = (tx: Transaction): Outbox => ({
       where id = ${id}`;
   },
 
-  async markFailed(id, reason, giveUp) {
+  async markFailed(id, reason, retryAfter) {
     await tx`
       update notification_outbox
-      set status = ${giveUp ? "FAILED" : "PENDING"},
+      set status = ${retryAfter === null ? "FAILED" : "PENDING"},
           attempts = attempts + 1,
-          last_error = ${reason}
+          last_error = ${reason},
+          retry_after = ${retryAfter === null ? null : new Date(retryAfter)}
       where id = ${id}`;
   },
 });
