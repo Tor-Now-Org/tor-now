@@ -7,7 +7,7 @@ import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppHeader } from "@/components/app-header.tsx";
 import { Logo } from "@/components/logo.tsx";
-import { Button, Note } from "@/components/ui.tsx";
+import { Button } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 
 /**
@@ -36,9 +36,9 @@ export default function SignInPage() {
             <Button onClick={() => router.push("/")}>{copy.enter}</Button>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", textAlign: "center" }}>
-              <Logo size={34} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 60 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", textAlign: "center", paddingTop: 20 }}>
+              <Logo size={86} />
               <p style={{ margin: 0, color: "var(--muted)", fontSize: 14.5 }}>{copy.tagline}</p>
             </div>
 

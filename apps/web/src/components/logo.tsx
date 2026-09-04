@@ -66,6 +66,6 @@ export const Wordmark = ({ size = 19 }: { size?: number }) => {
 export const Logo = ({ size = 26 }: { size?: number }) => (
   <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
     <LogoMark size={size} />
-    <Wordmark />
+    <Wordmark {...(size > 26 ? { size: Math.round(size * (19 / 26)) } : {})} />
   </span>
 );
