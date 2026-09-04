@@ -208,13 +208,25 @@ test.describe("booking a second one of the same", () => {
     const phone = uniquePhone();
     await signInDirectly(page, phone, "דנה כהן");
 
+    // Both bookings have to land on the same day for the rule to be in play, so
+    // the first one's day is remembered and the second is taken back to it —
+    // "the next day with a free time" can move between two visits.
+    let bookedOn: number | null = null;
     const book = async (note: string) => {
       await page.goto("/");
       await ready(page);
       await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
       await page.getByText(name, { exact: false }).first().click();
-      const { time } = await theNextOfferedTime(page);
-      await time.click();
+      if (bookedOn === null) {
+        const { time, day } = await theNextOfferedTime(page);
+        bookedOn = day;
+        await time.click();
+      } else {
+        await showDay(page, bookedOn);
+        const times = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
+        await expect(times.first()).toBeVisible({ timeout: 20_000 });
+        await times.first().click();
+      }
       await expect(page.getByRole("dialog")).toBeVisible();
       await page.getByLabel("הערה לעסק").fill(note);
       await page.getByRole("button", { name: "אישור התור" }).click();

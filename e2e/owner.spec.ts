@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
+  asTyped,
   aDayFromNow,
   showTheDayOf,
   theNextStart,
@@ -27,7 +28,7 @@ test.describe("opening a business", () => {
     // 1 — details
     await expect(page.getByText("פרטי העסק")).toBeVisible();
     await page.getByLabel("שם העסק").fill(name);
-    await page.getByLabel("טלפון").fill(phone);
+    await page.getByLabel("טלפון").fill(asTyped(phone));
     await page.getByLabel("כתובת").fill("הרצל 1");
     await page.getByRole("button", { name: "המשך" }).click();
 
@@ -695,7 +696,7 @@ test.describe("photos", () => {
     await ready(page);
 
     await page.getByLabel("שם העסק").fill(name);
-    await page.getByLabel("טלפון").fill(phone);
+    await page.getByLabel("טלפון").fill(asTyped(phone));
     await page.getByLabel("כתובת").fill("הרצל 2");
     await page.getByRole("button", { name: "המשך" }).click();
 
