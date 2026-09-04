@@ -15,6 +15,10 @@ export const localDigits = (value: string): string =>
 export const toE164 = (local: string): string =>
   local.trim() === "" ? "" : `${PHONE_COUNTRY.dial}${localDigits(local)}`;
 
+/** The inverse of {@link toE164}, for pre-filling the field from a stored number. */
+export const fromE164 = (e164: string): string =>
+  e164.startsWith(PHONE_COUNTRY.dial) ? e164.slice(PHONE_COUNTRY.dial.length) : localDigits(e164);
+
 /**
  * Same rule the domain enforces on the full number, checked without the
  * prefix — the length must be judged on what the person actually typed, since

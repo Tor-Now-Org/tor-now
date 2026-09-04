@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import type { BusinessDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
@@ -23,7 +23,8 @@ import { Button, Card, Note, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 
-type Screen = "search" | "business" | "mine" | "visited" | "profile";
+/** A business is not here: it has a path of its own, and the path decides. */
+type Screen = "search" | "mine" | "visited" | "profile";
 
 /**
  * The customer application. One identity and two contexts: the drawer offers
@@ -40,16 +41,39 @@ export default function CustomerApp() {
   );
 }
 
+/** The path a business lives at, so a customer can be sent straight to it. */
+const businessPath = (businessId: string) => `/business/${businessId}`;
+
+/**
+ * The screen a business page is left for. Leaving means a different route, and
+ * a different route means a fresh mount: state cannot carry the answer across,
+ * so the address does.
+ */
+const SCREENS = ["search", "mine", "visited", "profile"] as const;
+const screenIn = (param: string | null): Screen =>
+  SCREENS.find((name) => name === param) ?? "search";
+
+const homePath = (screen: Screen) => (screen === "search" ? "/" : `/?screen=${screen}`);
+
+const businessIdIn = (pathname: string): string | null => {
+  const rest = pathname.startsWith("/business/")
+    ? pathname.slice("/business/".length)
+    : "";
+  return rest === "" ? null : decodeURIComponent(rest);
+};
+
 function CustomerAppInner() {
   const copy = useCopy("customer");
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const errorText = useErrorText();
   const { token, user, loading, signIn } = useSession();
 
-  const [screen, setScreen] = useState<Screen>(
-    searchParams.get("screen") === "profile" ? "profile" : "search",
-  );
+  // Which business is open is the path's business to know, not the state's;
+  // the rest of the screens have no address of their own and keep using state.
+  const routeBusinessId = businessIdIn(pathname);
+  const [screen, setScreen] = useState<Screen>(screenIn(searchParams.get("screen")));
   const [business, setBusiness] = useState<BusinessDto | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
@@ -65,25 +89,43 @@ function CustomerAppInner() {
     api.myBusinesses(token).then(setOwned).catch(() => setOwned([]));
   }, [token]);
 
-  if (loading) return <Spinner />;
-
   /**
-   * Opening a business from a list, which needs its full profile first.
+   * The path is what says which business is open, so a link and a tap arrive
+   * the same way: navigation changes the URL, and this fills in the business
+   * behind it — including on a cold load, where nothing was tapped at all.
    *
-   * Written once because two lists want it, and awaited rather than left to
-   * float: a rejected fetch used to make the tap do nothing at all, with the
-   * failure going nowhere a person or a log could see it.
+   * Awaited rather than left to float: a rejected fetch used to make the tap do
+   * nothing, with the failure going nowhere a person or a log could see it.
    */
-  const openBusiness = (businessId: string) => {
-    void api
-      .businessProfile(businessId)
+  useEffect(() => {
+    if (routeBusinessId === null) return;
+    if (business?.id === routeBusinessId) return;
+    let current = true;
+    api
+      .businessProfile(routeBusinessId)
       .then((profile) => {
-        setBusiness(profile.business);
-        setScreen("business");
+        if (current) setBusiness(profile.business);
       })
       .catch((cause: unknown) => {
-        console.error("[business] could not be opened", { businessId, cause });
+        console.error("[business] could not be opened", {
+          businessId: routeBusinessId,
+          cause,
+        });
+        if (current) router.replace("/");
       });
+    return () => {
+      current = false;
+    };
+  }, [routeBusinessId, business?.id, router]);
+
+  if (loading) return <Spinner />;
+
+  const openBusiness = (businessId: string) => router.push(businessPath(businessId));
+
+  /** Leaving a business takes the address bar with it. */
+  const leaveBusiness = (next: Screen) => {
+    setScreen(next);
+    if (routeBusinessId !== null) router.push(homePath(next));
   };
 
   const requireSession = (next: Screen) => {
@@ -92,18 +134,19 @@ function CustomerAppInner() {
       setSignInOpen(true);
       return;
     }
-    setScreen(next);
+    leaveBusiness(next);
   };
 
-  const showingBusiness = screen === "business" && business !== null;
+  const showingBusiness = routeBusinessId !== null && business?.id === routeBusinessId;
 
   return (
     <>
       <AppHeader
         languageLabel={copy.langSwitch}
-        {...(showingBusiness || screen === "profile"
+        {...(routeBusinessId !== null || screen === "profile"
           ? {
-              onBack: () => setScreen(showingBusiness ? "search" : "mine"),
+              onBack: () =>
+                routeBusinessId !== null ? leaveBusiness("search") : setScreen("mine"),
               backLabel: copy.back,
             }
           : {})}
@@ -130,33 +173,36 @@ function CustomerAppInner() {
       />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0 }}>
-        {screen === "search" && (
-          <BusinessSearch
-            onOpen={(picked) => {
-              setBusiness(picked);
-              setScreen("business");
-            }}
-          />
+        {routeBusinessId !== null ? (
+          showingBusiness ? (
+            <BookingFlow business={business} onFinished={() => leaveBusiness("mine")} />
+          ) : (
+            <Spinner />
+          )
+        ) : (
+          <>
+            {screen === "search" && (
+              <BusinessSearch
+                onOpen={(picked) => {
+                  // The business is already in hand, so the effect behind the
+                  // route sees it as loaded and asks for nothing more.
+                  setBusiness(picked);
+                  openBusiness(picked.id);
+                }}
+              />
+            )}
+            {screen === "mine" && <MyAppointments onOpenBusiness={openBusiness} />}
+            {screen === "visited" && <VisitedBusinesses onOpenBusiness={openBusiness} />}
+            {screen === "profile" && <Profile onSignedOut={() => setScreen("search")} />}
+          </>
         )}
-        {showingBusiness && (
-          <BookingFlow business={business} onFinished={() => setScreen("mine")} />
-        )}
-        {screen === "mine" && (
-          <MyAppointments
-            onOpenBusiness={openBusiness}
-          />
-        )}
-        {screen === "visited" && (
-          <VisitedBusinesses
-            onOpenBusiness={openBusiness}
-          />
-        )}
-        {screen === "profile" && <Profile onSignedOut={() => setScreen("search")} />}
       </main>
 
       <BottomNav
-        current={screen === "business" ? "search" : screen === "profile" ? "mine" : screen}
-        onSelect={(id) => (id === "search" ? setScreen("search") : requireSession(id as Screen))}
+        current={routeBusinessId !== null ? "search" : screen === "profile" ? "mine" : screen}
+        onSelect={(id) =>
+          id === "search" ? leaveBusiness("search") : requireSession(id as Screen)
+        }
         items={[
           { id: "search", label: copy.tabSearch, icon: <SearchIcon /> },
           { id: "mine", label: copy.tabMine, icon: <CalendarIcon /> },
@@ -192,14 +238,14 @@ function CustomerAppInner() {
             </>
           )}
 
-          <Button intent="quiet" onClick={() => { setDrawerOpen(false); setScreen("profile"); }}>
+          <Button intent="quiet" onClick={() => { setDrawerOpen(false); leaveBusiness("profile"); }}>
             {copy.profile}
           </Button>
           <SignOutButton
             label={copy.signOut}
             onSignedOut={() => {
               setDrawerOpen(false);
-              setScreen("search");
+              leaveBusiness("search");
             }}
           />
         </div>
@@ -225,7 +271,7 @@ function CustomerAppInner() {
             signIn(newToken, newUser);
             setSignInOpen(false);
             if (signInIntent !== null) {
-              setScreen(signInIntent);
+              leaveBusiness(signInIntent);
               setSignInIntent(null);
             }
           }}

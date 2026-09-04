@@ -249,7 +249,7 @@ const signIn = {
     "tagline": "קובעים תור. חוסכים זמן.",
     "langSwitch": "EN",
     "title": "כניסה",
-    "body": "אותה כניסה בדיוק ללקוחות, לבעלי עסק ולהנהלה: מספר טלפון וקוד בוואטסאפ. אין סיסמאות במערכת.",
+    "body": "אותה כניסה בדיוק ללקוחות ובעלי עסק",
     "phoneLabel": "מספר טלפון",
     "sendCode": "שליחת קוד",
     "codeTitle": "הקוד שנשלח",
@@ -259,8 +259,6 @@ const signIn = {
     "doneTitle": "נכנסתם",
     "doneBody": "מכאן ממשיכים ליומן. ההתחברות נשמרת 30 יום.",
     "startOver": "להתחיל מחדש",
-    "noteSame": "אין הרשמה נפרדת. מספר שלא מוכר נרשם, מספר מוכר נכנס — אותה פעולה בדיוק.",
-    "noteAllowlist": "לחשבון הנהלה נדרש גם שהמספר יופיע ברשימת המספרים המורשים. דגל הרשאה לבדו לא מספיק.",
   },
   en: {
     "nameTitle": "Nice to meet you",
@@ -276,7 +274,7 @@ const signIn = {
     "tagline": "Book a slot. Save time.",
     "langSwitch": "עב",
     "title": "Sign in",
-    "body": "The same sign-in for customers, owners and administrators alike: a phone number and a WhatsApp code. There are no passwords in the system.",
+    "body": "The same sign-in for customers and owners",
     "phoneLabel": "Phone number",
     "sendCode": "Send the code",
     "codeTitle": "The code we sent",
@@ -286,8 +284,6 @@ const signIn = {
     "doneTitle": "You're in",
     "doneBody": "From here you go to the day view. A session lasts 30 days.",
     "startOver": "Start over",
-    "noteSame": "There is no separate sign-up. An unknown number registers, a known one signs in — the very same action.",
-    "noteAllowlist": "An administrator also has to appear on the phone allowlist. The flag alone is not sufficient.",
   },
 } as const;
 
