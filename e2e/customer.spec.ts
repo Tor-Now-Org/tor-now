@@ -55,6 +55,25 @@ test.describe("finding and booking", () => {
     await expect(page.getByText("בוחרים שירות")).toBeVisible();
     await expect(page.getByText("תספורת")).toBeVisible();
     await expect(page.getByText("בוחרים שעה")).toBeVisible();
+    // Opening a business puts it in the address bar, so the page can be shared.
+    // Which business is not asserted: the name is shared with earlier runs, so
+    // the card that matches is not necessarily the one just created.
+    await expect(page).toHaveURL(/\/business\/[0-9a-f-]{36}$/);
+  });
+
+  test("a business opens straight from its own address", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `מספרה בקישור ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+
+    await page.goto(`/business/${shop.business.id}`);
+    await ready(page);
+
+    await expect(page.getByRole("heading", { name: shop.business.name })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText("בוחרים שירות")).toBeVisible();
   });
 
   test("shows nothing found for a name that is not there", async ({ page }) => {
@@ -167,10 +186,10 @@ test.describe("finding and booking", () => {
     });
     expect(booked.ok(), await booked.text()).toBe(true);
 
+    // A business has an address of its own, so the reload comes back to it
+    // rather than to the search screen it was found from.
     await page.reload();
     await ready(page);
-    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
-    await page.getByText(name, { exact: false }).first().click();
     // Back to the same day the count was taken on, which need not be today.
     await showDay(page, day);
     await expect(slots.first()).toBeVisible({ timeout: 20_000 });
