@@ -38,7 +38,7 @@ describe("booking", () => {
     expect(membership?.role).toBe("CUSTOMER");
   });
 
-  it("refuses a second booking for the same service on the same day", async () => {
+  it("stops at a second booking for the same service that day, and says what for", async () => {
     const shop = await anEstablishedBusiness(test);
     const customer = await signIn(test, "+972500000002", "דנה");
 
@@ -51,9 +51,68 @@ describe("booking", () => {
     };
     await test.services.booking.book(customer.actor, request);
 
+    // Its own code, and carrying what the question needs: the interface has to
+    // name the service and the day when it asks whether they meant it.
     await expect(
       test.services.booking.book(customer.actor, { ...request, startAt: TUESDAY_AT("11:00") }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    ).rejects.toMatchObject({
+      code: "ALREADY_BOOKED_THAT_DAY",
+      details: { serviceName: shop.service.name },
+    });
+  });
+
+  it("takes the second booking once the customer has said to go ahead", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const request = {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    };
+    const first = await test.services.booking.book(customer.actor, request);
+
+    // Two haircuts for two children on one phone number: unusual enough to ask
+    // about, ordinary enough that refusing it outright would be wrong.
+    const second = await test.services.booking.book(customer.actor, {
+      ...request,
+      startAt: TUESDAY_AT("11:00"),
+      bookingAnotherOfTheSame: true,
+    });
+
+    expect(second.status).toBe("CONFIRMED");
+    expect(second.id).not.toBe(first.id);
+    expect(
+      test.store.appointments.filter(
+        (appointment) => appointment.customerId === customer.user.id,
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("still refuses a second booking at a time no longer on offer", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const request = {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    };
+    await test.services.booking.book(customer.actor, request);
+
+    // Saying "yes, another one" answers a question about repeating a service.
+    // It does not answer for the chair being occupied, which is not the
+    // customer's to overrule — that slot is simply no longer offered.
+    await expect(
+      test.services.booking.book(customer.actor, {
+        ...request,
+        bookingAnotherOfTheSame: true,
+      }),
+    ).rejects.toMatchObject({ code: "OUTSIDE_WORKING_HOURS" });
   });
 
   it("allows a different service at the same business on the same day", async () => {

@@ -44,6 +44,10 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;paddin
 input,select{font:inherit;color:inherit}
 .field{width:100%;min-height:48px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--raised);font-size:15px;outline:none}
 .field:focus{border-color:var(--accent)}
+/* A paragraph is not a line: it needs padding on all four sides, room to grow,
+   and the page's own face rather than the browser's monospace default. */
+.field.multiline{min-height:84px;padding:12px 14px;line-height:1.6;resize:vertical;
+  font-family:inherit;font-size:14.5px}
 .label{font-size:12.5px;font-weight:500;color:var(--muted)}
 .hint{font-size:12px;color:var(--faint);line-height:1.5}
 /* One button system. Weight, depth and a real pressed state — a 1px

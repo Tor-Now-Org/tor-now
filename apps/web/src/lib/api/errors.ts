@@ -10,6 +10,7 @@ export type ApiErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
+  | "ALREADY_BOOKED_THAT_DAY"
   | "SLOT_TAKEN"
   | "ALREADY_CANCELLED"
   | "ALREADY_STARTED"

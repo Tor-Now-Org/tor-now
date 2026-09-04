@@ -91,6 +91,12 @@ export const bookingSchema = z.object({
   resourceId: uuidSchema,
   startAt: instantSchema,
   customerNote: z.string().trim().max(500).nullable().default(null),
+  /**
+   * Sent when the customer has been told they already hold an appointment for
+   * this service that day and has said to go ahead anyway. Absent means "not
+   * asked yet", so a first attempt still stops and explains itself.
+   */
+  bookingAnotherOfTheSame: z.boolean().default(false),
 });
 
 export const rescheduleSchema = z.object({ startAt: instantSchema });

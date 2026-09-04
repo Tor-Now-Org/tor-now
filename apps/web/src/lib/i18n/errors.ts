@@ -17,7 +17,10 @@ const MESSAGES: Readonly<
     UNAUTHENTICATED: "צריך להתחבר כדי להמשיך.",
     FORBIDDEN: "אין לכם הרשאה לפעולה הזאת.",
     NOT_FOUND: "לא מצאנו את מה שחיפשתם.",
-    CONFLICT: "קיים לך תור עבור שירות זה באותו יום.",
+    CONFLICT: "הפעולה מתנגשת עם משהו קיים.",
+    // Reached only if the question is somehow skipped; the booking screen asks
+    // rather than showing this.
+    ALREADY_BOOKED_THAT_DAY: "כבר יש לכם תור לשירות הזה באותו יום.",
     SLOT_TAKEN: "מישהו הקדים אתכם לשעה הזאת. בחרו שעה אחרת — עדכנו את הרשימה.",
     ALREADY_CANCELLED: "התור הזה כבר בוטל.",
     ALREADY_STARTED: "התור כבר התחיל — אי אפשר להזיז אותו, רק לבטל או לסמן שלא הגיעו.",
@@ -34,7 +37,8 @@ const MESSAGES: Readonly<
     UNAUTHENTICATED: "You need to sign in to continue.",
     FORBIDDEN: "You do not have permission to do that.",
     NOT_FOUND: "We could not find what you were looking for.",
-    CONFLICT: "You already have an appointment for the same day.",
+    CONFLICT: "That conflicts with something that already exists.",
+    ALREADY_BOOKED_THAT_DAY: "You already have an appointment for this service that day.",
     SLOT_TAKEN: "Someone took that time while you were confirming. Pick another — the list is up to date.",
     ALREADY_CANCELLED: "That appointment has already been cancelled.",
     ALREADY_STARTED: "That appointment has already started — it can be cancelled or marked a no show, but not moved.",

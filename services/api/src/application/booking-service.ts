@@ -42,6 +42,12 @@ export type BookingRequestInput = {
   readonly resourceId: ResourceId;
   readonly startAt: string;
   readonly customerNote: string | null;
+  /**
+   * The customer has been told they already hold an appointment for this
+   * service that day, and said to go ahead. Absent means they have not been
+   * asked, so the first attempt still stops and explains itself.
+   */
+  readonly bookingAnotherOfTheSame?: boolean;
 };
 
 /**
@@ -139,28 +145,34 @@ export const bookingService = (dependencies: {
           throw forbidden("This business is not accepting bookings from you");
         }
 
-        // One appointment per Service per day. Another Service on the same day
-        // is fine — the limit is on repeating the same thing, not on visiting.
+        // A second appointment for the same Service on the same day is unusual
+        // enough to be worth stopping over, and legitimate often enough that
+        // refusing it outright would be wrong — two haircuts for two children
+        // under one phone number is the ordinary case. So it asks rather than
+        // refuses: the first attempt stops with everything needed to pose the
+        // question, and an attempt that carries the answer goes through.
         //
-        // ponytail: application-level only, so two simultaneous requests can
-        // both pass. The database constraint that would close that race needs
-        // the local day of a timestamptz in the Business's zone, which is not
-        // an immutable expression; add it if double bookings appear in fact.
-        const clash = await repositories.appointments.hasConfirmedForServiceBetween(
-          customerId,
-          draft.serviceId,
-          dayStart,
-          dayEnd,
-        );
-        if (clash) {
-          throw new DomainError(
-            "CONFLICT",
-            "You already have an appointment for this service on that day",
-            {
-              serviceName: draft.serviceName,
-              date: instantToZoned(startAt, context.business.timeZone).date,
-            },
+        // The check runs on the confirmed attempt too. The customer answered a
+        // question about the appointment they had when they were asked, and
+        // between then and now they may have booked another elsewhere; what
+        // they agreed to is "one more of these today", which is what this is.
+        if (input.bookingAnotherOfTheSame !== true) {
+          const already = await repositories.appointments.hasConfirmedForServiceBetween(
+            customerId,
+            draft.serviceId,
+            dayStart,
+            dayEnd,
           );
+          if (already) {
+            throw new DomainError(
+              "ALREADY_BOOKED_THAT_DAY",
+              "The customer already has an appointment for this service that day",
+              {
+                serviceName: draft.serviceName,
+                date: instantToZoned(startAt, context.business.timeZone).date,
+              },
+            );
+          }
         }
 
         const appointment = await repositories.appointments.create(draft);

@@ -147,6 +147,20 @@ export const AppointmentSheet = ({
             />
           </Card>
 
+          {/* What the customer wrote when they booked. Shown right under who
+              they are, because it is usually about this appointment
+              specifically — a child coming along, a time constraint, where
+              they will be parked — and is no use to the owner discovered
+              afterwards. */}
+          {appointment.customerNote !== null && appointment.customerNote !== "" && (
+            <Card style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span className="label">{copy.customerNote}</span>
+              <span style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                {appointment.customerNote}
+              </span>
+            </Card>
+          )}
+
           {appointment.status === "NO_SHOW" && <Warning>{copy.noShowNote}</Warning>}
           {appointment.status === "CANCELLED" && <Note>{copy.cancelledNote}</Note>}
           {/* Said before the buttons rather than after a refused click. A

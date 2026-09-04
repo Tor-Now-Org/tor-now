@@ -14,6 +14,7 @@ const STATUS_BY_CODE: Readonly<Record<DomainErrorCode, ContentfulStatusCode>> =
     UNAUTHENTICATED: 401,
     FORBIDDEN: 403,
     NOT_FOUND: 404,
+    ALREADY_BOOKED_THAT_DAY: 409,
     CONFLICT: 409,
     // ADR 0003 makes this recoverable rather than terminal: the interface
     // re-renders availability in place instead of losing the customer's work.

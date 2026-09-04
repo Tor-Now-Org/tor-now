@@ -148,6 +148,54 @@ export const Field = ({
   );
 };
 
+/**
+ * The same field, for text that runs to more than a line.
+ *
+ * It shares Field's label, hint and problem behaviour deliberately — a form
+ * where the long answer is validated differently from the short ones teaches
+ * the reader two rules instead of one.
+ */
+export const MultilineField = ({
+  label,
+  hint,
+  problem,
+  id,
+  rows = 3,
+  ...rest
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  label: string;
+  hint?: string;
+  /** Already in the reader's language; see lib/i18n/field-problems.ts. */
+  problem?: string | null;
+}) => {
+  const wrong = problem !== undefined && problem !== null;
+  const describedBy = wrong ? `${id ?? ""}-problem` : undefined;
+  return (
+    <label htmlFor={id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span className="label">{label}</span>
+      <textarea
+        {...rest}
+        id={id}
+        rows={rows}
+        className="field multiline"
+        aria-invalid={wrong ? true : undefined}
+        aria-describedby={describedBy}
+        style={{ ...rest.style, ...(wrong && { borderColor: "var(--critical)" }) }}
+      />
+      {wrong ? (
+        <span
+          id={describedBy}
+          style={{ fontSize: 12, color: "var(--critical)", lineHeight: 1.5 }}
+        >
+          {problem}
+        </span>
+      ) : (
+        hint !== undefined && <span className="hint">{hint}</span>
+      )}
+    </label>
+  );
+};
+
 export const Select = ({
   label,
   children,

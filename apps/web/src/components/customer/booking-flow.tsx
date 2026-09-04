@@ -11,7 +11,7 @@ import type {
   ServiceDto,
   SlotDto,
 } from "@/lib/api/types.ts";
-import { formatPrice, timeIn, todayIn } from "@/lib/format.ts";
+import { formatLocalDate, formatPrice, timeIn, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useSession } from "@/lib/session.tsx";
@@ -19,7 +19,7 @@ import { DateStrip } from "../date-strip.tsx";
 import { SlotGrid } from "../slot-grid.tsx";
 import { VerifyPanel } from "../verify-panel.tsx";
 import { BusinessPhotos } from "./business-photos.tsx";
-import { Button, Card, Critical, Sheet, Spinner, Warning } from "../ui.tsx";
+import { Button, Card, Critical, MultilineField, Sheet, Spinner, Warning } from "../ui.tsx";
 
 /** How much of the calendar the strip offers at once. */
 const VISIBLE_DAYS = 14;
@@ -34,6 +34,13 @@ const key = (
     : `${serviceId}|${resourceId}|${date}`;
 
 type Stage = "choosing" | "confirming" | "verifying" | "done";
+
+/** Error details are unknown by type; take a string only when it is one. */
+const aString = (value: unknown, fallback: string): string =>
+  typeof value === "string" ? value : fallback;
+
+/** What the API accepts on customerNote; said here so the field can stop there. */
+const NOTE_LIMIT = 500;
 
 export const BookingFlow = ({
   business,
@@ -56,6 +63,12 @@ export const BookingFlow = ({
   const [stage, setStage] = useState<Stage>("choosing");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  /** Set when the API says this customer already has one of these today. */
+  const [alreadyBooked, setAlreadyBooked] = useState<{
+    serviceName: string;
+    date: string;
+  } | null>(null);
 
   /** The service, calendar and day the profile response already answered for. */
   const alreadyHave = useRef<string | null>(null);
@@ -124,7 +137,12 @@ export const BookingFlow = ({
     void loadDay();
   }, [loadDay, service, resource, date]);
 
-  const confirm = async () => {
+  /**
+   * `anotherOfTheSame` carries the customer's answer to "you already have one
+   * of these today — go ahead?". It is only ever true on a second attempt, so
+   * the first one still stops and asks.
+   */
+  const confirm = async (anotherOfTheSame = false) => {
     if (service === null || resource === null || slot === null) return;
     if (token === null) {
       setStage("verifying");
@@ -138,10 +156,21 @@ export const BookingFlow = ({
         serviceId: service.id,
         resourceId: resource.id,
         startAt: slot.startAt,
-        customerNote: null,
+        customerNote: note.trim() === "" ? null : note.trim(),
+        ...(anotherOfTheSame ? { bookingAnotherOfTheSame: true } : {}),
       });
       setStage("done");
     } catch (cause) {
+      if (isApiError(cause) && cause.code === "ALREADY_BOOKED_THAT_DAY") {
+        // Not a refusal but a question, so it is put as one rather than shown
+        // as an error the customer can do nothing about.
+        setAlreadyBooked({
+          serviceName: aString(cause.details["serviceName"], service.name),
+          date: aString(cause.details["date"], ""),
+        });
+        setBusy(false);
+        return;
+      }
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
       if (isRecoverableSlotError(cause)) {
         // The customer keeps the business, the service and the day; only the
@@ -307,13 +336,49 @@ export const BookingFlow = ({
                 ).format(new Date(slot.startAt))}`}
               />
             </Card>
-            {error !== null && <Critical>{error}</Critical>}
-            <Button onClick={confirm} busy={busy}>
-              {copy.confirmBooking}
-            </Button>
-            <Button intent="quiet" onClick={() => setStage("choosing")}>
-              {copy.backToTimes}
-            </Button>
+            {alreadyBooked === null ? (
+              <>
+                {/* Optional, and said to be: most bookings need nothing, and a
+                    field that looks required makes people invent something. */}
+                <MultilineField
+                  id="booking-note"
+                  label={copy.noteLabel}
+                  hint={copy.noteHint}
+                  placeholder={copy.notePlaceholder}
+                  maxLength={NOTE_LIMIT}
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                />
+                {error !== null && <Critical>{error}</Critical>}
+                <Button onClick={() => void confirm()} busy={busy}>
+                  {copy.confirmBooking}
+                </Button>
+                <Button intent="quiet" onClick={() => setStage("choosing")}>
+                  {copy.backToTimes}
+                </Button>
+              </>
+            ) : (
+              <>
+                {/* A question, not a rejection: the customer may well mean it —
+                    two children, one phone number — so the way through is the
+                    plain button and the way out is the quiet one. */}
+                <Warning>
+                  {copy.alreadyBooked
+                    .replace("{service}", alreadyBooked.serviceName)
+                    .replace("{date}", formatLocalDate(alreadyBooked.date, language, {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    }))}
+                </Warning>
+                <Button onClick={() => void confirm(true)} busy={busy}>
+                  {copy.bookAnyway}
+                </Button>
+                <Button intent="quiet" onClick={() => { setAlreadyBooked(null); setStage("choosing"); }}>
+                  {copy.backToTimes}
+                </Button>
+              </>
+            )}
           </div>
         )}
 

@@ -17,6 +17,13 @@ export type DomainErrorCode =
   | "BUSINESS_INACTIVE"
   | "ALREADY_CANCELLED"
   | "ALREADY_STARTED"
+  /**
+   * The customer already holds an appointment for this service that day. Its
+   * own code rather than a CONFLICT, because it is the one conflict the person
+   * may knowingly go ahead with — the interface has to tell it apart from a
+   * clash it can only refuse.
+   */
+  | "ALREADY_BOOKED_THAT_DAY"
   | "CONFLICT"
   | "RATE_LIMITED"
   | "VERIFICATION_FAILED";

@@ -182,6 +182,48 @@ test.describe("finding and booking", () => {
   });
 });
 
+test.describe("booking a second one of the same", () => {
+  test("asks before allowing it, and the note reaches the owner", async ({ page }) => {
+    const name = `כפול ${Date.now()}`;
+    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+    const phone = uniquePhone();
+    await signInDirectly(page, phone, "דנה כהן");
+
+    const book = async (note: string) => {
+      await page.goto("/");
+      await ready(page);
+      await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
+      await page.getByText(name, { exact: false }).first().click();
+      const { time } = await theNextOfferedTime(page);
+      await time.click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await page.getByLabel("הערה לעסק").fill(note);
+      await page.getByRole("button", { name: "אישור התור" }).click();
+    };
+
+    await book("מגיעה עם ילד");
+    await expect(page.getByText("התור נקבע")).toBeVisible({ timeout: 20_000 });
+
+    // The same service again that day: a question, not a refusal.
+    await book("השני הוא לילד");
+    await expect(page.getByText(/כבר יש לכם תור/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "כן, להזמין עוד תור" })).toBeVisible();
+
+    await page.getByRole("button", { name: "כן, להזמין עוד תור" }).click();
+    await expect(page.getByText("התור נקבע")).toBeVisible({ timeout: 20_000 });
+
+    // Both stand, and each carries what the customer wrote.
+    const { token } = await signInDirectly(page, phone, "דנה כהן");
+    const mine = await call<{ customerNote: string | null }[]>("/me/appointments", {
+      token,
+    });
+    expect(mine).toHaveLength(2);
+    expect(mine.map((appointment) => appointment.customerNote).sort()).toEqual(
+      ["השני הוא לילד", "מגיעה עם ילד"].sort(),
+    );
+  });
+});
+
 test.describe("a customer's own appointments", () => {
   test("cancels an appointment and is warned about the notice period", async ({ page }) => {
     const name = `מכון ${Date.now()}`;

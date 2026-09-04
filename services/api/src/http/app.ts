@@ -213,6 +213,7 @@ export const createApp = (services: Services) => {
       resourceId: body.resourceId as never,
       startAt: body.startAt,
       customerNote: body.customerNote,
+      bookingAnotherOfTheSame: body.bookingAnotherOfTheSame,
     });
     return context.json(wire.appointmentOut(appointment), 201);
   });
