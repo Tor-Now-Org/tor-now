@@ -104,6 +104,7 @@ export type AppointmentDto = {
 
 export type MyAppointmentDto = AppointmentDto & {
   businessName: string;
+  resourceName: string;
 };
 
 export type CalendarAppointmentDto = AppointmentDto & {

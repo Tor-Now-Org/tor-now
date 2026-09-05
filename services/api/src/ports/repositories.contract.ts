@@ -621,7 +621,9 @@ export const describeRepositoryContract = (
             limit: 10,
             offset: 0,
           }),
-        ).toMatchObject([{ businessName: context.business.name }]);
+        ).toMatchObject([
+          { businessName: context.business.name, resourceName: context.resource.name },
+        ]);
         expect(
           await repositories.appointments.listForCustomerAtBusiness(
             context.owner.id,

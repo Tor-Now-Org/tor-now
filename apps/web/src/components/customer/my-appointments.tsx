@@ -110,7 +110,17 @@ export const MyAppointments = ({
               {formatPrice(appointment.priceMinor, language, copy.free)}
             </span>
           </div>
-          <span className="hint">{formatWhen(appointment)}</span>
+          <span className="hint">
+            {formatWhen(appointment)} · {copy.staffName} {appointment.resourceName}
+          </span>
+          {appointment.customerNote !== null && appointment.customerNote !== "" && (
+            <Card padded={false} style={{ padding: 10, background: "var(--sunken)" }}>
+              <span className="label">{copy.customerNote}</span>
+              <p style={{ margin: "4px 0 0", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                {appointment.customerNote}
+              </p>
+            </Card>
+          )}
           <Button intent="primary" onClick={() => openInGoogleCalendar(appointment)}>
             {copy.addToCalendar}
           </Button>
@@ -149,7 +159,7 @@ export const MyAppointments = ({
                   appointment.status === "CANCELLED" ? "cancelled hint" : "spent hint"
                 }
               >
-                {formatWhen(appointment)}
+                {formatWhen(appointment)} · {copy.staffName} {appointment.resourceName}
               </span>
             </Card>
           ))}
