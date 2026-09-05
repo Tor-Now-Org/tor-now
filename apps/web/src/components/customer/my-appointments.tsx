@@ -121,15 +121,21 @@ export const MyAppointments = ({
               </p>
             </Card>
           )}
-          <Button intent="primary" onClick={() => openInGoogleCalendar(appointment)}>
-            {copy.addToCalendar}
-          </Button>
-          <Button intent="quiet" onClick={() => onOpenBusiness(appointment.businessId)}>
-            {copy.navigateToBusiness}
-          </Button>
-          <Button intent="quiet" onClick={() => setCancelling(appointment)}>
-            {copy.cancelAppointment}
-          </Button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <Button intent="primary" onClick={() => openInGoogleCalendar(appointment)}>
+              {copy.addToCalendar}
+            </Button>
+            <Button intent="quiet" onClick={() => onOpenBusiness(appointment.businessId)}>
+              {copy.navigateToBusiness}
+            </Button>
+            <Button
+              intent="quiet"
+              style={{ gridColumn: "1 / -1" }}
+              onClick={() => setCancelling(appointment)}
+            >
+              {copy.cancelAppointment}
+            </Button>
+          </div>
         </Card>
       ))}
 
