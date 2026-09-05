@@ -301,6 +301,63 @@ describe("removing a calendar", () => {
   });
 });
 
+describe("hiding a calendar", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  it("takes it off what customers are offered, and puts it back", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const spare = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      "כיסא שני",
+    );
+
+    await test.services.business.updateResource(
+      shop.owner.actor,
+      shop.business.id,
+      spare.id,
+      { active: false },
+    );
+    const whileHidden = await test.services.discovery.profile(
+      { kind: "ANONYMOUS" },
+      shop.business.id,
+    );
+    expect(whileHidden.resources.map((resource) => resource.id)).not.toContain(spare.id);
+
+    await test.services.business.updateResource(
+      shop.owner.actor,
+      shop.business.id,
+      spare.id,
+      { active: true },
+    );
+    const whenShown = await test.services.discovery.profile(
+      { kind: "ANONYMOUS" },
+      shop.business.id,
+    );
+    expect(whenShown.resources.map((resource) => resource.id)).toContain(spare.id);
+  });
+
+  it("will not hide the last one a business has", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    // Hiding is how a calendar stops being offered, so hiding the only one
+    // leaves a business no one can book — the same end the delete guard
+    // already refuses, reached by a different door.
+    await expect(
+      test.services.business.updateResource(
+        shop.owner.actor,
+        shop.business.id,
+        shop.resource.id,
+        { active: false },
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+  });
+});
+
 describe("where else a business can be found", () => {
   let test: Harness;
 

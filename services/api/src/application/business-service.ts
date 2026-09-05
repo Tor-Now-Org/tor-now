@@ -448,6 +448,17 @@ export const businessService = ({
     return unitOfWork.run(actor, async ({ repositories }) => {
       await loadOwnedBusiness(repositories, actor, businessId);
       await loadOwnedResource(repositories, businessId, resourceId);
+      // Hiding is how a calendar stops being offered, so hiding the last one
+      // leaves a Business nobody can book — the same end deleteResource already
+      // refuses, reached by a different door.
+      if (changes.active === false) {
+        const stillOffered = (
+          await repositories.resources.listForBusiness(businessId)
+        ).filter((resource) => resource.active && resource.id !== resourceId);
+        if (stillOffered.length === 0) {
+          throw validationFailed("A business must keep at least one calendar");
+        }
+      }
       return repositories.resources.update(resourceId, changes);
     });
   },

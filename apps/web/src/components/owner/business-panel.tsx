@@ -214,20 +214,81 @@ export const BusinessPanel = ({
       {panel === "resources" && (
         <>
           <Note>{copy.resourceNote}</Note>
-          {resources.map((resource) => (
-            <Card key={resource.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ flex: 1, fontWeight: 500 }}>{resource.name}</span>
-              <span className="hint">{resource.active ? copy.shown : copy.hidden}</span>
-              {resources.length > 1 && (
-                <button
-                  onClick={() => act(() => api.deleteResource(token, business.id, resource.id))}
-                  style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
+          {resources.map((resource) => {
+            // The last one on offer cannot be taken away by either door: a
+            // business with nothing bookable has no way to say so.
+            const lastOnOffer =
+              resource.active &&
+              resources.filter((candidate) => candidate.active).length <= 1;
+            return (
+              <Card
+                key={resource.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  ...(resource.active
+                    ? {}
+                    : { background: "var(--sunken)", borderStyle: "dashed" }),
+                }}
+              >
+                <span
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
                 >
-                  {copy.delete}
-                </button>
-              )}
-            </Card>
-          ))}
+                  <span
+                    style={{
+                      fontWeight: 500,
+                      ...(resource.active ? {} : { color: "var(--faint)" }),
+                    }}
+                  >
+                    {resource.name}
+                  </span>
+                  {!resource.active && <Tag text={copy.hidden} tone="neutral" />}
+                </span>
+                {/* Standing is something the owner changes, not a word they
+                    read — the same control the services list grew, for the
+                    same reason. */}
+                {!lastOnOffer && (
+                  <button
+                    className="chip"
+                    aria-pressed={!resource.active}
+                    style={{
+                      border: `1px solid ${resource.active ? "var(--line)" : "var(--accent)"}`,
+                      background: resource.active ? "var(--raised)" : "var(--accent-soft)",
+                      color: resource.active ? "var(--muted)" : "var(--accent-strong)",
+                      fontWeight: resource.active ? 400 : 600,
+                    }}
+                    onClick={() =>
+                      void act(() =>
+                        api.updateResource(token, business.id, resource.id, {
+                          active: !resource.active,
+                        }),
+                      )
+                    }
+                  >
+                    {resource.active ? copy.hideService : copy.showService}
+                  </button>
+                )}
+                {!lastOnOffer && (
+                  <button
+                    onClick={() => act(() => api.deleteResource(token, business.id, resource.id))}
+                    style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
+                  >
+                    {copy.delete}
+                  </button>
+                )}
+                {/* Said rather than left as an absence: a row with no controls
+                    and no reason reads as broken, not as protected. */}
+                {lastOnOffer && <span className="hint">{copy.lastCalendar}</span>}
+              </Card>
+            );
+          })}
           <Button intent="quiet" onClick={() => setNewResource("")}>{copy.add}</Button>
         </>
       )}

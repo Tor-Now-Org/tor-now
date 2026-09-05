@@ -250,6 +250,49 @@ test.describe("the business panel", () => {
     ).toHaveAttribute("href", "https://instagram.com/dreamhair");
   });
 
+  test("hides a calendar from customers, and brings it back", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `יומנים ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "יומנים" }).click();
+
+    // A second one, since the last calendar on offer cannot be taken away.
+    await page.getByRole("button", { name: "הוספה" }).click();
+    await page.getByRole("dialog").getByLabel("יומנים").fill("כיסא שני");
+    await page.getByRole("dialog").getByRole("button", { name: "הוספה" }).click();
+    await expect(page.getByText("כיסא שני")).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("button", { name: "הסתרה" }).first().click();
+    await expect(page.getByRole("button", { name: "הצגה" }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText("מוסתר").first()).toBeVisible();
+
+    const whileHidden = await call<{ resources: { name: string }[] }>(
+      `/businesses/${shop.business.id}`,
+    );
+    expect(whileHidden.resources).toHaveLength(1);
+
+    await page.getByRole("button", { name: "הצגה" }).first().click();
+    await expect(page.getByRole("button", { name: "הסתרה" }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const whenShown = await call<{ resources: { name: string }[] }>(
+      `/businesses/${shop.business.id}`,
+    );
+    expect(whenShown.resources).toHaveLength(2);
+  });
+
   test("hides a service from customers, and brings it back", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `הסתרה ${Date.now()}`,
