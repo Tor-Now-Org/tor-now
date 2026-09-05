@@ -621,6 +621,33 @@ export const businessService = ({
     });
   },
 
+  /**
+   * The calendar's whole week at once, replacing what was there.
+   *
+   * The screen edits a week and then saved it as a delete per existing range
+   * and a create per new one — fifteen sequential requests across the Atlantic
+   * for one tap, which is what made saving take seconds. One call, one
+   * transaction, one audit row.
+   */
+  async replaceWorkingHours(
+    actor: Actor,
+    businessId: BusinessId,
+    resourceId: ResourceId,
+    week: readonly { dayOfWeek: number; start: string; end: string }[],
+  ): Promise<readonly WorkingHours[]> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadOwnedResource(repositories, businessId, resourceId);
+      const ranges = week.map((range) => {
+        const start = parseLocalTime(range.start);
+        const end = parseLocalTime(range.end);
+        if (end <= start) throw validationFailed("A range must end after it starts");
+        return { dayOfWeek: range.dayOfWeek, startMinutes: start, endMinutes: end };
+      });
+      return repositories.workingHours.replaceForResource(resourceId, businessId, ranges);
+    });
+  },
+
   async updateWorkingHours(
     actor: Actor,
     businessId: BusinessId,

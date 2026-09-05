@@ -195,6 +195,14 @@ export const resourceUpdateSchema = z.object({
 
 export const workingHoursSchema = workingHoursEntrySchema;
 
+/**
+ * A whole week in one request. Capped generously: seven days of a few stretches
+ * each is the honest maximum, and an unbounded array is an unbounded insert.
+ */
+export const weekSchema = z.object({
+  week: z.array(workingHoursEntrySchema).max(50),
+});
+
 export const workingHoursUpdateSchema = z
   .object({ start: localTimeSchema, end: localTimeSchema })
   .refine((range) => range.end > range.start, {

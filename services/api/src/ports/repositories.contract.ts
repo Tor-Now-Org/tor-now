@@ -888,6 +888,43 @@ export const describeRepositoryContract = (
         expect(
           await repositories.workingHours.listForResource(context.resource.id),
         ).toEqual([]);
+
+        // A whole week in one statement, in place of whatever was there.
+        await repositories.workingHours.create({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          dayOfWeek: dayOfWeek(1),
+          startMinutes: localTime(600),
+          endMinutes: localTime(700),
+        });
+        const week = await repositories.workingHours.replaceForResource(
+          context.resource.id,
+          context.business.id,
+          [
+            { dayOfWeek: 0, startMinutes: localTime(540), endMinutes: localTime(780) },
+            { dayOfWeek: 0, startMinutes: localTime(960), endMinutes: localTime(1140) },
+            { dayOfWeek: 5, startMinutes: localTime(540), endMinutes: localTime(780) },
+          ],
+        );
+        expect(week).toHaveLength(3);
+        expect(
+          (await repositories.workingHours.listForResource(context.resource.id)).map(
+            (entry) => `${entry.dayOfWeek}:${entry.start}-${entry.end}`,
+          ),
+        ).toEqual(["0:540-780", "0:960-1140", "5:540-780"]);
+
+        // And an empty week is a calendar that keeps no hours at all, not a
+        // no-op that leaves the old ones standing.
+        expect(
+          await repositories.workingHours.replaceForResource(
+            context.resource.id,
+            context.business.id,
+            [],
+          ),
+        ).toEqual([]);
+        expect(
+          await repositories.workingHours.listForResource(context.resource.id),
+        ).toEqual([]);
       });
     });
 

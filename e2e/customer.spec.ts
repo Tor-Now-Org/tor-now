@@ -148,7 +148,10 @@ test.describe("finding and booking", () => {
     await expect(sheet.getByText(shop.resource.name).first()).toBeVisible();
     await expect(sheet.getByText(/\d\d:\d\d–\d\d:\d\d/)).toBeVisible();
     await expect(sheet.getByText(/30 דק׳/)).toBeVisible();
-    await expect(sheet.getByText(/80/)).toBeVisible();
+    // The price with its currency, not the digits alone: the fixture's name
+    // carries a timestamp, and "80" turns up inside it often enough to have
+    // failed this test on a name rather than on a price.
+    await expect(sheet.getByText(/80[\s\u200e\u200f]*₪/)).toBeVisible();
     await page.getByRole("button", { name: "אישור התור" }).click();
 
     await expect(page.getByText("מאמתים מספר טלפון")).toBeVisible();

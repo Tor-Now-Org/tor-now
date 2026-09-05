@@ -231,6 +231,78 @@ describe("owning a business", () => {
       test.store.audit.some((entry) => entry.action === "WORKING_HOURS_CHANGED"),
     ).toBe(true);
   });
+
+  it("replaces the whole week in one go, and audits it once", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const before = test.store.audit.length;
+
+    const week = await test.services.business.replaceWorkingHours(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      [
+        { dayOfWeek: 1, start: "09:00", end: "13:00" },
+        { dayOfWeek: 1, start: "16:00", end: "19:00" },
+        { dayOfWeek: 2, start: "09:00", end: "17:00" },
+      ],
+    );
+
+    // The registered Tuesday is gone: this is the week now, not an addition to
+    // the week that was there.
+    expect(week).toHaveLength(3);
+    const stored = await test.services.business.listWorkingHours(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+    );
+    expect(stored.map((entry) => `${entry.dayOfWeek}:${entry.start}-${entry.end}`)).toEqual([
+      "1:540-780",
+      "1:960-1140",
+      "2:540-1020",
+    ]);
+
+    // One row for the change a person made, not one per range.
+    expect(test.store.audit.length - before).toBe(1);
+  });
+
+  it("refuses a range that ends before it starts, and writes nothing", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    await expect(
+      test.services.business.replaceWorkingHours(
+        shop.owner.actor,
+        shop.business.id,
+        shop.resource.id,
+        [
+          { dayOfWeek: 1, start: "09:00", end: "13:00" },
+          { dayOfWeek: 2, start: "17:00", end: "09:00" },
+        ],
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+
+    // The whole week is one transaction, so a bad range leaves the old one
+    // standing rather than half a new one.
+    const stored = await test.services.business.listWorkingHours(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+    );
+    expect(stored.map((entry) => entry.dayOfWeek)).toEqual([2]);
+  });
+
+  it("will not let one owner rewrite another's week", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const stranger = await signIn(test, "+972500000044", "זר");
+
+    await expect(
+      test.services.business.replaceWorkingHours(
+        stranger.actor,
+        shop.business.id,
+        shop.resource.id,
+        [{ dayOfWeek: 1, start: "09:00", end: "13:00" }],
+      ),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });
 
 describe("removing a calendar", () => {

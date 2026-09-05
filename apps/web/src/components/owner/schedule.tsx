@@ -23,6 +23,7 @@ import {
   WeeklyHours,
   type DayHours,
 } from "./weekly-hours.tsx";
+import { weekIsUsable } from "./usual-week.ts";
 
 /**
  * The three schedule layers of ADR 0002, as three tabs — because each has
@@ -135,14 +136,12 @@ export const Schedule = ({
     setBusy(true);
     setError(null);
     try {
-      for (const range of hours) {
-        await api.deleteWorkingHours(token, business.id, range.id);
-      }
-      for (const [dayOfWeek, day] of week.entries()) {
-        for (const range of rangesFor(day, dayOfWeek)) {
-          await api.addWorkingHours(token, business.id, resource.id, range);
-        }
-      }
+      await api.replaceWorkingHours(
+        token,
+        business.id,
+        resource.id,
+        week.flatMap((day, dayOfWeek) => rangesFor(day, dayOfWeek)),
+      );
       await load();
       setSaved(true);
     } catch (cause) {
@@ -211,7 +210,10 @@ export const Schedule = ({
               {copy.settingsSaved}
             </p>
           )}
-          <Button busy={busy} onClick={() => void saveWeek()}>
+          {/* A half-typed time is not a shorter day: saving it would drop the
+              stretch it belongs to without saying so. */}
+          {!weekIsUsable(week) && <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>}
+          <Button busy={busy} disabled={!weekIsUsable(week)} onClick={() => void saveWeek()}>
             {copy.save}
           </Button>
         </>

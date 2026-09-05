@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { mergedRanges, type TimeRange } from "@tor-now/domain";
-import { Button, Card, Field, Note } from "../ui.tsx";
+import { Button, Card, Note } from "../ui.tsx";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import {
   breakBetween,
   collidesWithPrevious,
   exceptionsTo,
+  isUsable,
   usualOf,
 } from "./usual-week.ts";
 
@@ -46,6 +47,8 @@ export const DEFAULT_OPEN_DAYS = [0, 1, 2, 3, 4];
 const TOO_MANY_EXCEPTIONS = 5;
 /** A new stretch starts an hour after the last one ends, so it lands as a break. */
 const AFTER_THE_LAST = 60;
+/** Wide enough for "09:00", so a label can be centred on its mark. */
+const LABEL_WIDTH = 40;
 
 export const emptyWeek = (): DayHours[] =>
   Array.from({ length: 7 }, (_unused, day) => ({
@@ -108,7 +111,7 @@ const clockOf = (minutes: number): string => {
  * interaction — it is a picture of what the fields already say.
  */
 const DayBar = ({ ranges }: { ranges: readonly TimeRange[] }) => {
-  const open = mergedRanges(ranges);
+  const open = mergedRanges(ranges.filter(isUsable));
   if (open.length === 0) return null;
 
   const first = open[0];
@@ -120,41 +123,73 @@ const DayBar = ({ ranges }: { ranges: readonly TimeRange[] }) => {
   const across = Math.max(60, to - from);
   const at = (minutes: number) => ((minutes - from) / across) * 100;
 
+  // An hour marked every so often rather than every hour: a label per hour on a
+  // phone is a grey smudge. The step is chosen so the marks stay about a
+  // thumb's width apart however long the day is.
+  const hours = across / 60;
+  const step = hours <= 6 ? 1 : hours <= 12 ? 2 : 3;
+  const marks: number[] = [];
+  for (let minute = from; minute <= to; minute += step * 60) marks.push(minute);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }} aria-hidden="true">
       <div
-        aria-hidden="true"
         style={{
           position: "relative",
-          height: 30,
-          borderRadius: 10,
+          height: 34,
+          borderRadius: 11,
           background: "var(--sunken)",
+          border: "1px solid var(--line)",
           overflow: "hidden",
         }}
       >
+        {marks.map((minute) => (
+          <span
+            key={`tick-${minute}`}
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              insetInlineStart: `${at(minute)}%`,
+              width: 1,
+              background: "var(--line)",
+            }}
+          />
+        ))}
         {open.map((range) => (
           <span
             key={`${range.start}-${range.end}`}
             style={{
               position: "absolute",
-              top: 6,
-              bottom: 6,
+              top: 5,
+              bottom: 5,
               insetInlineStart: `${at(minutesOf(range.start))}%`,
               width: `${at(minutesOf(range.end)) - at(minutesOf(range.start))}%`,
-              borderRadius: 6,
-              background: "var(--accent)",
-              opacity: 0.9,
+              borderRadius: 7,
+              background: "linear-gradient(180deg,var(--accent),var(--accent-strong))",
+              boxShadow: "0 1px 2px oklch(25% 0.055 258/.18)",
             }}
           />
         ))}
       </div>
-      <div
-        className="hint tab"
-        aria-hidden="true"
-        style={{ display: "flex", justifyContent: "space-between" }}
-      >
-        <span>{clockOf(from)}</span>
-        <span>{clockOf(to)}</span>
+      {/* The hours themselves, under the marks they belong to. */}
+      <div style={{ position: "relative", height: 14 }}>
+        {marks.map((minute) => (
+          <span
+            key={`label-${minute}`}
+            className="hint tab"
+            style={{
+              position: "absolute",
+              // Centred on the mark by a symmetric box rather than a transform:
+              // translateX goes the wrong way when the page turns around.
+              insetInlineStart: `calc(${at(minute)}% - ${LABEL_WIDTH / 2}px)`,
+              width: LABEL_WIDTH,
+              textAlign: "center",
+            }}
+          >
+            {clockOf(minute)}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -182,6 +217,18 @@ const Stretches = ({
   const at = (position: number, change: (range: TimeRange) => TimeRange) =>
     setRanges(ranges.map((range, index) => (index === position ? change(range) : range)));
 
+  /**
+   * Put the stretches in the order of the day, once the hand editing them has
+   * left the field. Sorting on every keystroke would move the row somebody is
+   * still typing into; leaving them unsorted makes the gap between two of them
+   * a lie, since "what is between these" only means anything in order.
+   */
+  const tidy = () => {
+    if (!ranges.every(isUsable)) return;
+    const inOrder = [...ranges].sort((left, right) => left.start.localeCompare(right.start));
+    if (inOrder.some((range, index) => range !== ranges[index])) setRanges(inOrder);
+  };
+
   return (
     <>
       {ranges.map((range, position) => {
@@ -205,45 +252,55 @@ const Stretches = ({
               >
                 <Rule />
                 <span className="tab">
-                  {gap === null
+                  {collidesWithPrevious(ranges, position)
                     ? copy.rangesOverlap
-                    : `${copy.breakOf} · ${gap.start}–${gap.end}`}
+                    : gap === null
+                      ? copy.breakOf
+                      : `${copy.breakOf} · ${gap.start}–${gap.end}`}
                 </span>
                 <Rule />
               </div>
             )}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
-              <div
-                style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-              >
-                <Field
-                  id={`from-${id}-${position}`}
-                  label={copy.from}
-                  type="time"
-                  value={range.start}
-                  onChange={(event) =>
-                    at(position, (found) => ({ ...found, start: event.target.value }))
-                  }
-                />
-                <Field
-                  id={`to-${id}-${position}`}
-                  label={copy.to}
-                  type="time"
-                  value={range.end}
-                  onChange={(event) =>
-                    at(position, (found) => ({ ...found, end: event.target.value }))
-                  }
-                />
-              </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Clock
+                id={`from-${id}-${position}`}
+                label={copy.opensAt}
+                value={range.start}
+                onChange={(start) => at(position, (found) => ({ ...found, start }))}
+                onDone={tidy}
+              />
+              <span aria-hidden="true" style={{ color: "var(--faint)", flexShrink: 0 }}>
+                –
+              </span>
+              <Clock
+                id={`to-${id}-${position}`}
+                label={copy.closesAt}
+                value={range.end}
+                onChange={(end) => at(position, (found) => ({ ...found, end }))}
+                onDone={tidy}
+              />
               {ranges.length > 1 && (
                 <button
                   aria-label={`${copy.delete} ${range.start}-${range.end}`}
                   onClick={() =>
                     setRanges(ranges.filter((_unused, index) => index !== position))
                   }
-                  style={{ color: "var(--critical)", fontSize: 13, minHeight: 48 }}
+                  style={{
+                    flexShrink: 0,
+                    width: 38,
+                    height: 38,
+                    borderRadius: 999,
+                    color: "var(--muted)",
+                  }}
                 >
-                  {copy.delete}
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M6 6l12 12M18 6L6 18"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </button>
               )}
             </div>
@@ -271,6 +328,73 @@ const Stretches = ({
         {copy.addRange}
       </button>
     </>
+  );
+};
+
+/**
+ * One time, as a control worth tapping.
+ *
+ * It is a native time input underneath — which is what opens the phone's own
+ * clock, the picker every owner already knows — wearing the app's face: the
+ * hour large and in the display type, what it means small above it. A field
+ * with a caption beside another field with a caption said the same thing in
+ * the browser's own voice, which is the one voice the product does not use.
+ */
+const Clock = ({
+  id,
+  label,
+  value,
+  onChange,
+  onDone,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onDone: () => void;
+}) => {
+  const usable = /^\d{2}:\d{2}$/.test(value);
+  return (
+    <span
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 1,
+        padding: "5px 4px 7px",
+        borderRadius: 14,
+        background: usable ? "var(--raised)" : "var(--critical-soft)",
+        border: `1px solid ${usable ? "var(--line)" : "oklch(55% 0.170 22/.45)"}`,
+        boxShadow: "0 1px 2px oklch(25% 0.055 258/.06)",
+      }}
+    >
+      <label htmlFor={id} style={{ fontSize: 10.5, fontWeight: 500, color: "var(--faint)" }}>
+        {label}
+      </label>
+      <input
+        id={id}
+        type="time"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onDone}
+        style={{
+          width: "100%",
+          minHeight: 32,
+          border: 0,
+          outline: "none",
+          background: "transparent",
+          textAlign: "center",
+          fontFamily: "Rubik, sans-serif",
+          fontWeight: 600,
+          fontSize: 18,
+          letterSpacing: "-.01em",
+          fontVariantNumeric: "tabular-nums",
+          color: usable ? "var(--ink)" : "var(--critical)",
+        }}
+      />
+    </span>
   );
 };
 
@@ -309,23 +433,38 @@ export const WeeklyHours = ({
     setHours(atDay(hours, dayOfWeek, change));
 
   /** The usual is the days themselves, so editing it edits all of them. */
-  const setUsualRanges = (ranges: TimeRange[]) =>
+  const setUsualRanges = (ranges: TimeRange[]) => {
+    // Pin the days that already differ. Move the usual to nine-to-one and a
+    // Friday that already closed at one would match it, be swallowed into the
+    // group, and vanish from the list of days that differ — the screen quietly
+    // undoing a decision the owner made.
+    const pinned = exceptions.filter((day) => hours[day]?.open === true);
+    if (pinned.some((day) => !apart.includes(day))) {
+      setApart([...new Set([...apart, ...pinned])]);
+    }
     setHours(
       hours.map((day, dayOfWeek) =>
         usual.days.includes(dayOfWeek) ? { ...day, ranges } : day,
       ),
     );
+  };
+
+  /** What a day gets when it has nothing of its own to fall back on. */
+  const someHours = (): TimeRange[] =>
+    usual.ranges.length > 0
+      ? usual.ranges.map((range) => ({ ...range }))
+      : [{ ...DEFAULT_OPENING }];
 
   const joinTheUsual = (dayOfWeek: number) => {
     setApart(apart.filter((day) => day !== dayOfWeek));
-    setDay(dayOfWeek, () => ({ open: true, ranges: [...usual.ranges] }));
+    setDay(dayOfWeek, () => ({ open: true, ranges: someHours() }));
   };
 
   const leaveTheUsual = (dayOfWeek: number, closed: boolean) => {
     if (!apart.includes(dayOfWeek)) setApart([...apart, dayOfWeek]);
     setDay(dayOfWeek, (day) => ({
       open: !closed,
-      ranges: day.ranges.length > 0 ? day.ranges : [...usual.ranges],
+      ranges: day.ranges.length > 0 ? day.ranges : someHours(),
     }));
   };
 
@@ -375,7 +514,11 @@ export const WeeklyHours = ({
         {usual.days.length === 0 ? (
           <Note>{copy.noUsualYet}</Note>
         ) : (
-          <Stretches id="usual" ranges={[...usual.ranges]} setRanges={setUsualRanges} />
+          <Stretches
+            id="usual"
+            ranges={usual.ranges.map((range) => ({ ...range }))}
+            setRanges={setUsualRanges}
+          />
         )}
 
         <div style={{ height: 1, background: "var(--line)" }} />

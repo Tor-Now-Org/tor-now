@@ -465,6 +465,24 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         store.workingHours = [...store.workingHours, hours];
         return hours;
       },
+      async replaceForResource(resourceId, businessId, ranges) {
+        const written = ranges.map((range) => {
+          const hours = {
+            id: asId(nextId("working-hours")),
+            resourceId,
+            businessId,
+            dayOfWeek: dayOfWeek(range.dayOfWeek),
+            start: localTime(range.startMinutes),
+            end: localTime(range.endMinutes),
+          } as (typeof store.workingHours)[number];
+          return hours;
+        });
+        store.workingHours = [
+          ...store.workingHours.filter((hours) => hours.resourceId !== resourceId),
+          ...written,
+        ];
+        return written;
+      },
       async update(id, changes) {
         const existing = store.workingHours.find((hours) => hours.id === id);
         if (existing === undefined) throw notFound("WorkingHours", id);

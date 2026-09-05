@@ -154,6 +154,23 @@ export const workingHoursRepository = (
   async delete(id) {
     await tx`delete from working_hours where id = ${id}`;
   },
+
+  async replaceForResource(resourceId, businessId, ranges) {
+    await tx`delete from working_hours where resource_id = ${resourceId}`;
+    if (ranges.length === 0) return [];
+    // One statement for the week. The column list comes from the rows, so the
+    // shape is stated once, here.
+    const rows = ranges.map((range) => ({
+      resource_id: resourceId,
+      business_id: businessId,
+      day_of_week: range.dayOfWeek,
+      start_local: range.startMinutes,
+      end_local: range.endMinutes,
+    }));
+    const written = await tx<Row[]>`
+      insert into working_hours ${tx(rows)} returning *`;
+    return written.map(toWorkingHours);
+  },
 });
 
 export const dateOverrideRepository = (

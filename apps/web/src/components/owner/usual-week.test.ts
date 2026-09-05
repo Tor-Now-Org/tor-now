@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { DayHours } from "./weekly-hours.tsx";
-import { breakBetween, collidesWithPrevious, exceptionsTo, usualOf } from "./usual-week.ts";
+import {
+  breakBetween,
+  collidesWithPrevious,
+  exceptionsTo,
+  isUsable,
+  usualOf,
+  weekIsUsable,
+} from "./usual-week.ts";
 
 const open = (...ranges: { start: string; end: string }[]): DayHours => ({
   open: true,
@@ -109,5 +116,37 @@ describe("what sits between two stretches", () => {
     const touching = [tillOne, { start: "13:00", end: "19:00" }];
     expect(breakBetween(touching, 1)).toBeNull();
     expect(collidesWithPrevious(touching, 1)).toBe(true);
+  });
+});
+
+describe("a time the browser is still being told", () => {
+  it("is not a stretch, and not a week that can be saved", () => {
+    // What a native time field reports while only half of it has been set.
+    expect(isUsable({ start: "", end: "17:00" })).toBe(false);
+    expect(isUsable({ start: "09:00", end: "" })).toBe(false);
+    expect(isUsable({ start: "17:00", end: "09:00" })).toBe(false);
+    expect(isUsable({ start: "09:00", end: "17:00" })).toBe(true);
+
+    expect(weekIsUsable([open({ start: "09:00", end: "" }), shut, shut, shut, shut, shut, shut]))
+      .toBe(false);
+    // A closed day keeps whatever was last in its fields, and none of it is
+    // going to be stored, so it cannot be what blocks a save.
+    expect(
+      weekIsUsable([
+        { open: false, ranges: [{ start: "09:00", end: "" }] },
+        shut,
+        shut,
+        shut,
+        shut,
+        shut,
+        shut,
+      ]),
+    ).toBe(true);
+  });
+
+  it("says nothing about the gap on either side of it", () => {
+    const halfTyped = [{ start: "09:00", end: "13:00" }, { start: "", end: "19:00" }];
+    expect(breakBetween(halfTyped, 1)).toBeNull();
+    expect(collidesWithPrevious(halfTyped, 1)).toBe(false);
   });
 });

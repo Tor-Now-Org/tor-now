@@ -473,6 +473,20 @@ const ownerRoutes = (services: Services) => {
     );
   });
 
+  // The whole week at once. The per-range routes stay: they are what an
+  // override or a single correction uses, and this one is not a replacement for
+  // them but the shape the week editor actually saves in.
+  owner.put("/:businessId/resources/:resourceId/working-hours", async (context) => {
+    const body = await parseBody(context, schema.weekSchema);
+    const hours = await services.business.replaceWorkingHours(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "resourceId"),
+      body.week,
+    );
+    return context.json(hours.map(wire.workingHoursOut));
+  });
+
   owner.patch("/:businessId/working-hours/:id", async (context) => {
     const body = await parseBody(context, schema.workingHoursUpdateSchema);
     return context.json(

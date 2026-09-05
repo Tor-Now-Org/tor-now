@@ -190,6 +190,19 @@ export type WorkingHoursRepository = {
     changes: { startMinutes: number; endMinutes: number },
   ): Promise<WorkingHours>;
   delete(id: WorkingHoursId): Promise<void>;
+  /**
+   * This calendar's whole week, in place of the week it had.
+   *
+   * The editor speaks in days and the store speaks in ranges, with no
+   * correspondence between the two to preserve — a day that lost its break has
+   * one range where it had two. Saving it as a delete and an insert per range
+   * meant fifteen round trips for one tap of "save"; this is one.
+   */
+  replaceForResource(
+    resourceId: ResourceId,
+    businessId: BusinessId,
+    ranges: readonly { dayOfWeek: number; startMinutes: number; endMinutes: number }[],
+  ): Promise<readonly WorkingHours[]>;
 };
 
 export type DateOverrideRepository = {

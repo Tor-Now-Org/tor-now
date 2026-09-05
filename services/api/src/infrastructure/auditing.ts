@@ -195,6 +195,23 @@ export const auditedWorkingHours = (
     await inner.delete(id);
     await record(context, AUDIT_ACTIONS.workingHoursChanged, "WorkingHours", id, null, null);
   },
+  async replaceForResource(resourceId, businessId, ranges) {
+    // One row for the week rather than one per range: the change a person made
+    // was "these are my hours now", and fourteen rows saying a range was
+    // removed and another created is a worse record of it than the two weeks
+    // side by side. Kept against the calendar, which is what was edited.
+    const before = await inner.listForResource(resourceId);
+    const after = await inner.replaceForResource(resourceId, businessId, ranges);
+    await record(
+      context,
+      AUDIT_ACTIONS.workingHoursChanged,
+      "Resource",
+      resourceId,
+      before,
+      after,
+    );
+    return after;
+  },
 });
 
 export const auditedDateOverrides = (

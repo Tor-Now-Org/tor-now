@@ -24,6 +24,7 @@ import {
   WeeklyHours,
   type DayHours,
 } from "@/components/owner/weekly-hours.tsx";
+import { weekIsUsable } from "@/components/owner/usual-week.ts";
 import { Button, Card, Critical, Field, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import type { BusinessDto } from "@/lib/api/types.ts";
@@ -159,7 +160,9 @@ export default function OnboardingPage() {
                 .filter((service) => service.name.trim().length > 0)
                 .map((service) => checkText(service.name, TEXT_RULES.serviceName)),
             )
-          : hours.some((day) => day.open);
+          : // Open somewhere, and every stretch of it readable: a half-typed
+            // time would be dropped on the way to the store without a word.
+            hours.some((day) => day.open) && weekIsUsable(hours);
 
   const finish = async () => {
     setBusy(true);

@@ -73,6 +73,28 @@ export const exceptionsTo = (usual: UsualWeek): number[] =>
   );
 
 /**
+ * A time the browser will hand back mid-edit.
+ *
+ * A native time field is empty until both halves are set, and reports that as
+ * "". Everything downstream — sorting, the bar, the gap between two stretches —
+ * reads a clock as two numbers, so the half-typed state has to be a state the
+ * screen knows about rather than a NaN it renders.
+ */
+export const isClock = (value: string): boolean => /^\d{2}:\d{2}$/.test(value);
+
+/** A stretch that could be stored: two real times, the second after the first. */
+export const isUsable = (range: TimeRange): boolean =>
+  isClock(range.start) && isClock(range.end) && range.start < range.end;
+
+/**
+ * Whether the week could be saved as it stands. An open day with a half-typed
+ * stretch would otherwise be written as a day with fewer hours than it has,
+ * silently, because merging drops what it cannot read.
+ */
+export const weekIsUsable = (week: readonly DayHours[]): boolean =>
+  week.every((day) => !day.open || day.ranges.every(isUsable));
+
+/**
  * The gap between two stretches — which is all a break has ever been. Absent
  * when they touch or collide, since there is nothing between them to name.
  */
@@ -83,6 +105,7 @@ export const breakBetween = (
   const before = ranges[position - 1];
   const after = ranges[position];
   if (before === undefined || after === undefined) return null;
+  if (!isUsable(before) || !isUsable(after)) return null;
   return after.start > before.end ? { start: before.end, end: after.start } : null;
 };
 
@@ -94,5 +117,6 @@ export const collidesWithPrevious = (
   const before = ranges[position - 1];
   const after = ranges[position];
   if (before === undefined || after === undefined) return false;
+  if (!isUsable(before) || !isUsable(after)) return false;
   return after.start <= before.end;
 };

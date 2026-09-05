@@ -429,6 +429,18 @@ export const api = {
       { method: "POST", body: input, token },
     ),
 
+  /** The whole week in one request, which is how the week editor saves. */
+  replaceWorkingHours: (
+    token: string,
+    businessId: string,
+    resourceId: string,
+    week: { dayOfWeek: number; start: string; end: string }[],
+  ) =>
+    request<WorkingHoursDto[]>(
+      `/businesses/${businessId}/resources/${resourceId}/working-hours`,
+      { method: "PUT", body: { week }, token },
+    ),
+
   updateWorkingHours: (
     token: string,
     businessId: string,
