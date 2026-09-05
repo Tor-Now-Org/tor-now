@@ -25,6 +25,28 @@ import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "../phone-field.tsx";
 import { PhotoPanel } from "./photo-panel.tsx";
 
+/**
+ * How the one control that changes standing is drawn.
+ *
+ * Taking something off the menu should not be the loudest thing on its row, so
+ * withdrawing is quiet. Putting it back is the corrective action and is drawn
+ * as a filled button — the shape this system uses for "press this" — rather
+ * than as an accent tint, which is how it says "already chosen".
+ */
+const restoreOrWithdraw = (active: boolean) =>
+  active
+    ? {
+        border: "1px solid var(--line)",
+        background: "var(--raised)",
+        color: "var(--muted)",
+      }
+    : {
+        border: "1px solid var(--accent-strong)",
+        background: "var(--accent)",
+        color: "var(--on-accent)",
+        fontWeight: 600,
+      };
+
 /** The quiet mark that says a name can be changed by pressing it. */
 const PencilMark = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -212,11 +234,11 @@ export const BusinessPanel = ({
                 style={{
                   // Quiet while it is on offer — taking something off the menu
                   // should not be the loudest thing on the row — and the clear
-                  // way back once it is not.
-                  border: `1px solid ${service.active ? "var(--line)" : "var(--accent)"}`,
-                  background: service.active ? "var(--raised)" : "var(--accent-soft)",
-                  color: service.active ? "var(--muted)" : "var(--accent-strong)",
-                  fontWeight: service.active ? 400 : 600,
+                  // way back once it is not — filled, because the accent tint
+                  // is this system's *selected* state (a picked service, the
+                  // current tab), so a control wearing it reads as already
+                  // chosen rather than as something to press.
+                  ...restoreOrWithdraw(service.active),
                 }}
                 onClick={() =>
                   void act(() =>
@@ -307,14 +329,9 @@ export const BusinessPanel = ({
                     same reason. */}
                 {!lastOnOffer && (
                   <button
-                    className="chip"
+                    className="chip tap"
                     aria-pressed={!resource.active}
-                    style={{
-                      border: `1px solid ${resource.active ? "var(--line)" : "var(--accent)"}`,
-                      background: resource.active ? "var(--raised)" : "var(--accent-soft)",
-                      color: resource.active ? "var(--muted)" : "var(--accent-strong)",
-                      fontWeight: resource.active ? 400 : 600,
-                    }}
+                    style={restoreOrWithdraw(resource.active)}
                     onClick={() =>
                       void act(() =>
                         api.updateResource(token, business.id, resource.id, {
