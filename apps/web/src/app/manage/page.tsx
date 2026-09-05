@@ -42,6 +42,8 @@ function ManageApp() {
    * is its own small betrayal, and the customer page leaves from the list.
    */
   const requestedTab = params.get("tab");
+  /** The calendar the schedule should open on, when arriving from the panel. */
+  const [editingCalendar, setEditingCalendar] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(() =>
     TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "day",
   );
@@ -131,13 +133,23 @@ function ManageApp() {
           <CalendarDay token={token} business={business} resources={resources} />
         )}
         {tab === "schedule" && (
-          <Schedule token={token} business={business} resources={resources} />
+          <Schedule
+            token={token}
+            business={business}
+            resources={resources}
+            {...(editingCalendar === null ? {} : { openOn: editingCalendar })}
+          />
         )}
         {tab === "business" && (
           <BusinessPanel
             token={token}
             business={business}
             resources={resources}
+            // Editing a calendar means its schedule, so the tab changes with it.
+            onEditCalendar={(resourceId) => {
+              setEditingCalendar(resourceId);
+              setTab("schedule");
+            }}
             onChanged={() => {
               void loadBusinesses();
               void loadResources();
@@ -149,7 +161,10 @@ function ManageApp() {
 
       <BottomNav
         current={tab}
-        onSelect={(id) => setTab(id as Tab)}
+        onSelect={(id) => {
+          setEditingCalendar(null);
+          setTab(id as Tab);
+        }}
         items={[
           { id: "day", label: copy.tabDay, icon: <CalendarIcon /> },
           { id: "schedule", label: copy.tabSchedule, icon: <ClockIcon /> },

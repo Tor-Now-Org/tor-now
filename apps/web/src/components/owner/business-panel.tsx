@@ -42,11 +42,14 @@ export const BusinessPanel = ({
   token,
   business,
   resources,
+  onEditCalendar,
   onChanged,
 }: {
   token: string;
   business: BusinessDto;
   resources: readonly ResourceDto[];
+  /** Takes the owner to this calendar's own schedule, which is where it is edited. */
+  onEditCalendar: (resourceId: string) => void;
   onChanged: () => void;
 }) => {
   const copy = useCopy("owner");
@@ -253,6 +256,17 @@ export const BusinessPanel = ({
                   </span>
                   {!resource.active && <Tag text={copy.hidden} tone="neutral" />}
                 </span>
+                {/* Its hours, blocks and exceptional days live on the schedule
+                    screen, which is where a calendar is actually edited. This
+                    goes straight there with this one open, rather than leaving
+                    the owner to find the tab and pick the row again. */}
+                <button
+                  className="chip"
+                  style={{ border: "1px solid var(--line)" }}
+                  onClick={() => onEditCalendar(resource.id)}
+                >
+                  {copy.editCalendar}
+                </button>
                 {/* Standing is something the owner changes, not a word they
                     read — the same control the services list grew, for the
                     same reason. */}

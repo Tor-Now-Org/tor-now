@@ -166,9 +166,12 @@ test.describe("the schedule layers", () => {
     await ready(page);
     await page.getByRole("button", { name: "לוח זמנים" }).click();
 
-    // Hours: the gap between two ranges is the break, and the screen says so.
-    await expect(page.getByText(/הרווח בין שני טווחים/)).toBeVisible();
-    await expect(page.getByText("08:00–20:00").first()).toBeVisible();
+    // Hours: the week as a person describes it, showing the times this
+    // business actually keeps.
+    await expect(page.getByText("אותן שעות לכמה ימים")).toBeVisible();
+    const monday = page.locator(".card", { hasText: "שני" }).first();
+    await expect(monday.locator('input[type="time"]').first()).toHaveValue("08:00");
+    await expect(monday.locator('input[type="time"]').nth(1)).toHaveValue("20:00");
 
     // Overrides: replace the weekday entirely.
     await page.getByRole("button", { name: "ימים חריגים" }).click();
@@ -316,6 +319,75 @@ test.describe("the business panel", () => {
     await expect(page.getByText("מוסתר").first()).toBeVisible({ timeout: 15_000 });
     const mine = await call<{ status: string }[]>("/me/appointments", { token });
     expect(mine.map((appointment) => appointment.status)).toEqual(["CONFIRMED"]);
+  });
+
+  test("a calendar's week is edited in the words the wizard used", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `שבוע ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+
+    // The wizard's editor, not a list of ranges: a day is open or closed, and
+    // has an opening and a closing time.
+    await expect(page.getByText("אותן שעות לכמה ימים")).toBeVisible({ timeout: 15_000 });
+
+    // Close Sunday, and save the week.
+    const sunday = page.locator(".card", { hasText: "ראשון" }).first();
+    await sunday.getByRole("checkbox").first().uncheck();
+    await page.getByRole("button", { name: "שמירה" }).last().click();
+    await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
+
+    // What a customer is offered follows from it.
+    const week = await call<{ dayOfWeek: number }[]>(
+      `/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`,
+      { token: shop.owner.token },
+    );
+    expect(week.map((entry) => entry.dayOfWeek)).not.toContain(0);
+    expect(week.length).toBeGreaterThan(0);
+  });
+
+  test("edit on a calendar opens that calendar's schedule", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `עריכה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await call(`/businesses/${shop.business.id}/resources`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "כיסא שני" },
+    });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "יומנים" }).click();
+
+    // The second calendar is not the one the schedule would open on by
+    // default, which is the whole point of pressing edit on its row.
+    await page
+      .locator(".card", { hasText: "כיסא שני" })
+      .getByRole("button", { name: "עריכה" })
+      .click();
+
+    // The schedule screen, open on the calendar whose row was pressed — not on
+    // the first one, which is what it would have shown by default.
+    await expect(
+      page.getByRole("button", { name: "כיסא שני", pressed: true }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "ימים חריגים" })).toBeVisible();
   });
 
   test("hides a calendar from customers, and brings it back", async ({ page }) => {

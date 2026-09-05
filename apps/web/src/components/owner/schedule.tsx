@@ -15,7 +15,16 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useFieldProblem } from "@/lib/use-field-problem.ts";
-import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
+import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } from "../ui.tsx";
+import {
+  emptyBulk,
+  emptyWeek,
+  rangesFor,
+  weekFromRanges,
+  WeeklyHours,
+  type BulkHours,
+  type DayHours,
+} from "./weekly-hours.tsx";
 
 /**
  * The three schedule layers of ADR 0002, as three tabs — because each has
@@ -30,10 +39,13 @@ export const Schedule = ({
   token,
   business,
   resources,
+  openOn,
 }: {
   token: string;
   business: BusinessDto;
   resources: readonly ResourceDto[];
+  /** A calendar asked for by name, from the calendars panel's edit control. */
+  openOn?: string;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -46,14 +58,28 @@ export const Schedule = ({
   // Resources are fetched by the parent and arrive after this mounts, so the
   // selection cannot come from the initial render alone — it has to follow the
   // list. Without this the screen waits forever for a calendar it already has.
+  //
+  // `openOn` is the calendar somebody asked for by name, arriving from the
+  // calendars panel: it wins over both the current selection and the default,
+  // because a person who pressed "edit" on one row means that row.
   useEffect(() => {
-    setResource((current) =>
-      current !== null && resources.some((candidate) => candidate.id === current.id)
+    setResource((current) => {
+      const asked =
+        openOn === undefined
+          ? undefined
+          : resources.find((candidate) => candidate.id === openOn);
+      if (asked !== undefined) return asked;
+      return current !== null && resources.some((candidate) => candidate.id === current.id)
         ? current
-        : (resources[0] ?? null),
-    );
-  }, [resources]);
+        : (resources[0] ?? null);
+    });
+  }, [resources, openOn]);
   const [hours, setHours] = useState<WorkingHoursDto[] | null>(null);
+  const [week, setWeek] = useState<DayHours[]>(emptyWeek);
+  const [bulk, setBulk] = useState<BulkHours>(emptyBulk);
+  /** Days whose ranges cannot be said as "open, close, and one break". */
+  const [tooComplex, setTooComplex] = useState<number[]>([]);
+  const [saved, setSaved] = useState(false);
   const [overrides, setOverrides] = useState<OverrideDto[]>([]);
   const [blocks, setBlocks] = useState<BlockDto[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +100,9 @@ export const Schedule = ({
         api.calendarDay(token, business.id, resource.id, from),
       ]);
       setHours(loadedHours);
+      const asWeek = weekFromRanges(loadedHours);
+      setWeek(asWeek.week);
+      setTooComplex(asWeek.tooComplex);
       setOverrides(loadedOverrides);
       setBlocks(calendarDays.blocks);
     } catch (cause) {
@@ -101,10 +130,36 @@ export const Schedule = ({
     }
   };
 
-  if (hours === null || resource === null) return <Spinner />;
+  /**
+   * The week as edited, in place of the week that was there.
+   *
+   * Replacing rather than reconciling: the editor speaks in days, the store
+   * speaks in ranges, and there is no correspondence between the two to
+   * preserve — a day that lost its break has one range where it had two.
+   */
+  const saveWeek = async () => {
+    if (resource === null || hours === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      for (const range of hours) {
+        await api.deleteWorkingHours(token, business.id, range.id);
+      }
+      for (const [dayOfWeek, day] of week.entries()) {
+        for (const range of rangesFor(day, dayOfWeek)) {
+          await api.addWorkingHours(token, business.id, resource.id, range);
+        }
+      }
+      await load();
+      setSaved(true);
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    } finally {
+      setBusy(false);
+    }
+  };
 
-  const byDay = (dayOfWeek: number) =>
-    hours.filter((range) => range.dayOfWeek === dayOfWeek).sort((a, b) => a.start.localeCompare(b.start));
+  if (hours === null || resource === null) return <Spinner />;
 
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -151,45 +206,22 @@ export const Schedule = ({
 
       {layer === "hours" && (
         <>
-          {/* ADR 0002: the gap between two ranges on a day is the break. */}
+          {/* The same editor the wizard uses. A business described its week
+              once in plain words and then edited it, ever after, as a list of
+              ranges with an add and a delete — the same week in two different
+              languages, the second one ADR 0002's storage rather than anybody's
+              idea of a Tuesday. */}
           <Note>{copy.hoursNote}</Note>
-          {copy.days.map((dayName, dayOfWeek) => {
-            const ranges = byDay(dayOfWeek);
-            return (
-              <Card key={dayOfWeek} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ flex: 1, fontWeight: 600 }}>{dayName}</span>
-                  <span className="hint">{ranges.length === 0 ? copy.closed : copy.open}</span>
-                </div>
-                {ranges.map((range) => (
-                  <div key={range.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span className="tab" style={{ flex: 1 }}>{range.start}–{range.end}</span>
-                    <button
-                      className="chip"
-                      style={{ border: "1px solid var(--line)" }}
-                      onClick={() => setEditingRange({ id: range.id, dayOfWeek, start: range.start, end: range.end })}
-                    >
-                      {copy.editRange}
-                    </button>
-                    <button
-                      onClick={() => act(() => api.deleteWorkingHours(token, business.id, range.id))}
-                      style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
-                    >
-                      {copy.delete}
-                    </button>
-                  </div>
-                ))}
-                <button
-                  className="chip"
-                  style={{ border: "1px dashed var(--line)" }}
-                  onClick={() => setEditingRange({ id: null, dayOfWeek, start: "09:00", end: "17:00" })}
-                >
-                  {copy.addRange}
-                </button>
-              </Card>
-            );
-          })}
-          <Note>{copy.rangeGapNote}</Note>
+          {tooComplex.length > 0 && <Warning>{copy.hoursTooComplex}</Warning>}
+          <WeeklyHours hours={week} setHours={setWeek} bulk={bulk} setBulk={setBulk} />
+          {saved && (
+            <p className="hint" role="status" style={{ margin: 0 }}>
+              {copy.settingsSaved}
+            </p>
+          )}
+          <Button busy={busy} onClick={() => void saveWeek()}>
+            {copy.save}
+          </Button>
         </>
       )}
 
