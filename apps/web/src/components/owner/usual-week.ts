@@ -1,5 +1,5 @@
 import { mergedRanges, type TimeRange } from "@tor-now/domain";
-import type { DayHours } from "./weekly-hours.tsx";
+import type { DayHours } from "./week.ts";
 
 /**
  * "Most days, nine to five" is how a person describes a week, and it is not
@@ -92,7 +92,13 @@ export const isUsable = (range: TimeRange): boolean =>
  * silently, because merging drops what it cannot read.
  */
 export const weekIsUsable = (week: readonly DayHours[]): boolean =>
-  week.every((day) => !day.open || day.ranges.every(isUsable));
+  week.every(
+    (day) =>
+      !day.open ||
+      // Open with nothing to show for it would be stored as a closed day, which
+      // is not what the screen is saying.
+      (day.ranges.length > 0 && day.ranges.every(isUsable)),
+  );
 
 /**
  * The gap between two stretches — which is all a break has ever been. Absent

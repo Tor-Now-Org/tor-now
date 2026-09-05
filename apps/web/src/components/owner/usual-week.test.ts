@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DayHours } from "./weekly-hours.tsx";
+import type { DayHours } from "./week.ts";
 import {
   breakBetween,
   collidesWithPrevious,
@@ -116,6 +116,19 @@ describe("what sits between two stretches", () => {
     const touching = [tillOne, { start: "13:00", end: "19:00" }];
     expect(breakBetween(touching, 1)).toBeNull();
     expect(collidesWithPrevious(touching, 1)).toBe(true);
+  });
+});
+
+describe("a week that could not be stored as it reads", () => {
+  it("is one with a day open and nothing to show for it", () => {
+    // Stored, this is a closed day. On screen it says the business is open,
+    // so saving it would be the screen and the store disagreeing.
+    expect(weekIsUsable([{ open: true, ranges: [] }, shut, shut, shut, shut, shut, shut]))
+      .toBe(false);
+  });
+
+  it("is not one that is simply shut all week", () => {
+    expect(weekIsUsable([shut, shut, shut, shut, shut, shut, shut])).toBe(true);
   });
 });
 

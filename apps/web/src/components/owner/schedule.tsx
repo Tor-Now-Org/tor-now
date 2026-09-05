@@ -204,7 +204,10 @@ export const Schedule = ({
               languages, the second one ADR 0002's storage rather than anybody's
               idea of a Tuesday. */}
           <Note>{copy.hoursNote}</Note>
-          <WeeklyHours hours={week} setHours={setWeek} />
+          {/* Keyed on the calendar: the editor holds which days the owner has
+              pulled out of the usual, and that answer belongs to the week in
+              front of them, not to the next calendar they switch to. */}
+          <WeeklyHours key={resource.id} hours={week} setHours={setWeek} />
           {saved && (
             <p className="hint" role="status" style={{ margin: 0 }}>
               {copy.settingsSaved}

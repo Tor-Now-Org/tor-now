@@ -4,6 +4,7 @@ import { useState } from "react";
 import { mergedRanges, type TimeRange } from "@tor-now/domain";
 import { Button, Card, Note } from "../ui.tsx";
 import { useCopy } from "@/lib/i18n/index.tsx";
+import { DEFAULT_OPENING, type DayHours } from "./week.ts";
 import {
   breakBetween,
   collidesWithPrevious,
@@ -11,6 +12,25 @@ import {
   isUsable,
   usualOf,
 } from "./usual-week.ts";
+
+// The week model moved to week.ts, where it can be tested without a renderer.
+// The screens still reach it through this file, which is the thing they think
+// they are using.
+export {
+  DEFAULT_OPENING,
+  DEFAULT_OPEN_DAYS,
+  emptyWeek,
+  rangesFor,
+  weekFromRanges,
+} from "./week.ts";
+export type { DayHours } from "./week.ts";
+
+/** Once this many days go their own way, "most days" has stopped being true. */
+const TOO_MANY_EXCEPTIONS = 5;
+/** A new stretch starts an hour after the last one ends, so it lands as a break. */
+const AFTER_THE_LAST = 60;
+/** Wide enough for "09:00", so a label can be centred on its mark. */
+const LABEL_WIDTH = 40;
 
 /**
  * A week of working hours, said the way a person says it.
@@ -29,62 +49,6 @@ import {
  * of a "usual" — that is worked out on the way in (see usual-week.ts) and
  * written back as plain ranges on the way out.
  */
-/**
- * A day, as a person describes it: open or not, and the stretches it is open
- * for. ADR 0002 has no break entity — a break is the gap between two ranges —
- * so a day that shuts for lunch simply has two of them, and a day with three
- * stretches is no harder to say than a day with two.
- */
-export type DayHours = {
-  open: boolean;
-  ranges: TimeRange[];
-};
-
-export const DEFAULT_OPENING = { start: "09:00", end: "17:00" };
-export const DEFAULT_OPEN_DAYS = [0, 1, 2, 3, 4];
-
-/** Once this many days go their own way, "most days" has stopped being true. */
-const TOO_MANY_EXCEPTIONS = 5;
-/** A new stretch starts an hour after the last one ends, so it lands as a break. */
-const AFTER_THE_LAST = 60;
-/** Wide enough for "09:00", so a label can be centred on its mark. */
-const LABEL_WIDTH = 40;
-
-export const emptyWeek = (): DayHours[] =>
-  Array.from({ length: 7 }, (_unused, day) => ({
-    open: DEFAULT_OPEN_DAYS.includes(day),
-    ranges: [{ start: DEFAULT_OPENING.start, end: DEFAULT_OPENING.end }],
-  }));
-
-/**
- * The ranges ADR 0002 stores, from the day a person described — merged, so two
- * that overlap or touch are stored as the one stretch they describe rather than
- * as a break of no length.
- */
-export const rangesFor = (
-  day: DayHours,
-  dayOfWeek: number,
-): { dayOfWeek: number; start: string; end: string }[] =>
-  day.open
-    ? mergedRanges(day.ranges).map((range) => ({ dayOfWeek, ...range }))
-    : [];
-
-/** The inverse, for a week that already exists, tidied on the way in. */
-export const weekFromRanges = (
-  ranges: readonly { dayOfWeek: number; start: string; end: string }[],
-): DayHours[] =>
-  Array.from({ length: 7 }, (_unused, dayOfWeek) => {
-    const onThisDay = mergedRanges(
-      ranges.filter((range) => range.dayOfWeek === dayOfWeek),
-    );
-    return onThisDay.length === 0
-      ? {
-          open: false,
-          ranges: [{ start: DEFAULT_OPENING.start, end: DEFAULT_OPENING.end }],
-        }
-      : { open: true, ranges: onThisDay };
-  });
-
 /** One day changed, the rest untouched. */
 const atDay = (
   week: DayHours[],
@@ -444,7 +408,11 @@ export const WeeklyHours = ({
     }
     setHours(
       hours.map((day, dayOfWeek) =>
-        usual.days.includes(dayOfWeek) ? { ...day, ranges } : day,
+        usual.days.includes(dayOfWeek)
+          ? // A copy each: sharing one array between five days is a mutation
+            // away from editing Monday by editing Tuesday.
+            { ...day, ranges: ranges.map((range) => ({ ...range })) }
+          : day,
       ),
     );
   };
@@ -460,10 +428,19 @@ export const WeeklyHours = ({
     setDay(dayOfWeek, () => ({ open: true, ranges: someHours() }));
   };
 
-  const leaveTheUsual = (dayOfWeek: number, closed: boolean) => {
+  /**
+   * A day leaves the usual keeping the hours it had.
+   *
+   * It used to leave shut, on the reasoning that a departing day is usually a
+   * closed one. That made "this day is different" mean "this day is off", which
+   * is a different sentence and a destructive one: an owner separating Thursday
+   * to move it half an hour lost Thursday instead. Closing is one tap away on
+   * the day's own card, and it is the owner who takes it.
+   */
+  const leaveTheUsual = (dayOfWeek: number, open = true) => {
     if (!apart.includes(dayOfWeek)) setApart([...apart, dayOfWeek]);
     setDay(dayOfWeek, (day) => ({
-      open: !closed,
+      open,
       ranges: day.ranges.length > 0 ? day.ranges : someHours(),
     }));
   };
@@ -533,7 +510,7 @@ export const WeeklyHours = ({
                 aria-pressed={following}
                 aria-label={copy.days[dayOfWeek]}
                 onClick={() =>
-                  following ? leaveTheUsual(dayOfWeek, true) : joinTheUsual(dayOfWeek)
+                  following ? leaveTheUsual(dayOfWeek) : joinTheUsual(dayOfWeek)
                 }
                 style={{
                   minWidth: 44,
@@ -578,12 +555,12 @@ export const WeeklyHours = ({
               <ChoiceChip
                 chosen={!day.open}
                 label={copy.closed}
-                onClick={() => leaveTheUsual(dayOfWeek, true)}
+                onClick={() => leaveTheUsual(dayOfWeek, false)}
               />
               <ChoiceChip
                 chosen={day.open}
                 label={copy.otherHours}
-                onClick={() => leaveTheUsual(dayOfWeek, false)}
+                onClick={() => leaveTheUsual(dayOfWeek, true)}
               />
             </div>
 
