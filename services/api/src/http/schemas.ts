@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { PHONE_PATTERN, TEXT_RULES, type TextRule } from "@tor-now/domain";
+import {
+  bareHandle,
+  INSTAGRAM_PATTERN,
+  PHONE_PATTERN,
+  TEXT_RULES,
+  type TextRule,
+} from "@tor-now/domain";
 import { PAGINATION } from "../config.ts";
 
 /**
@@ -111,6 +117,17 @@ const workingHoursEntrySchema = z
     message: "A range must end after it starts",
   });
 
+/**
+ * A handle as people write it — with the @, or pasted as a profile URL — kept
+ * as the bare handle. Refusing the forms everybody uses would be pedantry.
+ */
+const instagramSchema = z
+  .string()
+  .transform(bareHandle)
+  .refine((handle) => INSTAGRAM_PATTERN.test(handle), {
+    message: "An Instagram handle: letters, digits, dots or underscores",
+  });
+
 export const registerBusinessSchema = z.object({
   name: text(TEXT_RULES.businessName),
   phone: phoneSchema,
@@ -137,6 +154,8 @@ export const updateBusinessSchema = z.object({
   timeZone: z.string().min(1).optional(),
   description: text(TEXT_RULES.description).nullable().optional(),
   address: text(TEXT_RULES.address).nullable().optional(),
+  instagram: instagramSchema.nullable().optional(),
+  whatsapp: phoneSchema.nullable().optional(),
   defaultBufferMinutes: z.number().int().min(0).max(240).optional(),
   minimumNoticeMinutes: z.number().int().min(0).max(43200).optional(),
   bookingHorizonDays: z.number().int().min(1).max(365).optional(),

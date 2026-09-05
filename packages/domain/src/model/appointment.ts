@@ -45,6 +45,13 @@ export type Appointment = {
   readonly status: AppointmentStatus;
   /** Snapshots taken at booking time; the Service may change afterwards. */
   readonly serviceName: string;
+  /**
+   * Which calendar — the person or chair — this was booked with, as it was
+   * named then. A snapshot for the same reason as the service name: renaming
+   * or retiring a Resource does not rewrite the appointments already made
+   * against it.
+   */
+  readonly resourceName: string;
   readonly price: Money;
   readonly durationMinutes: number;
   readonly bufferMinutes: number;

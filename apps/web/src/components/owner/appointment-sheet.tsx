@@ -19,7 +19,7 @@ import type {
 import { formatPrice, timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { PhoneActions } from "./phone-actions.tsx";
+import { PhoneActions } from "../phone-actions.tsx";
 import { Button, Card, Critical, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
 
 /**
@@ -100,6 +100,9 @@ export const AppointmentSheet = ({
           <h2 style={{ fontSize: 19 }}>{copy.whatHappened}</h2>
           <Card style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <Detail label={copy.rService} value={appointment.serviceName} />
+            {appointment.resourceName !== undefined && appointment.resourceName !== "" && (
+              <Detail label={copy.rProvider} value={appointment.resourceName} />
+            )}
             <Detail
               label={copy.rWhen}
               value={`${timeIn(appointment.startAt, business.timeZone, language)}–${timeIn(appointment.endAt, business.timeZone, language)}`}

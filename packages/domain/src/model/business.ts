@@ -23,6 +23,13 @@ export type Business = {
   readonly timeZone: TimeZone;
   readonly description: string | null;
   readonly address: string | null;
+  /** Instagram handle, bare: no @ and no URL. Null when the business has none. */
+  readonly instagram: string | null;
+  /**
+   * The number this business answers WhatsApp on, E.164. Separate from `phone`
+   * on purpose: many publish one number for calls and another for messages.
+   */
+  readonly whatsapp: string | null;
   /** True on registration (ADR 0011); an administrator or Billing clears it. */
   readonly active: boolean;
   readonly defaultBufferMinutes: number;

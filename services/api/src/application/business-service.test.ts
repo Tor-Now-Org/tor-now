@@ -233,6 +233,65 @@ describe("owning a business", () => {
   });
 });
 
+describe("where else a business can be found", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  it("keeps an Instagram handle and a WhatsApp number, and hands them back", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    const updated = await test.services.business.update(shop.owner.actor, shop.business.id, {
+      instagram: "dreamhair",
+      whatsapp: "+972545646946",
+    });
+
+    expect(updated.instagram).toBe("dreamhair");
+    expect(updated.whatsapp).toBe("+972545646946");
+
+    // And a customer looking at the business sees them, since that is the only
+    // reason to hold them at all.
+    const profile = await test.services.discovery.profile(
+      { kind: "ANONYMOUS" },
+      shop.business.id,
+    );
+    expect(profile.business.instagram).toBe("dreamhair");
+    expect(profile.business.whatsapp).toBe("+972545646946");
+  });
+
+  it("lets a business take them down again", async () => {
+    const shop = await anEstablishedBusiness(test);
+    await test.services.business.update(shop.owner.actor, shop.business.id, {
+      instagram: "dreamhair",
+    });
+
+    const cleared = await test.services.business.update(shop.owner.actor, shop.business.id, {
+      instagram: null,
+    });
+
+    // Null is a removal, not "no change" — the distinction the other optional
+    // fields already make.
+    expect(cleared.instagram).toBeNull();
+  });
+
+  it("leaves them alone when the change does not mention them", async () => {
+    const shop = await anEstablishedBusiness(test);
+    await test.services.business.update(shop.owner.actor, shop.business.id, {
+      instagram: "dreamhair",
+      whatsapp: "+972545646946",
+    });
+
+    const renamed = await test.services.business.update(shop.owner.actor, shop.business.id, {
+      name: "שם חדש",
+    });
+
+    expect(renamed.instagram).toBe("dreamhair");
+    expect(renamed.whatsapp).toBe("+972545646946");
+  });
+});
+
 describe("the owner's customers", () => {
   it("shows only the people who booked with that business", async () => {
     const test = harness();

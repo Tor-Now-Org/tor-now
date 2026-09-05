@@ -17,11 +17,16 @@ import { TEXT_RULES } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import {
   blocking,
+  checkInstagram,
   checkPhone,
   checkText,
   useFieldProblem,
 } from "@/lib/use-field-problem.ts";
 import { PhotoPanel } from "./photo-panel.tsx";
+
+/** An optional field left empty is absent, not an empty string. */
+const blankToNull = (value: string | null | undefined): string | null =>
+  value === null || value === undefined || value.trim() === "" ? null : value.trim();
 import { Button, Card, Critical, Field, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
 
 type Panel = "services" | "resources" | "photos" | "settings" | "billing";
@@ -263,6 +268,41 @@ export const BusinessPanel = ({
             <Field id="s-tz" label={copy.fTimezone} hint={copy.fTimezoneHint} value={settings.timeZone} readOnly disabled />
           </Card>
 
+          {/* Both optional, and grouped away from the booking rules: these are
+              places a customer can reach the business, not settings that change
+              what it offers. */}
+          <span className="label">{copy.contactChannels}</span>
+          <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Field
+              id="s-instagram"
+              label={copy.fInstagram}
+              hint={copy.fInstagramHint}
+              dir="ltr"
+              placeholder="yourbusiness"
+              value={settings.instagram ?? ""}
+              problem={
+                (settings.instagram ?? "") === ""
+                  ? null
+                  : problem.instagram(settings.instagram ?? "")
+              }
+              onChange={(e) => { setSettings({ ...settings, instagram: e.target.value }); setSaved(false); }}
+            />
+            <Field
+              id="s-whatsapp"
+              label={copy.fWhatsapp}
+              hint={copy.fWhatsappHint}
+              dir="ltr"
+              type="tel"
+              inputMode="tel"
+              placeholder="+972501234567"
+              value={settings.whatsapp ?? ""}
+              problem={
+                (settings.whatsapp ?? "") === "" ? null : problem.phone(settings.whatsapp ?? "")
+              }
+              onChange={(e) => { setSettings({ ...settings, whatsapp: e.target.value }); setSaved(false); }}
+            />
+          </Card>
+
           <span className="label">{copy.bookingRules}</span>
           <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <Field id="s-buffer" label={`${copy.fBuffer} (${copy.unitMinutes})`} hint={copy.fBufferHint} type="number"
@@ -293,6 +333,8 @@ export const BusinessPanel = ({
                   phone: settings.phone,
                   address: settings.address === "" ? null : settings.address,
                   description: settings.description === "" ? null : settings.description,
+                  instagram: blankToNull(settings.instagram),
+                  whatsapp: blankToNull(settings.whatsapp),
                   defaultBufferMinutes: settings.defaultBufferMinutes,
                   cancellationWindowHours: settings.cancellationWindowHours,
                   minimumNoticeMinutes: settings.minimumNoticeMinutes,
@@ -306,6 +348,13 @@ export const BusinessPanel = ({
               checkPhone(settings.phone),
               checkText(settings.address ?? "", TEXT_RULES.address),
               checkText(settings.description ?? "", TEXT_RULES.description),
+              // Optional: empty is fine, malformed is not.
+              blankToNull(settings.instagram) === null
+                ? null
+                : checkInstagram(settings.instagram ?? ""),
+              blankToNull(settings.whatsapp) === null
+                ? null
+                : checkPhone(settings.whatsapp ?? ""),
             )}
           >
             {copy.save}

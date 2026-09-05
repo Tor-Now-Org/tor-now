@@ -3,9 +3,10 @@
 import { useState } from "react";
 
 /**
- * What a business does with a customer's number: ring it, or take it somewhere
+ * What one side does with the other's number: ring it, or take it somewhere
  * else. Both were a transcription job — read it off the screen, type it into
- * the phone, hope.
+ * the phone, hope. It runs in both directions now: a business calling a
+ * customer, and a customer calling a business.
  *
  * The number itself is shown once, above, by whichever screen this sits on.
  * Repeating it here to hang two buttons off it would say the same thing twice;

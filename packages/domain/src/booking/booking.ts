@@ -63,6 +63,7 @@ export const draftAppointment = (
     ),
     status: "CONFIRMED",
     serviceName: service.name,
+    resourceName: resource.name,
     price: service.price,
     durationMinutes: service.durationMinutes,
     bufferMinutes: buffer,

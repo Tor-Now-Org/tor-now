@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TEXT_RULES, checkPhone, checkText } from "./text.ts";
+import { TEXT_RULES, bareHandle, checkInstagram, checkPhone, checkText } from "./text.ts";
 
 describe("text fields", () => {
   it("calls an empty required field missing rather than too short", () => {
@@ -43,5 +43,26 @@ describe("phone numbers", () => {
     expect(checkPhone("+9725")).toBe("TOO_SHORT");
     expect(checkPhone("+050123456")).toBe("NOT_A_PHONE");
     expect(checkPhone(`+9${"7".repeat(15)}`)).toBe("NOT_A_PHONE");
+  });
+});
+
+describe("an Instagram handle", () => {
+  it("takes what people actually type", () => {
+    // The @ is how a handle is written and is not part of it; a pasted profile
+    // URL is the other thing people do instead of reading the hint.
+    expect(bareHandle("@dreamhair")).toBe("dreamhair");
+    expect(bareHandle("dreamhair")).toBe("dreamhair");
+    expect(bareHandle("https://instagram.com/dreamhair")).toBe("dreamhair");
+    expect(bareHandle("https://www.instagram.com/dreamhair/")).toBe("dreamhair");
+    expect(bareHandle("  @dream.hair_1  ")).toBe("dream.hair_1");
+  });
+
+  it("accepts the characters Instagram accepts, and refuses the rest", () => {
+    expect(checkInstagram("dream.hair_1")).toBeNull();
+    expect(checkInstagram("@dreamhair")).toBeNull();
+    expect(checkInstagram("")).toBe("REQUIRED");
+    expect(checkInstagram("dream hair")).toBe("NOT_A_HANDLE");
+    expect(checkInstagram("dream/hair")).toBe("NOT_A_HANDLE");
+    expect(checkInstagram("a".repeat(31))).toBe("TOO_LONG");
   });
 });

@@ -76,6 +76,46 @@ test.describe("finding and booking", () => {
     await expect(page.getByText("בוחרים שירות")).toBeVisible();
   });
 
+  test("offers one tap to call the business", async ({ page }) => {
+    const name = `טלפון ${Date.now()}`;
+    const ownerPhone = uniquePhone();
+    await aBusinessWithOpenHours({ name, ownerPhone });
+
+    await page.goto("/");
+    await ready(page);
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
+    await page.getByText(name, { exact: false }).first().click();
+
+    // One tap to ring them, above the times, where somebody with a question can
+    // find it. The number itself is not printed — it was a line to read and
+    // then dial, and the button does the dialling.
+    await expect(
+      page.getByRole("link", { name: new RegExp("התקשרו") }).first(),
+    ).toHaveAttribute("href", `tel:${ownerPhone}`, { timeout: 15_000 });
+  });
+
+  test("hands out a link to the business anyone can open", async ({ page, context }) => {
+    const name = `שיתוף ${Date.now()}`;
+    const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+
+    // No share sheet in this browser, so the address goes to the clipboard.
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto("/");
+    await ready(page);
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
+    await page.getByText(name, { exact: false }).first().click();
+
+    await page.getByRole("button", { name: "שיתוף העסק" }).click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain(`/business/${shop.business.id}`);
+
+    // And the address is one somebody arriving cold can actually open.
+    const stranger = await context.newPage();
+    await stranger.goto(copied);
+    await expect(stranger.getByRole("heading", { name })).toBeVisible({ timeout: 20_000 });
+    await stranger.close();
+  });
+
   test("shows nothing found for a name that is not there", async ({ page }) => {
     await page.goto("/");
     await ready(page);
@@ -198,6 +238,37 @@ test.describe("finding and booking", () => {
     if (takenLabel !== undefined) {
       await expect(page.getByRole("radio", { name: takenLabel, exact: true })).toHaveCount(0);
     }
+  });
+});
+
+test.describe("who the appointment is with", () => {
+  test("names the provider on the customer's own list", async ({ page }) => {
+    const name = `נותן שירות ${Date.now()}`;
+    const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+    const phone = uniquePhone();
+    const { token } = await signInDirectly(page, phone, "דנה כהן");
+
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: await theNextStart(shop),
+        customerNote: null,
+      },
+    });
+
+    await page.goto("/");
+    await ready(page);
+    await page.getByRole("button", { name: "התורים שלי" }).click();
+
+    // The calendar's name at booking time, which is what the customer turned up
+    // expecting — not whatever it may be renamed to later.
+    await expect(page.getByText(`עם ${shop.resource.name}`)).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });
 
@@ -374,6 +445,34 @@ test.describe("an API older than the interface", () => {
     });
     await expect(page.getByText(shop.service.name).first()).toBeVisible();
     await expect(page.getByRole("region", { name: "תמונות מהעסק" })).toHaveCount(0);
+  });
+
+  test("and when it carries no contact channels either", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `בלי ערוצים ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+
+    // Absent is not null. The screen guarded on null, so an older function —
+    // which sends neither key — crashed the page on a `.replace` of undefined
+    // rather than simply showing nothing.
+    await page.route(`**/businesses/${shop.business.id}?*`, async (route) => {
+      const answer = await route.fetch();
+      const body = (await answer.json()) as { business: Record<string, unknown> };
+      delete body.business["instagram"];
+      delete body.business["whatsapp"];
+      await route.fulfill({ response: answer, json: body });
+    });
+
+    await page.goto("/");
+    await ready(page);
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(shop.business.name.slice(0, 9));
+    await page.getByText(shop.business.name).first().click();
+
+    await expect(page.getByRole("heading", { name: shop.business.name })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(shop.service.name).first()).toBeVisible();
   });
 });
 

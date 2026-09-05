@@ -37,13 +37,20 @@ export const TEXT_RULES = Object.freeze({
    */
   auditReason: { min: 3, max: 200 },
   code: { min: 4, max: 8 },
+  /** What Instagram itself allows in a handle, minus the leading @. */
+  instagramHandle: { min: 1, max: 30 },
 }) satisfies Readonly<Record<string, TextRule>>;
 
 /**
  * Why a value is not acceptable, as a reason rather than a sentence: the API
  * and the two languages the interface speaks each say it their own way.
  */
-export type FieldProblem = "REQUIRED" | "TOO_SHORT" | "TOO_LONG" | "NOT_A_PHONE";
+export type FieldProblem =
+  | "REQUIRED"
+  | "TOO_SHORT"
+  | "TOO_LONG"
+  | "NOT_A_PHONE"
+  | "NOT_A_HANDLE";
 
 export const checkText = (value: string, rule: TextRule): FieldProblem | null => {
   const trimmed = value.trim();
@@ -63,6 +70,29 @@ export const checkPhone = (value: string): FieldProblem | null => {
   if (trimmed.replace(/^\+/, "").length < 9) return "TOO_SHORT";
   return PHONE_PATTERN.test(trimmed) ? null : "NOT_A_PHONE";
 };
+
+/** What Instagram permits: letters, digits, full stops and underscores. */
+export const INSTAGRAM_PATTERN = /^[A-Za-z0-9._]{1,30}$/;
+
+/**
+ * An Instagram handle, as typed. A leading @ is how people write one and is not
+ * part of it, so it is accepted here and removed by `bareHandle` rather than
+ * rejected — refusing the form everybody uses would be pedantry.
+ */
+export const checkInstagram = (value: string): FieldProblem | null => {
+  const handle = bareHandle(value);
+  if (handle.length === 0) return "REQUIRED";
+  if (handle.length > TEXT_RULES.instagramHandle.max) return "TOO_LONG";
+  return INSTAGRAM_PATTERN.test(handle) ? null : "NOT_A_HANDLE";
+};
+
+/** The handle without the @ people put in front of it, or the URL they paste. */
+export const bareHandle = (value: string): string =>
+  value
+    .trim()
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .replace(/^@/, "")
+    .replace(/\/+$/, "");
 
 /** True when every field given is acceptable. */
 export const allAcceptable = (

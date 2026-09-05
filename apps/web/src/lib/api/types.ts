@@ -11,6 +11,14 @@ export type BusinessDto = {
   timeZone: string;
   description: string | null;
   address: string | null;
+  /**
+   * Instagram handle, bare: no @ and no URL. Optional in the type as well as
+   * in the data — an API deployed before these existed sends neither key, and
+   * a screen that reads them has to survive that.
+   */
+  instagram?: string | null;
+  /** The number this business answers WhatsApp on, which may differ from phone. */
+  whatsapp?: string | null;
   active: boolean;
   defaultBufferMinutes: number;
   minimumNoticeMinutes: number;
@@ -92,6 +100,12 @@ export type AppointmentDto = {
   endAt: string;
   status: AppointmentStatus;
   serviceName: string;
+  /**
+   * Who it is with, as the calendar was named at booking time. Optional in the
+   * type: an API deployed before this field sends nothing, and a screen that
+   * reads it has to survive that.
+   */
+  resourceName?: string;
   priceMinor: number;
   price: number;
   durationMinutes: number;

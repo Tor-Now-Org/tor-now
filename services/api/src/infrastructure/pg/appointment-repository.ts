@@ -219,11 +219,12 @@ export const appointmentRepository = (
         insert into appointment (
           business_id, resource_id, service_id, customer_id,
           start_at, end_at, occupied_until, status,
-          service_name, price_minor, duration_minutes, buffer_minutes, customer_note)
+          service_name, resource_name, price_minor, duration_minutes, buffer_minutes,
+          customer_note)
         values (
           ${draft.businessId}, ${draft.resourceId}, ${draft.serviceId}, ${draft.customerId},
           ${asDate(draft.startAt)}, ${asDate(draft.endAt)}, ${asDate(draft.occupiedUntil)},
-          ${draft.status}, ${draft.serviceName}, ${draft.price},
+          ${draft.status}, ${draft.serviceName}, ${draft.resourceName}, ${draft.price},
           ${draft.durationMinutes}, ${draft.bufferMinutes}, ${draft.customerNote})
         returning *`;
       return one(rows);

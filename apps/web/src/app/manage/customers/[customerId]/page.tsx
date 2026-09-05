@@ -21,7 +21,7 @@ import {
   isCancelled,
   outcomeOfDto,
 } from "@/components/owner/appointment-sheet.tsx";
-import { PhoneActions } from "@/components/owner/phone-actions.tsx";
+import { PhoneActions } from "@/components/phone-actions.tsx";
 import { Button, Card, Critical, Empty, Note, Spinner } from "@/components/ui.tsx";
 
 /**

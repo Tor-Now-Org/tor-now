@@ -181,6 +181,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           timeZone: timeZone(input.timeZone),
           description: input.description,
           address: input.address,
+          instagram: null,
+          whatsapp: null,
           active: true,
           defaultBufferMinutes: BUSINESS_DEFAULTS.defaultBufferMinutes,
           minimumNoticeMinutes: BUSINESS_DEFAULTS.minimumNoticeMinutes,

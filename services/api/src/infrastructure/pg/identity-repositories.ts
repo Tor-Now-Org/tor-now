@@ -157,6 +157,8 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
         time_zone = coalesce(${changes.timeZone ?? null}, time_zone),
         description = ${changes.description === undefined ? tx`description` : changes.description},
         address = ${changes.address === undefined ? tx`address` : changes.address},
+        instagram = ${changes.instagram === undefined ? tx`instagram` : changes.instagram},
+        whatsapp = ${changes.whatsapp === undefined ? tx`whatsapp` : changes.whatsapp},
         default_buffer_minutes = coalesce(${changes.defaultBufferMinutes ?? null}, default_buffer_minutes),
         minimum_notice_minutes = coalesce(${changes.minimumNoticeMinutes ?? null}, minimum_notice_minutes),
         booking_horizon_days = coalesce(${changes.bookingHorizonDays ?? null}, booking_horizon_days),

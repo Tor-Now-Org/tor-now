@@ -205,6 +205,50 @@ test.describe("the schedule layers", () => {
 });
 
 test.describe("the business panel", () => {
+  test("publishes an Instagram and a WhatsApp, and the customer can reach both", async ({
+    page,
+  }) => {
+    const name = `ערוצים ${Date.now()}`;
+    const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "הגדרות העסק" }).click();
+
+    // Typed the way a person writes it: with the @, which is not part of it.
+    await page.getByLabel("אינסטגרם").fill("@dreamhair");
+    await page.getByLabel("וואטסאפ").fill("+972545646946");
+    await page.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
+
+    const profile = await call<{ business: { instagram: string; whatsapp: string } }>(
+      `/businesses/${shop.business.id}`,
+    );
+    expect(profile.business.instagram).toBe("dreamhair");
+    expect(profile.business.whatsapp).toBe("+972545646946");
+
+    // And on the customer's side, one tap each.
+    await page.goto("/");
+    await ready(page);
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
+    await page.getByText(name, { exact: false }).first().click();
+
+    await expect(page.getByRole("link", { name: /וואטסאפ/ })).toHaveAttribute(
+      "href",
+      "https://wa.me/972545646946",
+    );
+    // Icon-only, so the accessible name is what a screen reader is given — and
+    // what this asserts, since there is no text to look for.
+    await expect(
+      page.getByRole("link", { name: "אינסטגרם @dreamhair" }),
+    ).toHaveAttribute("href", "https://instagram.com/dreamhair");
+  });
+
   test("hides a service from customers, and brings it back", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `הסתרה ${Date.now()}`,

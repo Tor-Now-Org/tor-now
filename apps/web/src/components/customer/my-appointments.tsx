@@ -111,6 +111,14 @@ export const MyAppointments = ({
             </span>
           </div>
           <span className="hint">{formatWhen(appointment)}</span>
+          {/* Who it is with. A business with one calendar says nothing new by
+              naming it, so it is only shown where the appointment carries a
+              name — and never on an API too old to send one. */}
+          {appointment.resourceName !== undefined && appointment.resourceName !== "" && (
+            <span className="hint">
+              {copy.withProvider} {appointment.resourceName}
+            </span>
+          )}
           <Button intent="primary" onClick={() => openInGoogleCalendar(appointment)}>
             {copy.addToCalendar}
           </Button>

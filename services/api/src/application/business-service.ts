@@ -148,6 +148,8 @@ export const businessService = ({
       timeZone: string;
       description: string | null;
       address: string | null;
+      instagram: string | null;
+      whatsapp: string | null;
       defaultBufferMinutes: number;
       minimumNoticeMinutes: number;
       bookingHorizonDays: number;

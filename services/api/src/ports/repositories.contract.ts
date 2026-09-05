@@ -95,6 +95,7 @@ export const describeRepositoryContract = (
       occupiedUntil: AT(occupiedUntil),
       status: "CONFIRMED" as const,
       serviceName: "שירות",
+      resourceName: "יומן",
       price: money(8000),
       durationMinutes: 30,
       bufferMinutes: 10,

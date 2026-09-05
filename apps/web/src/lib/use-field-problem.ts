@@ -2,8 +2,10 @@
 
 import { useCallback } from "react";
 import {
+  checkInstagram,
   checkPhone,
   checkText,
+  TEXT_RULES,
   type FieldProblem,
   type TextRule,
 } from "@tor-now/domain";
@@ -47,7 +49,15 @@ export const useFieldProblem = () => {
     [language],
   );
 
-  return { text, phone, localPhone };
+  const instagram = useCallback(
+    (value: string, show = true): string | null =>
+      show
+        ? sayProblem(language, checkInstagram(value), TEXT_RULES.instagramHandle)
+        : null,
+    [language],
+  );
+
+  return { text, phone, localPhone, instagram };
 };
 
 /** True when any of these values is unacceptable, whatever is being shown. */
@@ -55,4 +65,4 @@ export const blocking = (
   ...checks: readonly (FieldProblem | null)[]
 ): boolean => checks.some((problem) => problem !== null);
 
-export { checkPhone, checkText };
+export { checkInstagram, checkPhone, checkText };

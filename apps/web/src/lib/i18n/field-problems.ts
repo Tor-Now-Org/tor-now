@@ -16,12 +16,14 @@ const SENTENCES: Readonly<
     TOO_SHORT: (rule) => `לפחות ${rule.min} תווים`,
     TOO_LONG: (rule) => `עד ${rule.max} תווים`,
     NOT_A_PHONE: () => "מספר טלפון בפורמט בינלאומי, למשל ‎+972501234567",
+    NOT_A_HANDLE: () => "שם משתמש באינסטגרם — אותיות, ספרות, נקודה או קו תחתון",
   },
   en: {
     REQUIRED: () => "This field is required",
     TOO_SHORT: (rule) => `At least ${rule.min} characters`,
     TOO_LONG: (rule) => `At most ${rule.max} characters`,
     NOT_A_PHONE: () => "A phone number in international form, e.g. +972501234567",
+    NOT_A_HANDLE: () => "An Instagram username — letters, digits, dots or underscores",
   },
 });
 
