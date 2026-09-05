@@ -375,6 +375,9 @@ test.describe("a customer's own appointments", () => {
     await ready(page);
     await page.getByRole("button", { name: "התורים שלי" }).click();
     await expect(page.getByText("תספורת").first()).toBeVisible({ timeout: 15_000 });
+    // How long it takes and when it ends, not only when it starts.
+    await expect(page.getByText("30 דק׳").first()).toBeVisible();
+    await expect(page.getByText(/\d{2}:\d{2}–\d{2}:\d{2}/).first()).toBeVisible();
 
     await page.getByRole("button", { name: "ביטול התור" }).first().click();
     // The window governs visibility, not permission: warned, and still allowed.

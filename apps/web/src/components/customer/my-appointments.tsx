@@ -91,15 +91,29 @@ export const MyAppointments = ({
   );
   const past = appointments.filter((appointment) => !upcoming.includes(appointment));
 
-  const formatWhen = (appointment: MyAppointmentDto) =>
-    new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
+  const locale = language === "he" ? "he-IL" : "en-GB";
+
+  /**
+   * The day, then the span it occupies — a start alone left "and until when?"
+   * to arithmetic the customer should not have to do. The end is the
+   * appointment's own, so a service whose length changed later still reads as
+   * it was booked.
+   */
+  const formatWhen = (appointment: MyAppointmentDto) => {
+    const day = new Intl.DateTimeFormat(locale, {
       weekday: "long",
       day: "numeric",
       month: "long",
+    }).format(new Date(appointment.startAt));
+    const clock = new Intl.DateTimeFormat(locale, {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
-    }).format(new Date(appointment.startAt));
+    });
+    return `${day} · ${clock.format(new Date(appointment.startAt))}–${clock.format(
+      new Date(appointment.endAt),
+    )}`;
+  };
 
   // ponytail: Google's own URL scheme, no calendar API/dependency needed.
   const openInGoogleCalendar = (appointment: MyAppointmentDto) => {
@@ -128,8 +142,16 @@ export const MyAppointments = ({
             <span style={{ flex: 1, fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 16 }}>
               {appointment.serviceName} - {appointment.businessName}
             </span>
-            <span className="tab" style={{ fontSize: 14 }}>
-              {formatPrice(appointment.priceMinor, language, copy.free)}
+            {/* What it costs and how long it takes, as it was booked: the two
+                facts a customer checks against their own day, side by side and
+                out of the sentence below. */}
+            <span style={{ display: "flex", alignItems: "baseline", gap: 7, flexShrink: 0 }}>
+              <span className="hint tab">
+                {appointment.durationMinutes} {copy.minutes}
+              </span>
+              <span className="tab" style={{ fontSize: 14 }}>
+                {formatPrice(appointment.priceMinor, language, copy.free)}
+              </span>
             </span>
           </div>
           <span className="hint">
