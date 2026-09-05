@@ -462,15 +462,35 @@ export const BookingFlow = ({
         {stage === "confirming" && slot !== null && service !== null && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <h2 id="confirm-title" style={{ fontSize: 20 }}>{copy.confirmTitle}</h2>
+            {/* Everything the booking commits them to, in one place. It said
+                where, what and when; how long it takes, what it costs and who
+                it is with were on other screens or on none, and a confirmation
+                that leaves those out is asking somebody to agree to terms it
+                has not shown them. */}
             <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <Row label={copy.atBusiness} value={business.name} />
               <Row label={copy.service} value={service.name} />
+              {resource !== null && <Row label={copy.who} value={resource.name} />}
               <Row
                 label={copy.when}
-                value={`${timeIn(slot.startAt, business.timeZone, language)} · ${new Intl.DateTimeFormat(
+                // Start and finish rather than a start and a duration to add
+                // up: "until when am I here" is the question being asked.
+                value={`${timeIn(slot.startAt, business.timeZone, language)}–${timeIn(
+                  slot.endAt,
+                  business.timeZone,
+                  language,
+                )} · ${new Intl.DateTimeFormat(
                   language === "he" ? "he-IL" : "en-GB",
                   { timeZone: business.timeZone, weekday: "long", day: "numeric", month: "long" },
                 ).format(new Date(slot.startAt))}`}
+              />
+              <Row
+                label={copy.howLong}
+                value={`${service.durationMinutes} ${copy.minutes}`}
+              />
+              <Row
+                label={copy.priceLabel}
+                value={formatPrice(service.priceMinor, language, copy.free)}
               />
             </Card>
             {alreadyBooked === null ? (

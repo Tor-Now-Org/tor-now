@@ -125,7 +125,7 @@ test.describe("finding and booking", () => {
 
   test("books a slot, verifying the phone inline on the way", async ({ page }) => {
     const name = `קליניקה ${Date.now()}`;
-    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+    const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
 
     await page.goto("/");
     await ready(page);
@@ -140,6 +140,15 @@ test.describe("finding and booking", () => {
     // The confirmation sheet, then verification, because there is no session.
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByText("מאשרים את התור")).toBeVisible();
+
+    // Everything the booking commits to, before it is made: what, with whom,
+    // when it starts and finishes, how long it takes and what it costs.
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText(shop.service.name).first()).toBeVisible();
+    await expect(sheet.getByText(shop.resource.name).first()).toBeVisible();
+    await expect(sheet.getByText(/\d\d:\d\d–\d\d:\d\d/)).toBeVisible();
+    await expect(sheet.getByText(/30 דק׳/)).toBeVisible();
+    await expect(sheet.getByText(/80/)).toBeVisible();
     await page.getByRole("button", { name: "אישור התור" }).click();
 
     await expect(page.getByText("מאמתים מספר טלפון")).toBeVisible();
