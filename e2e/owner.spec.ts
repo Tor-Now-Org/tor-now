@@ -907,6 +907,26 @@ test.describe("a customer's own page", () => {
     await expect(page.locator(".cancelled").first()).toBeVisible({ timeout: 15_000 });
   });
 
+  test("an appointment opened from the record says which day it was", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBookingFor(ownerPhone, uniquePhone());
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "לקוחות", exact: true }).click();
+    await page.getByText("דנה כהן").first().click();
+    await expect(page).toHaveURL(/\/manage\/customers\//, { timeout: 15_000 });
+
+    await page.getByText(shop.service.name).first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+
+    // The record runs back over years, so the hour alone does not say which
+    // morning this was: the weekday and the date come with it.
+    await expect(sheet.getByText(/יום \S+.*\d+ ב\S+ · \d\d:\d\d–\d\d:\d\d/)).toBeVisible();
+  });
+
   test("an owner who books in their own chair is on their own list", async ({ page }) => {
     const ownerPhone = uniquePhone();
     const shop = await aBusinessWithOpenHours({

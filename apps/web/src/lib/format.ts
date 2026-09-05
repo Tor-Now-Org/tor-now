@@ -34,6 +34,34 @@ export const dateIn = (
     month: "long",
   }).format(new Date(isoInstant));
 
+/**
+ * The day an appointment falls on, said the way somebody would say it: the
+ * weekday, the date, and the year only when it is not this one.
+ *
+ * A record can run back years, and "8 בספטמבר" alone is ambiguous the moment it
+ * does. Carrying the year on every line would be noise on the common case —
+ * today's diary — so it appears exactly where it settles something. `now` is a
+ * parameter rather than a call to the clock, so the function stays pure and
+ * testable.
+ */
+export const dayIn = (
+  isoInstant: string,
+  timeZone: string,
+  language: Language,
+  now: Date = new Date(),
+): string => {
+  const yearOf = (when: Date) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric" }).format(when);
+  const when = new Date(isoInstant);
+  return new Intl.DateTimeFormat(LOCALE[language], {
+    timeZone,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    ...(yearOf(when) === yearOf(now) ? {} : { year: "numeric" }),
+  }).format(when);
+};
+
 export const weekdayIn = (
   isoInstant: string,
   timeZone: string,

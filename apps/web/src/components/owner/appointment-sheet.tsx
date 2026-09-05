@@ -16,7 +16,7 @@ import type {
   CalendarAppointmentDto,
   SlotDto,
 } from "@/lib/api/types.ts";
-import { formatPrice, timeIn } from "@/lib/format.ts";
+import { dayIn, formatPrice, timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { PhoneActions } from "../phone-actions.tsx";
@@ -103,9 +103,17 @@ export const AppointmentSheet = ({
             {appointment.resourceName !== undefined && appointment.resourceName !== "" && (
               <Detail label={copy.rProvider} value={appointment.resourceName} />
             )}
+            {/* The day as well as the hour. The sheet also opens from a
+                customer's record, where the surrounding screen is a list of
+                years rather than one day, and a bare "09:00–09:30" there says
+                nothing about which morning it was. */}
             <Detail
               label={copy.rWhen}
-              value={`${timeIn(appointment.startAt, business.timeZone, language)}–${timeIn(appointment.endAt, business.timeZone, language)}`}
+              value={`${dayIn(appointment.startAt, business.timeZone, language)} · ${timeIn(
+                appointment.startAt,
+                business.timeZone,
+                language,
+              )}–${timeIn(appointment.endAt, business.timeZone, language)}`}
             />
             <Detail label={copy.price} value={formatPrice(appointment.priceMinor, language, "—")} />
           </Card>
