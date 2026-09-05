@@ -18,16 +18,18 @@ begin
   -- Resource — and because the stored range includes the Buffer, an
   -- appointment merely touching that Buffer is refused by the same constraint.
   insert into appointment (business_id, resource_id, service_id, customer_id,
-      start_at, end_at, occupied_until, service_name, price_minor, duration_minutes, buffer_minutes)
+      start_at, end_at, occupied_until, service_name, resource_name,
+      price_minor, duration_minutes, buffer_minutes)
     values (v_biz, v_res, v_svc, v_user, '2026-09-01T09:00:00Z', '2026-09-01T09:30:00Z',
-            '2026-09-01T09:40:00Z', 'probe cut', 8000, 30, 10);
+            '2026-09-01T09:40:00Z', 'probe cut', 'probe chair', 8000, 30, 10);
 
   v_failed := false;
   begin
     insert into appointment (business_id, resource_id, service_id, customer_id,
-        start_at, end_at, occupied_until, service_name, price_minor, duration_minutes, buffer_minutes)
+        start_at, end_at, occupied_until, service_name, resource_name,
+      price_minor, duration_minutes, buffer_minutes)
       values (v_biz, v_res, v_svc, v_user, '2026-09-01T09:35:00Z', '2026-09-01T10:05:00Z',
-              '2026-09-01T10:15:00Z', 'probe cut', 8000, 30, 10);
+              '2026-09-01T10:15:00Z', 'probe cut', 'probe chair', 8000, 30, 10);
   exception when exclusion_violation then v_failed := true;
   end;
   if not v_failed then raise exception 'INVARIANT BROKEN: buffer overlap was accepted'; end if;
@@ -35,18 +37,20 @@ begin
   -- The half-open range means a booking starting exactly where the previous
   -- Buffer ends is adjacent, not conflicting.
   insert into appointment (business_id, resource_id, service_id, customer_id,
-      start_at, end_at, occupied_until, service_name, price_minor, duration_minutes, buffer_minutes)
+      start_at, end_at, occupied_until, service_name, resource_name,
+      price_minor, duration_minutes, buffer_minutes)
     values (v_biz, v_res, v_svc, v_user, '2026-09-01T09:40:00Z', '2026-09-01T10:10:00Z',
-            '2026-09-01T10:20:00Z', 'probe cut', 8000, 30, 10);
+            '2026-09-01T10:20:00Z', 'probe cut', 'probe chair', 8000, 30, 10);
 
   -- ADR 0003: cancelled appointments are excluded by the constraint's
   -- predicate, so a cancelled slot is immediately rebookable.
   update appointment set status = 'CANCELLED', cancelled_at = now(), cancelled_by = 'CUSTOMER'
     where resource_id = v_res and start_at = '2026-09-01T09:00:00Z';
   insert into appointment (business_id, resource_id, service_id, customer_id,
-      start_at, end_at, occupied_until, service_name, price_minor, duration_minutes, buffer_minutes)
+      start_at, end_at, occupied_until, service_name, resource_name,
+      price_minor, duration_minutes, buffer_minutes)
     values (v_biz, v_res, v_svc, v_user, '2026-09-01T09:00:00Z', '2026-09-01T09:30:00Z',
-            '2026-09-01T09:40:00Z', 'probe cut', 8000, 30, 10);
+            '2026-09-01T09:40:00Z', 'probe cut', 'probe chair', 8000, 30, 10);
 
   -- ADR 0006: the audit trail is append-only, enforced rather than intended.
   insert into audit_log (actor_id, action, entity_type, entity_id) values (v_user, 'PROBE', 'Probe', 'x');
