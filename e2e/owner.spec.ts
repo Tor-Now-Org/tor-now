@@ -637,7 +637,9 @@ test.describe("finding one appointment", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByText("אורית שגב")).toBeVisible();
     await expect(sheet.getByText("חיפוש לפי שם או טלפון")).toHaveCount(0);
-    await expect(sheet.getByRole("button", { name: /העתקה/ })).toBeVisible();
+    // Both ways to reach them, as marks rather than words.
+    await expect(sheet.getByRole("link", { name: /חיוג/ })).toBeVisible();
+    await expect(sheet.getByRole("link", { name: /וואטסאפ/ })).toBeVisible();
   });
 
   test("a phone number finds it too, and says so when nothing matches", async ({ page }) => {
@@ -689,7 +691,7 @@ test.describe("a customer's own page", () => {
     return shop;
   };
 
-  test("opens as a page, with the number ready to call or copy", async ({ page }) => {
+  test("opens as a page, with the number ready to call or message", async ({ page }) => {
     const ownerPhone = uniquePhone();
     const customerPhone = uniquePhone();
     const shop = await aBookingFor(ownerPhone, customerPhone);
@@ -708,10 +710,15 @@ test.describe("a customer's own page", () => {
     await expect(page.getByText("לקוח מאז")).toBeVisible();
     await expect(page.getByText("היסטוריית התורים")).toBeVisible();
 
-    // The number dials, and can be taken away without transcribing it.
-    await expect(page.getByRole("link", { name: new RegExp(customerPhone.replace("+", "\\+")) }))
-      .toHaveAttribute("href", `tel:${customerPhone}`);
-    await expect(page.getByRole("button", { name: "העתקה" })).toBeVisible();
+    // One tap to ring them, one to message them; neither asks the owner to
+    // transcribe the number first.
+    await expect(page.getByRole("link", { name: `חיוג ${customerPhone}` })).toHaveAttribute(
+      "href",
+      `tel:${customerPhone}`,
+    );
+    await expect(
+      page.getByRole("link", { name: `וואטסאפ ${customerPhone}` }),
+    ).toHaveAttribute("href", `https://wa.me/${customerPhone.replace("+", "")}`);
   });
 
   test("going back returns to the customers list, not the calendar", async ({ page }) => {

@@ -146,7 +146,7 @@ export const AppointmentSheet = ({
             </span>
             <PhoneActions
               phone={appointment.customerPhone}
-              labels={{ call: copy.callCustomer, copy: copy.copyPhone, copied: copy.copied }}
+              labels={{ call: copy.callCustomer, whatsapp: copy.whatsappCustomer }}
             />
           </Card>
 

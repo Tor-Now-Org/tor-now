@@ -214,7 +214,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
             ringing back. */}
         <PhoneActions
           phone={record.user.phone}
-          labels={{ call: copy.callCustomer, copy: copy.copyPhone, copied: copy.copied }}
+          labels={{ call: copy.callCustomer, whatsapp: copy.whatsappCustomer }}
         />
 
         <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 11 }}>
