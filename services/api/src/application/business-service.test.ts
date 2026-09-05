@@ -290,6 +290,40 @@ describe("owning a business", () => {
     expect(stored.map((entry) => entry.dayOfWeek)).toEqual([2]);
   });
 
+  it("refuses a week that writes one day twice over the same minutes", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    // What the editor merges before it writes. Accepting it is how a day's
+    // stretch landed under another day's number and the day it belonged to
+    // came back empty — the store took the duplicate without a word.
+    await expect(
+      test.services.business.replaceWorkingHours(
+        shop.owner.actor,
+        shop.business.id,
+        shop.resource.id,
+        [
+          { dayOfWeek: 1, start: "09:00", end: "17:00" },
+          { dayOfWeek: 1, start: "16:00", end: "20:00" },
+        ],
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED", details: { dayOfWeek: 1 } });
+  });
+
+  it("takes two stretches of one day that leave a break between them", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    const week = await test.services.business.replaceWorkingHours(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      [
+        { dayOfWeek: 1, start: "09:00", end: "13:00" },
+        { dayOfWeek: 1, start: "16:00", end: "20:00" },
+      ],
+    );
+    expect(week).toHaveLength(2);
+  });
+
   it("will not let one owner rewrite another's week", async () => {
     const shop = await anEstablishedBusiness(test);
     const stranger = await signIn(test, "+972500000044", "זר");

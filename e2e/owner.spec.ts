@@ -313,6 +313,73 @@ test.describe("the week a calendar keeps", () => {
     expect((await storedWeek(shop))(6)).toEqual(["09:00-17:00"]);
   });
 
+  test("a day given its own hours can be put back on the usual, saved twice", async ({
+    page,
+  }) => {
+    const { shop } = await anOwnerAt("הלוך ושוב", { start: "09:00", end: "17:00" });
+    const usual = await openTheWeek(page, shop);
+
+    // Out, with hours of its own, saved.
+    await usual.getByRole("button", { name: "רביעי" }).click();
+    const wednesday = page.locator(".card", { hasText: "רביעי" }).first();
+    await wednesday.locator('input[type="time"]').first().fill("10:00");
+    await wednesday.locator('input[type="time"]').nth(1).fill("14:00");
+    await save(page);
+    expect((await storedWeek(shop))(3)).toEqual(["10:00-14:00"]);
+
+    // Back on the usual by its chip, saved again. This is where it came back
+    // as a day off.
+    await usual.getByRole("button", { name: "רביעי" }).click();
+    await expect(page.locator(".card", { hasText: "רביעי" })).toHaveCount(0);
+    await save(page);
+    expect((await storedWeek(shop))(3)).toEqual(["09:00-17:00"]);
+  });
+
+  test("and put back after leaving the screen and coming back to it", async ({ page }) => {
+    const { shop } = await anOwnerAt("הלוך ושוב אחרי טעינה", { start: "09:00", end: "17:00" });
+    const usual = await openTheWeek(page, shop);
+
+    await usual.getByRole("button", { name: "רביעי" }).click();
+    const wednesday = page.locator(".card", { hasText: "רביעי" }).first();
+    await wednesday.locator('input[type="time"]').first().fill("10:00");
+    await wednesday.locator('input[type="time"]').nth(1).fill("14:00");
+    await save(page);
+
+    // Coming back to it fresh, which is what an owner actually does: the day is
+    // an exception now because its hours differ, not because anything on this
+    // page remembers that it was pulled out.
+    await page.reload();
+    await ready(page);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
+    const reopened = page.locator(".card", { hasText: "רוב הימים" }).first();
+
+    await reopened.getByRole("button", { name: "רביעי" }).click();
+    await save(page);
+    expect((await storedWeek(shop))(3)).toEqual(["09:00-17:00"]);
+  });
+
+  test("and a closed day comes back on the usual from its chip", async ({ page }) => {
+    const { shop } = await anOwnerAt("פתיחה מחדש", { start: "09:00", end: "17:00" });
+    const usual = await openTheWeek(page, shop);
+
+    await usual.getByRole("button", { name: "שלישי" }).click();
+    const tuesday = page.locator(".card", { hasText: "שלישי" }).first();
+    await tuesday.getByRole("button", { name: "סגור", exact: true }).click();
+    await save(page);
+    expect((await storedWeek(shop))(2)).toEqual([]);
+
+    await page.reload();
+    await ready(page);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
+    const reopened = page.locator(".card", { hasText: "רוב הימים" }).first();
+
+    await reopened.getByRole("button", { name: "שלישי" }).click();
+    await save(page);
+    expect((await storedWeek(shop))(2)).toEqual(["09:00-17:00"]);
+  });
+
   test("editing the usual moves the days on it and leaves the others alone", async ({
     page,
   }) => {

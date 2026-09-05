@@ -1,6 +1,7 @@
 import {
   BUSINESS_DEFAULTS,
   cancelAppointment,
+  mergedRanges,
   money,
   subscriptionStateOn,
   todayIn,
@@ -644,6 +645,29 @@ export const businessService = ({
         if (end <= start) throw validationFailed("A range must end after it starts");
         return { dayOfWeek: range.dayOfWeek, startMinutes: start, endMinutes: end };
       });
+
+      // Two stretches of one day that run together describe one stretch, and
+      // the caller is expected to have said so. Refusing them here rather than
+      // storing them is what turns a caller's mistake into an answer: a week
+      // arriving with a day written twice used to be accepted, and the day it
+      // belonged to quietly lost its hours.
+      for (const dayOfWeek of new Set(ranges.map((range) => range.dayOfWeek))) {
+        const onThisDay = ranges.filter((range) => range.dayOfWeek === dayOfWeek);
+        const asClock = (minutes: number) =>
+          `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(
+            minutes % 60,
+          ).padStart(2, "0")}`;
+        const stretches = onThisDay.map((range) => ({
+          start: asClock(range.startMinutes),
+          end: asClock(range.endMinutes),
+        }));
+        if (mergedRanges(stretches).length !== stretches.length) {
+          throw validationFailed("A day's ranges must not overlap one another", {
+            dayOfWeek,
+          });
+        }
+      }
+
       return repositories.workingHours.replaceForResource(resourceId, businessId, ranges);
     });
   },

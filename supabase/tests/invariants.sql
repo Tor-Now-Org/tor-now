@@ -72,6 +72,26 @@ begin
   end;
   if not v_failed then raise exception 'INVARIANT BROKEN: audit_log was rewritable'; end if;
 
+  -- ADR 0002: a break is the gap between two ranges, so two ranges of one day
+  -- that run together describe one range and the table must not hold them.
+  -- Without this an editor writing a day twice emptied the day it meant.
+  insert into working_hours (resource_id, business_id, day_of_week, start_local, end_local)
+    values (v_res, v_biz, 3, 540, 1020);
+  v_failed := false;
+  begin
+    insert into working_hours (resource_id, business_id, day_of_week, start_local, end_local)
+      values (v_res, v_biz, 3, 960, 1200);
+  exception when exclusion_violation then v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'INVARIANT BROKEN: a day was open twice over the same minutes';
+  end if;
+
+  -- And two that only touch are two stretches with no break between them,
+  -- which is a week the store is expected to hold.
+  insert into working_hours (resource_id, business_id, day_of_week, start_local, end_local)
+    values (v_res, v_biz, 3, 1020, 1200);
+
   -- Every Business has a Subscription, without the registration path saying so.
   if not exists (select 1 from subscription where business_id = v_biz) then
     raise exception 'INVARIANT BROKEN: business has no subscription';
