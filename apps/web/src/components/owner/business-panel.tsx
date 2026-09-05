@@ -316,7 +316,9 @@ export const BusinessPanel = ({
                 {/* Its hours, blocks and exceptional days live on the schedule
                     screen, which is where a calendar is actually edited. This
                     goes straight there with this one open, rather than leaving
-                    the owner to find the tab and pick the row again. */}
+                    the owner to find the tab and pick the row again. Plainly
+                    "edit", now that renaming lives on the name and there is no
+                    second editing action to tell it apart from. */}
                 <button
                   className="chip"
                   style={{ border: "1px solid var(--line)" }}

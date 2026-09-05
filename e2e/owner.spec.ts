@@ -454,7 +454,7 @@ test.describe("the business panel", () => {
     // default, which is the whole point of pressing edit on its row.
     await page
       .locator(".card", { hasText: "כיסא שני" })
-      .getByRole("button", { name: "שעות" })
+      .getByRole("button", { name: "עריכה" })
       .click();
 
     // The schedule screen, open on the calendar whose row was pressed — not on
