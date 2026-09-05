@@ -731,6 +731,27 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("lists what is still to come on a calendar, and nothing behind it", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7107");
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-18T09:00:00Z", "2026-09-18T09:30:00Z", "2026-09-18T09:40:00Z"),
+        );
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-19T09:00:00Z", "2026-09-19T09:30:00Z", "2026-09-19T09:40:00Z"),
+        );
+
+        const from = parseInstant("2026-09-19T00:00:00Z");
+        const upcoming = await repositories.appointments.upcomingForResource(
+          context.resource.id,
+          from,
+        );
+
+        expect(upcoming).toHaveLength(1);
+        expect(upcoming[0]?.startAt).toBe(parseInstant("2026-09-19T09:00:00Z"));
+      });
+    });
+
     it("names everyone who has booked, whatever their role is here", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "7105");

@@ -371,6 +371,16 @@ export type AppointmentRepository = {
    */
   customerIdsFor(businessId: BusinessId): Promise<readonly UserId[]>;
   /**
+   * Appointments still to come on this calendar. Asked before a calendar is
+   * taken away, because "this has four people booked on it" is the thing an
+   * owner needs to know before answering, and asked again while doing it, since
+   * what is cancelled has to be exactly what was described.
+   */
+  upcomingForResource(
+    resourceId: ResourceId,
+    from: Instant,
+  ): Promise<readonly Appointment[]>;
+  /**
    * Confirmed appointments starting inside the window that have not had a
    * reminder written yet (ADR 0005). Returned with the customer attached,
    * because a reminder is addressed to a person.

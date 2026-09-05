@@ -399,9 +399,15 @@ export const api = {
       token,
     }),
 
-  deleteResource: (token: string, businessId: string, resourceId: string) =>
+  deleteResource: (
+    token: string,
+    businessId: string,
+    resourceId: string,
+    upcoming: "KEEP" | "CANCEL" = "KEEP",
+  ) =>
     request<void>(`/businesses/${businessId}/resources/${resourceId}`, {
       method: "DELETE",
+      query: { upcoming },
       token,
     }),
 

@@ -250,6 +250,74 @@ test.describe("the business panel", () => {
     ).toHaveAttribute("href", "https://instagram.com/dreamhair");
   });
 
+  test("asks what becomes of the bookings before a calendar is taken away", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `הסרה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+
+    // A second calendar, since the last one on offer cannot be removed, and a
+    // customer booked onto it.
+    const second = await call<{ id: string; name: string }>(
+      `/businesses/${shop.business.id}/resources`,
+      { method: "POST", token: shop.owner.token, body: { name: "כיסא שני" } },
+    );
+    const customerPhone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone: customerPhone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: {
+        phone: customerPhone,
+        code,
+        name: { givenName: "דנה", familyName: "כהן" },
+      },
+    });
+    const startAt = await theNextStart({ ...shop, resource: second });
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: second.id,
+        startAt,
+        customerNote: null,
+      },
+    });
+
+    await page.addInitScript(
+      ([key, sessionToken]) =>
+        window.localStorage.setItem(key as string, sessionToken as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "יומנים" }).click();
+
+    // Both calendars offer removal, so this names the one under test.
+    await page
+      .locator(".card", { hasText: "כיסא שני" })
+      .getByRole("button", { name: "מחיקה" })
+      .click();
+
+    // The question, with the number of people it affects in it.
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByText(/1 תורים עתידיים/)).toBeVisible();
+
+    await page.getByRole("button", { name: "להסיר ולהשאיר את התורים העתידיים" }).click();
+
+    // The calendar is off the list customers see, and the appointment stands.
+    await expect(page.getByText("מוסתר").first()).toBeVisible({ timeout: 15_000 });
+    const mine = await call<{ status: string }[]>("/me/appointments", { token });
+    expect(mine.map((appointment) => appointment.status)).toEqual(["CONFIRMED"]);
+  });
+
   test("hides a calendar from customers, and brings it back", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `יומנים ${Date.now()}`,

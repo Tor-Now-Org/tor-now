@@ -697,6 +697,17 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
       },
 
+      async upcomingForResource(resourceId, from) {
+        return store.appointments
+          .filter(
+            (appointment) =>
+              appointment.resourceId === resourceId &&
+              appointment.status === "CONFIRMED" &&
+              appointment.startAt >= from,
+          )
+          .sort((left, right) => left.startAt - right.startAt);
+      },
+
       async customerIdsFor(businessId) {
         return [
           ...new Set(

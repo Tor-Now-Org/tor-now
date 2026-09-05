@@ -62,6 +62,8 @@ export const BusinessPanel = ({
   } | null>(null);
   const [editing, setEditing] = useState<Partial<ServiceDto> | null>(null);
   const [newResource, setNewResource] = useState<string | null>(null);
+  /** The calendar the owner has asked to remove, while they are being asked about it. */
+  const [removing, setRemoving] = useState<ResourceDto | null>(null);
   const [settings, setSettings] = useState(business);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -277,7 +279,7 @@ export const BusinessPanel = ({
                 )}
                 {!lastOnOffer && (
                   <button
-                    onClick={() => act(() => api.deleteResource(token, business.id, resource.id))}
+                    onClick={() => setRemoving(resource)}
                     style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
                   >
                     {copy.delete}
@@ -496,6 +498,74 @@ export const BusinessPanel = ({
                 {copy.removeService}
               </Button>
             )}
+          </div>
+        )}
+      </Sheet>
+
+      <Sheet
+        open={removing !== null}
+        onClose={() => setRemoving(null)}
+        labelledBy="remove-calendar-title"
+      >
+        {removing !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 id="remove-calendar-title" style={{ fontSize: 19 }}>
+              {copy.removeCalendarTitle.replace("{name}", removing.name)}
+            </h2>
+            {/* What happens to the past is not a question, so it is stated
+                rather than asked: it is the record of what the business did. */}
+            <Note>{copy.removeCalendarPast}</Note>
+
+            {(removing.upcomingAppointments ?? 0) > 0 ? (
+              <>
+                <Warning>
+                  {copy.removeCalendarUpcoming.replace(
+                    "{count}",
+                    String(removing.upcomingAppointments ?? 0),
+                  )}
+                </Warning>
+                <Button
+                  busy={busy}
+                  intent="quiet"
+                  onClick={() =>
+                    act(async () => {
+                      await api.deleteResource(token, business.id, removing.id, "KEEP");
+                      setRemoving(null);
+                    })
+                  }
+                >
+                  {copy.removeCalendarKeep}
+                </Button>
+                <Button
+                  busy={busy}
+                  intent="danger"
+                  onClick={() =>
+                    act(async () => {
+                      await api.deleteResource(token, business.id, removing.id, "CANCEL");
+                      setRemoving(null);
+                    })
+                  }
+                >
+                  {copy.removeCalendarCancel}
+                </Button>
+              </>
+            ) : (
+              <Button
+                busy={busy}
+                intent="danger"
+                onClick={() =>
+                  act(async () => {
+                    await api.deleteResource(token, business.id, removing.id, "KEEP");
+                    setRemoving(null);
+                  })
+                }
+              >
+                {copy.removeCalendarConfirm}
+              </Button>
+            )}
+            <Button intent="quiet" onClick={() => setRemoving(null)}>
+              {copy.removeCalendarBack}
+            </Button>
           </div>
         )}
       </Sheet>

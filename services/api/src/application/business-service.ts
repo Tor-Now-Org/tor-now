@@ -1,5 +1,6 @@
 import {
   BUSINESS_DEFAULTS,
+  cancelAppointment,
   money,
   subscriptionStateOn,
   todayIn,
@@ -22,6 +23,8 @@ import {
   type WorkingHours,
 } from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
+import { notificationFor } from "./notifications.ts";
+import { TEMPLATES } from "../ports/notifier.ts";
 import type { PhotoStore } from "../ports/photo-store.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { loadOwnedBusiness, loadOwnedResource, requireUser } from "./authorization.ts";
@@ -425,6 +428,30 @@ export const businessService = ({
   // Resources
   // -------------------------------------------------------------------------
 
+  /**
+   * The calendars, each with what is still booked on it.
+   *
+   * The count travels with the list because it is what the screen has to say
+   * before asking the owner to decide: "this has three people booked on it" is
+   * the whole of the question, and asking for it per calendar afterwards would
+   * be a request per row for a number the list already knows how to fetch.
+   */
+  async listResourcesWithUpcoming(actor: Actor, businessId: BusinessId) {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      const resources = await repositories.resources.listForBusiness(businessId);
+      const now = clock.now();
+      return Promise.all(
+        resources.map(async (resource) => ({
+          resource,
+          upcoming: (
+            await repositories.appointments.upcomingForResource(resource.id, now)
+          ).length,
+        })),
+      );
+    });
+  },
+
   async listResources(actor: Actor, businessId: BusinessId) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       await loadOwnedBusiness(repositories, actor, businessId);
@@ -432,10 +459,39 @@ export const businessService = ({
     });
   },
 
+  /**
+   * A new calendar opens on the same week the business already keeps.
+   *
+   * Hours hang off a Resource rather than the Business (ADR 0002), which is
+   * what lets one person work Sundays and another not. The cost was that a new
+   * calendar arrived with no hours at all — bookable at no time, and unusable
+   * until the owner typed out a week the business had already described. So it
+   * starts as a copy of an existing calendar's week and is edited from there,
+   * which is the common case: a second chair keeps the shop's hours.
+   */
   async createResource(actor: Actor, businessId: BusinessId, name: string) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       await loadOwnedBusiness(repositories, actor, businessId);
-      return repositories.resources.create({ businessId, name });
+      const existing = await repositories.resources.listForBusiness(businessId);
+      const created = await repositories.resources.create({ businessId, name });
+
+      // The oldest calendar still on offer is the business's own week as far as
+      // anything here can tell. Nothing to copy is not a failure: the first
+      // calendar of all is made by registration, which sets its hours itself.
+      const source = existing.find((resource) => resource.active) ?? existing[0];
+      if (source !== undefined) {
+        const week = await repositories.workingHours.listForResource(source.id);
+        for (const hours of week) {
+          await repositories.workingHours.create({
+            resourceId: created.id,
+            businessId,
+            dayOfWeek: hours.dayOfWeek,
+            startMinutes: hours.start,
+            endMinutes: hours.end,
+          });
+        }
+      }
+      return created;
     });
   },
 
@@ -463,9 +519,26 @@ export const businessService = ({
     });
   },
 
-  async deleteResource(actor: Actor, businessId: BusinessId, resourceId: ResourceId) {
-    await unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+  /**
+   * Taking a calendar away, and saying what becomes of what is booked on it.
+   *
+   * Past appointments are never in question: they are the record of what
+   * happened and the repository keeps them by withdrawing rather than deleting.
+   * The ones still to come are a real choice the owner has to make, because
+   * both answers are wrong by default — cancelling silently strands people who
+   * are expecting to be seen, and keeping silently leaves appointments on a
+   * calendar the owner believes is gone. So the caller says which, and the
+   * screen asks.
+   */
+  async deleteResource(
+    actor: Actor,
+    businessId: BusinessId,
+    resourceId: ResourceId,
+    upcoming: "KEEP" | "CANCEL" = "KEEP",
+  ) {
+    await unitOfWork.run(actor, async (session) => {
+      const { repositories } = session;
+      const business = await loadOwnedBusiness(repositories, actor, businessId);
       await loadOwnedResource(repositories, businessId, resourceId);
       // Every Business has at least one Resource; removing the last one would
       // leave it unbookable with no way to say so. Counted among the ones still
@@ -477,6 +550,35 @@ export const businessService = ({
       if (stillOffered.length <= 1) {
         throw validationFailed("A business must keep at least one calendar");
       }
+
+      if (upcoming === "CANCEL") {
+        // Cancelled by the Business, and each customer told: someone holding an
+        // appointment that is about to stop existing has to hear it from us
+        // rather than discover it at the door.
+        const booked = await repositories.appointments.upcomingForResource(
+          resourceId,
+          clock.now(),
+        );
+        for (const appointment of booked) {
+          const outcome = cancelAppointment(
+            appointment,
+            business,
+            "BUSINESS",
+            clock.now(),
+          );
+          const cancelled = await repositories.appointments.update(appointment.id, {
+            status: "CANCELLED",
+            ...outcome,
+          });
+          const customer = await repositories.users.findById(appointment.customerId);
+          if (customer !== null) {
+            await session.outbox.enqueue(
+              notificationFor(TEMPLATES.bookingCancelled, cancelled, business, customer),
+            );
+          }
+        }
+      }
+
       await repositories.resources.delete(resourceId);
     });
   },

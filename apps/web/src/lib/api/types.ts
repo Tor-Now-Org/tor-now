@@ -42,6 +42,12 @@ export type ResourceDto = {
   businessId: string;
   name: string;
   active: boolean;
+  /**
+   * How many appointments are still to come on this calendar. Optional: an API
+   * deployed before the count sends nothing, and the screen must not read that
+   * as "none booked" when it is about to ask what to do with them.
+   */
+  upcomingAppointments?: number;
 };
 
 export type BusinessProfileDto = {

@@ -395,11 +395,16 @@ const ownerRoutes = (services: Services) => {
   });
 
   owner.get("/:businessId/resources", async (context) => {
-    const list = await services.business.listResources(
+    const list = await services.business.listResourcesWithUpcoming(
       actorOf(context),
       idParam(context, "businessId"),
     );
-    return context.json(list.map(wire.resourceOut));
+    return context.json(
+      list.map((entry) => ({
+        ...wire.resourceOut(entry.resource),
+        upcomingAppointments: entry.upcoming,
+      })),
+    );
   });
 
   owner.post("/:businessId/resources", async (context) => {
@@ -431,10 +436,14 @@ const ownerRoutes = (services: Services) => {
   });
 
   owner.delete("/:businessId/resources/:resourceId", async (context) => {
+    // What becomes of what is still booked. Absent means keep, so a caller that
+    // has not been asked the question cannot answer it by accident.
+    const upcoming = context.req.query("upcoming") === "CANCEL" ? "CANCEL" : "KEEP";
     await services.business.deleteResource(
       actorOf(context),
       idParam(context, "businessId"),
       idParam(context, "resourceId"),
+      upcoming,
     );
     return context.body(null, 204);
   });

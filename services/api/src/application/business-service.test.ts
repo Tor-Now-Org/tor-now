@@ -301,6 +301,146 @@ describe("removing a calendar", () => {
   });
 });
 
+describe("adding a calendar", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  it("opens the same hours the business already keeps", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const existing = await test.services.business.listWorkingHours(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+    );
+
+    const second = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      "כיסא שני",
+    );
+
+    // A calendar with no hours is bookable at no time at all, so a new one
+    // arrived unusable and the owner had to type the week out again to say
+    // what the business had already said.
+    const copied = await test.services.business.listWorkingHours(
+      shop.owner.actor,
+      shop.business.id,
+      second.id,
+    );
+    const asWeek = (hours: readonly { dayOfWeek: number; start: unknown; end: unknown }[]) =>
+      hours.map((entry) => ({
+        dayOfWeek: entry.dayOfWeek,
+        start: entry.start,
+        end: entry.end,
+      }));
+    expect(asWeek(copied)).toEqual(asWeek(existing));
+    expect(copied.length).toBeGreaterThan(0);
+  });
+
+  it("is immediately bookable, without the owner touching the schedule", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const second = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      "כיסא שני",
+    );
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const booked = await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: second.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    expect(booked.resourceId).toBe(second.id);
+  });
+});
+
+describe("taking a calendar away", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  const aCalendarWithABooking = async () => {
+    const shop = await anEstablishedBusiness(test);
+    const spare = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      "כיסא שני",
+    );
+    const customer = await signIn(test, "+972500000002", "דנה");
+    const booked = await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: spare.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+    return { shop, spare, booked };
+  };
+
+  it("keeps what is booked when the owner says to keep it", async () => {
+    const { shop, spare, booked } = await aCalendarWithABooking();
+
+    await test.services.business.deleteResource(
+      shop.owner.actor,
+      shop.business.id,
+      spare.id,
+      "KEEP",
+    );
+
+    // The appointment stands and its customer is none the wiser; the calendar
+    // simply stops being offered for anything new.
+    const after = test.store.appointments.find((entry) => entry.id === booked.id);
+    expect(after?.status).toBe("CONFIRMED");
+    expect(test.deliveredTemplates).not.toContain("BOOKING_CANCELLED");
+  });
+
+  it("calls off what is booked when the owner says to, and tells each customer", async () => {
+    const { shop, spare, booked } = await aCalendarWithABooking();
+
+    await test.services.business.deleteResource(
+      shop.owner.actor,
+      shop.business.id,
+      spare.id,
+      "CANCEL",
+    );
+
+    const after = test.store.appointments.find((entry) => entry.id === booked.id);
+    expect(after?.status).toBe("CANCELLED");
+    expect(after?.cancelledBy).toBe("BUSINESS");
+
+    // Somebody holding an appointment that has just stopped existing hears it
+    // from us rather than at the door.
+    await test.services.outboxWorker.drain();
+    expect(test.deliveredTemplates).toContain("BOOKING_CANCELLED");
+  });
+
+  it("leaves the past alone either way", async () => {
+    const { shop, spare } = await aCalendarWithABooking();
+    // Move past the appointment, so it is history rather than a plan.
+    test.travelTo(parseInstant(TUESDAY_AT("18:00")));
+
+    await test.services.business.deleteResource(
+      shop.owner.actor,
+      shop.business.id,
+      spare.id,
+      "CANCEL",
+    );
+
+    // Nothing upcoming to call off, and what happened is still recorded.
+    expect(test.store.appointments).toHaveLength(1);
+    expect(test.store.appointments[0]?.status).toBe("CONFIRMED");
+  });
+});
+
 describe("hiding a calendar", () => {
   let test: Harness;
 

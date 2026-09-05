@@ -161,6 +161,16 @@ export const appointmentRepository = (
     return rows[0]?.found === true;
   },
 
+  async upcomingForResource(resourceId, from) {
+    const rows = await tx<Row[]>`
+      select * from appointment
+      where resource_id = ${resourceId}
+        and status = 'CONFIRMED'
+        and start_at >= ${asDate(from)}
+      order by start_at`;
+    return rows.map(toAppointment);
+  },
+
   async customerIdsFor(businessId) {
     // Every status: a cancelled appointment ends a booking, not a
     // relationship, and the owner still has to be able to find that person.

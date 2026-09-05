@@ -1,7 +1,6 @@
 import {
   cancelAppointment,
   clearNoShow,
-  displayName,
   DomainError,
   END_OF_DAY,
   forbidden,
@@ -26,7 +25,8 @@ import {
   type UserId,
 } from "@tor-now/domain";
 import { PAGINATION } from "../config.ts";
-import { TEMPLATES, type OutboundMessage } from "../ports/notifier.ts";
+import { notificationFor } from "./notifications.ts";
+import { TEMPLATES } from "../ports/notifier.ts";
 import type {
   AppointmentWithBusiness,
   Page,
@@ -74,24 +74,6 @@ const scheduleForDay = async (
   return { schedule: { workingHours, overrides, blocks, occupied }, dayStart, dayEnd };
 };
 
-const notificationFor = (
-  template: OutboundMessage["template"],
-  appointment: Appointment,
-  business: { name: string; phone: string; timeZone: string },
-  customer: { givenName: string; familyName: string | null; phone: string },
-  previousStartAt?: string,
-): OutboundMessage => ({
-  recipientPhone: customer.phone,
-  template,
-  payload: {
-    businessName: business.name,
-    businessPhone: business.phone,
-    serviceName: appointment.serviceName,
-    customerName: displayName(customer),
-    startAt: formatInstant(appointment.startAt),
-    ...(previousStartAt === undefined ? {} : { previousStartAt }),
-  },
-});
 
 export const bookingService = (dependencies: {
   unitOfWork: UnitOfWork;
