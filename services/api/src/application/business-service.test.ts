@@ -245,7 +245,7 @@ describe("removing a calendar", () => {
     const spare = await test.services.business.createResource(
       shop.owner.actor,
       shop.business.id,
-      { name: "כיסא שני" },
+      "כיסא שני",
     );
     const customer = await signIn(test, "+972500000002", "דנה");
     await test.services.booking.book(customer.actor, {
@@ -276,7 +276,7 @@ describe("removing a calendar", () => {
     const spare = await test.services.business.createResource(
       shop.owner.actor,
       shop.business.id,
-      { name: "כיסא שני" },
+      "כיסא שני",
     );
     const customer = await signIn(test, "+972500000002", "דנה");
     await test.services.booking.book(customer.actor, {
