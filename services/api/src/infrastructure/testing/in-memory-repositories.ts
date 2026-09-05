@@ -686,14 +686,18 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
       },
 
-      async hasConfirmedForServiceBetween(customerId, serviceId, from, to) {
-        return store.appointments.some(
-          (appointment) =>
-            appointment.customerId === customerId &&
-            appointment.serviceId === serviceId &&
-            appointment.status === "CONFIRMED" &&
-            appointment.startAt >= from &&
-            appointment.startAt < to,
+      async confirmedForServiceBetween(customerId, serviceId, from, to) {
+        return (
+          store.appointments
+            .filter(
+              (appointment) =>
+                appointment.customerId === customerId &&
+                appointment.serviceId === serviceId &&
+                appointment.status === "CONFIRMED" &&
+                appointment.startAt >= from &&
+                appointment.startAt < to,
+            )
+            .sort((left, right) => left.startAt - right.startAt)[0] ?? null
         );
       },
 

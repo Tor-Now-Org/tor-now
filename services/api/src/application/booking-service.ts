@@ -139,19 +139,25 @@ export const bookingService = (dependencies: {
         // between then and now they may have booked another elsewhere; what
         // they agreed to is "one more of these today", which is what this is.
         if (input.bookingAnotherOfTheSame !== true) {
-          const already = await repositories.appointments.hasConfirmedForServiceBetween(
+          const already = await repositories.appointments.confirmedForServiceBetween(
             customerId,
             draft.serviceId,
             dayStart,
             dayEnd,
           );
-          if (already) {
+          if (already !== null) {
+            // Everything the question needs, taken from the appointment they
+            // already hold rather than from the one they are attempting: the
+            // point is for them to recognise it, including which calendar it is
+            // on, which may not be the one in front of them.
             throw new DomainError(
               "ALREADY_BOOKED_THAT_DAY",
               "The customer already has an appointment for this service that day",
               {
-                serviceName: draft.serviceName,
-                date: instantToZoned(startAt, context.business.timeZone).date,
+                serviceName: already.serviceName,
+                resourceName: already.resourceName,
+                startAt: formatInstant(already.startAt),
+                date: instantToZoned(already.startAt, context.business.timeZone).date,
               },
             );
           }

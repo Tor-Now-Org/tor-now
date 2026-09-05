@@ -51,13 +51,52 @@ describe("booking", () => {
     };
     await test.services.booking.book(customer.actor, request);
 
-    // Its own code, and carrying what the question needs: the interface has to
-    // name the service and the day when it asks whether they meant it.
+    // Its own code, and carrying the whole of the question: which service, with
+    // whom, on what day and at what time. "You already have one of these today"
+    // is not enough for somebody to tell whether they meant it — they need to
+    // recognise the appointment they are being asked about.
     await expect(
       test.services.booking.book(customer.actor, { ...request, startAt: TUESDAY_AT("11:00") }),
     ).rejects.toMatchObject({
       code: "ALREADY_BOOKED_THAT_DAY",
-      details: { serviceName: shop.service.name },
+      details: {
+        serviceName: shop.service.name,
+        resourceName: shop.resource.name,
+        startAt: TUESDAY_AT("09:00"),
+      },
+    });
+  });
+
+  it("notices the first one whichever calendar it was booked on", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const second = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      "כיסא שני",
+    );
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    // A different chair is still the same haircut on the same day, and the
+    // question names the chair the first one is on rather than this one.
+    await expect(
+      test.services.booking.book(customer.actor, {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: second.id,
+        startAt: TUESDAY_AT("11:00"),
+        customerNote: null,
+      }),
+    ).rejects.toMatchObject({
+      code: "ALREADY_BOOKED_THAT_DAY",
+      details: { resourceName: shop.resource.name },
     });
   });
 

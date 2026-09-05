@@ -354,12 +354,19 @@ export type AppointmentRepository = {
    * exists, and reading a customer's history to find out is a page of work to
    * decide a yes or no.
    */
-  hasConfirmedForServiceBetween(
+  /**
+   * The customer's confirmed appointment for this Service inside the window, if
+   * they have one — the appointment rather than a yes, because what the screen
+   * has to say is "you already have this, with Ran, at nine", and a boolean
+   * cannot say any of it. Any calendar counts: the same haircut twice in a day
+   * is the same question wherever it was booked.
+   */
+  confirmedForServiceBetween(
     customerId: UserId,
     serviceId: ServiceId,
     from: Instant,
     to: Instant,
-  ): Promise<boolean>;
+  ): Promise<Appointment | null>;
   /**
    * Everyone who has ever booked here, whatever else they are to this Business.
    *

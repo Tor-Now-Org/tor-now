@@ -69,6 +69,8 @@ export const BookingFlow = ({
   /** Set when the API says this customer already has one of these today. */
   const [alreadyBooked, setAlreadyBooked] = useState<{
     serviceName: string;
+    resourceName: string;
+    startAt: string;
     date: string;
   } | null>(null);
 
@@ -168,6 +170,8 @@ export const BookingFlow = ({
         // as an error the customer can do nothing about.
         setAlreadyBooked({
           serviceName: aString(cause.details["serviceName"], service.name),
+          resourceName: aString(cause.details["resourceName"], ""),
+          startAt: aString(cause.details["startAt"], ""),
           date: aString(cause.details["date"], ""),
         });
         setBusy(false);
@@ -495,14 +499,31 @@ export const BookingFlow = ({
                 {/* A question, not a rejection: the customer may well mean it —
                     two children, one phone number — so the way through is the
                     plain button and the way out is the quiet one. */}
+                {/* The appointment they already hold, named back to them: a
+                    person cannot tell whether they meant to book another
+                    without recognising the first. The calendar is part of that
+                    — it may not be the one they are looking at. */}
                 <Warning>
                   {copy.alreadyBooked
                     .replace("{service}", alreadyBooked.serviceName)
-                    .replace("{date}", formatLocalDate(alreadyBooked.date, language, {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                    }))}
+                    .replace(
+                      "{when}",
+                      `${formatLocalDate(alreadyBooked.date, language, {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                      })}${
+                        alreadyBooked.startAt === ""
+                          ? ""
+                          : ` ${copy.atTime} ${timeIn(alreadyBooked.startAt, business.timeZone, language)}`
+                      }`,
+                    )
+                    .replace(
+                      "{with}",
+                      alreadyBooked.resourceName === ""
+                        ? ""
+                        : ` ${copy.withProvider} ${alreadyBooked.resourceName}`,
+                    )}
                 </Warning>
                 <Button onClick={() => void confirm(true)} busy={busy}>
                   {copy.bookAnyway}

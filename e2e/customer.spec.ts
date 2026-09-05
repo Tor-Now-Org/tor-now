@@ -283,7 +283,7 @@ const SAFELY_PAST_THE_NOTICE = 4;
 test.describe("booking a second one of the same", () => {
   test("asks before allowing it, and the note reaches the owner", async ({ page }) => {
     const name = `כפול ${Date.now()}`;
-    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+    const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
     const phone = uniquePhone();
     await signInDirectly(page, phone, "דנה כהן");
 
@@ -314,9 +314,13 @@ test.describe("booking a second one of the same", () => {
     await book("מגיעה עם ילד");
     await expect(page.getByText("התור נקבע")).toBeVisible({ timeout: 20_000 });
 
-    // The same service again that day: a question, not a refusal.
+    // The same service again that day: a question, not a refusal — and one that
+    // names the appointment they already hold, with the calendar and the hour,
+    // since nobody can tell whether they meant it without recognising it.
     await book("השני הוא לילד");
     await expect(page.getByText(/כבר יש לכם תור/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(new RegExp(`עם ${shop.resource.name}`))).toBeVisible();
+    await expect(page.getByText(/בשעה \d\d:\d\d/)).toBeVisible();
     await expect(page.getByRole("button", { name: "כן, להזמין עוד תור" })).toBeVisible();
 
     await page.getByRole("button", { name: "כן, להזמין עוד תור" }).click();

@@ -149,16 +149,19 @@ export const appointmentRepository = (
     return rows.map(toAppointment);
   },
 
-  async hasConfirmedForServiceBetween(customerId, serviceId, from, to) {
-    const rows = await tx<{ found: boolean }[]>`
-      select exists (
-        select 1 from appointment
-        where customer_id = ${customerId}
-          and service_id = ${serviceId}
-          and status = 'CONFIRMED'
-          and start_at >= ${asDate(from)} and start_at < ${asDate(to)}
-      ) as found`;
-    return rows[0]?.found === true;
+  async confirmedForServiceBetween(customerId, serviceId, from, to) {
+    // The earliest, since that is the one a person will picture when asked
+    // whether they meant to book another.
+    const rows = await tx<Row[]>`
+      select * from appointment
+      where customer_id = ${customerId}
+        and service_id = ${serviceId}
+        and status = 'CONFIRMED'
+        and start_at >= ${asDate(from)} and start_at < ${asDate(to)}
+      order by start_at
+      limit 1`;
+    const row = rows[0];
+    return row === undefined ? null : toAppointment(row);
   },
 
   async upcomingForResource(resourceId, from) {

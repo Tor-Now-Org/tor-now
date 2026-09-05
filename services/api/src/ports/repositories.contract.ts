@@ -664,23 +664,25 @@ export const describeRepositoryContract = (
             context.business.id,
           ),
         ).toHaveLength(1);
+        // The appointment itself, since the screen has to name it back to the
+        // person: which service, with whom, and at what time.
         expect(
-          await repositories.appointments.hasConfirmedForServiceBetween(
+          await repositories.appointments.confirmedForServiceBetween(
             context.owner.id,
             booked.serviceId,
             span[0],
             span[1],
           ),
-        ).toBe(true);
+        ).toMatchObject({ id: booked.id, resourceName: context.resource.name });
         // The day before holds nothing, so the span is what decides the answer.
         expect(
-          await repositories.appointments.hasConfirmedForServiceBetween(
+          await repositories.appointments.confirmedForServiceBetween(
             context.owner.id,
             booked.serviceId,
             parseInstant("2026-09-14T00:00:00Z"),
             span[0],
           ),
-        ).toBe(false);
+        ).toBeNull();
         expect(
           await repositories.appointments.listForBusinessBetween(
             context.business.id,
