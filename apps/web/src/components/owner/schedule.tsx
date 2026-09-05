@@ -203,7 +203,6 @@ export const Schedule = ({
               ranges with an add and a delete — the same week in two different
               languages, the second one ADR 0002's storage rather than anybody's
               idea of a Tuesday. */}
-          <Note>{copy.hoursNote}</Note>
           {/* Keyed on the calendar: the editor holds which days the owner has
               pulled out of the usual, and that answer belongs to the week in
               front of them, not to the next calendar they switch to. */}
