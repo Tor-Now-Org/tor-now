@@ -110,6 +110,11 @@ function ManageApp() {
       <AppHeader
         languageLabel={copy.langSwitch}
         title={business.name}
+        // The chevron is the way back to the customer app; the drawer offers the
+        // same trip, but only after you think to open it.
+        onBack={() => router.push("/")}
+        backLabel={copy.asCustomer}
+        showBackLabel={false}
         trailing={
           user !== null ? (
             <AccountButton
