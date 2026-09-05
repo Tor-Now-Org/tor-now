@@ -264,7 +264,7 @@ const Stretches = ({
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Clock
                 id={`from-${id}-${position}`}
-                label={copy.opensAt}
+                label={copy.from}
                 value={range.start}
                 onChange={(start) => at(position, (found) => ({ ...found, start }))}
                 onDone={tidy}
@@ -274,7 +274,7 @@ const Stretches = ({
               </span>
               <Clock
                 id={`to-${id}-${position}`}
-                label={copy.closesAt}
+                label={copy.to}
                 value={range.end}
                 onChange={(end) => at(position, (found) => ({ ...found, end }))}
                 onDone={tidy}
