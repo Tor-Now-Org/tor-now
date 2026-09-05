@@ -489,7 +489,7 @@ export const BookingFlow = ({
           todayLabel={copy.today}
           weekdayNames={copy.days}
         />
-        {busy && day === null ? (
+        {busy ? (
           <Spinner />
         ) : day !== null ? (
           <SlotGrid
