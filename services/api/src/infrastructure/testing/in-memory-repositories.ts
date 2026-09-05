@@ -663,7 +663,11 @@ export const inMemoryRepositories = (store: Store): Repositories => {
               (candidate) => candidate.id === appointment.businessId,
             );
             if (business === undefined) throw notFound("Business", appointment.businessId);
-            return { appointment, businessName: business.name };
+            const resource = store.resources.find(
+              (candidate) => candidate.id === appointment.resourceId,
+            );
+            if (resource === undefined) throw notFound("Resource", appointment.resourceId);
+            return { appointment, businessName: business.name, resourceName: resource.name };
           });
       },
       async listForCustomerAtBusiness(customerId, businessId) {

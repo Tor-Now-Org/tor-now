@@ -222,7 +222,8 @@ test.describe("the business panel", () => {
 
     // Typed the way a person writes it: with the @, which is not part of it.
     await page.getByLabel("אינסטגרם").fill("@dreamhair");
-    await page.getByLabel("וואטסאפ").fill("+972545646946");
+    // Local digits behind the flag, like every other number in the app.
+    await page.getByLabel("וואטסאפ").fill(asTyped("+972545646946"));
     await page.getByRole("button", { name: "שמירה" }).click();
     await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
 

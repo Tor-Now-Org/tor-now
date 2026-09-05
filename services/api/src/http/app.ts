@@ -226,6 +226,20 @@ export const createApp = (services: Services) => {
     ),
   );
 
+  app.put("/appointments/:appointmentId/note", async (context) => {
+    const { customerNote } = await parseBody(context, schema.customerNoteSchema);
+    return context.json(
+      wire.appointmentOut(
+        await services.booking.setCustomerNote(
+          actorOf(context),
+          idParam(context, "appointmentId"),
+          // A cleared field and an absent note are the same thing.
+          customerNote === "" ? null : customerNote,
+        ),
+      ),
+    );
+  });
+
   app.post("/appointments/:appointmentId/reschedule", async (context) => {
     const { startAt } = await parseBody(context, schema.rescheduleSchema);
     return context.json(

@@ -344,6 +344,39 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("writes and clears the customer's note without touching the time", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "03005");
+        const booked = await repositories.appointments.create(
+          anAppointmentAt(
+            context,
+            "2026-09-01T09:00:00.000Z",
+            "2026-09-01T09:30:00.000Z",
+            "2026-09-01T09:40:00.000Z",
+          ),
+        );
+
+        const noted = await repositories.appointments.update(booked.id, {
+          customerNote: "מגיעים עם ילד",
+        });
+        expect(noted.customerNote).toBe("מגיעים עם ילד");
+        expect(noted.startAt).toEqual(booked.startAt);
+
+        // An update that says nothing about the note leaves it alone.
+        const moved = await repositories.appointments.update(booked.id, {
+          startAt: AT("2026-09-01T10:00:00.000Z"),
+          endAt: AT("2026-09-01T10:30:00.000Z"),
+          occupiedUntil: AT("2026-09-01T10:40:00.000Z"),
+        });
+        expect(moved.customerNote).toBe("מגיעים עם ילד");
+
+        expect(
+          (await repositories.appointments.update(booked.id, { customerNote: null }))
+            .customerNote,
+        ).toBeNull();
+      });
+    });
+
     it("reports occupied spans without any customer detail", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "03004");
@@ -622,7 +655,9 @@ export const describeRepositoryContract = (
             limit: 10,
             offset: 0,
           }),
-        ).toMatchObject([{ businessName: context.business.name }]);
+        ).toMatchObject([
+          { businessName: context.business.name, resourceName: context.resource.name },
+        ]);
         expect(
           await repositories.appointments.listForCustomerAtBusiness(
             context.owner.id,

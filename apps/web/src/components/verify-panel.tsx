@@ -5,8 +5,9 @@ import { needsName, TEXT_RULES } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
 import { blocking, checkText, useFieldProblem } from "@/lib/use-field-problem.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import { checkLocalPhone, PHONE_COUNTRY, toE164 } from "@/lib/phone.ts";
+import { checkLocalPhone, toE164 } from "@/lib/phone.ts";
 import type { UserDto } from "@/lib/api/types.ts";
+import { PhoneField } from "./phone-field.tsx";
 import { Button, Critical, Field, Note } from "./ui.tsx";
 
 /**
@@ -75,7 +76,6 @@ export const VerifyPanel = ({
     setTouched((previous) => new Set(previous).add(field));
 
   const problem = useFieldProblem();
-  const phoneProblem = problem.localPhone(phone, touched.has("phone"));
   const givenProblem = problem.text(givenName, TEXT_RULES.personName, touched.has("given"));
   const familyProblem = problem.text(familyName, TEXT_RULES.personName, touched.has("family"));
 
@@ -155,24 +155,13 @@ export const VerifyPanel = ({
 
       {stage === "phone" ? (
         <>
-          <Field
+          <PhoneField
             id="verify-phone"
             label={labels.phoneLabel}
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            dir="ltr"
-            startAdornment={
-              <>
-                <span style={{ fontSize: 24 }}>{PHONE_COUNTRY.flag}</span>
-                {PHONE_COUNTRY.dial}
-              </>
-            }
-            maxLength={9}
             value={phone}
-            problem={phoneProblem}
+            showProblem={touched.has("phone")}
             onBlur={() => leave("phone")}
-            onChange={(event) => setPhone(event.target.value.replace(/\D/g, ""))}
+            onChange={setPhone}
           />
           {labels.notHeld !== undefined && <Note>{labels.notHeld}</Note>}
           {error !== null && <Critical>{error}</Critical>}

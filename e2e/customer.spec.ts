@@ -266,7 +266,7 @@ test.describe("who the appointment is with", () => {
 
     // The calendar's name at booking time, which is what the customer turned up
     // expecting — not whatever it may be renamed to later.
-    await expect(page.getByText(`עם ${shop.resource.name}`)).toBeVisible({
+    await expect(page.getByText(new RegExp(`בשירות ${shop.resource.name}`))).toBeVisible({
       timeout: 15_000,
     });
   });

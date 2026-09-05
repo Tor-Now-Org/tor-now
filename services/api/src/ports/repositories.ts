@@ -264,10 +264,11 @@ export type BookedAppointment = {
   readonly customerPhone: string;
 };
 
-/** A customer's own appointment, with the business named for display (e.g. "add to calendar"). */
+/** A customer's own appointment, with the business and staff named for display (e.g. "add to calendar"). */
 export type AppointmentWithBusiness = {
   readonly appointment: Appointment;
   readonly businessName: string;
+  readonly resourceName: string;
 };
 
 /** An appointment and everyone a reminder about it needs to name. */
@@ -399,6 +400,7 @@ export type AppointmentRepository = {
         | "cancelledAt"
         | "cancelledBy"
         | "lateCancellation"
+        | "customerNote"
       >
     >,
   ): Promise<Appointment>;

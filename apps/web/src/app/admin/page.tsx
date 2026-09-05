@@ -18,7 +18,9 @@ import { formatLocalDate } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
 import { useSession } from "@/lib/session.tsx";
-import { checkPhone, useFieldProblem } from "@/lib/use-field-problem.ts";
+import { useFieldProblem } from "@/lib/use-field-problem.ts";
+import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
+import { PhoneField } from "@/components/phone-field.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
@@ -278,7 +280,7 @@ export default function AdminPage() {
                     </button>
                   </Card>
                 ))}
-                <Button intent="quiet" onClick={() => setNewAllowed("+972")}>{copy.add}</Button>
+                <Button intent="quiet" onClick={() => setNewAllowed("")}>{copy.add}</Button>
               </>
             )}
 
@@ -431,9 +433,8 @@ export default function AdminPage() {
                 <Field id="edit-name" label={copy.fName} value={edits.name}
                   problem={problem.text(edits.name, TEXT_RULES.businessName)}
                   onChange={(event) => setEdits({ ...edits, name: event.target.value })} />
-                <Field id="edit-phone" label={copy.fPhone} dir="ltr" type="tel" inputMode="tel" value={edits.phone}
-                  problem={problem.phone(edits.phone)}
-                  onChange={(event) => setEdits({ ...edits, phone: event.target.value })} />
+                <PhoneField id="edit-phone" label={copy.fPhone} value={fromE164(edits.phone)}
+                  onChange={(local) => setEdits({ ...edits, phone: toE164(local) })} />
                 <Field id="edit-address" label={copy.fAddress} value={edits.address}
                   problem={problem.text(edits.address, TEXT_RULES.address)}
                   onChange={(event) => setEdits({ ...edits, address: event.target.value })} />
@@ -568,12 +569,12 @@ export default function AdminPage() {
         {newAllowed !== null && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <h2 style={{ fontSize: 19 }}>{copy.allowlist}</h2>
-            <Field id="allow-phone" label={copy.phone} dir="ltr" type="tel" inputMode="tel" value={newAllowed}
-              problem={problem.phone(newAllowed, newAllowed !== "")}
-              onChange={(e) => setNewAllowed(e.target.value)} />
+            <PhoneField id="allow-phone" label={copy.phone} value={newAllowed}
+              showProblem={newAllowed !== ""}
+              onChange={setNewAllowed} />
             <Button busy={busy}
-              disabled={checkPhone(newAllowed) !== null}
-              onClick={() => act(() => api.adminAddToAllowlist(token, newAllowed.trim(), null))}>
+              disabled={checkLocalPhone(newAllowed) !== null}
+              onClick={() => act(() => api.adminAddToAllowlist(token, toE164(newAllowed), null))}>
               {copy.add}
             </Button>
           </div>

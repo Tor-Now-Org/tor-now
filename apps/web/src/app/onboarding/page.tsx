@@ -16,7 +16,8 @@ import {
   checkText,
   useFieldProblem,
 } from "@/lib/use-field-problem.ts";
-import { checkLocalPhone, fromE164, PHONE_COUNTRY, toE164 } from "@/lib/phone.ts";
+import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
+import { PhoneField } from "@/components/phone-field.tsx";
 import { Button, Card, Critical, Field, Note, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import type { BusinessDto } from "@/lib/api/types.ts";
@@ -319,25 +320,14 @@ export default function OnboardingPage() {
                 onBlur={() => leave("name")}
                 onChange={(e) => setName(e.target.value)}
               />
-              <Field
+              <PhoneField
                 id="biz-phone"
                 label={signInCopy.phoneLabel}
                 required
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                dir="ltr"
-                startAdornment={
-                  <>
-                    <span style={{ fontSize: 24 }}>{PHONE_COUNTRY.flag}</span>
-                    {PHONE_COUNTRY.dial}
-                  </>
-                }
-                maxLength={9}
                 value={phone}
-                problem={problem.localPhone(phone, touched.has("phone"))}
+                showProblem={touched.has("phone")}
                 onBlur={() => leave("phone")}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                onChange={setPhone}
               />
               <Field
                 id="biz-address"

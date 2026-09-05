@@ -282,6 +282,13 @@ export const api = {
       token,
     }),
 
+  setCustomerNote: (token: string, appointmentId: string, customerNote: string | null) =>
+    request<AppointmentDto>(`/appointments/${appointmentId}/note`, {
+      method: "PUT",
+      body: { customerNote },
+      token,
+    }),
+
   reschedule: (token: string, appointmentId: string, startAt: string) =>
     request<AppointmentDto>(`/appointments/${appointmentId}/reschedule`, {
       method: "POST",

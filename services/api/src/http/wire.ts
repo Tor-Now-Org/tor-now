@@ -141,12 +141,15 @@ export const appointmentWithCustomerOut = (
 export const appointmentWithBusinessOut = ({
   appointment,
   businessName,
+  resourceName,
 }: {
   appointment: Appointment;
   businessName: string;
+  resourceName: string;
 }) => ({
   ...appointmentOut(appointment),
   businessName,
+  resourceName,
 });
 
 export const userOut = (user: User) => ({

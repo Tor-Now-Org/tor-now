@@ -12,6 +12,8 @@ import {
   checkText,
   useFieldProblem,
 } from "@/lib/use-field-problem.ts";
+import { fromE164 } from "@/lib/phone.ts";
+import { PhoneField } from "../phone-field.tsx";
 import { SignOutButton } from "../sign-out.tsx";
 import { SupportLink } from "../support-link.tsx";
 import { Button, Card, Critical, Field, Note, Sheet } from "../ui.tsx";
@@ -104,7 +106,9 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
           value={birthDate}
           onChange={(event) => { setBirthDate(event.target.value); setSaved(false); }}
         />
-        <Field id="profile-phone" label={copy.phoneLabel} value={user.phone} dir="ltr" readOnly disabled />
+        {/* Locked, but shown the way it was typed: flag and local digits. */}
+        <PhoneField id="profile-phone" label={copy.phoneLabel} value={fromE164(user.phone)}
+          showProblem={false} readOnly disabled />
         <Note>{copy.phoneLocked}</Note>
         {error !== null && <Critical>{error}</Critical>}
         {saved && <p className="hint" style={{ margin: 0 }} role="status">{copy.profileSaved}</p>}

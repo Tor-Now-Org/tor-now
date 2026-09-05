@@ -119,6 +119,11 @@ export const appointmentRepository = (
   },
 
   async listForCustomerWithBusiness(customerId, page) {
+    // The resource is not joined for its name: the appointment carries the one
+    // it was booked under. Joining it aliased r.name over a.resource_name, so
+    // this one query quietly answered with the calendar's current name while
+    // every other query answered with the snapshot — and an inner join would
+    // have dropped the row entirely for a resource that no longer exists.
     const rows = await tx<Row[]>`
       select a.*, b.name as business_name
       from appointment a
@@ -126,10 +131,14 @@ export const appointmentRepository = (
       where a.customer_id = ${customerId}
       order by a.start_at desc
       limit ${page.limit} offset ${page.offset}`;
-    return rows.map((row) => ({
-      appointment: toAppointment(row),
-      businessName: text(row["business_name"]),
-    }));
+    return rows.map((row) => {
+      const appointment = toAppointment(row);
+      return {
+        appointment,
+        businessName: text(row["business_name"]),
+        resourceName: appointment.resourceName,
+      };
+    });
   },
 
   async listForCustomerAtBusiness(customerId, businessId) {
@@ -249,7 +258,8 @@ export const appointmentRepository = (
           occupied_until = coalesce(${changes.occupiedUntil === undefined ? null : asDate(changes.occupiedUntil)}, occupied_until),
           cancelled_at = ${changes.cancelledAt === undefined ? tx`cancelled_at` : changes.cancelledAt === null ? null : asDate(changes.cancelledAt)},
           cancelled_by = ${changes.cancelledBy === undefined ? tx`cancelled_by` : changes.cancelledBy},
-          late_cancellation = coalesce(${changes.lateCancellation ?? null}, late_cancellation)
+          late_cancellation = coalesce(${changes.lateCancellation ?? null}, late_cancellation),
+          customer_note = ${changes.customerNote === undefined ? tx`customer_note` : changes.customerNote}
         where id = ${id}
         returning *`;
       return one(rows);
