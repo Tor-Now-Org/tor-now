@@ -381,6 +381,17 @@ export type AppointmentRepository = {
     from: Instant,
   ): Promise<readonly Appointment[]>;
   /**
+   * How many appointments are still to come on each of a Business's calendars.
+   *
+   * One statement for the whole list rather than one per calendar: the list is
+   * reloaded after every change to a calendar, and asking per row put a round
+   * trip to Postgres between the owner and their own screen for each one.
+   */
+  upcomingCountsByResource(
+    businessId: BusinessId,
+    from: Instant,
+  ): Promise<ReadonlyMap<ResourceId, number>>;
+  /**
    * Confirmed appointments starting inside the window that have not had a
    * reminder written yet (ADR 0005). Returned with the customer attached,
    * because a reminder is addressed to a person.

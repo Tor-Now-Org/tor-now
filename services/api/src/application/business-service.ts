@@ -439,16 +439,14 @@ export const businessService = ({
   async listResourcesWithUpcoming(actor: Actor, businessId: BusinessId) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       await loadOwnedBusiness(repositories, actor, businessId);
-      const resources = await repositories.resources.listForBusiness(businessId);
-      const now = clock.now();
-      return Promise.all(
-        resources.map(async (resource) => ({
-          resource,
-          upcoming: (
-            await repositories.appointments.upcomingForResource(resource.id, now)
-          ).length,
-        })),
-      );
+      const [resources, counts] = [
+        await repositories.resources.listForBusiness(businessId),
+        await repositories.appointments.upcomingCountsByResource(businessId, clock.now()),
+      ];
+      return resources.map((resource) => ({
+        resource,
+        upcoming: counts.get(resource.id) ?? 0,
+      }));
     });
   },
 

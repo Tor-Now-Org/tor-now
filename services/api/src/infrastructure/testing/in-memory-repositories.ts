@@ -708,6 +708,21 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           .sort((left, right) => left.startAt - right.startAt);
       },
 
+      async upcomingCountsByResource(businessId, from) {
+        const counts = new Map<Resource["id"], number>();
+        for (const appointment of store.appointments) {
+          if (
+            appointment.businessId !== businessId ||
+            appointment.status !== "CONFIRMED" ||
+            appointment.startAt < from
+          ) {
+            continue;
+          }
+          counts.set(appointment.resourceId, (counts.get(appointment.resourceId) ?? 0) + 1);
+        }
+        return counts;
+      },
+
       async customerIdsFor(businessId) {
         return [
           ...new Set(

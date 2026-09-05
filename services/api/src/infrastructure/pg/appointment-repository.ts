@@ -171,6 +171,17 @@ export const appointmentRepository = (
     return rows.map(toAppointment);
   },
 
+  async upcomingCountsByResource(businessId, from) {
+    const rows = await tx<{ resource_id: string; count: string }[]>`
+      select resource_id, count(*) as count
+      from appointment
+      where business_id = ${businessId}
+        and status = 'CONFIRMED'
+        and start_at >= ${asDate(from)}
+      group by resource_id`;
+    return new Map(rows.map((row) => [asId(row.resource_id), Number(row.count)]));
+  },
+
   async customerIdsFor(businessId) {
     // Every status: a cancelled appointment ends a booking, not a
     // relationship, and the owner still has to be able to find that person.

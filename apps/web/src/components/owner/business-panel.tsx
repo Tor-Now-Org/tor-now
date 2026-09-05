@@ -84,7 +84,8 @@ export const BusinessPanel = ({
   resources: readonly ResourceDto[];
   /** Takes the owner to this calendar's own schedule, which is where it is edited. */
   onEditCalendar: (resourceId: string) => void;
-  onChanged: () => void;
+  /** What changed, so the screen reloads that and not the rest. */
+  onChanged: (touches: "everything" | "calendars") => void;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -113,7 +114,7 @@ export const BusinessPanel = ({
         name: renaming.name.trim(),
       });
       setRenaming(null);
-    });
+    }, "calendars");
   };
   const [settings, setSettings] = useState(business);
   const [saved, setSaved] = useState(false);
@@ -123,8 +124,14 @@ export const BusinessPanel = ({
 
   const load = useCallback(async () => {
     try {
-      setServices(await api.listServices(token, business.id));
-      setBilling(await api.subscription(token, business.id));
+      // Together: neither answer depends on the other, and asked one after the
+      // other they cost two round trips to Frankfurt instead of one.
+      const [loadedServices, loadedBilling] = await Promise.all([
+        api.listServices(token, business.id),
+        api.subscription(token, business.id),
+      ]);
+      setServices(loadedServices);
+      setBilling(loadedBilling);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
@@ -134,15 +141,26 @@ export const BusinessPanel = ({
     void load();
   }, [load]);
 
-  const act = async (action: () => Promise<unknown>) => {
+  /**
+   * Runs one change and reloads what it could have altered.
+   *
+   * `touches` says which. Hiding a calendar or renaming one changes nothing
+   * about the services on offer or the subscription, and reloading them anyway
+   * cost two more round trips on a press whose whole job is to flip a flag —
+   * about half the wait, spent asking questions whose answers had not moved.
+   */
+  const act = async (
+    action: () => Promise<unknown>,
+    touches: "everything" | "calendars" = "everything",
+  ) => {
     setBusy(true);
     setError(null);
     try {
       await action();
       setEditing(null);
       setNewResource(null);
-      await load();
-      onChanged();
+      if (touches === "everything") await load();
+      onChanged(touches);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
@@ -335,10 +353,12 @@ export const BusinessPanel = ({
                     aria-pressed={!resource.active}
                     style={restoreOrWithdraw(resource.active)}
                     onClick={() =>
-                      void act(() =>
-                        api.updateResource(token, business.id, resource.id, {
-                          active: !resource.active,
-                        }),
+                      void act(
+                        () =>
+                          api.updateResource(token, business.id, resource.id, {
+                            active: !resource.active,
+                          }),
+                        "calendars",
                       )
                     }
                   >
@@ -634,7 +654,7 @@ export const BusinessPanel = ({
                     act(async () => {
                       await api.deleteResource(token, business.id, removing.id, "KEEP");
                       setRemoving(null);
-                    })
+                    }, "calendars")
                   }
                 >
                   {copy.removeCalendarKeep}
@@ -646,7 +666,7 @@ export const BusinessPanel = ({
                     act(async () => {
                       await api.deleteResource(token, business.id, removing.id, "CANCEL");
                       setRemoving(null);
-                    })
+                    }, "calendars")
                   }
                 >
                   {copy.removeCalendarCancel}
@@ -682,7 +702,9 @@ export const BusinessPanel = ({
               value={newResource} onChange={(e) => setNewResource(e.target.value)} />
             <Button busy={busy}
               disabled={checkText(newResource, TEXT_RULES.resourceName) !== null}
-              onClick={() => act(() => api.createResource(token, business.id, newResource.trim()))}>
+              onClick={() =>
+                act(() => api.createResource(token, business.id, newResource.trim()), "calendars")
+              }>
               {copy.add}
             </Button>
           </div>

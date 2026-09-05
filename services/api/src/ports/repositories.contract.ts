@@ -752,6 +752,28 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("counts what is still to come on every calendar at once", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7108");
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-20T09:00:00Z", "2026-09-20T09:30:00Z", "2026-09-20T09:40:00Z"),
+        );
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-20T10:00:00Z", "2026-09-20T10:30:00Z", "2026-09-20T10:40:00Z"),
+        );
+
+        const counts = await repositories.appointments.upcomingCountsByResource(
+          context.business.id,
+          parseInstant("2026-09-20T00:00:00Z"),
+        );
+
+        expect(counts.get(context.resource.id)).toBe(2);
+        // A calendar with nothing booked is absent rather than zero; the caller
+        // reads a missing key as none.
+        expect(counts.size).toBe(1);
+      });
+    });
+
     it("names everyone who has booked, whatever their role is here", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "7105");

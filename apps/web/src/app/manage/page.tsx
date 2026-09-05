@@ -150,8 +150,12 @@ function ManageApp() {
               setEditingCalendar(resourceId);
               setTab("schedule");
             }}
-            onChanged={() => {
-              void loadBusinesses();
+            // Reloading the businesses replaces the chosen one, and the
+            // resources effect is keyed on it — so asking for both after a
+            // calendar changed fetched the calendars twice and the businesses
+            // for no reason.
+            onChanged={(touches) => {
+              if (touches === "everything") void loadBusinesses();
               void loadResources();
             }}
           />
