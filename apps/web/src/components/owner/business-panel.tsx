@@ -25,6 +25,18 @@ import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "../phone-field.tsx";
 import { PhotoPanel } from "./photo-panel.tsx";
 
+/** The quiet mark that says a name can be changed by pressing it. */
+const PencilMark = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M4 20h4l10-10a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5 4 20Z"
+      stroke="var(--faint)"
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 /** An optional field left empty is absent, not an empty string. */
 const blankToNull = (value: string | null | undefined): string | null =>
   value === null || value === undefined || value.trim() === "" ? null : value.trim();
@@ -69,6 +81,18 @@ export const BusinessPanel = ({
   const [removing, setRemoving] = useState<ResourceDto | null>(null);
   /** The calendar being renamed, and the name as it is being typed. */
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const renameIsBad =
+    renaming === null || checkText(renaming.name, TEXT_RULES.resourceName) !== null;
+
+  const saveRename = async () => {
+    if (renaming === null || renameIsBad) return;
+    await act(async () => {
+      await api.updateResource(token, business.id, renaming.id, {
+        name: renaming.name.trim(),
+      });
+      setRenaming(null);
+    });
+  };
   const [settings, setSettings] = useState(business);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -239,13 +263,21 @@ export const BusinessPanel = ({
                     : { background: "var(--sunken)", borderStyle: "dashed" }),
                 }}
               >
-                <span
+                {/* The name renames itself. It was a chip of its own on a row
+                    that already had three, which crowded the name it was about
+                    into two lines; a name is the one thing on this row nobody
+                    has to hunt for, so pressing it is where renaming belongs. */}
+                <button
+                  onClick={() => setRenaming({ id: resource.id, name: resource.name })}
+                  aria-label={`${copy.rename} ${resource.name}`}
                   style={{
                     flex: 1,
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
                     flexWrap: "wrap",
+                    minHeight: 44,
+                    textAlign: "start",
                   }}
                 >
                   <span
@@ -256,19 +288,13 @@ export const BusinessPanel = ({
                   >
                     {resource.name}
                   </span>
+                  <PencilMark />
                   {!resource.active && <Tag text={copy.hidden} tone="neutral" />}
-                </span>
+                </button>
                 {/* Its hours, blocks and exceptional days live on the schedule
                     screen, which is where a calendar is actually edited. This
                     goes straight there with this one open, rather than leaving
                     the owner to find the tab and pick the row again. */}
-                <button
-                  className="chip"
-                  style={{ border: "1px solid var(--line)" }}
-                  onClick={() => setRenaming({ id: resource.id, name: resource.name })}
-                >
-                  {copy.rename}
-                </button>
                 <button
                   className="chip"
                   style={{ border: "1px solid var(--line)" }}
@@ -537,22 +563,24 @@ export const BusinessPanel = ({
               id="rename-resource"
               label={copy.resourceNamePlaceholder}
               value={renaming.name}
+              // Open with the name selected, and take Enter as "done": a
+              // rename is one short field, and reaching for a button to change
+              // two letters is most of the work.
+              autoFocus
+              onFocus={(event) => event.target.select()}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || renameIsBad) return;
+                event.preventDefault();
+                void saveRename();
+              }}
               problem={problem.text(renaming.name, TEXT_RULES.resourceName)}
               onChange={(event) => setRenaming({ ...renaming, name: event.target.value })}
             />
-            <Button
-              busy={busy}
-              disabled={checkText(renaming.name, TEXT_RULES.resourceName) !== null}
-              onClick={() =>
-                act(async () => {
-                  await api.updateResource(token, business.id, renaming.id, {
-                    name: renaming.name.trim(),
-                  });
-                  setRenaming(null);
-                })
-              }
-            >
+            <Button busy={busy} disabled={renameIsBad} onClick={() => void saveRename()}>
               {copy.save}
+            </Button>
+            <Button intent="quiet" onClick={() => setRenaming(null)}>
+              {copy.removeCalendarBack}
             </Button>
           </div>
         )}

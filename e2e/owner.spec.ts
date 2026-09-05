@@ -412,10 +412,14 @@ test.describe("the business panel", () => {
     await page.getByRole("button", { name: "העסק" }).click();
     await page.getByRole("button", { name: "יומנים" }).click();
 
-    await page.getByRole("button", { name: "שינוי שם" }).first().click();
+    // The name is the control: pressing it is how it is changed.
+    await page.getByRole("button", { name: `שינוי שם ${shop.resource.name}` }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
+
+    // It opens with the name selected and takes Enter as done, so a rename is
+    // type-and-return rather than a hunt for a button.
     await page.getByRole("dialog").getByLabel("שם היומן").fill("עמדה ראשית");
-    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await page.getByRole("dialog").getByLabel("שם היומן").press("Enter");
 
     await expect(page.getByText("עמדה ראשית")).toBeVisible({ timeout: 15_000 });
 
