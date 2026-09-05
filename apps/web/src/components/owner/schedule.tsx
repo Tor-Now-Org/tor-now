@@ -392,6 +392,7 @@ export const Schedule = ({
                   id="override"
                   ranges={editingOverride.ranges}
                   setRanges={(ranges) => setEditingOverride({ ...editingOverride, ranges })}
+                  namesTheGap={false}
                 />
               </div>
             )}
@@ -478,6 +479,7 @@ export const Schedule = ({
                 id="block"
                 ranges={editingBlock.ranges}
                 setRanges={(ranges) => setEditingBlock({ ...editingBlock, ranges })}
+                namesTheGap={false}
               />
             )}
             {!editingBlock.allDay && !editingBlock.ranges.every(isUsable) && (

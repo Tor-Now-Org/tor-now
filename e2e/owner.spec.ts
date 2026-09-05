@@ -587,7 +587,10 @@ test.describe("special days and blockages", () => {
     await sheet.getByRole("button", { name: "הוספת טווח שעות" }).click();
     await sheet.locator('input[type="time"]').nth(2).fill("17:00");
     await sheet.locator('input[type="time"]').nth(3).fill("19:00");
-    await expect(sheet.getByText(/הפסקה · 11:00–17:00/)).toBeVisible();
+    // No "break" between them here: on a special day the owner is saying which
+    // hours are open, and the gap is simply the hours that are not. The word
+    // belongs to the weekly hours, where it names a real thing.
+    await expect(sheet.getByText(/הפסקה/)).toHaveCount(0);
 
     await sheet.getByRole("button", { name: "שמירה" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });

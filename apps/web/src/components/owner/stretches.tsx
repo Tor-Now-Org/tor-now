@@ -142,10 +142,22 @@ export const Stretches = ({
   id,
   ranges,
   setRanges,
+  namesTheGap = true,
 }: {
   id: string;
   ranges: TimeRange[];
   setRanges: (ranges: TimeRange[]) => void;
+  /**
+   * Whether to call the gap between two stretches a break.
+   *
+   * On working hours it is one, and naming it is what makes three stretches
+   * legible. On a blockage it is the opposite — the gap is the part of the day
+   * still open — and on a special day the owner is describing hours, not
+   * arranging a lunch break. So the word belongs to the week and nowhere else;
+   * a stretch running into the one before it still says so everywhere, because
+   * that changes what gets stored.
+   */
+  namesTheGap?: boolean;
 }) => {
   const copy = useCopy("owner");
 
@@ -173,7 +185,7 @@ export const Stretches = ({
             key={position}
             style={{ display: "flex", flexDirection: "column", gap: 10 }}
           >
-            {position > 0 && (
+            {position > 0 && (namesTheGap || collidesWithPrevious(ranges, position)) && (
               <div
                 style={{
                   display: "flex",
