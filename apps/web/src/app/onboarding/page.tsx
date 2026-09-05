@@ -19,11 +19,9 @@ import {
 import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "@/components/phone-field.tsx";
 import {
-  emptyBulk,
   emptyWeek,
   rangesFor,
   WeeklyHours,
-  type BulkHours,
   type DayHours,
 } from "@/components/owner/weekly-hours.tsx";
 import { Button, Card, Critical, Field, Sheet, Spinner } from "@/components/ui.tsx";
@@ -94,7 +92,6 @@ export default function OnboardingPage() {
     { name: "", durationMinutes: DEFAULT_SERVICE_MINUTES, priceMinor: 0, bufferMinutes: null },
   ]);
   const [hours, setHours] = useState<DayHours[]>(emptyWeek);
-  const [bulk, setBulk] = useState<BulkHours>(emptyBulk);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
@@ -474,7 +471,7 @@ export default function OnboardingPage() {
           <>
             <StepHeading title={copy.hoursTitle} body={copy.hoursBody} />
 
-            <WeeklyHours hours={hours} setHours={setHours} bulk={bulk} setBulk={setBulk} />
+            <WeeklyHours hours={hours} setHours={setHours} />
           </>
         )}
 

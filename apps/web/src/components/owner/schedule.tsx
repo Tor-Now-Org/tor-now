@@ -17,12 +17,10 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { useFieldProblem } from "@/lib/use-field-problem.ts";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
 import {
-  emptyBulk,
   emptyWeek,
   rangesFor,
   weekFromRanges,
   WeeklyHours,
-  type BulkHours,
   type DayHours,
 } from "./weekly-hours.tsx";
 
@@ -76,7 +74,6 @@ export const Schedule = ({
   }, [resources, openOn]);
   const [hours, setHours] = useState<WorkingHoursDto[] | null>(null);
   const [week, setWeek] = useState<DayHours[]>(emptyWeek);
-  const [bulk, setBulk] = useState<BulkHours>(emptyBulk);
   const [saved, setSaved] = useState(false);
   const [overrides, setOverrides] = useState<OverrideDto[]>([]);
   const [blocks, setBlocks] = useState<BlockDto[]>([]);
@@ -208,7 +205,7 @@ export const Schedule = ({
               languages, the second one ADR 0002's storage rather than anybody's
               idea of a Tuesday. */}
           <Note>{copy.hoursNote}</Note>
-          <WeeklyHours hours={week} setHours={setWeek} bulk={bulk} setBulk={setBulk} />
+          <WeeklyHours hours={week} setHours={setWeek} />
           {saved && (
             <p className="hint" role="status" style={{ margin: 0 }}>
               {copy.settingsSaved}

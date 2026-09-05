@@ -168,10 +168,17 @@ test.describe("the schedule layers", () => {
 
     // Hours: the week as a person describes it, showing the times this
     // business actually keeps.
-    await expect(page.getByText("אותן שעות לכמה ימים")).toBeVisible();
-    const monday = page.locator(".card", { hasText: "שני" }).first();
-    await expect(monday.locator('input[type="time"]').first()).toHaveValue("08:00");
-    await expect(monday.locator('input[type="time"]').nth(1)).toHaveValue("20:00");
+    await expect(page.getByText("רוב הימים")).toBeVisible();
+    const usual = page.locator(".card", { hasText: "רוב הימים" }).first();
+    await expect(usual.locator('input[type="time"]').first()).toHaveValue("08:00");
+    await expect(usual.locator('input[type="time"]').nth(1)).toHaveValue("20:00");
+    // Open the same hours every day, so every day is on the usual and nothing
+    // is listed as an exception.
+    await expect(usual.getByRole("button", { name: "שני" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByText("ימים אחרים")).toHaveCount(0);
 
     // Overrides: replace the weekday entirely.
     await page.getByRole("button", { name: "ימים חריגים" }).click();
@@ -337,17 +344,22 @@ test.describe("the business panel", () => {
     await page.goto("/manage");
     await ready(page);
     await page.getByRole("button", { name: "לוח זמנים" }).click();
-    await expect(page.getByText("אותן שעות לכמה ימים")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
 
-    // Monday: 09:00–17:00 already, plus a stretch that overlaps it and a third
-    // that stands apart. The overlap is one stretch however it is typed.
-    const monday = page.locator(".card", { hasText: "שני" }).first();
-    await monday.getByRole("button", { name: "הוספת טווח שעות" }).click();
-    await monday.locator('input[type="time"]').nth(2).fill("16:00");
-    await monday.locator('input[type="time"]').nth(3).fill("18:00");
-    await monday.getByRole("button", { name: "הוספת טווח שעות" }).click();
-    await monday.locator('input[type="time"]').nth(4).fill("20:00");
-    await monday.locator('input[type="time"]').nth(5).fill("22:00");
+    // 09:00–17:00 already, plus a stretch that overlaps it and a third that
+    // stands apart. The overlap is one stretch however it is typed.
+    const usual = page.locator(".card", { hasText: "רוב הימים" }).first();
+    await usual.getByRole("button", { name: "הוספת טווח שעות" }).click();
+    await usual.locator('input[type="time"]').nth(2).fill("16:00");
+    await usual.locator('input[type="time"]').nth(3).fill("18:00");
+    await usual.getByRole("button", { name: "הוספת טווח שעות" }).click();
+    await usual.locator('input[type="time"]').nth(4).fill("20:00");
+    await usual.locator('input[type="time"]').nth(5).fill("22:00");
+
+    // What sits between two stretches is named, and what runs into the one
+    // before it says so rather than vanishing under the hand that typed it.
+    await expect(usual.getByText("חופף — יישמר כטווח אחד")).toBeVisible();
+    await expect(usual.getByText(/הפסקה · 18:00–20:00/)).toBeVisible();
 
     await page.getByRole("button", { name: "שמירה" }).last().click();
     await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
@@ -378,13 +390,21 @@ test.describe("the business panel", () => {
     await ready(page);
     await page.getByRole("button", { name: "לוח זמנים" }).click();
 
-    // The wizard's editor, not a list of ranges: a day is open or closed, and
-    // has an opening and a closing time.
-    await expect(page.getByText("אותן שעות לכמה ימים")).toBeVisible({ timeout: 15_000 });
+    // The wizard's editor: the hours most days keep, and the days that keep
+    // them — not seven identical cards.
+    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
 
-    // Close Sunday, and save the week.
+    // Sunday off the usual. It drops into the days that work differently,
+    // shut, which is the common reason a day departs.
+    const usual = page.locator(".card", { hasText: "רוב הימים" }).first();
+    await usual.getByRole("button", { name: "ראשון" }).click();
+    await expect(page.getByText("ימים אחרים")).toBeVisible();
     const sunday = page.locator(".card", { hasText: "ראשון" }).first();
-    await sunday.getByRole("checkbox").first().uncheck();
+    await expect(sunday.getByRole("button", { name: "סגור" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
     await page.getByRole("button", { name: "שמירה" }).last().click();
     await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
 
@@ -395,6 +415,48 @@ test.describe("the business panel", () => {
     );
     expect(week.map((entry) => entry.dayOfWeek)).not.toContain(0);
     expect(week.length).toBeGreaterThan(0);
+  });
+
+  test("one day keeps its own hours while the rest keep the usual", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `שישי קצר ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
+
+    // "Nine to five, Friday till one" — the sentence the screen is built for.
+    const usual = page.locator(".card", { hasText: "רוב הימים" }).first();
+    await usual.getByRole("button", { name: "שישי" }).click();
+
+    const friday = page.locator(".card", { hasText: "שישי" }).first();
+    await friday.getByRole("button", { name: "שעות אחרות" }).click();
+    await friday.locator('input[type="time"]').nth(1).fill("13:00");
+
+    await page.getByRole("button", { name: "שמירה" }).last().click();
+    await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
+
+    const week = await call<{ dayOfWeek: number; start: string; end: string }[]>(
+      `/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`,
+      { token: shop.owner.token },
+    );
+    const said = (dayOfWeek: number) =>
+      week
+        .filter((entry) => entry.dayOfWeek === dayOfWeek)
+        .map((entry) => `${entry.start}-${entry.end}`);
+
+    // The one day moved, and the days on the usual did not.
+    expect(said(5)).toEqual(["09:00-13:00"]);
+    expect(said(0)).toEqual(["09:00-17:00"]);
+    expect(said(4)).toEqual(["09:00-17:00"]);
   });
 
   test("renames a calendar without touching what is booked on it", async ({ page }) => {
