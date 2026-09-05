@@ -503,16 +503,21 @@ export const api = {
       { token, query: { date } },
     ),
 
-  createBlock: (
+  /**
+   * A blockage, which is one decision and may be several spans: days away are
+   * a span each, and an hour kept free across a fortnight is fourteen.
+   */
+  createBlocks: (
     token: string,
     businessId: string,
     resourceId: string,
-    input: { startAt: string; endAt: string; reason: string },
+    blocks: { startAt: string; endAt: string; reason: string }[],
   ) =>
-    request<BlockDto>(
-      `/businesses/${businessId}/resources/${resourceId}/blocks`,
-      { method: "POST", body: input, token },
-    ),
+    request<BlockDto[]>(`/businesses/${businessId}/resources/${resourceId}/blocks`, {
+      method: "POST",
+      body: { blocks },
+      token,
+    }),
 
   deleteBlock: (token: string, businessId: string, blockId: string) =>
     request<void>(`/businesses/${businessId}/blocks/${blockId}`, {

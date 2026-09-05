@@ -201,11 +201,11 @@ describe("owning a business", () => {
 
   it("a block carves time out of an otherwise open day", async () => {
     const shop = await anEstablishedBusiness(test);
-    await test.services.calendar.createBlock(
+    await test.services.calendar.createBlocks(
       shop.owner.actor,
       shop.business.id,
       shop.resource.id,
-      { startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "ספק" },
+      [{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "ספק" }],
     );
 
     const [day] = await test.services.availability.forRange({ kind: "ANONYMOUS" }, {
@@ -217,6 +217,112 @@ describe("owning a business", () => {
     });
     expect(day?.slots.map((slot) => slot.startAt)).not.toContain(TUESDAY_AT("09:00"));
     expect(day?.slots.map((slot) => slot.startAt)).toContain(TUESDAY_AT("10:00"));
+  });
+
+  it("blocks several days as one decision, each of them its own block", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    // A week away: three days, made together. Each is a block of its own
+    // afterwards, so one day of it can be given back without the rest.
+    const made = await test.services.calendar.createBlocks(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      [
+        { startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "חופשה" },
+        { startAt: TUESDAY_AT("11:00"), endAt: TUESDAY_AT("12:00"), reason: "חופשה" },
+        { startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("15:00"), reason: "חופשה" },
+      ],
+    );
+
+    expect(made).toHaveLength(3);
+    expect(new Set(made.map((block) => block.id)).size).toBe(3);
+
+    const [day] = await test.services.availability.forRange({ kind: "ANONYMOUS" }, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      from: TUESDAY as never,
+      to: TUESDAY as never,
+    });
+    const starts = day?.slots.map((slot) => slot.startAt) ?? [];
+    expect(starts).not.toContain(TUESDAY_AT("09:00"));
+    expect(starts).not.toContain(TUESDAY_AT("11:00"));
+    expect(starts).not.toContain(TUESDAY_AT("14:00"));
+    expect(starts).toContain(TUESDAY_AT("10:00"));
+  });
+
+  it("makes none of a blockage when one of its spans is impossible", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    await expect(
+      test.services.calendar.createBlocks(
+        shop.owner.actor,
+        shop.business.id,
+        shop.resource.id,
+        [
+          { startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "" },
+          { startAt: TUESDAY_AT("15:00"), endAt: TUESDAY_AT("14:00"), reason: "" },
+        ],
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+
+    // One decision, one transaction: a holiday blocked to Wednesday and failing
+    // on Thursday is a calendar nobody can trust.
+    expect(test.store.blocks).toHaveLength(0);
+  });
+
+  it("refuses a special day whose hours run into one another", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    await expect(
+      test.services.business.putOverride(
+        shop.owner.actor,
+        shop.business.id,
+        shop.resource.id,
+        {
+          date: TUESDAY,
+          note: null,
+          ranges: [
+            { start: "09:00", end: "13:00" },
+            { start: "12:00", end: "17:00" },
+          ],
+        },
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+  });
+
+  it("takes a special day with a break in the middle of it", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    const override = await test.services.business.putOverride(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      {
+        date: TUESDAY,
+        note: null,
+        ranges: [
+          { start: "09:00", end: "13:00" },
+          { start: "16:00", end: "19:00" },
+        ],
+      },
+    );
+
+    expect(override.ranges).toHaveLength(2);
+
+    // And the day the customer is offered follows it: nothing in the gap.
+    const [day] = await test.services.availability.forRange({ kind: "ANONYMOUS" }, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      from: TUESDAY as never,
+      to: TUESDAY as never,
+    });
+    const starts = day?.slots.map((slot) => slot.startAt) ?? [];
+    expect(starts).toContain(TUESDAY_AT("09:00"));
+    expect(starts).not.toContain(TUESDAY_AT("14:00"));
+    expect(starts).toContain(TUESDAY_AT("16:00"));
   });
 
   it("records schedule changes in the audit trail", async () => {

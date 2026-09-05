@@ -190,3 +190,27 @@ export const whenIn = (
     minute: "2-digit",
     hour12: false,
   }).format(new Date(iso));
+
+/**
+ * A block is entered as a wall clock in the Business's own zone and stored as
+ * an instant. The conversion is done here rather than by sending a naive string
+ * the server would have to guess the zone of.
+ */
+export const localToInstant = (date: string, time: string, timeZone: string): string => {
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  const [hour, minute] = time.split(":").map(Number) as [number, number];
+  const asIfUtc = Date.UTC(year, month - 1, day, hour, minute);
+  const offset = offsetAt(asIfUtc, timeZone);
+  return new Date(asIfUtc - offsetAt(asIfUtc - offset, timeZone)).toISOString();
+};
+
+const offsetAt = (instant: number, timeZone: string): number => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(new Date(instant));
+  const read = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? "0");
+  return Date.UTC(read("year"), read("month") - 1, read("day"), read("hour") % 24, read("minute"), read("second")) - instant;
+};

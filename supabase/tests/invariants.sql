@@ -6,7 +6,7 @@
 -- It succeeds when the final notice reads ALL_INVARIANTS_HELD.
 do $$
 declare
-  v_user uuid; v_biz uuid; v_res uuid; v_svc uuid; v_failed boolean;
+  v_user uuid; v_biz uuid; v_res uuid; v_svc uuid; v_failed boolean; v_override uuid;
 begin
   insert into app_user (phone, given_name) values ('+972500000001', 'invariant probe') returning id into v_user;
   insert into business (name, phone) values ('probe business', '+972500000002') returning id into v_biz;
@@ -91,6 +91,24 @@ begin
   -- which is a week the store is expected to hold.
   insert into working_hours (resource_id, business_id, day_of_week, start_local, end_local)
     values (v_res, v_biz, 3, 1020, 1200);
+
+  -- And the same for a special day, whose stretches are the layer above the
+  -- week's. Two that run together describe one, and the table must not hold
+  -- them any more than the week's table does.
+  insert into date_override (id, resource_id, business_id, on_date)
+    values (gen_random_uuid(), v_res, v_biz, date '2026-09-20')
+    returning id into v_override;
+  insert into date_override_range (date_override_id, business_id, start_local, end_local)
+    values (v_override, v_biz, 540, 1020);
+  v_failed := false;
+  begin
+    insert into date_override_range (date_override_id, business_id, start_local, end_local)
+      values (v_override, v_biz, 960, 1200);
+  exception when exclusion_violation then v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'INVARIANT BROKEN: a special day was open twice over the same minutes';
+  end if;
 
   -- Every Business has a Subscription, without the registration path saying so.
   if not exists (select 1 from subscription where business_id = v_biz) then

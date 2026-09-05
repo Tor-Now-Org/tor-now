@@ -73,6 +73,26 @@ const EXTENSIONS: Readonly<Record<string, string>> = Object.freeze({
   "image/webp": "webp",
 });
 
+/**
+ * The stretches of one day, checked the way the domain would store them: each
+ * ending after it starts, and no two of them running together. Two that collide
+ * describe one stretch, and a caller that has not said which is asking the
+ * store to guess.
+ */
+const rangesThatDoNotCollide = (
+  ranges: readonly { start: string; end: string }[],
+): readonly { start: string; end: string }[] => {
+  for (const range of ranges) {
+    if (parseLocalTime(range.end) <= parseLocalTime(range.start)) {
+      throw validationFailed("A range must end after it starts");
+    }
+  }
+  if (mergedRanges(ranges).length !== ranges.length) {
+    throw validationFailed("A day's ranges must not overlap one another");
+  }
+  return ranges;
+};
+
 export const businessService = ({
   unitOfWork,
   clock,
@@ -741,10 +761,9 @@ export const businessService = ({
         businessId,
         date: parseLocalDate(input.date),
         note: input.note,
-        ranges: input.ranges.map((range) => {
+        ranges: rangesThatDoNotCollide(input.ranges).map((range) => {
           const start = parseLocalTime(range.start);
           const end = parseLocalTime(range.end);
-          if (end <= start) throw validationFailed("A range must end after it starts");
           return { startMinutes: start, endMinutes: end };
         }),
       });

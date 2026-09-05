@@ -12,10 +12,13 @@ import type {
 } from "@/lib/api/types.ts";
 import { addDaysTo, formatLocalDate, timeIn, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { TEXT_RULES } from "@tor-now/domain";
+import { mergedRanges, TEXT_RULES, type TimeRange } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useFieldProblem } from "@/lib/use-field-problem.ts";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
+import { Stretches } from "./stretches.tsx";
+import { isUsable } from "./usual-week.ts";
+import { spansOf } from "./blockage.ts";
 import {
   emptyWeek,
   rangesFor,
@@ -82,8 +85,28 @@ export const Schedule = ({
   const [busy, setBusy] = useState(false);
 
   const [editingRange, setEditingRange] = useState<{ id: string | null; dayOfWeek: number; start: string; end: string } | null>(null);
-  const [editingOverride, setEditingOverride] = useState<{ date: string; closed: boolean; start: string; end: string } | null>(null);
-  const [editingBlock, setEditingBlock] = useState<{ date: string; allDay: boolean; start: string; end: string; reason: string } | null>(null);
+  /**
+   * A special day: which date, and the stretches it is open for. An empty list
+   * of stretches is not the same as none — "closed" is the absence of them,
+   * which is what ADR 0002 stores, so the two are one choice with a list under
+   * it rather than two independent fields.
+   */
+  const [editingOverride, setEditingOverride] = useState<{
+    date: string;
+    closed: boolean;
+    ranges: TimeRange[];
+  } | null>(null);
+  /**
+   * A blockage: the days it covers, and the hours of each of them. A week away
+   * is one decision, and so is an hour kept free every day of that week.
+   */
+  const [editingBlock, setEditingBlock] = useState<{
+    from: string;
+    to: string;
+    allDay: boolean;
+    ranges: TimeRange[];
+    reason: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     if (resource === null) return;
@@ -247,7 +270,11 @@ export const Schedule = ({
           <Button
             intent="quiet"
             onClick={() =>
-              setEditingOverride({ date: todayIn(business.timeZone), closed: true, start: "10:00", end: "14:00" })
+              setEditingOverride({
+                date: todayIn(business.timeZone),
+                closed: true,
+                ranges: [{ start: "10:00", end: "14:00" }],
+              })
             }
           >
             {copy.addOverride}
@@ -278,7 +305,13 @@ export const Schedule = ({
           <Button
             intent="quiet"
             onClick={() =>
-              setEditingBlock({ date: todayIn(business.timeZone), allDay: false, start: "12:00", end: "13:00", reason: "" })
+              setEditingBlock({
+                from: todayIn(business.timeZone),
+                to: todayIn(business.timeZone),
+                allDay: false,
+                ranges: [{ start: "12:00", end: "13:00" }],
+                reason: "",
+              })
             }
           >
             {copy.addBlock}
@@ -351,26 +384,36 @@ export const Schedule = ({
               ))}
             </div>
             {!editingOverride.closed && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <Field id="override-from" label={copy.from} type="time" value={editingOverride.start}
-                  onChange={(e) => setEditingOverride({ ...editingOverride, start: e.target.value })} />
-                <Field id="override-to" label={copy.to} type="time" value={editingOverride.end}
-                  onChange={(e) => setEditingOverride({ ...editingOverride, end: e.target.value })} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {/* The same editor the week uses: a special day is a day, and a
+                    day that shuts for lunch has two stretches whichever layer
+                    it belongs to. */}
+                <Stretches
+                  id="override"
+                  ranges={editingOverride.ranges}
+                  setRanges={(ranges) => setEditingOverride({ ...editingOverride, ranges })}
+                />
               </div>
             )}
             <Note>{copy.overrideReplaces}</Note>
+            {!editingOverride.closed && !editingOverride.ranges.every(isUsable) && (
+              <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>
+            )}
             <Button
               busy={busy}
+              disabled={!editingOverride.closed && !editingOverride.ranges.every(isUsable)}
               onClick={() =>
                 act(() =>
                   api.putOverride(token, business.id, resource.id, {
                     date: editingOverride.date,
                     note: null,
                     // An empty list is a day off — the absence of ranges is the
-                    // whole of what "closed" means (ADR 0002).
+                    // whole of what "closed" means (ADR 0002). Merged on the
+                    // way out, so two stretches the owner ran together are the
+                    // one stretch they describe rather than a refusal.
                     ranges: editingOverride.closed
                       ? []
-                      : [{ start: editingOverride.start, end: editingOverride.end }],
+                      : mergedRanges(editingOverride.ranges),
                   }),
                 )
               }
@@ -386,8 +429,32 @@ export const Schedule = ({
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <h2 style={{ fontSize: 19 }}>{copy.addBlock}</h2>
             <Note>{copy.blockFormHint}</Note>
-            <Field id="block-date" label={copy.date} type="date" value={editingBlock.date}
-              onChange={(e) => setEditingBlock({ ...editingBlock, date: e.target.value })} />
+            {/* From and to, defaulting to the same day: a week away is one
+                decision, and making it seven was the reason nobody made it. */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Field
+                id="block-from-date"
+                label={copy.fromDate}
+                type="date"
+                value={editingBlock.from}
+                onChange={(e) =>
+                  setEditingBlock({
+                    ...editingBlock,
+                    from: e.target.value,
+                    // A range that ends before it starts is a slip, not an
+                    // instruction: the far end follows the near one.
+                    to: editingBlock.to < e.target.value ? e.target.value : editingBlock.to,
+                  })
+                }
+              />
+              <Field
+                id="block-to-date"
+                label={copy.toDate}
+                type="date"
+                value={editingBlock.to}
+                onChange={(e) => setEditingBlock({ ...editingBlock, to: e.target.value })}
+              />
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               {[true, false].map((allDay) => (
                 <button
@@ -407,29 +474,31 @@ export const Schedule = ({
               ))}
             </div>
             {!editingBlock.allDay && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <Field id="block-from" label={copy.from} type="time" value={editingBlock.start}
-                  onChange={(e) => setEditingBlock({ ...editingBlock, start: e.target.value })} />
-                <Field id="block-to" label={copy.to} type="time" value={editingBlock.end}
-                  onChange={(e) => setEditingBlock({ ...editingBlock, end: e.target.value })} />
-              </div>
+              <Stretches
+                id="block"
+                ranges={editingBlock.ranges}
+                setRanges={(ranges) => setEditingBlock({ ...editingBlock, ranges })}
+              />
+            )}
+            {!editingBlock.allDay && !editingBlock.ranges.every(isUsable) && (
+              <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>
             )}
             <Field id="block-reason" label={copy.reason} placeholder={copy.reasonPlaceholder} value={editingBlock.reason}
               problem={problem.text(editingBlock.reason, TEXT_RULES.reason)}
               onChange={(e) => setEditingBlock({ ...editingBlock, reason: e.target.value })} hint={copy.reasonHint} />
             <Button
               busy={busy}
-              onClick={() => {
-                const start = editingBlock.allDay ? "00:00" : editingBlock.start;
-                const end = editingBlock.allDay ? "23:59" : editingBlock.end;
-                return act(() =>
-                  api.createBlock(token, business.id, resource.id, {
-                    startAt: localToInstant(editingBlock.date, start, business.timeZone),
-                    endAt: localToInstant(editingBlock.date, end, business.timeZone),
-                    reason: editingBlock.reason,
-                  }),
-                );
-              }}
+              disabled={!editingBlock.allDay && !editingBlock.ranges.every(isUsable)}
+              onClick={() =>
+                act(() =>
+                  api.createBlocks(
+                    token,
+                    business.id,
+                    resource.id,
+                    spansOf(editingBlock, business.timeZone),
+                  ),
+                )
+              }
             >
               {copy.save}
             </Button>
@@ -440,26 +509,3 @@ export const Schedule = ({
   );
 };
 
-/**
- * A block is entered as a wall clock in the Business's own zone and stored as
- * an instant. The conversion is done here rather than by sending a naive string
- * the server would have to guess the zone of.
- */
-const localToInstant = (date: string, time: string, timeZone: string): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  const [hour, minute] = time.split(":").map(Number) as [number, number];
-  const asIfUtc = Date.UTC(year, month - 1, day, hour, minute);
-  const offset = offsetAt(asIfUtc, timeZone);
-  return new Date(asIfUtc - offsetAt(asIfUtc - offset, timeZone)).toISOString();
-};
-
-const offsetAt = (instant: number, timeZone: string): number => {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour12: false,
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  }).formatToParts(new Date(instant));
-  const read = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? "0");
-  return Date.UTC(read("year"), read("month") - 1, read("day"), read("hour") % 24, read("minute"), read("second")) - instant;
-};

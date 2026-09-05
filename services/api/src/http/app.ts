@@ -590,18 +590,14 @@ const ownerRoutes = (services: Services) => {
   });
 
   owner.post("/:businessId/resources/:resourceId/blocks", async (context) => {
-    const body = await parseBody(context, schema.blockSchema);
-    return context.json(
-      wire.blockOut(
-        await services.calendar.createBlock(
-          actorOf(context),
-          idParam(context, "businessId"),
-          idParam(context, "resourceId"),
-          body,
-        ),
-      ),
-      201,
+    const body = await parseBody(context, schema.blocksSchema);
+    const made = await services.calendar.createBlocks(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "resourceId"),
+      body.blocks,
     );
+    return context.json(made.map(wire.blockOut), 201);
   });
 
   owner.delete("/:businessId/blocks/:blockId", async (context) => {

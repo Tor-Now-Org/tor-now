@@ -132,7 +132,21 @@ export const harness = (options: { now?: Instant } = {}) => {
         auditTrail,
         outbox,
       };
-      return work(session);
+      // The real unit of work is a database transaction, so a failure part way
+      // through leaves nothing behind. This double used to keep whatever had
+      // been written before the throw, which let a service claim to be
+      // all-or-nothing with no test able to contradict it — the blockage that
+      // failed on its third day had already blocked the first two.
+      //
+      // Every repository here replaces its array rather than mutating it, so
+      // the top level of the store is the whole of the state to keep.
+      const before = { ...store };
+      try {
+        return await work(session);
+      } catch (failure) {
+        Object.assign(store, before);
+        throw failure;
+      }
     },
   };
 

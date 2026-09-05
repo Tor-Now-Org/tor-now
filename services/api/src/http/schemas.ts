@@ -224,10 +224,22 @@ export const overrideSchema = z.object({
     .default([]),
 });
 
-export const blockSchema = z.object({
+const blockSpanSchema = z.object({
   startAt: instantSchema,
   endAt: instantSchema,
   reason: text(TEXT_RULES.reason).default(""),
+});
+
+/**
+ * A blockage, which may be more than one span: a week away is seven days, and
+ * a lunch break kept for a fortnight is fourteen. They arrive together because
+ * they are one decision, and half a blockage is worse than none.
+ *
+ * Capped at two months of daily spans — beyond that it is a working-hours
+ * change, not a blockage.
+ */
+export const blocksSchema = z.object({
+  blocks: z.array(blockSpanSchema).min(1).max(62),
 });
 
 export const dateRangeSchema = z.object({

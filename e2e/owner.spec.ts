@@ -519,6 +519,142 @@ test.describe("the week a calendar keeps", () => {
   });
 });
 
+/**
+ * The two layers above the week: a date that replaces it, and a blockage that
+ * carves time out of it. Both used to take one date and one stretch, so a
+ * holiday was a week of identical forms and a lunch break was a form a day.
+ */
+test.describe("special days and blockages", () => {
+  const anOwnerAt = async (name: string) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `${name} ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "08:00", end: "20:00" },
+    });
+    return shop;
+  };
+
+  const openTheLayer = async (
+    page: Page,
+    shop: { business: { id: string }; owner: { token: string } },
+    layer: string,
+  ) => {
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+    await page.getByRole("button", { name: layer }).click();
+  };
+
+  const offeredOn = async (
+    shop: { business: { id: string }; service: { id: string }; resource: { id: string } },
+    date: string,
+  ) => {
+    const days = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${date}&to=${date}`,
+    );
+    return (days[0]?.slots ?? []).map((slot) => slot.startAt);
+  };
+
+  const asHour = (startAt: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Jerusalem",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(startAt));
+
+  test("a special day can be open twice with a break between", async ({ page }) => {
+    const shop = await anOwnerAt("יום חריג");
+    await openTheLayer(page, shop, "ימים חריגים");
+
+    const day = aDayFromNow(1);
+    await page.getByRole("button", { name: "הוספת יום חריג" }).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+    await sheet.getByLabel("תאריך").fill(day);
+    await sheet.getByRole("button", { name: "שעות אחרות" }).click();
+
+    // Morning, then a break, then the evening — one form, not two special days
+    // (which the store could not have held anyway: one override per date).
+    await sheet.locator('input[type="time"]').first().fill("09:00");
+    await sheet.locator('input[type="time"]').nth(1).fill("11:00");
+    await sheet.getByRole("button", { name: "הוספת טווח שעות" }).click();
+    await sheet.locator('input[type="time"]').nth(2).fill("17:00");
+    await sheet.locator('input[type="time"]').nth(3).fill("19:00");
+    await expect(sheet.getByText(/הפסקה · 11:00–17:00/)).toBeVisible();
+
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    await expect
+      .poll(async () => (await offeredOn(shop, day)).map(asHour), { timeout: 15_000 })
+      .toEqual(expect.arrayContaining(["09:00", "17:00"]));
+    const hours = (await offeredOn(shop, day)).map(asHour);
+    expect(hours).not.toContain("13:00");
+    expect(hours).not.toContain("19:30");
+  });
+
+  test("a blockage covers a range of days in one go", async ({ page }) => {
+    const shop = await anOwnerAt("חופשה");
+    await openTheLayer(page, shop, "חסימות");
+
+    const first = aDayFromNow(1);
+    const last = aDayFromNow(2);
+    await page.getByRole("button", { name: "הוספת חסימה" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByLabel("מתאריך").fill(first);
+    await sheet.getByLabel("עד תאריך").fill(last);
+    await sheet.getByRole("button", { name: "כל היום" }).click();
+    await sheet.getByLabel("סיבה").fill("חופשה");
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // Both days are gone for a customer, from one form.
+    await expect.poll(async () => (await offeredOn(shop, first)).length, { timeout: 15_000 })
+      .toBe(0);
+    expect(await offeredOn(shop, last)).toHaveLength(0);
+    // And still bookable the day after, so the range ended where it was told to.
+    expect((await offeredOn(shop, aDayFromNow(3))).length).toBeGreaterThan(0);
+  });
+
+  test("and can keep the same hours free on each of those days", async ({ page }) => {
+    const shop = await anOwnerAt("שעה קבועה");
+    await openTheLayer(page, shop, "חסימות");
+
+    const first = aDayFromNow(1);
+    const last = aDayFromNow(2);
+    await page.getByRole("button", { name: "הוספת חסימה" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByLabel("מתאריך").fill(first);
+    await sheet.getByLabel("עד תאריך").fill(last);
+    await sheet.locator('input[type="time"]').first().fill("10:00");
+    await sheet.locator('input[type="time"]').nth(1).fill("11:00");
+    await sheet.getByRole("button", { name: "הוספת טווח שעות" }).click();
+    await sheet.locator('input[type="time"]').nth(2).fill("14:00");
+    await sheet.locator('input[type="time"]').nth(3).fill("15:00");
+    await sheet.getByLabel("סיבה").fill("שיעור");
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // Two hours on each of two days: four blocks from one form, and the rest of
+    // both days still open.
+    for (const day of [first, last]) {
+      await expect
+        .poll(async () => (await offeredOn(shop, day)).map(asHour), { timeout: 15_000 })
+        .not.toContain("10:00");
+      const hours = (await offeredOn(shop, day)).map(asHour);
+      expect(hours).not.toContain("14:00");
+      expect(hours).toContain("12:00");
+    }
+  });
+});
+
 test.describe("the business panel", () => {
   test("publishes an Instagram and a WhatsApp, and the customer can reach both", async ({
     page,

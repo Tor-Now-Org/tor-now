@@ -243,18 +243,26 @@ describe("the owner routes", () => {
     // An override with no ranges is a day off, and says so on the wire.
     expect(override.body).toMatchObject({ closed: true });
 
+    // A blockage is a list of spans, because one decision can cover several
+    // days or several hours of the same day.
     const block = await api.post(
       `/businesses/${businessId}/resources/${resourceId}/blocks`,
-      { startAt: "2026-09-02T09:00:00.000Z", endAt: "2026-09-02T10:00:00.000Z", reason: "ספק" },
+      {
+        blocks: [
+          { startAt: "2026-09-02T09:00:00.000Z", endAt: "2026-09-02T10:00:00.000Z", reason: "ספק" },
+          { startAt: "2026-09-02T14:00:00.000Z", endAt: "2026-09-02T15:00:00.000Z", reason: "ספק" },
+        ],
+      },
       owner.token,
     );
     expect(block.status).toBe(201);
+    expect(block.body).toHaveLength(2);
 
     const calendar = await api.get(
       `/businesses/${businessId}/resources/${resourceId}/calendar?date=2026-09-02`,
       owner.token,
     );
-    expect((calendar.body as { blocks: unknown[] }).blocks).toHaveLength(1);
+    expect((calendar.body as { blocks: unknown[] }).blocks).toHaveLength(2);
   });
 
   it("answers 204 with no body on a delete", async () => {

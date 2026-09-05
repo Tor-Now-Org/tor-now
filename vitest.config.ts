@@ -1,6 +1,12 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // The interface's own "@/" imports, so a module that reaches for the shared
+  // library is testable without a bundler.
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./apps/web/src", import.meta.url)) },
+  },
   test: {
     include: [
       "packages/*/src/**/*.test.ts",

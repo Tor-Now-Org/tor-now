@@ -199,29 +199,40 @@ export const calendarService = ({
     });
   },
 
-  async createBlock(
+  /**
+   * One blockage, which the owner may have described as several spans: days
+   * away are a span each, and an hour kept free across a fortnight is fourteen.
+   *
+   * They are made together in one transaction because they were one decision —
+   * a holiday blocked from Monday to Wednesday and then failing on Thursday is
+   * a calendar nobody can trust — and each is a Block of its own afterwards, so
+   * a single day of it can be given back without unpicking the rest.
+   */
+  async createBlocks(
     actor: Actor,
     businessId: BusinessId,
     resourceId: ResourceId,
-    input: { startAt: string; endAt: string; reason: string },
-  ): Promise<Block> {
+    spans: readonly { startAt: string; endAt: string; reason: string }[],
+  ): Promise<readonly Block[]> {
     return unitOfWork.run(actor, async ({ repositories }) => {
       await loadOwnedBusiness(repositories, actor, businessId);
       await loadOwnedResource(repositories, businessId, resourceId);
 
-      const startAt = parseInstant(input.startAt);
-      const endAt = parseInstant(input.endAt);
-      if (endAt <= startAt) {
-        throw validationFailed("A block must end after it starts");
-      }
-
-      return repositories.blocks.create({
-        resourceId,
-        businessId,
-        startAt,
-        endAt,
-        reason: input.reason,
+      // Read in full before any of it is written: the transaction would undo a
+      // half-made blockage anyway, but a caller's mistake is better answered
+      // than rolled back.
+      const wanted = spans.map((span) => {
+        const startAt = parseInstant(span.startAt);
+        const endAt = parseInstant(span.endAt);
+        if (endAt <= startAt) {
+          throw validationFailed("A block must end after it starts");
+        }
+        return { resourceId, businessId, startAt, endAt, reason: span.reason };
       });
+
+      const made: Block[] = [];
+      for (const span of wanted) made.push(await repositories.blocks.create(span));
+      return made;
     });
   },
 
