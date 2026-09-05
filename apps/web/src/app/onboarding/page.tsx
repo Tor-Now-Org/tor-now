@@ -19,8 +19,8 @@ import {
 import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "@/components/phone-field.tsx";
 import {
-  DEFAULT_OPENING,
-  DEFAULT_OPEN_DAYS,
+  emptyBulk,
+  emptyWeek,
   rangesFor,
   WeeklyHours,
   type BulkHours,
@@ -93,20 +93,8 @@ export default function OnboardingPage() {
   const [services, setServices] = useState<DraftService[]>([
     { name: "", durationMinutes: DEFAULT_SERVICE_MINUTES, priceMinor: 0, bufferMinutes: null },
   ]);
-  const [hours, setHours] = useState<DayHours[]>(() =>
-    Array.from({ length: 7 }, (_unused, day) => ({
-      open: DEFAULT_OPEN_DAYS.includes(day),
-      ...DEFAULT_OPENING,
-    })),
-  );
-  const [bulk, setBulk] = useState<BulkHours>({
-    days: [...DEFAULT_OPEN_DAYS],
-    start: DEFAULT_OPENING.start,
-    end: DEFAULT_OPENING.end,
-    withBreak: false,
-    breakFrom: "13:00",
-    breakTo: "16:00",
-  });
+  const [hours, setHours] = useState<DayHours[]>(emptyWeek);
+  const [bulk, setBulk] = useState<BulkHours>(emptyBulk);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);

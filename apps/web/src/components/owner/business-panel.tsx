@@ -67,6 +67,8 @@ export const BusinessPanel = ({
   const [newResource, setNewResource] = useState<string | null>(null);
   /** The calendar the owner has asked to remove, while they are being asked about it. */
   const [removing, setRemoving] = useState<ResourceDto | null>(null);
+  /** The calendar being renamed, and the name as it is being typed. */
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [settings, setSettings] = useState(business);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -260,6 +262,13 @@ export const BusinessPanel = ({
                     screen, which is where a calendar is actually edited. This
                     goes straight there with this one open, rather than leaving
                     the owner to find the tab and pick the row again. */}
+                <button
+                  className="chip"
+                  style={{ border: "1px solid var(--line)" }}
+                  onClick={() => setRenaming({ id: resource.id, name: resource.name })}
+                >
+                  {copy.rename}
+                </button>
                 <button
                   className="chip"
                   style={{ border: "1px solid var(--line)" }}
@@ -512,6 +521,39 @@ export const BusinessPanel = ({
                 {copy.removeService}
               </Button>
             )}
+          </div>
+        )}
+      </Sheet>
+
+      <Sheet open={renaming !== null} onClose={() => setRenaming(null)} labelledBy="rename-title">
+        {renaming !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 id="rename-title" style={{ fontSize: 19 }}>{copy.renameCalendar}</h2>
+            {/* Renaming touches nothing else: hours, blocks and appointments
+                hang off the calendar's identity rather than its name, and an
+                appointment keeps the name it was booked under. */}
+            <Note>{copy.renameCalendarNote}</Note>
+            <Field
+              id="rename-resource"
+              label={copy.resourceNamePlaceholder}
+              value={renaming.name}
+              problem={problem.text(renaming.name, TEXT_RULES.resourceName)}
+              onChange={(event) => setRenaming({ ...renaming, name: event.target.value })}
+            />
+            <Button
+              busy={busy}
+              disabled={checkText(renaming.name, TEXT_RULES.resourceName) !== null}
+              onClick={() =>
+                act(async () => {
+                  await api.updateResource(token, business.id, renaming.id, {
+                    name: renaming.name.trim(),
+                  });
+                  setRenaming(null);
+                })
+              }
+            >
+              {copy.save}
+            </Button>
           </div>
         )}
       </Sheet>

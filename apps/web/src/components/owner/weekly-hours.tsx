@@ -1,5 +1,6 @@
 "use client";
 
+import { mergedRanges, type TimeRange } from "@tor-now/domain";
 import { Button, Card, Field, Note } from "../ui.tsx";
 import { useCopy } from "@/lib/i18n/index.tsx";
 
@@ -15,13 +16,15 @@ import { useCopy } from "@/lib/i18n/index.tsx";
  * friendly terms and every edit afterwards happened in a list of ranges with an
  * add and a delete. The same week deserves the same words both times.
  */
+/**
+ * A day, as a person describes it: open or not, and the stretches it is open
+ * for. ADR 0002 has no break entity — a break is the gap between two ranges —
+ * so a day that shuts for lunch simply has two of them, and a day with three
+ * stretches is no harder to say than a day with two.
+ */
 export type DayHours = {
   open: boolean;
-  start: string;
-  end: string;
-  /** A break splits the day into two ranges; ADR 0002 has no break entity. */
-  breakFrom?: string;
-  breakTo?: string;
+  ranges: TimeRange[];
 };
 
 /** What the bulk editor is currently set to apply. */
@@ -40,8 +43,7 @@ export const DEFAULT_OPEN_DAYS = [0, 1, 2, 3, 4];
 export const emptyWeek = (): DayHours[] =>
   Array.from({ length: 7 }, (_unused, day) => ({
     open: DEFAULT_OPEN_DAYS.includes(day),
-    start: DEFAULT_OPENING.start,
-    end: DEFAULT_OPENING.end,
+    ranges: [{ start: DEFAULT_OPENING.start, end: DEFAULT_OPENING.end }],
   }));
 
 export const emptyBulk = (): BulkHours => ({
@@ -53,60 +55,41 @@ export const emptyBulk = (): BulkHours => ({
   breakTo: "16:00",
 });
 
-/** The ranges ADR 0002 stores, from the day a person described. */
+/**
+ * The ranges ADR 0002 stores, from the day a person described — merged, so two
+ * that overlap or touch are stored as the one stretch they describe rather than
+ * as a break of no length.
+ */
 export const rangesFor = (
   day: DayHours,
   dayOfWeek: number,
-): { dayOfWeek: number; start: string; end: string }[] => {
-  if (!day.open) return [];
-  if (
-    day.breakFrom === undefined ||
-    day.breakTo === undefined ||
-    day.breakFrom <= day.start ||
-    day.breakTo >= day.end ||
-    day.breakTo <= day.breakFrom
-  ) {
-    return [{ dayOfWeek, start: day.start, end: day.end }];
-  }
-  return [
-    { dayOfWeek, start: day.start, end: day.breakFrom },
-    { dayOfWeek, start: day.breakTo, end: day.end },
-  ];
-};
+): { dayOfWeek: number; start: string; end: string }[] =>
+  day.open
+    ? mergedRanges(day.ranges).map((range) => ({ dayOfWeek, ...range }))
+    : [];
 
-/**
- * The inverse, for a week that already exists. One range is a plain day; two
- * are a day with a break. More than two cannot be said in these words, and the
- * caller is told so rather than shown a lie.
- */
+/** The inverse, for a week that already exists, tidied on the way in. */
 export const weekFromRanges = (
   ranges: readonly { dayOfWeek: number; start: string; end: string }[],
-): { week: DayHours[]; tooComplex: number[] } => {
-  const tooComplex: number[] = [];
-  const week = Array.from({ length: 7 }, (_unused, dayOfWeek) => {
-    const onThisDay = ranges
-      .filter((range) => range.dayOfWeek === dayOfWeek)
-      .sort((left, right) => left.start.localeCompare(right.start));
-    if (onThisDay.length === 0) {
-      return { open: false, start: DEFAULT_OPENING.start, end: DEFAULT_OPENING.end };
-    }
-    if (onThisDay.length === 1) {
-      const only = onThisDay[0]!;
-      return { open: true, start: only.start, end: only.end };
-    }
-    if (onThisDay.length > 2) tooComplex.push(dayOfWeek);
-    const first = onThisDay[0]!;
-    const last = onThisDay[onThisDay.length - 1]!;
-    return {
-      open: true,
-      start: first.start,
-      end: last.end,
-      breakFrom: first.end,
-      breakTo: onThisDay[1]!.start,
-    };
+): DayHours[] =>
+  Array.from({ length: 7 }, (_unused, dayOfWeek) => {
+    const onThisDay = mergedRanges(
+      ranges.filter((range) => range.dayOfWeek === dayOfWeek),
+    );
+    return onThisDay.length === 0
+      ? {
+          open: false,
+          ranges: [{ start: DEFAULT_OPENING.start, end: DEFAULT_OPENING.end }],
+        }
+      : { open: true, ranges: onThisDay };
   });
-  return { week, tooComplex };
-};
+
+/** One day changed, the rest untouched. */
+const atDay = (
+  week: DayHours[],
+  dayOfWeek: number,
+  change: (day: DayHours) => DayHours,
+): DayHours[] => week.map((day, index) => (index === dayOfWeek ? change(day) : day));
 
 export const WeeklyHours = ({
   hours,
@@ -195,11 +178,12 @@ export const WeeklyHours = ({
                     bulk.days.includes(dayOfWeek)
                       ? {
                           open: true,
-                          start: bulk.start,
-                          end: bulk.end,
-                          ...(bulk.withBreak
-                            ? { breakFrom: bulk.breakFrom, breakTo: bulk.breakTo }
-                            : {}),
+                          ranges: bulk.withBreak
+                            ? [
+                                { start: bulk.start, end: bulk.breakFrom },
+                                { start: bulk.breakTo, end: bulk.end },
+                              ]
+                            : [{ start: bulk.start, end: bulk.end }],
                         }
                       : day,
                   ),
@@ -225,32 +209,94 @@ export const WeeklyHours = ({
                 <span style={{ flex: 1, fontWeight: 500 }}>{copy.days[dayOfWeek]}</span>
                 <span className="hint">{day.open ? copy.open : copy.closed}</span>
               </label>
-              {day.open && day.breakFrom !== undefined && (
-                <span className="hint">
-                  {copy.withBreak}: {day.breakFrom}–{day.breakTo}
-                </span>
-              )}
               {day.open && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <Field
-                    id={`from-${dayOfWeek}`}
-                    label={copy.from}
-                    type="time"
-                    value={day.start}
-                    onChange={(event) =>
-                      setHours(hours.map((d, i) => (i === dayOfWeek ? { ...d, start: event.target.value } : d)))
+                <>
+                  {/* One row per stretch the day is open for. Two of them are
+                      what a break looks like; three are a day that opens,
+                      shuts, opens and shuts again, which the store has always
+                      been able to hold. */}
+                  {day.ranges.map((range, position) => (
+                    <div
+                      key={position}
+                      style={{ display: "flex", alignItems: "flex-end", gap: 10 }}
+                    >
+                      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                        <Field
+                          id={`from-${dayOfWeek}-${position}`}
+                          label={copy.from}
+                          type="time"
+                          value={range.start}
+                          onChange={(event) =>
+                            setHours(
+                              atDay(hours, dayOfWeek, (entry) => ({
+                                ...entry,
+                                ranges: entry.ranges.map((candidate, index) =>
+                                  index === position
+                                    ? { ...candidate, start: event.target.value }
+                                    : candidate,
+                                ),
+                              })),
+                            )
+                          }
+                        />
+                        <Field
+                          id={`to-${dayOfWeek}-${position}`}
+                          label={copy.to}
+                          type="time"
+                          value={range.end}
+                          onChange={(event) =>
+                            setHours(
+                              atDay(hours, dayOfWeek, (entry) => ({
+                                ...entry,
+                                ranges: entry.ranges.map((candidate, index) =>
+                                  index === position
+                                    ? { ...candidate, end: event.target.value }
+                                    : candidate,
+                                ),
+                              })),
+                            )
+                          }
+                        />
+                      </div>
+                      {day.ranges.length > 1 && (
+                        <button
+                          aria-label={`${copy.delete} ${range.start}-${range.end}`}
+                          onClick={() =>
+                            setHours(
+                              atDay(hours, dayOfWeek, (entry) => ({
+                                ...entry,
+                                ranges: entry.ranges.filter((_, index) => index !== position),
+                              })),
+                            )
+                          }
+                          style={{ color: "var(--critical)", fontSize: 13, minHeight: 44 }}
+                        >
+                          {copy.delete}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    className="chip"
+                    style={{ border: "1px dashed var(--line)", alignSelf: "flex-start" }}
+                    onClick={() =>
+                      setHours(
+                        atDay(hours, dayOfWeek, (entry) => ({
+                          ...entry,
+                          ranges: [
+                            ...entry.ranges,
+                            {
+                              start: entry.ranges[entry.ranges.length - 1]?.end ?? DEFAULT_OPENING.start,
+                              end: DEFAULT_OPENING.end,
+                            },
+                          ],
+                        })),
+                      )
                     }
-                  />
-                  <Field
-                    id={`to-${dayOfWeek}`}
-                    label={copy.to}
-                    type="time"
-                    value={day.end}
-                    onChange={(event) =>
-                      setHours(hours.map((d, i) => (i === dayOfWeek ? { ...d, end: event.target.value } : d)))
-                    }
-                  />
-                </div>
+                  >
+                    {copy.addRange}
+                  </button>
+                </>
               )}
             </Card>
           ))}

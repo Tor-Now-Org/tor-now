@@ -15,7 +15,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useFieldProblem } from "@/lib/use-field-problem.ts";
-import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } from "../ui.tsx";
+import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
 import {
   emptyBulk,
   emptyWeek,
@@ -77,8 +77,6 @@ export const Schedule = ({
   const [hours, setHours] = useState<WorkingHoursDto[] | null>(null);
   const [week, setWeek] = useState<DayHours[]>(emptyWeek);
   const [bulk, setBulk] = useState<BulkHours>(emptyBulk);
-  /** Days whose ranges cannot be said as "open, close, and one break". */
-  const [tooComplex, setTooComplex] = useState<number[]>([]);
   const [saved, setSaved] = useState(false);
   const [overrides, setOverrides] = useState<OverrideDto[]>([]);
   const [blocks, setBlocks] = useState<BlockDto[]>([]);
@@ -100,9 +98,7 @@ export const Schedule = ({
         api.calendarDay(token, business.id, resource.id, from),
       ]);
       setHours(loadedHours);
-      const asWeek = weekFromRanges(loadedHours);
-      setWeek(asWeek.week);
-      setTooComplex(asWeek.tooComplex);
+      setWeek(weekFromRanges(loadedHours));
       setOverrides(loadedOverrides);
       setBlocks(calendarDays.blocks);
     } catch (cause) {
@@ -212,7 +208,6 @@ export const Schedule = ({
               languages, the second one ADR 0002's storage rather than anybody's
               idea of a Tuesday. */}
           <Note>{copy.hoursNote}</Note>
-          {tooComplex.length > 0 && <Warning>{copy.hoursTooComplex}</Warning>}
           <WeeklyHours hours={week} setHours={setWeek} bulk={bulk} setBulk={setBulk} />
           {saved && (
             <p className="hint" role="status" style={{ margin: 0 }}>

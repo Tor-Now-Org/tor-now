@@ -321,6 +321,48 @@ test.describe("the business panel", () => {
     expect(mine.map((appointment) => appointment.status)).toEqual(["CONFIRMED"]);
   });
 
+  test("a day can be open more than twice, and overlapping stretches merge", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `טווחים ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+    await expect(page.getByText("אותן שעות לכמה ימים")).toBeVisible({ timeout: 15_000 });
+
+    // Monday: 09:00–17:00 already, plus a stretch that overlaps it and a third
+    // that stands apart. The overlap is one stretch however it is typed.
+    const monday = page.locator(".card", { hasText: "שני" }).first();
+    await monday.getByRole("button", { name: "הוספת טווח שעות" }).click();
+    await monday.locator('input[type="time"]').nth(2).fill("16:00");
+    await monday.locator('input[type="time"]').nth(3).fill("18:00");
+    await monday.getByRole("button", { name: "הוספת טווח שעות" }).click();
+    await monday.locator('input[type="time"]').nth(4).fill("20:00");
+    await monday.locator('input[type="time"]').nth(5).fill("22:00");
+
+    await page.getByRole("button", { name: "שמירה" }).last().click();
+    await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
+
+    const week = await call<{ dayOfWeek: number; start: string; end: string }[]>(
+      `/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`,
+      { token: shop.owner.token },
+    );
+    const mondayRanges = week
+      .filter((entry) => entry.dayOfWeek === 1)
+      .map((entry) => `${entry.start}-${entry.end}`)
+      .sort();
+    expect(mondayRanges).toEqual(["09:00-18:00", "20:00-22:00"]);
+  });
+
   test("a calendar's week is edited in the words the wizard used", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `שבוע ${Date.now()}`,
@@ -355,6 +397,35 @@ test.describe("the business panel", () => {
     expect(week.length).toBeGreaterThan(0);
   });
 
+  test("renames a calendar without touching what is booked on it", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `שם ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "יומנים" }).click();
+
+    await page.getByRole("button", { name: "שינוי שם" }).first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("dialog").getByLabel("שם היומן").fill("עמדה ראשית");
+    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+
+    await expect(page.getByText("עמדה ראשית")).toBeVisible({ timeout: 15_000 });
+
+    // And a customer choosing between calendars sees the new name.
+    const profile = await call<{ resources: { name: string }[] }>(
+      `/businesses/${shop.business.id}`,
+    );
+    expect(profile.resources.map((resource) => resource.name)).toContain("עמדה ראשית");
+  });
+
   test("edit on a calendar opens that calendar's schedule", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `עריכה ${Date.now()}`,
@@ -379,7 +450,7 @@ test.describe("the business panel", () => {
     // default, which is the whole point of pressing edit on its row.
     await page
       .locator(".card", { hasText: "כיסא שני" })
-      .getByRole("button", { name: "עריכה" })
+      .getByRole("button", { name: "שעות" })
       .click();
 
     // The schedule screen, open on the calendar whose row was pressed — not on
