@@ -17,10 +17,11 @@ import { TEXT_RULES } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import {
   blocking,
-  checkPhone,
   checkText,
   useFieldProblem,
 } from "@/lib/use-field-problem.ts";
+import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
+import { PhoneField } from "../phone-field.tsx";
 import { PhotoPanel } from "./photo-panel.tsx";
 import { Button, Card, Critical, Field, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
 
@@ -250,10 +251,11 @@ export const BusinessPanel = ({
             <Field id="s-name" label={copy.fName} hint={copy.fNameHint} value={settings.name}
               problem={problem.text(settings.name, TEXT_RULES.businessName)}
               onChange={(e) => { setSettings({ ...settings, name: e.target.value }); setSaved(false); }} />
-            <Field id="s-phone" label={copy.fPhone} hint={copy.fPhoneHint} dir="ltr" type="tel" inputMode="tel"
-              value={settings.phone}
-              problem={problem.phone(settings.phone)}
-              onChange={(e) => { setSettings({ ...settings, phone: e.target.value }); setSaved(false); }} />
+            {/* Held as E.164 like the API wants it, typed as local digits like
+                everywhere else a number is entered. */}
+            <PhoneField id="s-phone" label={copy.fPhone} hint={copy.fPhoneHint}
+              value={fromE164(settings.phone)}
+              onChange={(local) => { setSettings({ ...settings, phone: toE164(local) }); setSaved(false); }} />
             <Field id="s-address" label={copy.fAddress} hint={copy.fAddressHint} value={settings.address ?? ""}
               problem={problem.text(settings.address ?? "", TEXT_RULES.address)}
               onChange={(e) => { setSettings({ ...settings, address: e.target.value }); setSaved(false); }} />
@@ -303,7 +305,7 @@ export const BusinessPanel = ({
             }
             disabled={blocking(
               checkText(settings.name, TEXT_RULES.businessName),
-              checkPhone(settings.phone),
+              checkLocalPhone(fromE164(settings.phone)),
               checkText(settings.address ?? "", TEXT_RULES.address),
               checkText(settings.description ?? "", TEXT_RULES.description),
             )}
