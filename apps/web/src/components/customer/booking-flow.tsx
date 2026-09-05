@@ -66,13 +66,26 @@ export const BookingFlow = ({
   const [note, setNote] = useState("");
   /** Briefly true after the address is copied, where there is no share sheet. */
   const [shared, setShared] = useState(false);
-  /** Set when the API says this customer already has one of these today. */
-  const [alreadyBooked, setAlreadyBooked] = useState<{
-    serviceName: string;
-    resourceName: string;
-    startAt: string;
-    date: string;
-  } | null>(null);
+  /**
+   * The question the API came back with, if it came back with one. Two things
+   * can be worth stopping over — another of the same service today, and a time
+   * that runs across an appointment held elsewhere — and either can follow the
+   * other, so each is asked and answered on its own.
+   */
+  const [question, setQuestion] = useState<
+    | {
+        kind: "SAME_SERVICE" | "OVERLAP";
+        businessName: string;
+        serviceName: string;
+        resourceName: string;
+        startAt: string;
+        endAt: string;
+        date: string;
+      }
+    | null
+  >(null);
+  /** The answers given so far, carried into every following attempt. */
+  const [answered, setAnswered] = useState({ sameService: false, overlap: false });
 
   /** The service, calendar and day the profile response already answered for. */
   const alreadyHave = useRef<string | null>(null);
@@ -142,11 +155,12 @@ export const BookingFlow = ({
   }, [loadDay, service, resource, date]);
 
   /**
-   * `anotherOfTheSame` carries the customer's answer to "you already have one
-   * of these today — go ahead?". It is only ever true on a second attempt, so
-   * the first one still stops and asks.
+   * `answers` carries what the customer has already said yes to. Both are false
+   * on a first attempt, so it stops and asks; each answer given is kept for
+   * every attempt after it, since a second question does not withdraw the first
+   * answer.
    */
-  const confirm = async (anotherOfTheSame = false) => {
+  const confirm = async (answers = answered) => {
     if (service === null || resource === null || slot === null) return;
     if (token === null) {
       setStage("verifying");
@@ -161,17 +175,27 @@ export const BookingFlow = ({
         resourceId: resource.id,
         startAt: slot.startAt,
         customerNote: note.trim() === "" ? null : note.trim(),
-        ...(anotherOfTheSame ? { bookingAnotherOfTheSame: true } : {}),
+        ...(answers.sameService ? { bookingAnotherOfTheSame: true } : {}),
+        ...(answers.overlap ? { bookingOverAnother: true } : {}),
       });
       setStage("done");
     } catch (cause) {
-      if (isApiError(cause) && cause.code === "ALREADY_BOOKED_THAT_DAY") {
+      const asking =
+        isApiError(cause) && cause.code === "ALREADY_BOOKED_THAT_DAY"
+          ? "SAME_SERVICE"
+          : isApiError(cause) && cause.code === "OVERLAPS_ANOTHER_APPOINTMENT"
+            ? "OVERLAP"
+            : null;
+      if (asking !== null && isApiError(cause)) {
         // Not a refusal but a question, so it is put as one rather than shown
         // as an error the customer can do nothing about.
-        setAlreadyBooked({
+        setQuestion({
+          kind: asking,
+          businessName: aString(cause.details["businessName"], business.name),
           serviceName: aString(cause.details["serviceName"], service.name),
           resourceName: aString(cause.details["resourceName"], ""),
           startAt: aString(cause.details["startAt"], ""),
+          endAt: aString(cause.details["endAt"], ""),
           date: aString(cause.details["date"], ""),
         });
         setBusy(false);
@@ -188,6 +212,43 @@ export const BookingFlow = ({
     } finally {
       setBusy(false);
     }
+  };
+
+  /**
+   * Yes to the question on screen. The answer is kept — a second question is
+   * asked of the same attempt, and answering it must not un-answer the first —
+   * and the booking is attempted again with both.
+   */
+  const answer = async () => {
+    if (question === null) return;
+    const given =
+      question.kind === "SAME_SERVICE"
+        ? { ...answered, sameService: true }
+        : { ...answered, overlap: true };
+    setAnswered(given);
+    setQuestion(null);
+    await confirm(given);
+  };
+
+  /**
+   * When the appointment they already hold is: the day, then the clock. The
+   * overlapping one is shown as a span, since "runs across yours" is the whole
+   * point and a start alone does not show it. Read in this business's time
+   * zone, which is the clock the customer is looking at.
+   */
+  const whenOf = (asked: NonNullable<typeof question>) => {
+    const day = formatLocalDate(asked.date, language, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+    if (asked.startAt === "") return day;
+    const from = timeIn(asked.startAt, business.timeZone, language);
+    const until =
+      asked.kind === "OVERLAP" && asked.endAt !== ""
+        ? `–${timeIn(asked.endAt, business.timeZone, language)}`
+        : "";
+    return `${day} ${copy.atTime} ${from}${until}`;
   };
 
   if (profile === null) return <Spinner />;
@@ -493,7 +554,7 @@ export const BookingFlow = ({
                 value={formatPrice(service.priceMinor, language, copy.free)}
               />
             </Card>
-            {alreadyBooked === null ? (
+            {question === null ? (
               <>
                 {/* Optional, and said to be: most bookings need nothing, and a
                     field that looks required makes people invent something. */}
@@ -524,31 +585,24 @@ export const BookingFlow = ({
                     without recognising the first. The calendar is part of that
                     — it may not be the one they are looking at. */}
                 <Warning>
-                  {copy.alreadyBooked
-                    .replace("{service}", alreadyBooked.serviceName)
-                    .replace(
-                      "{when}",
-                      `${formatLocalDate(alreadyBooked.date, language, {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                      })}${
-                        alreadyBooked.startAt === ""
-                          ? ""
-                          : ` ${copy.atTime} ${timeIn(alreadyBooked.startAt, business.timeZone, language)}`
-                      }`,
-                    )
+                  {(question.kind === "SAME_SERVICE"
+                    ? copy.alreadyBooked
+                    : copy.overlapsAnother
+                  )
+                    .replace("{service}", question.serviceName)
+                    .replace("{business}", question.businessName)
+                    .replace("{when}", whenOf(question))
                     .replace(
                       "{with}",
-                      alreadyBooked.resourceName === ""
+                      question.resourceName === ""
                         ? ""
-                        : ` ${copy.withProvider} ${alreadyBooked.resourceName}`,
+                        : ` ${copy.withProvider} ${question.resourceName}`,
                     )}
                 </Warning>
-                <Button onClick={() => void confirm(true)} busy={busy}>
-                  {copy.bookAnyway}
+                <Button onClick={() => void answer()} busy={busy}>
+                  {question.kind === "SAME_SERVICE" ? copy.bookAnyway : copy.bookOverAnyway}
                 </Button>
-                <Button intent="quiet" onClick={() => { setAlreadyBooked(null); setStage("choosing"); }}>
+                <Button intent="quiet" onClick={() => { setQuestion(null); setStage("choosing"); }}>
                   {copy.backToTimes}
                 </Button>
               </>

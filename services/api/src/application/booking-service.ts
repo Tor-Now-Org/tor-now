@@ -48,6 +48,12 @@ export type BookingRequestInput = {
    * asked, so the first attempt still stops and explains itself.
    */
   readonly bookingAnotherOfTheSame?: boolean;
+  /**
+   * The customer has been told this time runs across an appointment they
+   * already hold somewhere, and said to go ahead. Absent means they have not
+   * been asked.
+   */
+  readonly bookingOverAnother?: boolean;
 };
 
 /**
@@ -158,6 +164,39 @@ export const bookingService = (dependencies: {
                 resourceName: already.resourceName,
                 startAt: formatInstant(already.startAt),
                 date: instantToZoned(already.startAt, context.business.timeZone).date,
+              },
+            );
+          }
+        }
+
+        // A Business can only see its own diary, so the clash it cannot rule
+        // out is the one at somebody else's — the dentist at ten that makes the
+        // barber at ten past impossible. Asked of the customer's whole diary
+        // and answered the same way as above: a question with everything needed
+        // to recognise the appointment, and a way through for the person who
+        // means it, since they may be booking for someone else or about to
+        // cancel the other.
+        if (input.bookingOverAnother !== true) {
+          const clash = await repositories.appointments.overlappingForCustomer(
+            customerId,
+            draft.startAt,
+            draft.endAt,
+          );
+          if (clash !== null) {
+            throw new DomainError(
+              "OVERLAPS_ANOTHER_APPOINTMENT",
+              "The customer already has an appointment at that time",
+              {
+                businessName: clash.businessName,
+                serviceName: clash.appointment.serviceName,
+                resourceName: clash.resourceName,
+                startAt: formatInstant(clash.appointment.startAt),
+                endAt: formatInstant(clash.appointment.endAt),
+                // In this Business's time zone, since that is the calendar the
+                // customer is reading. The clash may sit in another, and a date
+                // is what they will match against their own day.
+                date: instantToZoned(clash.appointment.startAt, context.business.timeZone)
+                  .date,
               },
             );
           }

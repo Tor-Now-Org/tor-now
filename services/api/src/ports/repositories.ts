@@ -348,13 +348,6 @@ export type AppointmentRepository = {
     businessId: BusinessId,
   ): Promise<readonly Appointment[]>;
   /**
-   * Whether this customer already holds a confirmed appointment for this
-   * Service inside the span. Asked once per booking, so it answers with a
-   * boolean rather than the rows: the caller only needs to know that one
-   * exists, and reading a customer's history to find out is a page of work to
-   * decide a yes or no.
-   */
-  /**
    * The customer's confirmed appointment for this Service inside the window, if
    * they have one — the appointment rather than a yes, because what the screen
    * has to say is "you already have this, with Ran, at nine", and a boolean
@@ -367,6 +360,18 @@ export type AppointmentRepository = {
     from: Instant,
     to: Instant,
   ): Promise<Appointment | null>;
+  /**
+   * The customer's own confirmed appointment running across this span, wherever
+   * it was booked, with the business named — a person cannot be in two chairs
+   * at once, and the clash a Business cannot see is precisely the one at
+   * somebody else's. Half-open: an appointment that ends exactly where the next
+   * begins does not overlap it.
+   */
+  overlappingForCustomer(
+    customerId: UserId,
+    from: Instant,
+    to: Instant,
+  ): Promise<AppointmentWithBusiness | null>;
   /**
    * Everyone who has ever booked here, whatever else they are to this Business.
    *

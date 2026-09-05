@@ -701,6 +701,28 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
       },
 
+      async overlappingForCustomer(customerId, from, to) {
+        const clash = store.appointments
+          .filter(
+            (appointment) =>
+              appointment.customerId === customerId &&
+              appointment.status === "CONFIRMED" &&
+              appointment.startAt < to &&
+              appointment.endAt > from,
+          )
+          .sort((left, right) => left.startAt - right.startAt)[0];
+        if (clash === undefined) return null;
+        const business = store.businesses.find(
+          (candidate) => candidate.id === clash.businessId,
+        );
+        if (business === undefined) throw notFound("Business", clash.businessId);
+        return {
+          appointment: clash,
+          businessName: business.name,
+          resourceName: clash.resourceName,
+        };
+      },
+
       async upcomingForResource(resourceId, from) {
         return store.appointments
           .filter(

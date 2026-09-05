@@ -21,6 +21,7 @@ const MESSAGES: Readonly<
     // Reached only if the question is somehow skipped; the booking screen asks
     // rather than showing this.
     ALREADY_BOOKED_THAT_DAY: "כבר יש לכם תור לשירות הזה באותו יום.",
+    OVERLAPS_ANOTHER_APPOINTMENT: "כבר יש לכם תור בשעה הזאת.",
     SLOT_TAKEN: "מישהו הקדים אתכם לשעה הזאת. בחרו שעה אחרת — עדכנו את הרשימה.",
     ALREADY_CANCELLED: "התור הזה כבר בוטל.",
     ALREADY_STARTED: "התור כבר התחיל — אי אפשר להזיז אותו, רק לבטל או לסמן שלא הגיעו.",
@@ -39,6 +40,7 @@ const MESSAGES: Readonly<
     NOT_FOUND: "We could not find what you were looking for.",
     CONFLICT: "That conflicts with something that already exists.",
     ALREADY_BOOKED_THAT_DAY: "You already have an appointment for this service that day.",
+    OVERLAPS_ANOTHER_APPOINTMENT: "You already have an appointment at that time.",
     SLOT_TAKEN: "Someone took that time while you were confirming. Pick another — the list is up to date.",
     ALREADY_CANCELLED: "That appointment has already been cancelled.",
     ALREADY_STARTED: "That appointment has already started — it can be cancelled or marked a no show, but not moved.",

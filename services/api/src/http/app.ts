@@ -214,6 +214,7 @@ export const createApp = (services: Services) => {
       startAt: body.startAt,
       customerNote: body.customerNote,
       bookingAnotherOfTheSame: body.bookingAnotherOfTheSame,
+      bookingOverAnother: body.bookingOverAnother,
     });
     return context.json(wire.appointmentOut(appointment), 201);
   });

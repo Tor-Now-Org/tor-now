@@ -347,6 +347,65 @@ test.describe("booking a second one of the same", () => {
   });
 });
 
+test.describe("booking over an appointment somewhere else", () => {
+  test("asks before allowing it, and names where the other one is", async ({ page }) => {
+    const clinicName = `קליניקה ${Date.now()}`;
+    const barberName = `מספרה ${Date.now()}`;
+    const clinic = await aBusinessWithOpenHours({
+      name: clinicName,
+      ownerPhone: uniquePhone(),
+      serviceName: "עיסוי",
+    });
+    const barber = await aBusinessWithOpenHours({
+      name: barberName,
+      ownerPhone: uniquePhone(),
+    });
+    const phone = uniquePhone();
+    const { token } = await signInDirectly(page, phone, "דנה כהן");
+
+    await page.goto(`/business/${clinic.business.id}`);
+    await ready(page);
+    const { time, day } = await theNextOfferedTime(page);
+    const label = ((await time.textContent()) ?? "").trim();
+
+    // The clinic's own diary will still be empty at that hour: what makes it
+    // unbookable is the customer's morning, spent at the barber. So the barber
+    // is booked for exactly the time the clinic is about to offer.
+    const startAt = await theStartShownAs(clinic, label, day);
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: barber.business.id,
+        serviceId: barber.service.id,
+        resourceId: barber.resource.id,
+        startAt,
+        customerNote: null,
+      },
+    });
+
+    await time.click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("button", { name: "אישור התור" }).click();
+
+    // Named, because "you are busy then" is no use without saying where: the
+    // clash is at a business this screen knows nothing about.
+    const warning = page.getByText(/חופפת לתור/);
+    await expect(warning).toBeVisible({ timeout: 20_000 });
+    await expect(warning).toContainText(barberName);
+    // Asserted on the warning itself: the sheet behind it shows a span too, and
+    // the point is that this sentence carries one.
+    await expect(warning).toContainText(/\d\d:\d\d–\d\d:\d\d/);
+
+    // Their call, not ours: the other one may be for somebody else.
+    await page.getByRole("button", { name: "כן, להזמין בכל זאת" }).click();
+    await expect(page.getByText("התור נקבע")).toBeVisible({ timeout: 20_000 });
+
+    const mine = await call<{ id: string }[]>("/me/appointments", { token });
+    expect(mine).toHaveLength(2);
+  });
+});
+
 test.describe("a customer's own appointments", () => {
   test("cancels an appointment and is warned about the notice period", async ({ page }) => {
     const name = `מכון ${Date.now()}`;

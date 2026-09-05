@@ -154,6 +154,143 @@ describe("booking", () => {
     ).rejects.toMatchObject({ code: "OUTSIDE_WORKING_HOURS" });
   });
 
+  /**
+   * A second business, so the clash under test is the one no single diary can
+   * see: the customer's own time, spent somewhere else.
+   */
+  const anotherBusinessDownTheRoad = async () => {
+    const owner = await signIn(test, "+972500000009", "מירי");
+    const business = await test.services.business.register(owner.actor, {
+      name: "קליניקת מירי",
+      phone: "+972500000009",
+      description: null,
+      address: "רחוב הרצל 9",
+      resourceNames: ["מירי"],
+      services: [
+        { name: "עיסוי", durationMinutes: 30, priceMinor: 20000, bufferMinutes: null },
+      ],
+      workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],
+    });
+    const [service] = await test.services.business.listServices(owner.actor, business.id);
+    const [resource] = await test.services.business.listResources(owner.actor, business.id);
+    if (service === undefined || resource === undefined) {
+      throw new Error("Registration did not produce a bookable business");
+    }
+    return { owner, business, service, resource };
+  };
+
+  it("stops at a time the customer is already booked for elsewhere, and names it", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const clinic = await anotherBusinessDownTheRoad();
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    // The clinic's diary is empty at nine and always will be: only the
+    // customer's own appointments say they cannot be there. So the question
+    // names the other business, which is the part they cannot work out for
+    // themselves from this screen.
+    await expect(
+      test.services.booking.book(customer.actor, {
+        businessId: clinic.business.id,
+        serviceId: clinic.service.id,
+        resourceId: clinic.resource.id,
+        startAt: TUESDAY_AT("09:00"),
+        customerNote: null,
+      }),
+    ).rejects.toMatchObject({
+      code: "OVERLAPS_ANOTHER_APPOINTMENT",
+      details: {
+        businessName: shop.business.name,
+        serviceName: shop.service.name,
+        resourceName: shop.resource.name,
+        startAt: TUESDAY_AT("09:00"),
+        endAt: TUESDAY_AT("09:30"),
+      },
+    });
+  });
+
+  it("takes it once the customer has said to go ahead", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const clinic = await anotherBusinessDownTheRoad();
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    // They may be booking for somebody else, or about to cancel the other one.
+    // Only they know, so the answer is theirs to give.
+    const second = await test.services.booking.book(customer.actor, {
+      businessId: clinic.business.id,
+      serviceId: clinic.service.id,
+      resourceId: clinic.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+      bookingOverAnother: true,
+    });
+    expect(second.status).toBe("CONFIRMED");
+  });
+
+  it("says nothing about an appointment that ends where the next one starts", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const clinic = await anotherBusinessDownTheRoad();
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    // Nine to half past, then half past onwards: back to back is tight, not
+    // impossible, and a question asked about it every time would be noise.
+    const second = await test.services.booking.book(customer.actor, {
+      businessId: clinic.business.id,
+      serviceId: clinic.service.id,
+      resourceId: clinic.resource.id,
+      startAt: TUESDAY_AT("09:30"),
+      customerNote: null,
+    });
+    expect(second.status).toBe("CONFIRMED");
+  });
+
+  it("says nothing about a cancelled appointment at the same time", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const clinic = await anotherBusinessDownTheRoad();
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const first = await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+    await test.services.booking.cancel(customer.actor, first.id);
+
+    const second = await test.services.booking.book(customer.actor, {
+      businessId: clinic.business.id,
+      serviceId: clinic.service.id,
+      resourceId: clinic.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+    expect(second.status).toBe("CONFIRMED");
+  });
+
   it("allows a different service at the same business on the same day", async () => {
     const shop = await anEstablishedBusiness(test);
     const other = await test.services.business.createService(

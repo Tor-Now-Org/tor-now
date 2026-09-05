@@ -103,6 +103,13 @@ export const bookingSchema = z.object({
    * asked yet", so a first attempt still stops and explains itself.
    */
   bookingAnotherOfTheSame: z.boolean().default(false),
+  /**
+   * Sent when the customer has been told this time runs across an appointment
+   * they already hold elsewhere and has said to go ahead anyway. Separate from
+   * the flag above: two different questions deserve two different answers, and
+   * one "yes" should not stand in for the other.
+   */
+  bookingOverAnother: z.boolean().default(false),
 });
 
 export const rescheduleSchema = z.object({ startAt: instantSchema });

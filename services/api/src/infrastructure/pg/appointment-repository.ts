@@ -164,6 +164,26 @@ export const appointmentRepository = (
     return row === undefined ? null : toAppointment(row);
   },
 
+  async overlappingForCustomer(customerId, from, to) {
+    const rows = await tx<Row[]>`
+      select a.*, b.name as business_name
+      from appointment a
+      join business b on b.id = a.business_id
+      where a.customer_id = ${customerId}
+        and a.status = 'CONFIRMED'
+        and a.start_at < ${asDate(to)} and a.end_at > ${asDate(from)}
+      order by a.start_at
+      limit 1`;
+    const row = rows[0];
+    if (row === undefined) return null;
+    const appointment = toAppointment(row);
+    return {
+      appointment,
+      businessName: text(row["business_name"]),
+      resourceName: appointment.resourceName,
+    };
+  },
+
   async upcomingForResource(resourceId, from) {
     const rows = await tx<Row[]>`
       select * from appointment

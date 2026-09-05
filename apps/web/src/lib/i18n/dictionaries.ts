@@ -123,6 +123,8 @@ const customer = {
     "atTime": "בשעה",
     "withProvider": "עם",
     "bookAnyway": "כן, להזמין עוד תור",
+    "overlapsAnother": "השעה הזאת חופפת לתור שכבר יש לכם: {service}{with} ב{business}, {when}. אפשר להזמין בכל זאת — למשל אם התור השני הוא של מישהו אחר או שאתם עומדים לבטל אותו.",
+    "bookOverAnyway": "כן, להזמין בכל זאת",
     "done": "התור נקבע",
     "doneBody": "שלחנו לכם אישור בוואטסאפ.",
     "toMine": "לתורים שלי",
@@ -258,6 +260,14 @@ const customer = {
     "minutes": "min",
     "free": "Free",
     "currency": "₪",
+    "photosOf": "Photos from the business",
+    "showPhoto": "View photo",
+    "alreadyBooked": "You already have {service}{with} on {when}. You can book another — for a child, or someone in the family — but it is worth making sure that is what you meant.",
+    "atTime": "at",
+    "withProvider": "with",
+    "bookAnyway": "Yes, book another",
+    "overlapsAnother": "This time runs across an appointment you already have: {service}{with} at {business}, {when}. You can book it anyway — if the other one is for somebody else, or you are about to cancel it.",
+    "bookOverAnyway": "Yes, book it anyway",
   },
 } as const;
 

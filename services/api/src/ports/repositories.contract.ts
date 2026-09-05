@@ -683,6 +683,34 @@ export const describeRepositoryContract = (
             span[0],
           ),
         ).toBeNull();
+        // Overlap is what the question is about, so the boundaries are the
+        // interesting part: a span that lands inside it clashes, and a span
+        // that begins exactly where it ends does not.
+        expect(
+          await repositories.appointments.overlappingForCustomer(
+            context.owner.id,
+            parseInstant("2026-09-15T09:15:00Z"),
+            parseInstant("2026-09-15T09:45:00Z"),
+          ),
+        ).toMatchObject({
+          appointment: { id: booked.id },
+          businessName: context.business.name,
+          resourceName: context.resource.name,
+        });
+        expect(
+          await repositories.appointments.overlappingForCustomer(
+            context.owner.id,
+            parseInstant("2026-09-15T09:30:00Z"),
+            parseInstant("2026-09-15T10:00:00Z"),
+          ),
+        ).toBeNull();
+        expect(
+          await repositories.appointments.overlappingForCustomer(
+            context.owner.id,
+            parseInstant("2026-09-15T08:00:00Z"),
+            parseInstant("2026-09-15T09:00:00Z"),
+          ),
+        ).toBeNull();
         expect(
           await repositories.appointments.listForBusinessBetween(
             context.business.id,

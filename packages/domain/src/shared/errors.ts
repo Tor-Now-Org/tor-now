@@ -24,6 +24,13 @@ export type DomainErrorCode =
    * clash it can only refuse.
    */
   | "ALREADY_BOOKED_THAT_DAY"
+  /**
+   * The time runs across an appointment the customer already holds, at this
+   * business or any other. Also answerable rather than final: only the customer
+   * knows whether they are booking for somebody else, or about to cancel the
+   * other one.
+   */
+  | "OVERLAPS_ANOTHER_APPOINTMENT"
   | "CONFLICT"
   | "RATE_LIMITED"
   | "VERIFICATION_FAILED";
