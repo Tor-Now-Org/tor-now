@@ -250,7 +250,8 @@ export const appointmentRepository = (
           occupied_until = coalesce(${changes.occupiedUntil === undefined ? null : asDate(changes.occupiedUntil)}, occupied_until),
           cancelled_at = ${changes.cancelledAt === undefined ? tx`cancelled_at` : changes.cancelledAt === null ? null : asDate(changes.cancelledAt)},
           cancelled_by = ${changes.cancelledBy === undefined ? tx`cancelled_by` : changes.cancelledBy},
-          late_cancellation = coalesce(${changes.lateCancellation ?? null}, late_cancellation)
+          late_cancellation = coalesce(${changes.lateCancellation ?? null}, late_cancellation),
+          customer_note = ${changes.customerNote === undefined ? tx`customer_note` : changes.customerNote}
         where id = ${id}
         returning *`;
       return one(rows);

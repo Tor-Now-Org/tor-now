@@ -101,6 +101,10 @@ export const bookingSchema = z.object({
 
 export const rescheduleSchema = z.object({ startAt: instantSchema });
 
+export const customerNoteSchema = z.object({
+  customerNote: z.string().trim().max(500).nullable(),
+});
+
 const workingHoursEntrySchema = z
   .object({
     dayOfWeek: z.number().int().min(0).max(6),

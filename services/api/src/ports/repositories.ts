@@ -400,6 +400,7 @@ export type AppointmentRepository = {
         | "cancelledAt"
         | "cancelledBy"
         | "lateCancellation"
+        | "customerNote"
       >
     >,
   ): Promise<Appointment>;

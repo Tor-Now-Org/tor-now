@@ -237,6 +237,28 @@ export const bookingService = (dependencies: {
     },
 
     /**
+     * The customer's own note, written after the fact. Only the customer who
+     * booked may write it: the note is addressed to the Business, so the
+     * Business reading it is not the same as the Business rewriting it.
+     */
+    async setCustomerNote(
+      actor: Actor,
+      appointmentId: AppointmentId,
+      customerNote: string | null,
+    ): Promise<Appointment> {
+      const userId = requireUser(actor);
+
+      return unitOfWork.run(actor, async ({ repositories }) => {
+        const appointment = await repositories.appointments.findById(appointmentId);
+        if (appointment === null) throw notFound("Appointment", appointmentId);
+        if (appointment.customerId !== userId) {
+          throw forbidden("Only the customer who booked may change the note");
+        }
+        return repositories.appointments.update(appointmentId, { customerNote });
+      });
+    },
+
+    /**
      * ADR 0005 counts reschedule as a third template, and CONTEXT.md makes it a
      * Business action only — a customer wanting a different time cancels and
      * books again.

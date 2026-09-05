@@ -9,7 +9,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { outcomeOfDto } from "../owner/appointment-sheet.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { Button, Card, Critical, Empty, Sheet, Spinner, Warning } from "../ui.tsx";
+import { Button, Card, Critical, Empty, MultilineField, Sheet, Spinner, Warning } from "../ui.tsx";
 
 /**
  * A customer's own appointments, across every business they have booked with.
@@ -28,6 +28,8 @@ export const MyAppointments = ({
 
   const [appointments, setAppointments] = useState<MyAppointmentDto[] | null>(null);
   const [cancelling, setCancelling] = useState<MyAppointmentDto | null>(null);
+  const [noting, setNoting] = useState<MyAppointmentDto | null>(null);
+  const [draftNote, setDraftNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +52,26 @@ export const MyAppointments = ({
     try {
       await api.cancel(token, cancelling.id);
       setCancelling(null);
+      await load();
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openNote = (appointment: MyAppointmentDto) => {
+    setDraftNote(appointment.customerNote ?? "");
+    setNoting(appointment);
+  };
+
+  const saveNote = async () => {
+    if (token === null || noting === null) return;
+    setBusy(true);
+    try {
+      // An emptied box is a removed note; the API reads "" as null too.
+      await api.setCustomerNote(token, noting.id, draftNote.trim() || null);
+      setNoting(null);
       await load();
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
@@ -128,11 +150,12 @@ export const MyAppointments = ({
             <Button intent="quiet" onClick={() => onOpenBusiness(appointment.businessId)}>
               {copy.navigateToBusiness}
             </Button>
-            <Button
-              intent="quiet"
-              style={{ gridColumn: "1 / -1" }}
-              onClick={() => setCancelling(appointment)}
-            >
+            <Button intent="quiet" onClick={() => openNote(appointment)}>
+              {appointment.customerNote === null || appointment.customerNote === ""
+                ? copy.addNote
+                : copy.editNote}
+            </Button>
+            <Button intent="quiet" onClick={() => setCancelling(appointment)}>
               {copy.cancelAppointment}
             </Button>
           </div>
@@ -171,6 +194,27 @@ export const MyAppointments = ({
           ))}
         </div>
       )}
+
+      <Sheet open={noting !== null} onClose={() => setNoting(null)} labelledBy="note-title">
+        {noting !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 id="note-title" style={{ fontSize: 20 }}>{copy.noteLabel}</h2>
+            <p className="hint" style={{ margin: 0 }}>{formatWhen(noting)}</p>
+            <MultilineField
+              id="customer-note"
+              label={copy.noteLabel}
+              hint={copy.noteHint}
+              placeholder={copy.notePlaceholder}
+              maxLength={500}
+              value={draftNote}
+              onChange={(event) => setDraftNote(event.target.value)}
+            />
+            <Button intent="primary" onClick={saveNote} busy={busy}>
+              {copy.saveNote}
+            </Button>
+          </div>
+        )}
+      </Sheet>
 
       <Sheet open={cancelling !== null} onClose={() => setCancelling(null)} labelledBy="cancel-title">
         {cancelling !== null && (
