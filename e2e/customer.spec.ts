@@ -13,6 +13,9 @@ import {
   useEnglish,
 } from "./support.ts";
 
+/** Far enough along the day that the notice window cannot swallow it mid-test. */
+const SAFELY_PAST_THE_NOTICE = 4;
+
 /**
  * The customer artboard: search, choose a service, choose a time, verify inline,
  * confirm, and see the appointment afterwards.
@@ -204,7 +207,9 @@ test.describe("finding and booking", () => {
     await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
     await page.getByText(name, { exact: false }).first().click();
 
-    const { day } = await theNextOfferedTime(page);
+    // Room for the one that gets taken and the ones counted around it: this
+    // journey reads a day, books inside it, and reads the same day again.
+    const { day } = await theNextOfferedTime(page, SAFELY_PAST_THE_NOTICE + 2);
     const slots = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
     const before = await slots.count();
     // Not the first one on the day: it is the closest to now, and the minimum
@@ -289,9 +294,6 @@ test.describe("who the appointment is with", () => {
   });
 });
 
-/** Far enough along the day that the notice window cannot swallow it mid-test. */
-const SAFELY_PAST_THE_NOTICE = 4;
-
 test.describe("booking a second one of the same", () => {
   test("asks before allowing it, and the note reaches the owner", async ({ page }) => {
     const name = `כפול ${Date.now()}`;
@@ -309,7 +311,8 @@ test.describe("booking a second one of the same", () => {
       await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
       await page.getByText(name, { exact: false }).first().click();
       if (bookedOn === null) {
-        const { time, day } = await theNextOfferedTime(page);
+        // Two bookings on one day, so the day has to have two times on it.
+        const { time, day } = await theNextOfferedTime(page, 2);
         bookedOn = day;
         await time.click();
       } else {

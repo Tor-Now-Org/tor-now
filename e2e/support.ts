@@ -223,6 +223,18 @@ export const aBusinessWithOpenHours = async (options: {
  */
 export const theNextOfferedTime = async (
   page: Page,
+  /**
+   * How many times the day has to offer, for a journey that needs more than
+   * one of them.
+   *
+   * A test that books a slot and then wants another on the same day was taking
+   * the first day with *a* slot, which late in the evening is today with one or
+   * two left — and the second booking then had nothing to take. That is the
+   * clock the suite happened to run on, not the product, and it failed the same
+   * two journeys every night. Asking for the room up front moves them to
+   * tomorrow, which a business open all day always has.
+   */
+  atLeast = 1,
 ): Promise<{ time: Locator; day: number }> => {
   const times = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
 
@@ -233,9 +245,11 @@ export const theNextOfferedTime = async (
     await expect(times.first().or(page.getByText(NO_TIMES))).toBeVisible({
       timeout: SLOTS_APPEAR_WITHIN,
     });
-    if ((await times.count()) > 0) return { time: times.first(), day };
+    if ((await times.count()) >= atLeast) return { time: times.first(), day };
   }
-  throw new Error(`No time was offered on any of the next ${DAYS_TO_TRY} days.`);
+  throw new Error(
+    `No day in the next ${DAYS_TO_TRY} offered ${atLeast} times or more.`,
+  );
 };
 
 /** Select one day of the strip by its distance from today. */
