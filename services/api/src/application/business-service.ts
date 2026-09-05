@@ -456,10 +456,14 @@ export const businessService = ({
     await unitOfWork.run(actor, async ({ repositories }) => {
       await loadOwnedBusiness(repositories, actor, businessId);
       await loadOwnedResource(repositories, businessId, resourceId);
-      const remaining = await repositories.resources.listForBusiness(businessId);
       // Every Business has at least one Resource; removing the last one would
-      // leave it unbookable with no way to say so.
-      if (remaining.length <= 1) {
+      // leave it unbookable with no way to say so. Counted among the ones still
+      // on offer: a withdrawn calendar keeps its row, so counting rows would
+      // let the last bookable one go as long as a retired one sat behind it.
+      const stillOffered = (
+        await repositories.resources.listForBusiness(businessId)
+      ).filter((resource) => resource.active);
+      if (stillOffered.length <= 1) {
         throw validationFailed("A business must keep at least one calendar");
       }
       await repositories.resources.delete(resourceId);

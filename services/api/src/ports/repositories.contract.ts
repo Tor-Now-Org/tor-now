@@ -698,6 +698,39 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("withdraws a calendar that has been booked, and removes one that has not", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7106");
+        const spare = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "כיסא פנוי",
+        });
+
+        // Nobody has booked the spare one, so there is no history to keep.
+        await repositories.resources.delete(spare.id);
+        expect(await repositories.resources.findById(spare.id)).toBeNull();
+
+        // The other one has an appointment against it. Removing the row would
+        // take the appointment with it — the foreign key cascades — so what a
+        // business asks for as "delete" has to mean "stop offering it".
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-17T09:00:00Z", "2026-09-17T09:30:00Z", "2026-09-17T09:40:00Z"),
+        );
+        await repositories.resources.delete(context.resource.id);
+
+        expect(await repositories.resources.findById(context.resource.id)).toMatchObject({
+          id: context.resource.id,
+          active: false,
+        });
+        expect(
+          await repositories.appointments.listForCustomerAtBusiness(
+            context.owner.id,
+            context.business.id,
+          ),
+        ).toHaveLength(1);
+      });
+    });
+
     it("names everyone who has booked, whatever their role is here", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "7105");

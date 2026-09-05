@@ -52,7 +52,21 @@ export const resourceRepository = (tx: Transaction): ResourceRepository => ({
     return one(rows, toResource, "Resource");
   },
 
+  /**
+   * A Resource that has ever been booked is withdrawn rather than removed, for
+   * a harder reason than the Service equivalent: appointment.resource_id
+   * cascades, so deleting the row takes every appointment ever made against it
+   * — the money, the no-shows, the history the Business is judged on — and says
+   * nothing while doing it. Withdrawing stops it being offered, which is what
+   * an owner removing a calendar actually means.
+   */
   async delete(id) {
+    const booked = await tx<Row[]>`
+      select 1 from appointment where resource_id = ${id} limit 1`;
+    if (booked.length > 0) {
+      await tx`update resource set active = false where id = ${id}`;
+      return;
+    }
     await tx`delete from resource where id = ${id}`;
   },
 });

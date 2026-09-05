@@ -52,6 +52,17 @@ begin
     values (v_biz, v_res, v_svc, v_user, '2026-09-01T09:00:00Z', '2026-09-01T09:30:00Z',
             '2026-09-01T09:40:00Z', 'probe cut', 'probe chair', 8000, 30, 10);
 
+  -- Removing a calendar must not remove what happened on it: the constraint
+  -- refuses, rather than cascading the appointments away.
+  v_failed := false;
+  begin
+    delete from resource where id = v_res;
+  exception when foreign_key_violation then v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'INVARIANT BROKEN: deleting a booked calendar took its appointments';
+  end if;
+
   -- ADR 0006: the audit trail is append-only, enforced rather than intended.
   insert into audit_log (actor_id, action, entity_type, entity_id) values (v_user, 'PROBE', 'Probe', 'x');
   v_failed := false;

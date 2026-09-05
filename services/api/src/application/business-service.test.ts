@@ -233,6 +233,74 @@ describe("owning a business", () => {
   });
 });
 
+describe("removing a calendar", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  it("keeps the appointments made against a calendar that is withdrawn", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const spare = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      { name: "כיסא שני" },
+    );
+    const customer = await signIn(test, "+972500000002", "דנה");
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    await test.services.business.deleteResource(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+    );
+
+    // The appointment stands, and the calendar stops being offered.
+    expect(test.store.appointments).toHaveLength(1);
+    const profile = await test.services.discovery.profile(
+      { kind: "ANONYMOUS" },
+      shop.business.id,
+    );
+    expect(profile.resources.map((resource) => resource.id)).toEqual([spare.id]);
+  });
+
+  it("will not leave a business with nothing bookable", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const spare = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      { name: "כיסא שני" },
+    );
+    const customer = await signIn(test, "+972500000002", "דנה");
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+
+    // The first is withdrawn rather than removed, so its row remains. Counting
+    // rows would call that "two calendars" and let the last bookable one go.
+    await test.services.business.deleteResource(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+    );
+
+    await expect(
+      test.services.business.deleteResource(shop.owner.actor, shop.business.id, spare.id),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+  });
+});
+
 describe("where else a business can be found", () => {
   let test: Harness;
 

@@ -382,8 +382,16 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
         return updated;
       },
+      /** Withdraws a calendar that has been booked; see the pg repository. */
       async delete(id) {
-        store.resources = store.resources.filter((resource) => resource.id !== id);
+        const booked = store.appointments.some(
+          (appointment) => appointment.resourceId === id,
+        );
+        store.resources = booked
+          ? store.resources.map((resource) =>
+              resource.id === id ? { ...resource, active: false } : resource,
+            )
+          : store.resources.filter((resource) => resource.id !== id);
       },
     },
 

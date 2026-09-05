@@ -192,9 +192,14 @@ test.describe("finding and booking", () => {
     await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
     await page.getByText(name, { exact: false }).first().click();
 
-    const { time: offered, day } = await theNextOfferedTime(page);
+    const { day } = await theNextOfferedTime(page);
     const slots = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
     const before = await slots.count();
+    // Not the first one on the day: it is the closest to now, and the minimum
+    // notice can overtake it between the screen rendering and the API being
+    // asked about it — which failed this test as "no slot reads as 15:50" a
+    // minute after the screen had offered exactly that.
+    const offered = slots.nth(Math.min(SAFELY_PAST_THE_NOTICE, before - 1));
     const takenLabel = (await offered.textContent())?.trim();
 
     // Someone else takes it, out of band.
@@ -271,6 +276,9 @@ test.describe("who the appointment is with", () => {
     });
   });
 });
+
+/** Far enough along the day that the notice window cannot swallow it mid-test. */
+const SAFELY_PAST_THE_NOTICE = 4;
 
 test.describe("booking a second one of the same", () => {
   test("asks before allowing it, and the note reaches the owner", async ({ page }) => {
