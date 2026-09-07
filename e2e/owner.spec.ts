@@ -1582,3 +1582,66 @@ test.describe("photos", () => {
     expect(loaded).toBe(true);
   });
 });
+
+/**
+ * Who else gets in, and how far (ADR 0016). One journey, because the whole
+ * point of the feature is what the other person then sees.
+ */
+test.describe("the team", () => {
+  test("a worker gets their calendars and nothing else", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `צוות ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    // The fixture opens with one calendar. A worker put on some of them only
+    // means something where there are some to leave out.
+    for (const name of ["יומן ב", "יומן ג"]) {
+      await call(`/businesses/${shop.business.id}/resources`, {
+        method: "POST",
+        token: shop.owner.token,
+        body: { name },
+      });
+    }
+
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto("/manage");
+    await ready(page);
+    await page.getByRole("button", { name: "צוות" }).click();
+
+
+    const worker = uniquePhone();
+    await page.getByRole("button", { name: "הוספת אדם" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByLabel("מספר הטלפון שלו").fill(asTyped(worker));
+    await sheet.getByLabel("שם פרטי").fill("עובדת");
+    await sheet.getByLabel("שם משפחה").fill("חדשה");
+    await sheet.getByRole("button", { name: /עובד ביומן/ }).click();
+    await sheet.getByRole("button", { name: "יומן ב" }).click();
+    await sheet.getByRole("button", { name: "יומן ג" }).click();
+    await sheet.getByRole("button", { name: "הוספת אדם" }).click();
+
+    // The row says the terms and the calendars, which is the whole of the answer.
+    await expect(page.getByText("עובדת חדשה")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("יומן ב, יומן ג")).toBeVisible();
+
+    // And now the other side of it, on the same phone number the invite named.
+    await signInDirectly(page, worker, "עובדת חדשה");
+    await page.goto("/manage");
+    await ready(page);
+
+    await expect(page.getByRole("button", { name: "יומן ב" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "יומן ג" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "יומן א" })).toHaveCount(0);
+
+    // The day and the schedule are theirs. The business, its customers and the
+    // team are not, and a tab that is not offered cannot be reached by accident.
+    await expect(page.getByRole("button", { name: "היומן" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "לוח זמנים" })).toBeVisible();
+    for (const tab of ["העסק", "לקוחות", "צוות"]) {
+      await expect(page.getByRole("button", { name: tab })).toHaveCount(0);
+    }
+  });
+});

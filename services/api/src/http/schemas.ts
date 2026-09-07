@@ -193,6 +193,24 @@ export const resourceUpdateSchema = z.object({
   active: z.boolean().optional(),
 });
 
+/**
+ * Adding somebody to the team. The phone number is the identity — it is the only
+ * thing about a colleague the person inviting reliably knows — and the resources
+ * are what a WORKER may see, checked against the role by the service.
+ */
+export const userLookupSchema = z.object({ phone: phoneSchema });
+
+export const invitationSchema = personName.extend({
+  phone: phoneSchema,
+  role: z.enum(["OWNER", "MANAGER", "WORKER"]),
+  resourceIds: z.array(uuidSchema).max(50).optional(),
+});
+
+export const membershipUpdateSchema = z.object({
+  role: z.enum(["OWNER", "MANAGER", "WORKER"]).optional(),
+  resourceIds: z.array(uuidSchema).max(50).optional(),
+});
+
 export const workingHoursSchema = workingHoursEntrySchema;
 
 /**

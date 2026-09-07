@@ -16,6 +16,10 @@ import {
   type User,
   type WorkingHours,
 } from "@tor-now/domain";
+import type {
+  StaffedBusiness,
+  TeamMember,
+} from "../application/business-service.ts";
 
 /**
  * What crosses the wire, stated explicitly rather than by serialising whatever
@@ -44,6 +48,16 @@ export const businessOut = (business: Business) => ({
   minimumNoticeMinutes: business.minimumNoticeMinutes,
   bookingHorizonDays: business.bookingHorizonDays,
   cancellationWindowHours: business.cancellationWindowHours,
+});
+
+/**
+ * A Business as it reaches someone who works there, flattened so the client
+ * reads one object: the same fields plus the terms they work on it under.
+ */
+export const staffedBusinessOut = (staffed: StaffedBusiness) => ({
+  ...businessOut(staffed.business),
+  role: staffed.role,
+  resourceIds: staffed.resourceIds,
 });
 
 /**
@@ -170,6 +184,15 @@ export const userOut = (user: User) => ({
 export const customerOut = (customer: Customer) => ({
   ...userOut(customer.user),
   blocked: customer.membership?.blockedAt != null,
+});
+
+/** A colleague: the person, the terms, and the calendars they are on. */
+export const teamMemberOut = (member: TeamMember) => ({
+  ...userOut(member.user),
+  membershipId: member.membership.id,
+  role: member.membership.role,
+  resourceIds: member.resourceIds,
+  joinedAt: formatInstant(member.membership.createdAt),
 });
 
 export const subscriptionOut = (subscription: Subscription) => ({

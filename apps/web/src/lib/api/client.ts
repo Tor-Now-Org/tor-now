@@ -23,7 +23,9 @@ import type {
   SessionDto,
   SubscriptionDto,
   SubscriptionState,
+  TeamMemberDto,
   UserDto,
+  UserLookupDto,
   WorkingHoursDto,
 } from "./types.ts";
 
@@ -552,6 +554,58 @@ export const api = {
       `/businesses/${businessId}/customers/${customerId}`,
       { token },
     ),
+
+  // --- The team (ADR 0016) -------------------------------------------------
+
+  listUsers: (token: string, businessId: string) =>
+    request<TeamMemberDto[]>(`/businesses/${businessId}/users`, { token }),
+
+  /** Whether a phone typed into the invite sheet already belongs to someone. */
+  lookupUserByPhone: (token: string, businessId: string, phone: string) =>
+    request<UserLookupDto>(
+      `/businesses/${businessId}/users/lookup?phone=${encodeURIComponent(phone)}`,
+      { token },
+    ),
+
+  /**
+   * By phone number, which is the identity: a colleague who has never signed in
+   * gets a User row from this, and finds the membership waiting at their first
+   * verification. Nothing is sent to the number.
+   */
+  inviteUser: (
+    token: string,
+    businessId: string,
+    invitation: {
+      phone: string;
+      givenName: string;
+      familyName?: string | null;
+      role: "OWNER" | "MANAGER" | "WORKER";
+      resourceIds?: string[];
+    },
+  ) =>
+    request<TeamMemberDto>(`/businesses/${businessId}/users`, {
+      method: "POST",
+      body: invitation,
+      token,
+    }),
+
+  updateUser: (
+    token: string,
+    businessId: string,
+    membershipId: string,
+    changes: { role?: "OWNER" | "MANAGER" | "WORKER"; resourceIds?: string[] },
+  ) =>
+    request<TeamMemberDto>(`/businesses/${businessId}/users/${membershipId}`, {
+      method: "PATCH",
+      body: changes,
+      token,
+    }),
+
+  removeUser: (token: string, businessId: string, membershipId: string) =>
+    request<void>(`/businesses/${businessId}/users/${membershipId}`, {
+      method: "DELETE",
+      token,
+    }),
 
   // --- Administrator (ADR 0010) -------------------------------------------
 

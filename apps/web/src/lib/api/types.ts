@@ -24,6 +24,15 @@ export type BusinessDto = {
   minimumNoticeMinutes: number;
   bookingHorizonDays: number;
   cancellationWindowHours: number;
+  /**
+   * The terms the person asking works here under, on the businesses list only.
+   * Optional in the type as well as the data — an API deployed before roles
+   * existed sends neither key, and the manage screen has to survive that by
+   * treating the absence as the old world, where anybody staffing was an OWNER.
+   */
+  role?: "OWNER" | "MANAGER" | "WORKER" | "CUSTOMER";
+  /** The calendars a WORKER is on. Empty for an OWNER or MANAGER, who reach all of them. */
+  resourceIds?: string[];
 };
 
 export type ServiceDto = {
@@ -191,6 +200,14 @@ export type CalendarDayDto = {
 /** A User as one Business sees them: the person, plus their standing there. */
 export type CustomerDto = UserDto & { blocked: boolean };
 
+/** A colleague: the person, the terms, and the calendars they are on. */
+export type TeamMemberDto = UserDto & {
+  membershipId: string;
+  role: "OWNER" | "MANAGER" | "WORKER" | "CUSTOMER";
+  resourceIds: string[];
+  joinedAt: string;
+};
+
 export type CustomerRecordDto = {
   user: UserDto;
   /** Blocked from booking at this Business. Per-business, like the record itself. */
@@ -259,3 +276,7 @@ export type RequestCodeDto = {
 };
 
 export type AllowlistEntryDto = { phone: string; note: string | null };
+
+export type UserLookupDto =
+  | { exists: false }
+  | { exists: true; givenName: string; familyName: string | null };

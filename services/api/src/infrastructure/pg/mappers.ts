@@ -12,6 +12,7 @@ import {
   type BusinessPhoto,
   type DateOverride,
   type Membership,
+  type MembershipResource,
   type Payment,
   type Resource,
   type PhotoSlot,
@@ -115,6 +116,14 @@ export const toMembership = (row: Row): Membership => ({
   role: text(row["role"]) as Membership["role"],
   createdAt: toInstant(row["created_at"]),
   blockedAt: nullableInstant(row["blocked_at"]),
+});
+
+export const toMembershipResource = (row: Row): MembershipResource => ({
+  id: asId(text(row["id"])),
+  membershipId: asId(text(row["membership_id"])),
+  businessId: asId(text(row["business_id"])),
+  resourceId: asId(text(row["resource_id"])),
+  createdAt: toInstant(row["created_at"]),
 });
 
 export const toResource = (row: Row): Resource => ({

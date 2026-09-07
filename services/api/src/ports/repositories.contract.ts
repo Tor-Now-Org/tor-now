@@ -13,6 +13,7 @@ import {
   timeZone,
   type Instant,
   type PhotoSlot,
+  type UserId,
 } from "@tor-now/domain";
 import type { Repositories } from "./repositories.ts";
 
@@ -30,6 +31,11 @@ export type RepositoryFactory = () => Promise<{
   repositories: Repositories;
   /** Undo everything this run wrote, so the next case starts clean. */
   cleanUp: () => Promise<void>;
+  /**
+   * Establish who Postgres RLS sees as the caller for the rest of this case
+   * (ADR 0007). The in-memory adapter has no RLS to fool, so it may no-op.
+   */
+  actAs?: (userId: UserId) => Promise<void>;
 }>;
 
 const AT = (iso: string): Instant => parseInstant(iso);
@@ -40,11 +46,14 @@ export const describeRepositoryContract = (
 ): void => {
   describe(`repository contract (${implementation})`, () => {
     const withRepositories = async (
-      body: (repositories: Repositories) => Promise<void>,
+      body: (
+        repositories: Repositories,
+        actAs: (userId: UserId) => Promise<void>,
+      ) => Promise<void>,
     ): Promise<void> => {
-      const { repositories, cleanUp } = await open();
+      const { repositories, cleanUp, actAs } = await open();
       try {
-        await body(repositories);
+        await body(repositories, actAs ?? (async () => {}));
       } finally {
         await cleanUp();
       }
@@ -259,6 +268,162 @@ export const describeRepositoryContract = (
           null,
         );
         expect(cleared.blockedAt).toBeNull();
+      });
+    });
+
+    it("promotes and removes a team member, and lists every role at once", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "02004");
+        const worker = await repositories.users.create({
+          phone: "+972500002224",
+          givenName: "יעל",
+          familyName: null,
+          birthDate: null,
+        });
+        const membership = await repositories.memberships.create(
+          worker.id,
+          context.business.id,
+          "WORKER",
+        );
+
+        expect(await repositories.memberships.findById(membership.id)).toMatchObject({
+          role: "WORKER",
+        });
+
+        const promoted = await repositories.memberships.setRole(membership.id, "MANAGER");
+        expect(promoted.role).toBe("MANAGER");
+
+        // listForBusiness takes one role; this one takes the whole team, which is
+        // what a users list has to show.
+        expect(
+          await repositories.memberships.listAllForBusiness(context.business.id),
+        ).toHaveLength(2);
+
+        await repositories.memberships.delete(membership.id);
+        expect(await repositories.memberships.findById(membership.id)).toBeNull();
+      });
+    });
+
+    it("invites a not-yet-registered phone, then re-invites to update the role", async () => {
+      await withRepositories(async (repositories, actAs) => {
+        const context = await aBookableBusiness(repositories, "02008");
+        await actAs(context.owner.id);
+
+        const { user, membership } = await repositories.memberships.invite(
+          context.business.id,
+          {
+            phone: "+972500002228",
+            givenName: "נועה",
+            familyName: null,
+            role: "WORKER",
+          },
+        );
+        expect(user.phone).toBe("+972500002228");
+        expect(membership).toMatchObject({ userId: user.id, role: "WORKER" });
+
+        const reinvited = await repositories.memberships.invite(context.business.id, {
+          phone: "+972500002228",
+          givenName: "נועה",
+          familyName: null,
+          role: "MANAGER",
+        });
+        expect(reinvited.user.id).toBe(user.id);
+        expect(reinvited.membership.id).toBe(membership.id);
+        expect(reinvited.membership.role).toBe("MANAGER");
+      });
+    });
+
+    // --- Membership resources ------------------------------------------
+
+    it("assigns a resource to a worker, and lists it from either side", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "02005");
+        const worker = await repositories.users.create({
+          phone: "+972500002225",
+          givenName: "אורי",
+          familyName: null,
+          birthDate: null,
+        });
+        const membership = await repositories.memberships.create(
+          worker.id,
+          context.business.id,
+          "WORKER",
+        );
+
+        const assignment = await repositories.membershipResources.create({
+          membershipId: membership.id,
+          businessId: context.business.id,
+          resourceId: context.resource.id,
+        });
+
+        expect(
+          await repositories.membershipResources.listForMembership(membership.id),
+        ).toHaveLength(1);
+        expect(
+          await repositories.membershipResources.listForResource(context.resource.id),
+        ).toMatchObject([{ id: assignment.id }]);
+
+        await repositories.membershipResources.delete(assignment.id);
+        expect(
+          await repositories.membershipResources.listForMembership(membership.id),
+        ).toEqual([]);
+      });
+    });
+
+    it("refuses the same resource twice for one membership", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "02006");
+        const worker = await repositories.users.create({
+          phone: "+972500002226",
+          givenName: "נועה",
+          familyName: null,
+          birthDate: null,
+        });
+        const membership = await repositories.memberships.create(
+          worker.id,
+          context.business.id,
+          "WORKER",
+        );
+        const assignment = {
+          membershipId: membership.id,
+          businessId: context.business.id,
+          resourceId: context.resource.id,
+        };
+        await repositories.membershipResources.create(assignment);
+
+        await expect(
+          repositories.membershipResources.create(assignment),
+        ).rejects.toThrow();
+      });
+    });
+
+    it("takes the assignments with the membership", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "02007");
+        const worker = await repositories.users.create({
+          phone: "+972500002227",
+          givenName: "גיל",
+          familyName: null,
+          birthDate: null,
+        });
+        const membership = await repositories.memberships.create(
+          worker.id,
+          context.business.id,
+          "WORKER",
+        );
+        await repositories.membershipResources.create({
+          membershipId: membership.id,
+          businessId: context.business.id,
+          resourceId: context.resource.id,
+        });
+
+        await repositories.memberships.delete(membership.id);
+
+        // The composite foreign key cascades: no assignment outlives the
+        // membership it granted, so nobody keeps reach after being removed.
+        expect(
+          await repositories.membershipResources.listForResource(context.resource.id),
+        ).toEqual([]);
       });
     });
 

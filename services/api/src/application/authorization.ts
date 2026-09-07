@@ -1,4 +1,14 @@
-import { forbidden, notFound, unauthenticated, type BusinessId, type UserId } from "@tor-now/domain";
+import {
+  forbidden,
+  isStaff,
+  manages,
+  notFound,
+  unauthenticated,
+  type BusinessId,
+  type Membership,
+  type ResourceId,
+  type UserId,
+} from "@tor-now/domain";
 import type { Repositories } from "../ports/repositories.ts";
 import type { Actor } from "../ports/unit-of-work.ts";
 
@@ -48,6 +58,80 @@ export const requireOwnership = async (
   const membership = await repositories.memberships.find(userId, businessId);
   if (membership === null || membership.role !== "OWNER") {
     throw forbidden("You do not manage this business");
+  }
+};
+
+/**
+ * Everything running a Business involves except the three things ADR 0016 keeps
+ * for its OWNER: billing, deleting it, and changing another OWNER. Those keep
+ * `requireOwnership`.
+ *
+ * Returns the Membership so a caller that also has to distinguish OWNER from
+ * MANAGER does not read it twice; null means an administrator, who has no
+ * Membership and is bound by neither restriction.
+ */
+export const requireOwnerOrManager = async (
+  repositories: Repositories,
+  actor: Actor,
+  businessId: BusinessId,
+): Promise<Membership | null> => {
+  if (actor.kind === "ADMINISTRATOR") return null;
+
+  const userId = requireUser(actor);
+  const membership = await repositories.memberships.find(userId, businessId);
+  if (membership === null || !manages(membership)) {
+    throw forbidden("You do not manage this business");
+  }
+  return membership;
+};
+
+/**
+ * Anybody who works at the Business, for endpoints that narrow their own
+ * result rather than gating on a single Resource. Returns the Membership so
+ * a caller can tell a WORKER from a MANAGER/OWNER; null means an
+ * administrator, unrestricted like `requireOwnerOrManager`.
+ */
+export const requireStaff = async (
+  repositories: Repositories,
+  actor: Actor,
+  businessId: BusinessId,
+): Promise<Membership | null> => {
+  if (actor.kind === "ADMINISTRATOR") return null;
+
+  const userId = requireUser(actor);
+  const membership = await repositories.memberships.find(userId, businessId);
+  if (membership === null || !isStaff(membership)) {
+    throw forbidden("You do not work at this business");
+  }
+  return membership;
+};
+
+/**
+ * One calendar and what hangs off it. A WORKER reaches only the Resources
+ * assigned to them; OWNER and MANAGER reach all of them without any row saying
+ * so, which is why adding a Resource does not have to touch anybody's
+ * assignments.
+ */
+export const requireResourceAccess = async (
+  repositories: Repositories,
+  actor: Actor,
+  businessId: BusinessId,
+  resourceId: ResourceId,
+): Promise<void> => {
+  if (actor.kind === "ADMINISTRATOR") return;
+
+  const userId = requireUser(actor);
+  const membership = await repositories.memberships.find(userId, businessId);
+  if (membership === null || !isStaff(membership)) {
+    throw forbidden("You do not work at this business");
+  }
+  if (manages(membership)) return;
+
+  const assignments = await repositories.membershipResources.listForMembership(
+    membership.id,
+  );
+  if (!assignments.some((assignment) => assignment.resourceId === resourceId)) {
+    throw forbidden("This calendar is not yours");
   }
 };
 

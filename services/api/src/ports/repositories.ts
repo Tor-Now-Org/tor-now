@@ -14,6 +14,9 @@ import type {
   Instant,
   LocalDate,
   Membership,
+  MembershipId,
+  MembershipResource,
+  MembershipResourceId,
   MembershipRole,
   Money,
   OccupiedSpan,
@@ -140,6 +143,44 @@ export type MembershipRepository = {
     businessId: BusinessId,
     blockedAt: Instant | null,
   ): Promise<Membership>;
+  findById(id: MembershipId): Promise<Membership | null>;
+  /** Every Membership at one Business, whatever the role. */
+  listAllForBusiness(businessId: BusinessId): Promise<readonly Membership[]>;
+  setRole(id: MembershipId, role: MembershipRole): Promise<Membership>;
+  delete(id: MembershipId): Promise<void>;
+  /**
+   * Finds or creates the User by phone, then creates or updates their
+   * Membership at this Business — atomically, bypassing app_user's RLS gap
+   * for a not-yet-registered invitee (ADR 0016).
+   */
+  invite(
+    businessId: BusinessId,
+    input: {
+      phone: string;
+      givenName: string;
+      familyName: string | null;
+      role: MembershipRole;
+    },
+  ): Promise<{ user: User; membership: Membership }>;
+};
+
+/**
+ * Which Resources a WORKER may see. OWNER and MANAGER are never listed: they
+ * reach every Resource in their Business implicitly.
+ */
+export type MembershipResourceRepository = {
+  listForMembership(
+    membershipId: MembershipId,
+  ): Promise<readonly MembershipResource[]>;
+  listForResource(
+    resourceId: ResourceId,
+  ): Promise<readonly MembershipResource[]>;
+  create(assignment: {
+    membershipId: MembershipId;
+    businessId: BusinessId;
+    resourceId: ResourceId;
+  }): Promise<MembershipResource>;
+  delete(id: MembershipResourceId): Promise<void>;
 };
 
 export type ResourceRepository = {
@@ -486,6 +527,7 @@ export type Repositories = {
   readonly businesses: BusinessRepository;
   readonly businessPhotos: BusinessPhotoRepository;
   readonly memberships: MembershipRepository;
+  readonly membershipResources: MembershipResourceRepository;
   readonly resources: ResourceRepository;
   readonly services: ServiceRepository;
   readonly workingHours: WorkingHoursRepository;

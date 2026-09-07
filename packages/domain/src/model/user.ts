@@ -1,5 +1,11 @@
 import type { Instant } from "../time/instant.ts";
-import type { BusinessId, MembershipId, UserId } from "./ids.ts";
+import type {
+  BusinessId,
+  MembershipId,
+  MembershipResourceId,
+  ResourceId,
+  UserId,
+} from "./ids.ts";
 import type { LocalDate } from "../time/local-date.ts";
 
 /**
@@ -58,8 +64,23 @@ export const isAnonymised = (user: Pick<User, "anonymisedAt">): boolean =>
  * there. Authorization is the existence of a Membership, not a property of the
  * User — the same person may own one Business and be a customer of another.
  */
-export const MEMBERSHIP_ROLES = ["OWNER", "CUSTOMER"] as const;
+export const MEMBERSHIP_ROLES = [
+  "OWNER",
+  "MANAGER",
+  "WORKER",
+  "CUSTOMER",
+] as const;
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
+
+/** The roles that work at a Business, as against holding a Membership there. */
+export const STAFF_ROLES = ["OWNER", "MANAGER", "WORKER"] as const;
+
+export const isStaff = (membership: Pick<Membership, "role">): boolean =>
+  (STAFF_ROLES as readonly MembershipRole[]).includes(membership.role);
+
+/** OWNER and MANAGER administer the Business; a WORKER only works in it. */
+export const manages = (membership: Pick<Membership, "role">): boolean =>
+  membership.role === "OWNER" || membership.role === "MANAGER";
 
 export type Membership = {
   readonly id: MembershipId;
@@ -73,6 +94,19 @@ export type Membership = {
 
 export const isBlocked = (membership: Pick<Membership, "blockedAt">): boolean =>
   membership.blockedAt !== null;
+
+/**
+ * One Resource a WORKER may see. OWNER and MANAGER reach every Resource in
+ * their Business implicitly and are never recorded here, so there is nothing to
+ * keep in step when a Resource is added.
+ */
+export type MembershipResource = {
+  readonly id: MembershipResourceId;
+  readonly membershipId: MembershipId;
+  readonly businessId: BusinessId;
+  readonly resourceId: ResourceId;
+  readonly createdAt: Instant;
+};
 
 /** A User seen through a Membership with the customer role. */
 export type Customer = {

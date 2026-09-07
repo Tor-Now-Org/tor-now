@@ -139,7 +139,7 @@ export const createApp = (services: Services) => {
 
   app.get("/me/businesses", async (context) => {
     const businesses = await services.business.listMine(actorOf(context));
-    return context.json(businesses.map(wire.businessOut));
+    return context.json(businesses.map(wire.staffedBusinessOut));
   });
 
   // ---------------------------------------------------------------------------
@@ -621,6 +621,54 @@ const ownerRoutes = (services: Services) => {
       payments: result.payments.map(wire.paymentOut),
       state: result.state,
     });
+  });
+
+  owner.get("/:businessId/users", async (context) => {
+    const members = await services.business.listUsers(
+      actorOf(context),
+      idParam(context, "businessId"),
+    );
+    return context.json(members.map(wire.teamMemberOut));
+  });
+
+  owner.get("/:businessId/users/lookup", async (context) => {
+    const { phone } = parseQuery(context, schema.userLookupSchema);
+    const result = await services.business.lookupUserByPhone(
+      actorOf(context),
+      idParam(context, "businessId"),
+      phone,
+    );
+    return context.json(result);
+  });
+
+  owner.post("/:businessId/users", async (context) => {
+    const body = await parseBody(context, schema.invitationSchema);
+    const member = await services.business.inviteUser(
+      actorOf(context),
+      idParam(context, "businessId"),
+      { ...body, resourceIds: body.resourceIds as never },
+    );
+    return context.json(wire.teamMemberOut(member), 201);
+  });
+
+  owner.patch("/:businessId/users/:membershipId", async (context) => {
+    const body = await parseBody(context, schema.membershipUpdateSchema);
+    const member = await services.business.updateUser(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "membershipId"),
+      { ...body, resourceIds: body.resourceIds as never },
+    );
+    return context.json(wire.teamMemberOut(member));
+  });
+
+  owner.delete("/:businessId/users/:membershipId", async (context) => {
+    await services.business.removeUser(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "membershipId"),
+    );
+    return context.body(null, 204);
   });
 
   owner.get("/:businessId/customers", async (context) => {

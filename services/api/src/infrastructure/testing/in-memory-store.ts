@@ -5,6 +5,7 @@ import type {
   BusinessPhoto,
   DateOverride,
   Membership,
+  MembershipResource,
   Payment,
   Resource,
   Service,
@@ -34,6 +35,7 @@ export type Store = {
   businesses: Business[];
   businessPhotos: BusinessPhoto[];
   memberships: Membership[];
+  membershipResources: MembershipResource[];
   resources: Resource[];
   services: Service[];
   workingHours: WorkingHours[];
@@ -62,6 +64,7 @@ export const emptyStore = (): Store => ({
   businesses: [],
   businessPhotos: [],
   memberships: [],
+  membershipResources: [],
   resources: [],
   services: [],
   workingHours: [],

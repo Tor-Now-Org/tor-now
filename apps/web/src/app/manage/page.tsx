@@ -15,14 +15,16 @@ import {
   CalendarIcon,
   ClockIcon,
   PeopleIcon,
+  ShieldIcon,
 } from "@/components/bottom-nav.tsx";
 import { BusinessPanel } from "@/components/owner/business-panel.tsx";
 import { CalendarDay } from "@/components/owner/calendar-day.tsx";
 import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
+import { Team } from "@/components/owner/team.tsx";
 import { Button, Card, Empty, Note, Sheet, Spinner } from "@/components/ui.tsx";
 
-const TABS = ["day", "schedule", "business", "customers"] as const;
+const TABS = ["day", "schedule", "business", "customers", "users"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -68,7 +70,15 @@ function ManageApp() {
 
   const loadResources = useCallback(async () => {
     if (token === null || business === null) return;
-    setResources(await api.listResources(token, business.id));
+    const all = await api.listResources(token, business.id);
+    // A WORKER is on some of the calendars, not all of them, and every screen
+    // here is fed from this one list — so the narrowing belongs here rather
+    // than in each of them (ADR 0016).
+    setResources(
+      business.role === "WORKER"
+        ? all.filter((resource) => (business.resourceIds ?? []).includes(resource.id))
+        : all,
+    );
   }, [token, business]);
 
   useEffect(() => {
@@ -107,6 +117,13 @@ function ManageApp() {
     );
   }
 
+  // Absent means an API deployed before roles existed, where anybody staffing
+  // was an owner (ADR 0016).
+  const manages = (business.role ?? "OWNER") !== "WORKER";
+  // A WORKER reaching a tab they may not have — an old link, a role changed
+  // under them — sees their calendar rather than an empty screen.
+  const shown: Tab = manages || tab === "day" || tab === "schedule" ? tab : "day";
+
   return (
     <>
       <AppHeader
@@ -129,10 +146,10 @@ function ManageApp() {
       />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0 }}>
-        {tab === "day" && (
+        {shown === "day" && (
           <CalendarDay token={token} business={business} resources={resources} />
         )}
-        {tab === "schedule" && (
+        {shown === "schedule" && (
           <Schedule
             token={token}
             business={business}
@@ -140,7 +157,7 @@ function ManageApp() {
             {...(editingCalendar === null ? {} : { openOn: editingCalendar })}
           />
         )}
-        {tab === "business" && (
+        {shown === "business" && (
           <BusinessPanel
             token={token}
             business={business}
@@ -160,11 +177,21 @@ function ManageApp() {
             }}
           />
         )}
-        {tab === "customers" && <Customers token={token} business={business} />}
+        {shown === "customers" && <Customers token={token} business={business} />}
+        {shown === "users" && (
+          <Team
+            token={token}
+            business={business}
+            resources={resources}
+            // They may have just changed their own terms, and the tabs and the
+            // calendars they may see both hang off that.
+            onChanged={() => void loadBusinesses()}
+          />
+        )}
       </main>
 
       <BottomNav
-        current={tab}
+        current={shown}
         onSelect={(id) => {
           setEditingCalendar(null);
           setTab(id as Tab);
@@ -172,8 +199,13 @@ function ManageApp() {
         items={[
           { id: "day", label: copy.tabDay, icon: <CalendarIcon /> },
           { id: "schedule", label: copy.tabSchedule, icon: <ClockIcon /> },
-          { id: "business", label: copy.tabBusiness, icon: <BuildingIcon /> },
-          { id: "customers", label: copy.tabCustomers, icon: <PeopleIcon /> },
+          ...(manages
+            ? [
+                { id: "business", label: copy.tabBusiness, icon: <BuildingIcon /> },
+                { id: "customers", label: copy.tabCustomers, icon: <PeopleIcon /> },
+                { id: "users", label: copy.tabUsers, icon: <ShieldIcon /> },
+              ]
+            : []),
         ]}
       />
 

@@ -15,6 +15,7 @@ import {
   type LocalDate,
   type TimeZone,
   type Membership,
+  type MembershipResource,
   type Resource,
   type Service,
   type Subscription,
@@ -283,6 +284,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
     },
 
     memberships: {
+      async findById(id) {
+        return store.memberships.find((membership) => membership.id === id) ?? null;
+      },
       async find(userId, businessId) {
         return (
           store.memberships.find(
@@ -298,6 +302,11 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         return store.memberships.filter(
           (membership) =>
             membership.businessId === businessId && membership.role === role,
+        );
+      },
+      async listAllForBusiness(businessId) {
+        return store.memberships.filter(
+          (membership) => membership.businessId === businessId,
         );
       },
       async create(userId, businessId, role) {
@@ -350,6 +359,99 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
         return updated;
       },
+      async setRole(id, role) {
+        const existing = store.memberships.find((membership) => membership.id === id);
+        if (existing === undefined) throw notFound("Membership", id);
+        const updated: Membership = { ...existing, role };
+        store.memberships = store.memberships.map((membership) =>
+          membership.id === id ? updated : membership,
+        );
+        return updated;
+      },
+      async delete(id) {
+        store.memberships = store.memberships.filter(
+          (membership) => membership.id !== id,
+        );
+        // The composite foreign key cascades in Postgres; here it is explicit.
+        store.membershipResources = store.membershipResources.filter(
+          (assignment) => assignment.membershipId !== id,
+        );
+      },
+      async invite(businessId, input) {
+        let user = store.users.find((existing) => existing.phone === input.phone);
+        if (user === undefined) {
+          user = {
+            id: asId(nextId("user")),
+            phone: input.phone,
+            givenName: input.givenName,
+            familyName: input.familyName,
+            birthDate: null,
+            deletedAt: null,
+            anonymisedAt: null,
+            isAdministrator: false,
+            createdAt: now(),
+          };
+          store.users = [...store.users, user];
+        }
+
+        const existingMembership = store.memberships.find(
+          (membership) =>
+            membership.userId === user!.id && membership.businessId === businessId,
+        );
+        const membership: Membership = existingMembership
+          ? { ...existingMembership, role: input.role }
+          : {
+              id: asId(nextId("membership")),
+              userId: user.id,
+              businessId,
+              role: input.role,
+              createdAt: now(),
+              blockedAt: null,
+            };
+        store.memberships = existingMembership
+          ? store.memberships.map((m) => (m.id === membership.id ? membership : m))
+          : [...store.memberships, membership];
+
+        return { user, membership };
+      },
+    },
+
+    membershipResources: {
+      async listForMembership(membershipId) {
+        return store.membershipResources.filter(
+          (assignment) => assignment.membershipId === membershipId,
+        );
+      },
+      async listForResource(resourceId) {
+        return store.membershipResources.filter(
+          (assignment) => assignment.resourceId === resourceId,
+        );
+      },
+      async create({ membershipId, businessId, resourceId }) {
+        if (
+          store.membershipResources.some(
+            (assignment) =>
+              assignment.membershipId === membershipId &&
+              assignment.resourceId === resourceId,
+          )
+        ) {
+          throw new DomainError("CONFLICT", "That resource is already assigned");
+        }
+        const assignment: MembershipResource = {
+          id: asId(nextId("membershipResource")),
+          membershipId,
+          businessId,
+          resourceId,
+          createdAt: now(),
+        };
+        store.membershipResources = [...store.membershipResources, assignment];
+        return assignment;
+      },
+      async delete(id) {
+        store.membershipResources = store.membershipResources.filter(
+          (assignment) => assignment.id !== id,
+        );
+      },
     },
 
     resources: {
@@ -387,11 +489,17 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         const booked = store.appointments.some(
           (appointment) => appointment.resourceId === id,
         );
-        store.resources = booked
-          ? store.resources.map((resource) =>
-              resource.id === id ? { ...resource, active: false } : resource,
-            )
-          : store.resources.filter((resource) => resource.id !== id);
+        if (booked) {
+          store.resources = store.resources.map((resource) =>
+            resource.id === id ? { ...resource, active: false } : resource,
+          );
+          return;
+        }
+        store.resources = store.resources.filter((resource) => resource.id !== id);
+        // The composite foreign key cascades in Postgres; here it is explicit.
+        store.membershipResources = store.membershipResources.filter(
+          (assignment) => assignment.resourceId !== id,
+        );
       },
     },
 

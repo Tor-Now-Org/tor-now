@@ -8,6 +8,7 @@ import {
   businessPhotoRepository,
   businessRepository,
   membershipRepository,
+  membershipResourceRepository,
   userRepository,
 } from "./identity-repositories.ts";
 import { appointmentRepository } from "./appointment-repository.ts";
@@ -26,6 +27,7 @@ const repositoriesOn = (tx: Transaction): Repositories => ({
   businesses: businessRepository(tx),
   businessPhotos: businessPhotoRepository(tx),
   memberships: membershipRepository(tx),
+  membershipResources: membershipResourceRepository(tx),
   resources: resourceRepository(tx),
   services: serviceRepository(tx),
   workingHours: workingHoursRepository(tx),

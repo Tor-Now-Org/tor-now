@@ -32,7 +32,7 @@ const daysInMonthOf = (date: LocalDate): number => {
   const [year, month] = date.split("-").map(Number);
   return new Date(Date.UTC(year ?? 1970, month ?? 1, 0)).getUTCDate();
 };
-import { loadOwnedBusiness, loadOwnedResource } from "./authorization.ts";
+import { loadOwnedBusiness, loadOwnedResource, requireResourceAccess } from "./authorization.ts";
 
 /**
  * The owner's view of their own Business: the day's appointments, the Blocks
@@ -116,8 +116,10 @@ export const calendarService = ({
   ): Promise<readonly MonthDay[]> {
     const first = parseLocalDate(firstOfMonth);
     return unitOfWork.run(actor, async ({ repositories }) => {
-      const business = await loadOwnedBusiness(repositories, actor, businessId);
+      await requireResourceAccess(repositories, actor, businessId, resourceId);
       await loadOwnedResource(repositories, businessId, resourceId);
+      const business = await repositories.businesses.findById(businessId);
+      if (business === null) throw notFound("Business", businessId);
 
       const start = zonedToInstant(first, MIDNIGHT, business.timeZone);
       const afterLast = zonedToInstant(
@@ -164,8 +166,10 @@ export const calendarService = ({
     date: string,
   ): Promise<CalendarDay> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      const business = await loadOwnedBusiness(repositories, actor, businessId);
+      await requireResourceAccess(repositories, actor, businessId, resourceId);
       await loadOwnedResource(repositories, businessId, resourceId);
+      const business = await repositories.businesses.findById(businessId);
+      if (business === null) throw notFound("Business", businessId);
 
       const on = parseLocalDate(date);
       const from = zonedToInstant(on, MIDNIGHT, business.timeZone);
