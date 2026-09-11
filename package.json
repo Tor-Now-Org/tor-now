@@ -21,6 +21,7 @@
     "check": "npm run typecheck && npm run test",
     "test:db": "./scripts/with-test-database.sh npx vitest run",
     "db:apply": "./scripts/apply-schema.sh",
+    "test:sql": "./scripts/with-test-database.sh ./scripts/prove-sql.sh",
     "test:e2e": "./scripts/e2e.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
