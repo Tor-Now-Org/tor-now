@@ -3,7 +3,6 @@ import {
   aBusinessWithOpenHours,
   asTyped,
   aDayFromNow,
-  showTheDayOf,
   theNextStart,
   call,
   ready,
@@ -16,6 +15,20 @@ import {
  * The owner artboards: onboarding, the day, the three schedule layers, the
  * business panel, and the customer record.
  */
+/**
+ * Bring the owner's screen to the day an appointment falls on.
+ *
+ * The month is the owner's calendar — there is no day strip to slide — so a day
+ * is reached by its square, which is labelled with the date.
+ */
+const showOwnerDay = async (page: Page, startAt: string): Promise<void> => {
+  const wanted = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(
+    new Date(startAt),
+  );
+  await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: wanted }).click();
+};
+
 test.describe("opening a business", () => {
   test("the wizard takes five steps and puts the business in search", async ({ page }) => {
     const phone = uniquePhone();
@@ -97,7 +110,7 @@ test.describe("the owner's day", () => {
 
     await page.goto("/manage");
     await ready(page);
-    await showTheDayOf(page, startAt);
+    await showOwnerDay(page, startAt);
 
     await expect(page.getByText("דנה כהן")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("תספורת").first()).toBeVisible();
@@ -136,7 +149,7 @@ test.describe("the owner's day", () => {
     );
     await page.goto("/manage");
     await ready(page);
-    await showTheDayOf(page, startAt);
+    await showOwnerDay(page, startAt);
 
     await page.getByRole("button", { name: /לא הגיע/ }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -539,7 +552,6 @@ test.describe("the month", () => {
     );
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
-    await page.getByRole("button", { name: "חודש" }).click();
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
   };
 
@@ -628,10 +640,9 @@ test.describe("the month", () => {
 
     await dayCell(page, aDayFromNow(1)).click();
     await expect(page.getByText(shop.resource.name).first()).toBeVisible();
-    await page.getByRole("button", { name: "פתיחת היום" }).click();
 
-    // Back on the day, on the date that was tapped.
-    await expect(page.getByRole("button", { name: "חודש", exact: true })).toBeVisible({
+    // The timeline below is the day that was tapped, on the same screen.
+    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
       timeout: 15_000,
     });
   });
@@ -653,9 +664,7 @@ test.describe("the day timeline", () => {
     );
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
-    await page.getByRole("button", { name: "חודש", exact: true }).click();
     await page.getByRole("button", { name: date }).click();
-    await page.getByRole("button", { name: "פתיחת היום" }).click();
     await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
       timeout: 15_000,
     });
@@ -768,6 +777,19 @@ test.describe("the day timeline", () => {
  * a person, the sheet chooses kinds, and everything active narrows together.
  */
 test.describe("finding things in a day", () => {
+  /** Signs in as somebody already known, for a second booking. */
+  const tokenFor = async (phone: string) => {
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code },
+    });
+    return token;
+  };
+
   /** Books an appointment for a named customer, and returns their phone. */
   const bookFor = async (
     shop: { business: { id: string }; service: { id: string }; resource: { id: string } },
@@ -826,7 +848,7 @@ test.describe("finding things in a day", () => {
     );
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
-    await showTheDayOf(page, first ?? "");
+    await showOwnerDay(page, first);
 
     await page.getByLabel("חיפוש תור לפי שם או טלפון").fill("יעל");
 
@@ -850,6 +872,88 @@ test.describe("finding things in a day", () => {
     });
   });
 
+  test("keeps her results when the search box is cleared or edited", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `ניקוי ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    const startAt = await theNextStart(shop);
+    await bookFor(shop, { givenName: "אורית", familyName: "שגב" }, startAt);
+
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await showOwnerDay(page, startAt);
+
+    await page.getByLabel("חיפוש תור לפי שם או טלפון").fill("אורית");
+    await page.getByRole("button", { name: /לקוח\s+אורית שגב/ }).click({ timeout: 15_000 });
+    await expect(page.getByText("אורית שגב").first()).toBeVisible();
+
+    // Her things are hers, not the search box's: clearing the query used to
+    // empty the list the chip was pointing at.
+    await page.getByLabel("חיפוש תור לפי שם או טלפון").fill("");
+    await expect(page.getByText("אורית שגב").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /תספורת/ }).first()).toBeVisible();
+  });
+
+  test("narrows and widens by reach, and clears back to the day", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `טווח ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    // One soon, one far enough out that only "everything" reaches it.
+    const soon = await theNextStart(shop);
+    const far = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000);
+    far.setUTCHours(9, 0, 0, 0);
+    const farDay = far.toISOString().slice(0, 10);
+    const [available] = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${farDay}&to=${farDay}`,
+    );
+    const later = available?.slots[0]?.startAt ?? "";
+    expect(later).not.toBe("");
+
+    const phone = await bookFor(shop, { givenName: "נועה", familyName: "שדה" }, soon);
+    await call("/appointments", {
+      method: "POST",
+      token: await tokenFor(phone),
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: later,
+        customerNote: null,
+      },
+    });
+
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await showOwnerDay(page, soon);
+
+    await page.getByLabel("חיפוש תור לפי שם או טלפון").fill("נועה");
+    await page.getByRole("button", { name: /לקוח\s+נועה שדה/ }).click({ timeout: 15_000 });
+
+    // A named person opens at everything: "when is she next in" is rarely
+    // about today.
+    await expect(page.getByText("2 תורים")).toBeVisible();
+    await page.getByRole("button", { name: "היום" }).click();
+    await expect(page.getByText("1 תורים")).toBeVisible();
+    await page.getByRole("button", { name: "הכול" }).click();
+    await expect(page.getByText("2 תורים")).toBeVisible();
+
+    await page.getByRole("button", { name: "ניקוי" }).first().click();
+    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
   test("the sheet chooses kinds, and the button says how many are set", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `סינון ${Date.now()}`,
@@ -864,7 +968,7 @@ test.describe("finding things in a day", () => {
     );
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
-    await showTheDayOf(page, startAt);
+    await showOwnerDay(page, startAt);
 
     await page.getByRole("button", { name: "סינון" }).click();
     const sheet = page.getByRole("dialog");
@@ -882,6 +986,99 @@ test.describe("finding things in a day", () => {
     await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
       timeout: 15_000,
     });
+  });
+});
+
+/**
+ * The + button, which is how anything is added to a day without first finding a
+ * gap to tap. Each choice carries the day it is about, so "when" is never asked
+ * twice.
+ */
+test.describe("adding to a day", () => {
+  const openAt = async (
+    page: Page,
+    shop: { business: { id: string }; owner: { token: string } },
+    date: string,
+  ) => {
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: date }).click();
+  };
+
+  const offeredOn = async (
+    shop: { business: { id: string }; service: { id: string }; resource: { id: string } },
+    date: string,
+  ) => {
+    const days = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${date}&to=${date}`,
+    );
+    return (days[0]?.slots ?? []).length;
+  };
+
+  test("adds a blockage of chosen hours", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `הוספה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const date = aDayFromNow(1);
+    await openAt(page, shop, date);
+
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    let sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: /^חסימה/ }).click();
+
+    sheet = page.getByRole("dialog");
+    await sheet.locator('input[type="time"]').first().fill("10:00");
+    await sheet.locator('input[type="time"]').nth(1).fill("12:00");
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // Two hours gone from what a customer is offered, and the rest still there.
+    const before = 8 * 2; // 09:00–17:00 at half-hour steps
+    await expect.poll(async () => offeredOn(shop, date), { timeout: 15_000 })
+      .toBeLessThan(before);
+    expect(await offeredOn(shop, date)).toBeGreaterThan(0);
+  });
+
+  test("adds a special day that closes the shop, and one with other hours", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `מיוחד ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const date = aDayFromNow(1);
+    await openAt(page, shop, date);
+
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /יום מיוחד/ }).click();
+
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "סגור כל היום" }).click();
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    await expect.poll(async () => offeredOn(shop, date), { timeout: 15_000 }).toBe(0);
+
+    // And the same day given hours instead: the special day replaces itself.
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /יום מיוחד/ }).click();
+    const again = page.getByRole("dialog");
+    await again.getByRole("button", { name: "שעות אחרות" }).click();
+    await again.locator('input[type="time"]').first().fill("10:00");
+    await again.locator('input[type="time"]').nth(1).fill("12:00");
+    await again.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    await expect.poll(async () => offeredOn(shop, date), { timeout: 15_000 }).toBeGreaterThan(0);
   });
 });
 
@@ -1527,7 +1724,6 @@ test.describe("the month view", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
 
-    await page.getByRole("button", { name: "חודש", exact: true }).click();
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
 
     // The squares are dated; what they are carrying is said when one is chosen,
@@ -1535,8 +1731,7 @@ test.describe("the month view", () => {
     await page.getByRole("button", { name: aDayFromNow(2) }).click();
     await expect(page.getByText("2 תורים").first()).toBeVisible();
 
-    // And the day itself opens from there, with the customer on it.
-    await page.getByRole("button", { name: "פתיחת היום" }).click();
+    // The day below follows the tap, with the customer on it.
     await expect(page.getByText("דנה כהן").first()).toBeVisible({ timeout: 15_000 });
   });
 
@@ -1581,9 +1776,7 @@ test.describe("an appointment whose time has passed", () => {
     await ready(page);
     // Yesterday, where the appointment now sits. A square is chosen and then
     // opened: the tap says what is in the day before going into it.
-    await page.getByRole("button", { name: "חודש", exact: true }).click();
     await page.getByRole("button", { name: new RegExp(`^${yesterday()}`) }).click();
-    await page.getByRole("button", { name: "פתיחת היום" }).click();
 
     await page.getByText("דנה כהן").first().click();
     await expect(page.getByRole("dialog")).toBeVisible();

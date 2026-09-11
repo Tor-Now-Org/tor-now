@@ -11,6 +11,8 @@ import {
   withinReach,
 } from "./day-filter.ts";
 
+const JERUSALEM = "Asia/Jerusalem";
+
 const NOW = Date.parse("2026-10-19T13:20:00.000Z");
 
 const appointment = (
@@ -140,15 +142,29 @@ describe("how far a filtered view reaches", () => {
   const all = [yael, noa];
 
   it("starts at the day it was opened on", () => {
-    expect(withinReach(all, "DAY", "2026-10-19")).toEqual([yael]);
+    expect(withinReach(all, "DAY", "2026-10-19", JERUSALEM)).toEqual([yael]);
   });
 
   it("takes the week from that day, not the calendar week", () => {
-    expect(withinReach(all, "WEEK", "2026-10-19")).toHaveLength(2);
-    expect(withinReach(all, "WEEK", "2026-10-22")).toHaveLength(0);
+    expect(withinReach(all, "WEEK", "2026-10-19", JERUSALEM)).toHaveLength(2);
+    expect(withinReach(all, "WEEK", "2026-10-22", JERUSALEM)).toHaveLength(0);
+  });
+
+  it("asks the business's own clock which day it is", () => {
+    // 22:30 UTC is half past one the next morning in Jerusalem. Slicing the
+    // instant would file it under the previous day and the owner would be told
+    // she has nothing booked.
+    const lateNight = appointment({
+      customerName: "יעל כהן",
+      customerPhone: "050-555-6677",
+      startAt: "2026-10-19T22:30:00.000Z",
+      endAt: "2026-10-19T23:00:00.000Z",
+    });
+    expect(withinReach([lateNight], "DAY", "2026-10-20", JERUSALEM)).toHaveLength(1);
+    expect(withinReach([lateNight], "DAY", "2026-10-19", JERUSALEM)).toHaveLength(0);
   });
 
   it("takes everything when asked", () => {
-    expect(withinReach(all, "ALL", "2026-10-19")).toHaveLength(2);
+    expect(withinReach(all, "ALL", "2026-10-19", JERUSALEM)).toHaveLength(2);
   });
 });

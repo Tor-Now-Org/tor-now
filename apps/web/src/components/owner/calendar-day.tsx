@@ -14,13 +14,13 @@ import { todayIn, whenIn } from "@/lib/format.ts";
 import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { DateStrip } from "../date-strip.tsx";
 import { AppointmentSheet } from "./appointment-sheet.tsx";
 import { Month } from "./month.tsx";
 import { ActiveFilters, FilterControls } from "./day-filter-bar.tsx";
 import { NOTHING, anyFilter, keptBy, withinReach, type Facets, type Reach } from "./day-filter.ts";
 import { DayTimeline, type Picked } from "./day-timeline.tsx";
 import { DayActionSheet } from "./day-actions.tsx";
+import { AddToDay } from "./day-add.tsx";
 import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
 
 /**
@@ -28,7 +28,6 @@ import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
  * and on refresh, and the hint below says so rather than letting an owner
  * believe a stale screen is current.
  */
-const VISIBLE_DAYS = 21;
 /** Long enough that a name is one request, short enough to feel immediate. */
 const SEARCH_SETTLE_MS = 250;
 
@@ -69,6 +68,14 @@ export const CalendarDay = ({
   const [facets, setFacets] = useState<Facets>(NOTHING);
   const [filterSheet, setFilterSheet] = useState(false);
   const [reach, setReach] = useState<Reach>("DAY");
+  /** Bumped when the day changes something the month draws, so it reloads. */
+  const [monthKey, setMonthKey] = useState(0);
+  /**
+   * Everything the named customer has, fetched by their number rather than read
+   * off the search box — editing or clearing the query used to empty the very
+   * list the chip was pointing at.
+   */
+  const [theirs, setTheirs] = useState<CalendarAppointmentDto[] | null>(null);
   const [selected, setSelected] = useState<CalendarAppointmentDto | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +86,6 @@ export const CalendarDay = ({
    * question behind a holiday, an extra shift, or ringing a customer back next
    * Tuesday. Both end at the same day's list, so switching never loses the day.
    */
-  const [view, setView] = useState<"days" | "month">("days");
   /**
    * Finding an appointment by who booked it.
    *
@@ -113,6 +119,26 @@ export const CalendarDay = ({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const customer = facets.customer;
+    if (customer === null) {
+      setTheirs(null);
+      return;
+    }
+    let current = true;
+    api
+      .searchAppointments(token, business.id, customer.phone)
+      .then((matches) => {
+        if (current) setTheirs(matches);
+      })
+      .catch(() => {
+        if (current) setTheirs([]);
+      });
+    return () => {
+      current = false;
+    };
+  }, [facets.customer, token, business.id]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -220,11 +246,12 @@ export const CalendarDay = ({
             const pool =
               facets.customer === null
                 ? (wholeDay?.calendars ?? []).flatMap((one) => one.appointments)
-                : (found ?? []);
+                : (theirs ?? []);
             const kept = withinReach(
               keptBy(pool, facets, Date.now()),
               facets.customer === null ? "DAY" : reach,
               date,
+              business.timeZone,
             ).sort((left, right) => left.startAt.localeCompare(right.startAt));
             return (
               <>
@@ -236,7 +263,9 @@ export const CalendarDay = ({
                   onReach={setReach}
                   count={kept.length}
                 />
-                {kept.length === 0 ? (
+                {facets.customer !== null && theirs === null ? (
+                  <Spinner />
+                ) : kept.length === 0 ? (
                   <Empty title={copy.noMatches} body={copy.findAppointmentHint} />
                 ) : (
                   kept.map((appointment) => (
@@ -306,50 +335,15 @@ export const CalendarDay = ({
         </div>
       ) : (
       <>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          {(["days", "month"] as const).map((candidate) => (
-            <button
-              key={candidate}
-              className="chip"
-              aria-pressed={view === candidate}
-              onClick={() => setView(candidate)}
-              style={{
-                background: view === candidate ? "var(--accent-soft)" : "transparent",
-                color: view === candidate ? "var(--accent-strong)" : "var(--muted)",
-                border: `1px solid ${view === candidate ? "var(--accent)" : "var(--line)"}`,
-              }}
-            >
-              {candidate === "days" ? copy.viewDays : copy.viewMonth}
-            </button>
-          ))}
-        </div>
-
-      </div>
-
-      {view === "days" ? (
-        <DateStrip
-          from={todayIn(business.timeZone)}
-          days={VISIBLE_DAYS}
-          selected={date}
-          onSelect={setDate}
-          todayLabel={copy.today}
-          weekdayNames={copy.days}
-        />
-      ) : (
-        // The month is the whole business at once, and it is where a holiday
-        // is taken: the grid answers "what does next month look like" and
-        // "change this" with the same taps.
-        <Month
-          token={token}
-          business={business}
-          resources={resources}
-          onOpenDay={(picked) => {
-            setDate(picked);
-            setView("days");
-          }}
-        />
-      )}
+      <Month
+        token={token}
+        business={business}
+        resources={resources}
+        scope={showEveryone ? null : (resource?.id ?? null)}
+        selected={date}
+        onPickDay={setDate}
+        reloadKey={monthKey}
+      />
 
       {error !== null && <Critical>{error}</Critical>}
 
@@ -387,6 +381,7 @@ export const CalendarDay = ({
         token={token}
         business={business}
         date={date}
+        past={date < todayIn(business.timeZone)}
         resources={resources}
         openHours={Object.fromEntries(
           (wholeDay?.calendars ?? []).map((calendar) => [calendar.resourceId, calendar.open]),
@@ -394,11 +389,24 @@ export const CalendarDay = ({
         onClose={() => setPicked(null)}
         onChanged={() => {
           setPicked(null);
+          setMonthKey((key) => key + 1);
           void load();
         }}
       />
       </>
       )}
+
+      <AddToDay
+        token={token}
+        business={business}
+        date={date}
+        resources={resources}
+        resource={resource}
+        onChanged={() => {
+          setMonthKey((key) => key + 1);
+          void load();
+        }}
+      />
 
       <AppointmentSheet
         token={token}

@@ -1,6 +1,7 @@
 import {
   compareByName,
   dayOfWeekOf,
+  manages,
   displayName,
   END_OF_DAY,
   instantToZoned,
@@ -66,7 +67,12 @@ const daysInMonthOf = (date: LocalDate): number => {
   const [year, month] = date.split("-").map(Number);
   return new Date(Date.UTC(year ?? 1970, month ?? 1, 0)).getUTCDate();
 };
-import { loadManagedBusiness, loadOwnedResource, requireResourceAccess } from "./authorization.ts";
+import {
+  loadManagedBusiness,
+  loadOwnedResource,
+  requireResourceAccess,
+  requireStaff,
+} from "./authorization.ts";
 
 /**
  * The owner's view of their own Business: the day's appointments, the Blocks
@@ -81,6 +87,26 @@ export type CalendarDay = {
   readonly date: string;
   readonly appointments: readonly (Appointment & { customerName: string; customerPhone: string })[];
   readonly blocks: readonly Block[];
+};
+
+/**
+ * The calendars this caller may read, which for a worker is the ones they were
+ * put on. The month and the day both show "the business", and for somebody who
+ * staffs two chairs out of four that phrase means two.
+ */
+const readableCalendars = async (
+  repositories: Parameters<typeof loadManagedBusiness>[0],
+  actor: Actor,
+  businessId: BusinessId,
+) => {
+  const membership = await requireStaff(repositories, actor, businessId);
+  const resources = await repositories.resources.listForBusiness(businessId);
+  const active = resources.filter((resource) => resource.active);
+  if (membership === null || manages(membership)) return active;
+
+  const assignments = await repositories.membershipResources.listForMembership(membership.id);
+  const mine = new Set(assignments.map((assignment) => assignment.resourceId));
+  return active.filter((resource) => mine.has(resource.id));
 };
 
 /** One day, every calendar: what is booked, what is blocked, and when it is open. */
@@ -229,12 +255,13 @@ export const calendarService = ({
   ): Promise<BusinessMonth> {
     const first = parseLocalDate(firstOfMonth);
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadManagedBusiness(repositories, actor, businessId);
+      // Wider than "managed": a worker reads the month and the day for the
+      // calendars they were put on, which is what the team feature promised
+      // them. Owners and managers read all of them.
+      const onOffer = await readableCalendars(repositories, actor, businessId);
       const business = await repositories.businesses.findById(businessId);
       if (business === null) throw notFound("Business", businessId);
 
-      const resources = await repositories.resources.listForBusiness(businessId);
-      const onOffer = resources.filter((resource) => resource.active);
       const days = daysInMonthOf(first);
       const last = addDays(first, days - 1);
       const start = zonedToInstant(first, MIDNIGHT, business.timeZone);
@@ -333,7 +360,10 @@ export const calendarService = ({
     date: string,
   ): Promise<BusinessDay> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadManagedBusiness(repositories, actor, businessId);
+      // Wider than "managed": a worker reads the month and the day for the
+      // calendars they were put on, which is what the team feature promised
+      // them. Owners and managers read all of them.
+      const onOffer = await readableCalendars(repositories, actor, businessId);
       const business = await repositories.businesses.findById(businessId);
       if (business === null) throw notFound("Business", businessId);
 
@@ -341,9 +371,6 @@ export const calendarService = ({
       const from = zonedToInstant(on, MIDNIGHT, business.timeZone);
       const to = zonedToInstant(on, END_OF_DAY, business.timeZone);
       const weekday = dayOfWeekOf(on);
-
-      const resources = await repositories.resources.listForBusiness(businessId);
-      const onOffer = resources.filter((resource) => resource.active);
 
       const calendars = await Promise.all(
         onOffer.map(async (resource) => {

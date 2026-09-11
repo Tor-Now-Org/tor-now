@@ -38,12 +38,21 @@ export const Month = ({
   token,
   business,
   resources,
-  onOpenDay,
+  scope,
+  selected,
+  onPickDay,
+  reloadKey,
 }: {
   token: string;
   business: BusinessDto;
   resources: readonly ResourceDto[];
-  onOpenDay: (date: string) => void;
+  /** Which calendar the screen is reading, or null for all of them. */
+  scope: string | null;
+  /** The day the timeline below is showing, so the grid can mark it. */
+  selected: string;
+  onPickDay: (date: string) => void;
+  /** Changes when something elsewhere edited the month, so it reloads. */
+  reloadKey: number;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -59,8 +68,6 @@ export const Month = ({
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
   const [openGroup, setOpenGroup] = useState<BusinessMonthDto["blockages"][number] | null>(null);
-  /** Which calendar the screen is reading — and therefore what a tap will make. */
-  const [scope, setScope] = useState<string | null>(null);
 
   const onOffer = resources.filter((resource) => resource.active !== false);
   const many = onOffer.length > 1;
@@ -76,7 +83,7 @@ export const Month = ({
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, reloadKey]);
 
   const act = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -132,24 +139,6 @@ export const Month = ({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {many && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <ScopeChip
-            label={copy.allCalendars}
-            chosen={scope === null}
-            onClick={() => setScope(null)}
-          />
-          {onOffer.map((resource) => (
-            <ScopeChip
-              key={resource.id}
-              label={resource.name}
-              chosen={scope === resource.id}
-              onClick={() => setScope(resource.id)}
-            />
-          ))}
-        </div>
-      )}
-
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <button
           className="chip tap"
@@ -208,11 +197,15 @@ export const Month = ({
                     chosen={chosen.includes(date)}
                     edge={date === from || date === to}
                     today={date === today}
+                    reading={date === selected}
                     label={formatLocalDate(date, language, { day: "numeric" })}
                     onClick={() => {
                       if (from === null || to !== null) {
                         setFrom(date);
                         setTo(null);
+                        // The day below follows the first tap: the timeline is
+                        // on the same screen, so there is nothing to navigate.
+                        onPickDay(date);
                         return;
                       }
                       setTo(date);
@@ -319,7 +312,6 @@ export const Month = ({
                   </div>
                 );
               })}
-              <Button onClick={() => onOpenDay(from)}>{copy.openTheDay}</Button>
             </>
           ) : (
             <p className="said" style={{ margin: 0 }}>
@@ -380,31 +372,6 @@ export const Month = ({
   );
 };
 
-const ScopeChip = ({
-  label,
-  chosen,
-  onClick,
-}: {
-  label: string;
-  chosen: boolean;
-  onClick: () => void;
-}) => (
-  <button
-    className="chip"
-    aria-pressed={chosen}
-    onClick={onClick}
-    style={{
-      minHeight: 36,
-      padding: "0 12px",
-      background: chosen ? "var(--accent)" : "var(--raised)",
-      color: chosen ? "var(--on-accent)" : "var(--ink)",
-      border: `1px solid ${chosen ? "var(--accent)" : "var(--line)"}`,
-    }}
-  >
-    {label}
-  </button>
-);
-
 /**
  * One square. The shop's own weather is the fill, because that is what a
  * customer meets; who is busy is the row of marks underneath.
@@ -417,6 +384,7 @@ const DaySquare = ({
   chosen,
   edge,
   today,
+  reading,
   label,
   onClick,
 }: {
@@ -427,6 +395,8 @@ const DaySquare = ({
   chosen: boolean;
   edge: boolean;
   today: boolean;
+  /** The day the timeline below is showing. */
+  reading: boolean;
   label: string;
   onClick: () => void;
 }) => {
@@ -459,7 +429,7 @@ const DaySquare = ({
         border: `1px solid ${
           weather === "shut" ? "var(--accent)" : chosen ? "var(--accent)" : "var(--line)"
         }`,
-        outline: edge ? "2px solid var(--accent)" : undefined,
+        outline: edge || reading ? "2px solid var(--accent)" : undefined,
         outlineOffset: 1,
         boxShadow: today ? "inset 0 0 0 1px var(--critical)" : undefined,
         display: "flex",

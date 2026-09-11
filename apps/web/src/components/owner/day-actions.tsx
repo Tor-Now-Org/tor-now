@@ -32,6 +32,7 @@ export const DayActionSheet = ({
   token,
   business,
   date,
+  past,
   resources,
   openHours,
   onClose,
@@ -41,6 +42,8 @@ export const DayActionSheet = ({
   token: string;
   business: BusinessDto;
   date: string;
+  /** Whether the day being read has already been and gone. */
+  past: boolean;
   resources: readonly ResourceDto[];
   /** What each calendar keeps that day, so closing an hour keeps the rest. */
   openHours: Readonly<Record<string, readonly { start: string; end: string }[]>>;
@@ -101,6 +104,7 @@ export const DayActionSheet = ({
           copy={copy}
           busy={busy}
           error={error}
+          past={past || picked.end <= minutesNow(business.timeZone, date)}
           onBlock={() =>
             void act(() =>
               api.createBlocks(token, business.id, picked.resourceId, [
@@ -180,6 +184,7 @@ const FreeActions = ({
   copy,
   busy,
   error,
+  past,
   onBlock,
   onCloseShop,
 }: {
@@ -188,6 +193,7 @@ const FreeActions = ({
   copy: ReturnType<typeof useCopy<"owner">>;
   busy: boolean;
   error: string | null;
+  past: boolean;
   onBlock: () => void;
   onCloseShop: () => void;
 }) => {
@@ -206,23 +212,49 @@ const FreeActions = ({
         {picked.resourceName}
       </p>
 
-      {/* Said rather than discovered: a gap too short for the shortest service
-          cannot become an appointment, and the sheet explains instead of
-          offering a button that would fail. */}
-      {tooShort && (
+      {/* Said rather than discovered. A gap too short for the shortest service
+          cannot become an appointment, and an hour that has gone is not worth
+          blocking — the sheet explains instead of offering a button that would
+          fail or do nothing. */}
+      {past ? (
+        <Note>{copy.alreadyPassed}</Note>
+      ) : tooShort ? (
         <Note>{copy.tooShortToBook.replace("{minutes}", String(SHORTEST_SERVICE_MINUTES))}</Note>
-      )}
+      ) : null}
 
       {error !== null && <Critical>{error}</Critical>}
 
-      <Button busy={busy} onClick={onBlock}>
+      <Button busy={busy} disabled={past} onClick={onBlock}>
         {copy.blockHere}
       </Button>
-      <Button intent="quiet" busy={busy} onClick={onCloseShop}>
+      <Button intent="quiet" busy={busy} disabled={past} onClick={onCloseShop}>
         {copy.closeShopHere}
       </Button>
     </div>
   );
+};
+
+/**
+ * The clock now, in the business's own zone, as minutes — or the end of the day
+ * when the date being read is not today, so a past day is past all over.
+ */
+const minutesNow = (timeZone: string, date: string): number => {
+  const now = new Date();
+  const here = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  if (here !== date) return here > date ? 24 * 60 : 0;
+  const clock = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
+  const [hour, minute] = clock.split(":").map(Number);
+  return (hour ?? 0) * 60 + (minute ?? 0);
 };
 
 /** A wall clock on this date, as the instant the API stores. */

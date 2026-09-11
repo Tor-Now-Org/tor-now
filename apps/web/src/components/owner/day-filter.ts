@@ -114,15 +114,32 @@ export const keptBy = (
 
 export type Reach = "DAY" | "WEEK" | "ALL";
 
+/**
+ * Which day an appointment falls on, in the business's own zone.
+ *
+ * Slicing the instant would answer in UTC, and a nine in the evening in
+ * Jerusalem is six in the evening the same day — but a one in the morning is
+ * the previous day in UTC, so the appointment would be filtered into the wrong
+ * day and read as missing.
+ */
+export const localDateOf = (instant: string, timeZone: string): string =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(instant));
+
 /** How far a filtered view looks — the day it was opened on, or wider. */
 export const withinReach = (
   appointments: readonly CalendarAppointmentDto[],
   reach: Reach,
   date: string,
+  timeZone: string,
 ): CalendarAppointmentDto[] => {
   if (reach === "ALL") return [...appointments];
   return appointments.filter((appointment) => {
-    const on = appointment.startAt.slice(0, 10);
+    const on = localDateOf(appointment.startAt, timeZone);
     if (reach === "DAY") return on === date;
     // A week from the day being read, which is what "this week" means to
     // somebody looking at that day rather than at a calendar month.
