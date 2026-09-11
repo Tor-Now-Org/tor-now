@@ -17,6 +17,8 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { DateStrip } from "../date-strip.tsx";
 import { AppointmentSheet } from "./appointment-sheet.tsx";
 import { Month } from "./month.tsx";
+import { ActiveFilters, FilterControls } from "./day-filter-bar.tsx";
+import { NOTHING, anyFilter, keptBy, withinReach, type Facets, type Reach } from "./day-filter.ts";
 import { DayTimeline, type Picked } from "./day-timeline.tsx";
 import { DayActionSheet } from "./day-actions.tsx";
 import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
@@ -63,6 +65,10 @@ export const CalendarDay = ({
   const [picked, setPicked] = useState<Picked | null>(null);
   /** Reading every calendar at once, which only means anything past one. */
   const [showEveryone, setShowEveryone] = useState(false);
+  /** Two ways in, one state: a person named, and kinds chosen. */
+  const [facets, setFacets] = useState<Facets>(NOTHING);
+  const [filterSheet, setFilterSheet] = useState(false);
+  const [reach, setReach] = useState<Reach>("DAY");
   const [selected, setSelected] = useState<CalendarAppointmentDto | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,16 +186,88 @@ export const CalendarDay = ({
         </div>
       )}
 
-      <input
-        className="field"
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={copy.findAppointment}
-        aria-label={copy.findAppointment}
+      <FilterControls
+        query={query}
+        onQuery={setQuery}
+        facets={facets}
+        onFacets={(next) => {
+          setFacets(next);
+          // Naming a person is not reading a day: "when is she next in" is the
+          // question, and it is rarely about today. So a customer opens at
+          // everything and narrows by tap — the other way round hid an
+          // appointment six weeks out behind an empty result.
+          setReach(next.customer === null ? "DAY" : "ALL");
+        }}
+        suggestions={found ?? wholeDay?.calendars.flatMap((one) => one.appointments) ?? []}
+        onSheet={setFilterSheet}
+        sheetOpen={filterSheet}
+        resources={resources}
+        services={[
+          ...new Set(
+            (wholeDay?.calendars ?? []).flatMap((one) =>
+              one.appointments.map((appointment) => appointment.serviceName),
+            ),
+          ),
+        ]}
       />
 
-      {found !== null ? (
+      {anyFilter(facets) ? (
+        // Filtered is a different question from "what does this day look
+        // like", so it gets a different answer: their things, in time order,
+        // and the whole day one ✕ away.
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(() => {
+            const pool =
+              facets.customer === null
+                ? (wholeDay?.calendars ?? []).flatMap((one) => one.appointments)
+                : (found ?? []);
+            const kept = withinReach(
+              keptBy(pool, facets, Date.now()),
+              facets.customer === null ? "DAY" : reach,
+              date,
+            ).sort((left, right) => left.startAt.localeCompare(right.startAt));
+            return (
+              <>
+                <ActiveFilters
+                  facets={facets}
+                  onFacets={setFacets}
+                  resources={resources}
+                  reach={reach}
+                  onReach={setReach}
+                  count={kept.length}
+                />
+                {kept.length === 0 ? (
+                  <Empty title={copy.noMatches} body={copy.findAppointmentHint} />
+                ) : (
+                  kept.map((appointment) => (
+                    <button
+                      key={appointment.id}
+                      onClick={() => setSelected(appointment)}
+                      style={{ textAlign: "start" }}
+                    >
+                      <Card
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 12 }}
+                      >
+                        <span className="tab hint" style={{ width: 74 }}>
+                          {whenIn(appointment.startAt, business.timeZone, language)}
+                        </span>
+                        <span
+                          style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}
+                        >
+                          <span style={{ fontWeight: 500 }}>{appointment.customerName}</span>
+                          <span className="hint">
+                            {appointment.serviceName} · {appointment.resourceName}
+                          </span>
+                        </span>
+                      </Card>
+                    </button>
+                  ))
+                )}
+              </>
+            );
+          })()}
+        </div>
+      ) : found !== null ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {found.length === 0 ? (
             <Empty title={copy.noMatches} body={copy.findAppointmentHint} />

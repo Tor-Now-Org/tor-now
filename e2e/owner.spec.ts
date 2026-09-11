@@ -763,6 +763,128 @@ test.describe("the day timeline", () => {
   });
 });
 
+/**
+ * Finding one thing in a day. Two mechanisms, one visible state: a search names
+ * a person, the sheet chooses kinds, and everything active narrows together.
+ */
+test.describe("finding things in a day", () => {
+  /** Books an appointment for a named customer, and returns their phone. */
+  const bookFor = async (
+    shop: { business: { id: string }; service: { id: string }; resource: { id: string } },
+    name: { givenName: string; familyName: string },
+    startAt: string,
+  ) => {
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name },
+    });
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt,
+        customerNote: null,
+      },
+    });
+    return phone;
+  };
+
+  test("names the person meant, rather than filtering on a string", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `חיפוש ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+
+    // Two customers called יעל on one day, which is the whole reason a person
+    // is chosen rather than a string matched.
+    const on = aDayFromNow(1);
+    const offered = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${on}&to=${on}`,
+    );
+    const slots = offered[0]?.slots ?? [];
+    const first = slots[0]?.startAt ?? "";
+    const second = slots[4]?.startAt ?? "";
+    expect(first).not.toBe("");
+    expect(second).not.toBe("");
+
+    const hers = await bookFor(shop, { givenName: "יעל", familyName: "כהן" }, first);
+    await bookFor(shop, { givenName: "יעל", familyName: "אלון" }, second);
+
+    await signInDirectly(page, uniquePhone(), "צופה");
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await showTheDayOf(page, first ?? "");
+
+    await page.getByLabel("חיפוש תור לפי שם או טלפון").fill("יעל");
+
+    // Two suggestions, not one mixed list: each row is a person, with her own
+    // number, which is what makes the filter unambiguous.
+    const suggestion = (name: string) =>
+      page.getByRole("button", { name: new RegExp(`לקוח\\s+${name}`) });
+    await expect(suggestion("יעל כהן")).toBeVisible({ timeout: 15_000 });
+    await expect(suggestion("יעל אלון")).toBeVisible();
+
+    // Choosing one leaves her things and nothing else, with a chip saying why.
+    await suggestion("יעל כהן").click();
+    await expect(page.getByText("יעל אלון")).toHaveCount(0);
+    await expect(page.getByText("יעל כהן").first()).toBeVisible();
+    expect(hers).not.toBe("");
+
+    // And the whole day is one tap back.
+    await page.getByRole("button", { name: "ניקוי" }).first().click();
+    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("the sheet chooses kinds, and the button says how many are set", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `סינון ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    const startAt = await theNextStart(shop);
+    await bookFor(shop, { givenName: "נועה", familyName: "שדה" }, startAt);
+
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await showTheDayOf(page, startAt);
+
+    await page.getByRole("button", { name: "סינון" }).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: "עתידי" }).click();
+    await sheet.getByRole("button", { name: "הצגת התוצאות" }).click();
+
+    // The count rides on the button, because a filter you forgot you set is
+    // the reason people think the screen is broken.
+    await expect(page.getByRole("button", { name: /סינון\s*1/ })).toBeVisible();
+    await expect(page.getByText("נועה שדה")).toBeVisible();
+
+    // Cleared, the day comes back.
+    await page.getByRole("button", { name: "ניקוי" }).first().click();
+    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+});
+
 test.describe("special days and blockages", () => {
   const anOwnerAt = async (name: string) => {
     const ownerPhone = uniquePhone();
@@ -1521,11 +1643,16 @@ test.describe("finding one appointment", () => {
     // The day the owner is looking at does not have it.
     await expect(page.getByText("אורית שגב")).toHaveCount(0);
 
+    // Typing offers the person, and choosing her narrows to her things — which
+    // is what tells two customers of the same name apart.
     await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("אורית");
-    await expect(page.getByText("אורית שגב")).toBeVisible({ timeout: 15_000 });
+    await page
+      .getByRole("button", { name: /לקוח\s+אורית שגב/ })
+      .click({ timeout: 15_000 });
+    await expect(page.getByText("אורית שגב").first()).toBeVisible();
 
-    // And it opens straight into the same controls as the calendar.
-    await page.getByText("אורית שגב").click();
+    // And her appointment opens into the same controls as the calendar.
+    await page.getByRole("button", { name: /תספורת/ }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("button", { name: "העברת התור לשעה אחרת" })).toBeVisible();
 
