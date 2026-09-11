@@ -177,6 +177,9 @@ export const toBlock = (row: Row): Block => ({
   startAt: toInstant(row["start_at"]),
   endAt: toInstant(row["end_at"]),
   reason: text(row["reason"]),
+  groupId: row["group_id"] === null || row["group_id"] === undefined
+    ? null
+    : text(row["group_id"]),
 });
 
 export const toAppointment = (row: Row): Appointment => ({

@@ -287,14 +287,31 @@ export const blockRepository = (tx: Transaction): BlockRepository => ({
 
   async create(block) {
     const rows = await tx<Row[]>`
-      insert into block (resource_id, business_id, start_at, end_at, reason)
+      insert into block (resource_id, business_id, start_at, end_at, reason, group_id)
       values (${block.resourceId}, ${block.businessId}, ${new Date(block.startAt)},
-              ${new Date(block.endAt)}, ${block.reason})
+              ${new Date(block.endAt)}, ${block.reason}, ${block.groupId})
       returning *`;
     return one(rows, toBlock, "Block");
   },
 
   async delete(id) {
     await tx`delete from block where id = ${id}`;
+  },
+
+  async deleteGroup(businessId, groupId) {
+    // Scoped by business as well as by group: the id comes from a URL, and a
+    // uuid guessed by somebody else must not reach another business's diary.
+    const rows = await tx<Row[]>`
+      delete from block where business_id = ${businessId} and group_id = ${groupId}
+      returning id`;
+    return rows.length;
+  },
+
+  async listGroup(businessId, groupId) {
+    const rows = await tx<Row[]>`
+      select * from block
+      where business_id = ${businessId} and group_id = ${groupId}
+      order by start_at`;
+    return rows.map(toBlock);
   },
 });

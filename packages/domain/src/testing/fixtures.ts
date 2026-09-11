@@ -102,6 +102,7 @@ export const aBlock = (
     startAt: at(date, start),
     endAt: at(date, end),
     reason: "פגישה אישית",
+    groupId: null,
     ...overrides,
   });
 

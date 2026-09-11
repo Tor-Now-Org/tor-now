@@ -1613,7 +1613,9 @@ test.describe("the team", () => {
 
 
     const worker = uniquePhone();
-    await page.getByRole("button", { name: "הוספת אדם" }).click();
+    // The list's own button, not the sheet's — both read "הוספה", which is the
+    // right word in both places and the reason this needs saying.
+    await page.getByRole("button", { name: "הוספה", exact: true }).first().click();
     const sheet = page.getByRole("dialog");
     await sheet.getByLabel("מספר הטלפון שלו").fill(asTyped(worker));
     await sheet.getByLabel("שם פרטי").fill("עובדת");
@@ -1621,7 +1623,7 @@ test.describe("the team", () => {
     await sheet.getByRole("button", { name: /עובד ביומן/ }).click();
     await sheet.getByRole("button", { name: "יומן ב" }).click();
     await sheet.getByRole("button", { name: "יומן ג" }).click();
-    await sheet.getByRole("button", { name: "הוספת אדם" }).click();
+    await sheet.getByRole("button", { name: "הוספה", exact: true }).click();
 
     // The row says the terms and the calendars, which is the whole of the answer.
     await expect(page.getByText("עובדת חדשה")).toBeVisible({ timeout: 15_000 });

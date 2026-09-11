@@ -234,9 +234,44 @@ export const calendarService = ({
         return { resourceId, businessId, startAt, endAt, reason: span.reason };
       });
 
+      // One decision, one group — including a blockage of a single day, so
+      // "what did this tap create" always has a truthful answer.
+      const groupId = crypto.randomUUID();
       const made: Block[] = [];
-      for (const span of wanted) made.push(await repositories.blocks.create(span));
+      for (const span of wanted) {
+        made.push(await repositories.blocks.create({ ...span, groupId }));
+      }
       return made;
+    });
+  },
+
+  /**
+   * A whole blockage, given back the way it was taken.
+   *
+   * Removing a holiday row by row is how half a holiday ends up still blocking
+   * a diary; the group is what makes "all three days" a single decision again.
+   * Returns how many it took, so the screen can say so.
+   */
+  async deleteBlockGroup(
+    actor: Actor,
+    businessId: BusinessId,
+    groupId: string,
+  ): Promise<number> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      return repositories.blocks.deleteGroup(businessId, groupId);
+    });
+  },
+
+  /** What a blockage covers, for a screen about to describe or undo it. */
+  async blockGroup(
+    actor: Actor,
+    businessId: BusinessId,
+    groupId: string,
+  ): Promise<readonly Block[]> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      return repositories.blocks.listGroup(businessId, groupId);
     });
   },
 

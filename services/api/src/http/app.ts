@@ -600,6 +600,25 @@ const ownerRoutes = (services: Services) => {
     return context.json(made.map(wire.blockOut), 201);
   });
 
+  // A whole blockage, by the group one decision created.
+  owner.get("/:businessId/block-groups/:groupId", async (context) => {
+    const blocks = await services.calendar.blockGroup(
+      actorOf(context),
+      idParam(context, "businessId"),
+      context.req.param("groupId"),
+    );
+    return context.json(blocks.map(wire.blockOut));
+  });
+
+  owner.delete("/:businessId/block-groups/:groupId", async (context) => {
+    const removed = await services.calendar.deleteBlockGroup(
+      actorOf(context),
+      idParam(context, "businessId"),
+      context.req.param("groupId"),
+    );
+    return context.json({ removed });
+  });
+
   owner.delete("/:businessId/blocks/:blockId", async (context) => {
     await services.calendar.deleteBlock(
       actorOf(context),

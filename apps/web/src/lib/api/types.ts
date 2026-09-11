@@ -189,6 +189,12 @@ export type BlockDto = {
   startAt: string;
   endAt: string;
   reason: string;
+  /**
+   * What one decision created. Blocks made together share it, so a week away is
+   * shown and removed as one thing. Optional in the type: an API deployed
+   * before blockages could span days sends nothing.
+   */
+  groupId?: string | null;
 };
 
 export type CalendarDayDto = {

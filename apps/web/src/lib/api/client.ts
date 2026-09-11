@@ -521,6 +521,16 @@ export const api = {
       token,
     }),
 
+  /** A whole blockage — every day one decision made. */
+  blockGroup: (token: string, businessId: string, groupId: string) =>
+    request<BlockDto[]>(`/businesses/${businessId}/block-groups/${groupId}`, { token }),
+
+  deleteBlockGroup: (token: string, businessId: string, groupId: string) =>
+    request<{ removed: number }>(`/businesses/${businessId}/block-groups/${groupId}`, {
+      method: "DELETE",
+      token,
+    }),
+
   deleteBlock: (token: string, businessId: string, blockId: string) =>
     request<void>(`/businesses/${businessId}/blocks/${blockId}`, {
       method: "DELETE",

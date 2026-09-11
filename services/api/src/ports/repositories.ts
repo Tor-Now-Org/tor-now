@@ -296,8 +296,17 @@ export type BlockRepository = {
     startAt: Instant;
     endAt: Instant;
     reason: string;
+    groupId: string;
   }): Promise<Block>;
   delete(id: BlockId): Promise<void>;
+  /**
+   * Everything one decision created. A holiday is given back the way it was
+   * taken — in one go — and doing it row by row is how half a holiday ends up
+   * still blocking a diary.
+   */
+  deleteGroup(businessId: BusinessId, groupId: string): Promise<number>;
+  /** The blocks of one group, so a screen can say what removing it would take. */
+  listGroup(businessId: BusinessId, groupId: string): Promise<readonly Block[]>;
 };
 
 export type AppointmentDraft = Omit<

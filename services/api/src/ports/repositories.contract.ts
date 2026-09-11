@@ -656,7 +656,36 @@ export const describeRepositoryContract = (
           startAt: AT("2026-09-01T09:00:00.000Z"),
           endAt: AT("2026-09-01T10:00:00.000Z"),
           reason: "פגישה אישית",
+          groupId: "11111111-1111-4111-8111-111111111111",
         });
+
+        // A blockage made as one decision comes back as one, and goes away as
+        // one — scoped by business, since the group id travels in a URL.
+        await repositories.blocks.create({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          startAt: AT("2026-09-02T09:00:00.000Z"),
+          endAt: AT("2026-09-02T10:00:00.000Z"),
+          reason: "חופשה",
+          groupId: "22222222-2222-4222-8222-222222222222",
+        });
+        await repositories.blocks.create({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          startAt: AT("2026-09-03T09:00:00.000Z"),
+          endAt: AT("2026-09-03T10:00:00.000Z"),
+          reason: "חופשה",
+          groupId: "22222222-2222-4222-8222-222222222222",
+        });
+        expect(
+          await repositories.blocks.listGroup(context.business.id, "22222222-2222-4222-8222-222222222222"),
+        ).toHaveLength(2);
+        expect(
+          await repositories.blocks.deleteGroup(context.business.id, "22222222-2222-4222-8222-222222222222"),
+        ).toBe(2);
+        expect(
+          await repositories.blocks.listGroup(context.business.id, "22222222-2222-4222-8222-222222222222"),
+        ).toEqual([]);
 
         const spans = await repositories.blocks.blockedBetween(
           context.resource.id,
@@ -994,6 +1023,7 @@ export const describeRepositoryContract = (
           startAt: parseInstant("2026-09-16T06:00:00Z"),
           endAt: parseInstant("2026-09-16T08:00:00Z"),
           reason: "ספק",
+          groupId: "11111111-1111-4111-8111-111111111111",
         });
         expect(
           await repositories.blocks.listForResourceBetween(
@@ -1399,6 +1429,7 @@ export const describeRepositoryContract = (
           startAt: parseInstant("2026-09-20T06:00:00Z"),
           endAt: parseInstant("2026-09-20T14:00:00Z"),
           reason: "חופשה",
+          groupId: "11111111-1111-4111-8111-111111111111",
         });
         expect(
           await repositories.blocks.countsByLocalDay(

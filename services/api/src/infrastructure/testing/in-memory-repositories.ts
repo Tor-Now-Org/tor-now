@@ -396,7 +396,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
 
         const existingMembership = store.memberships.find(
           (membership) =>
-            membership.userId === user!.id && membership.businessId === businessId,
+            membership.userId === user.id && membership.businessId === businessId,
         );
         const membership: Membership = existingMembership
           ? { ...existingMembership, role: input.role }
@@ -694,12 +694,25 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           startAt: input.startAt,
           endAt: input.endAt,
           reason: input.reason,
+          groupId: input.groupId,
         } as (typeof store.blocks)[number];
         store.blocks = [...store.blocks, block];
         return block;
       },
       async delete(id) {
         store.blocks = store.blocks.filter((block) => block.id !== id);
+      },
+      async deleteGroup(businessId, groupId) {
+        const going = store.blocks.filter(
+          (block) => block.businessId === businessId && block.groupId === groupId,
+        );
+        store.blocks = store.blocks.filter((block) => !going.includes(block));
+        return going.length;
+      },
+      async listGroup(businessId, groupId) {
+        return store.blocks
+          .filter((block) => block.businessId === businessId && block.groupId === groupId)
+          .sort((left, right) => left.startAt - right.startAt);
       },
     },
 

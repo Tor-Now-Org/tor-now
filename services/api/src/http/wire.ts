@@ -118,6 +118,8 @@ export const blockOut = (block: Block) => ({
   startAt: formatInstant(block.startAt),
   endAt: formatInstant(block.endAt),
   reason: block.reason,
+  /** What one decision made together, so a screen can say "3 days". */
+  groupId: block.groupId,
 });
 
 export const appointmentOut = (appointment: Appointment) => ({

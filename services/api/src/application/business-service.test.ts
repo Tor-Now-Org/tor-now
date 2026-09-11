@@ -272,6 +272,70 @@ describe("owning a business", () => {
     expect(test.store.blocks).toHaveLength(0);
   });
 
+  it("gives a blockage made together one identity, and takes it back as one", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    const made = await test.services.calendar.createBlocks(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      [
+        { startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "חופשה" },
+        { startAt: TUESDAY_AT("11:00"), endAt: TUESDAY_AT("12:00"), reason: "חופשה" },
+      ],
+    );
+
+    // One decision, one group — which is what lets a screen say "2 days" and
+    // undo the lot without walking the rows.
+    const groups = new Set(made.map((block) => block.groupId));
+    expect(groups.size).toBe(1);
+    const groupId = made[0]?.groupId ?? "";
+    expect(groupId).not.toBe("");
+
+    expect(
+      await test.services.calendar.blockGroup(shop.owner.actor, shop.business.id, groupId),
+    ).toHaveLength(2);
+    expect(
+      await test.services.calendar.deleteBlockGroup(shop.owner.actor, shop.business.id, groupId),
+    ).toBe(2);
+    expect(test.store.blocks).toHaveLength(0);
+  });
+
+  it("gives each decision its own group, so one holiday is not another", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const first = await test.services.calendar.createBlocks(
+      shop.owner.actor, shop.business.id, shop.resource.id,
+      [{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "א" }],
+    );
+    const second = await test.services.calendar.createBlocks(
+      shop.owner.actor, shop.business.id, shop.resource.id,
+      [{ startAt: TUESDAY_AT("11:00"), endAt: TUESDAY_AT("12:00"), reason: "ב" }],
+    );
+    expect(first[0]?.groupId).not.toBe(second[0]?.groupId);
+
+    // Removing one leaves the other standing.
+    await test.services.calendar.deleteBlockGroup(
+      shop.owner.actor, shop.business.id, first[0]?.groupId ?? "",
+    );
+    expect(test.store.blocks).toHaveLength(1);
+  });
+
+  it("will not let one business remove another's blockage", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const stranger = await signIn(test, "+972500000055", "זר");
+    const made = await test.services.calendar.createBlocks(
+      shop.owner.actor, shop.business.id, shop.resource.id,
+      [{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "חופשה" }],
+    );
+
+    await expect(
+      test.services.calendar.deleteBlockGroup(
+        stranger.actor, shop.business.id, made[0]?.groupId ?? "",
+      ),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(test.store.blocks).toHaveLength(1);
+  });
+
   it("refuses a special day whose hours run into one another", async () => {
     const shop = await anEstablishedBusiness(test);
 
