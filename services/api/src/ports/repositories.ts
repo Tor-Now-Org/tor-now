@@ -160,6 +160,9 @@ export type MembershipRepository = {
       givenName: string;
       familyName: string | null;
       role: MembershipRole;
+      /** What the owner actually typed, kept as a display hint — see Membership. */
+      invitedGivenName: string | null;
+      invitedFamilyName: string | null;
     },
   ): Promise<{ user: User; membership: Membership }>;
 };

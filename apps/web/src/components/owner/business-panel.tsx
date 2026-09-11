@@ -122,20 +122,24 @@ export const BusinessPanel = ({
   const [error, setError] = useState<string | null>(null);
   const problem = useFieldProblem();
 
+  // Billing is the OWNER's alone (ADR 0016) — absent role means an API
+  // deployed before roles existed, where anybody staffing was an OWNER.
+  const isOwner = (business.role ?? "OWNER") === "OWNER";
+
   const load = useCallback(async () => {
     try {
       // Together: neither answer depends on the other, and asked one after the
       // other they cost two round trips to Frankfurt instead of one.
       const [loadedServices, loadedBilling] = await Promise.all([
         api.listServices(token, business.id),
-        api.subscription(token, business.id),
+        isOwner ? api.subscription(token, business.id) : Promise.resolve(null),
       ]);
       setServices(loadedServices);
       setBilling(loadedBilling);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
-  }, [token, business.id, errorText]);
+  }, [token, business.id, isOwner, errorText]);
 
   useEffect(() => {
     void load();
@@ -173,7 +177,15 @@ export const BusinessPanel = ({
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {(["services", "resources", "photos", "settings", "billing"] as const).map((candidate) => (
+        {(
+          [
+            "services",
+            "resources",
+            "photos",
+            "settings",
+            ...(isOwner ? (["billing"] as const) : []),
+          ] as const
+        ).map((candidate) => (
           <button
             key={candidate}
             className="chip"

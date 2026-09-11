@@ -13,6 +13,7 @@ import {
   parseLocalDate,
   parseLocalTime,
   timeZone,
+  UNNAMED,
   validationFailed,
   type Business,
   type BusinessId,
@@ -501,11 +502,16 @@ export const businessService = ({
           : await repositories.memberships.find(existing.id, businessId);
       if (held !== null) requireRoleWithinReach(invitedBy, held.role);
 
+      // Somebody who has never signed in gets no name from the person inviting
+      // them — they confirm it themselves on first login, exactly like a normal
+      // signup (needsName). An already-registered phone keeps its real name.
       const { user, membership } = await repositories.memberships.invite(businessId, {
         phone: input.phone,
-        givenName: input.givenName,
-        familyName: input.familyName ?? null,
+        givenName: existing === null ? UNNAMED : input.givenName,
+        familyName: existing === null ? null : input.familyName ?? null,
         role: input.role,
+        invitedGivenName: input.givenName,
+        invitedFamilyName: input.familyName ?? null,
       });
 
       await setAssignments(repositories, businessId, membership, resourceIds);

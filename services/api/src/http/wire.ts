@@ -1,6 +1,7 @@
 import {
   formatInstant,
   displayName,
+  needsName,
   formatLocalTime,
   toMajorUnits,
   type Appointment,
@@ -208,13 +209,24 @@ export const customerOut = (customer: Customer) => ({
 });
 
 /** A colleague: the person, the terms, and the calendars they are on. */
-export const teamMemberOut = (member: TeamMember) => ({
-  ...userOut(member.user),
-  membershipId: member.membership.id,
-  role: member.membership.role,
-  resourceIds: member.resourceIds,
-  joinedAt: formatInstant(member.membership.createdAt),
-});
+export const teamMemberOut = (member: TeamMember) => {
+  const pending = needsName(member.user);
+  const { invitedGivenName, invitedFamilyName } = member.membership;
+  const name =
+    pending && invitedGivenName !== null
+      ? displayName({ givenName: invitedGivenName, familyName: invitedFamilyName })
+      : displayName(member.user);
+
+  return {
+    ...userOut(member.user),
+    name,
+    membershipId: member.membership.id,
+    role: member.membership.role,
+    resourceIds: member.resourceIds,
+    joinedAt: formatInstant(member.membership.createdAt),
+    pending,
+  };
+};
 
 export const subscriptionOut = (subscription: Subscription) => ({
   id: subscription.id,

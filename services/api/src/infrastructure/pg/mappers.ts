@@ -116,6 +116,8 @@ export const toMembership = (row: Row): Membership => ({
   role: text(row["role"]) as Membership["role"],
   createdAt: toInstant(row["created_at"]),
   blockedAt: nullableInstant(row["blocked_at"]),
+  invitedGivenName: nullableText(row["invited_given_name"]),
+  invitedFamilyName: nullableText(row["invited_family_name"]),
 });
 
 export const toMembershipResource = (row: Row): MembershipResource => ({

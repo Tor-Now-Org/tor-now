@@ -147,6 +147,11 @@ export const Team = ({
                       {copy.you}
                     </span>
                   )}
+                  {member.pending && (
+                    <span className="hint" style={{ marginInlineStart: 6 }}>
+                      {copy.pendingMember}
+                    </span>
+                  )}
                 </span>
                 <span className="hint">
                   {copy[`role${member.role === "CUSTOMER" ? "WORKER" : member.role}`]}

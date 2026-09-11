@@ -325,6 +325,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           role,
           createdAt: now(),
           blockedAt: null,
+          invitedGivenName: null,
+          invitedFamilyName: null,
         };
         store.memberships = [...store.memberships, membership];
         return membership;
@@ -343,6 +345,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           role: "CUSTOMER",
           createdAt: now(),
           blockedAt: null,
+          invitedGivenName: null,
+          invitedFamilyName: null,
         };
         store.memberships = [...store.memberships, membership];
         return membership;
@@ -399,7 +403,12 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             membership.userId === user.id && membership.businessId === businessId,
         );
         const membership: Membership = existingMembership
-          ? { ...existingMembership, role: input.role }
+          ? {
+              ...existingMembership,
+              role: input.role,
+              invitedGivenName: input.invitedGivenName,
+              invitedFamilyName: input.invitedFamilyName,
+            }
           : {
               id: asId(nextId("membership")),
               userId: user.id,
@@ -407,6 +416,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
               role: input.role,
               createdAt: now(),
               blockedAt: null,
+              invitedGivenName: input.invitedGivenName,
+              invitedFamilyName: input.invitedFamilyName,
             };
         store.memberships = existingMembership
           ? store.memberships.map((m) => (m.id === membership.id ? membership : m))

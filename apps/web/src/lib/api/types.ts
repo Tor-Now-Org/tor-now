@@ -244,6 +244,7 @@ export type TeamMemberDto = UserDto & {
   role: "OWNER" | "MANAGER" | "WORKER" | "CUSTOMER";
   resourceIds: string[];
   joinedAt: string;
+  pending: boolean;
 };
 
 export type CustomerRecordDto = {
