@@ -569,14 +569,23 @@ test.describe("the month", () => {
 
     const first = aDayFromNow(1);
     const last = aDayFromNow(3);
+
+    // What, then when, then the details: the + names the action, the grid asks
+    // which days, and only the last step asks anything that needs both.
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
+    await expect(page.getByText("בחירת ימים לחסימה")).toBeVisible();
+
     await dayCell(page, first).click();
     await dayCell(page, last).click();
-
-    // The bar counts the decision before making it, and sits under the grid so
-    // the second tap could reach the calendar at all.
     await expect(page.getByText(/3 ימים/).first()).toBeVisible();
-    await page.getByRole("button", { name: "חסימה ביומן" }).click();
-    await expect(page.getByText(/3 ימים/)).toHaveCount(0, { timeout: 15_000 });
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText(/3 ימים/)).toBeVisible();
+    await sheet.getByRole("button", { name: "כל היום" }).click();
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Three days of the customer's month are gone, from one gesture.
     for (const date of [first, aDayFromNow(2), last]) {
@@ -603,10 +612,14 @@ test.describe("the month", () => {
     });
     await openTheMonth(page, shop);
 
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
     await dayCell(page, aDayFromNow(1)).click();
     await dayCell(page, aDayFromNow(2)).click();
-    await page.getByRole("button", { name: "חסימה ביומן" }).click();
-    await expect(page.getByText(/2 ימים/)).toHaveCount(0, { timeout: 15_000 });
+    await page.getByRole("button", { name: "המשך" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "כל היום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // One band for the whole thing, not a mark per day.
     const band = page.getByRole("button", { name: "חסימה" }).first();
@@ -633,18 +646,20 @@ test.describe("the month", () => {
       .toBeGreaterThan(0);
   });
 
-  test("one tap opens the day it is about", async ({ page }) => {
+  test("a plain tap only shows the day, and offers nothing to change", async ({ page }) => {
     const ownerPhone = uniquePhone();
     const shop = await aBusinessWithOpenHours({ name: `יום ${Date.now()}`, ownerPhone });
     await openTheMonth(page, shop);
 
     await dayCell(page, aDayFromNow(1)).click();
-    await expect(page.getByText(shop.resource.name).first()).toBeVisible();
 
-    // The timeline below is the day that was tapped, on the same screen.
+    // The timeline below is the day that was tapped, on the same screen — and
+    // the calendar offers nothing else, because nothing was asked for.
     await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
       timeout: 15_000,
     });
+    await expect(page.getByRole("button", { name: "המשך" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "ביטול הבחירה" })).toHaveCount(0);
   });
 });
 
@@ -1021,6 +1036,53 @@ test.describe("adding to a day", () => {
     return (days[0]?.slots ?? []).length;
   };
 
+  test("the + gets out of the way while its own sheet is up", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `כפתור ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await openAt(page, shop, aDayFromNow(1));
+
+    const plus = page.getByRole("button", { name: "הוספה ליום" });
+    await expect(plus).toBeVisible();
+    await plus.click();
+
+    // A round button sitting on top of the sheet it opened is a trap: it
+    // covers the choices and does nothing useful if pressed.
+    await expect(plus).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toBeVisible();
+
+    // It stays away while days are being picked, too — the screen is asking a
+    // question, and the button that asked it would only get in the way.
+    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
+    await expect(page.getByText("בחירת ימים לחסימה")).toBeVisible();
+    await expect(plus).toHaveCount(0);
+
+    // And it comes back the moment the question is dropped.
+    await page.getByRole("button", { name: "ביטול הבחירה" }).click();
+    await expect(plus).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("will not aim an action at a day that has already gone", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `עבר ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await openAt(page, shop, aDayFromNow(1));
+
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
+    await expect(page.getByText(/אי אפשר לשנות ימים שכבר עברו/)).toBeVisible();
+
+    // Yesterday's square refuses the tap; tomorrow's takes it.
+    const yesterdayCell = page.getByRole("button", { name: aDayFromNow(-1) });
+    if ((await yesterdayCell.count()) > 0) {
+      await expect(yesterdayCell).toBeDisabled();
+    }
+    await page.getByRole("button", { name: aDayFromNow(1) }).click();
+    await expect(page.getByRole("button", { name: "המשך" })).toBeEnabled();
+  });
+
   test("adds a blockage of chosen hours", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `הוספה ${Date.now()}`,
@@ -1031,10 +1093,12 @@ test.describe("adding to a day", () => {
     await openAt(page, shop, date);
 
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    let sheet = page.getByRole("dialog");
-    await sheet.getByRole("button", { name: /^חסימה/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
+    await page.getByRole("button", { name: date }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
 
-    sheet = page.getByRole("dialog");
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "חלק מהיום" }).click();
     await sheet.locator('input[type="time"]').first().fill("10:00");
     await sheet.locator('input[type="time"]').nth(1).fill("12:00");
     await sheet.getByRole("button", { name: "שמירה" }).click();
@@ -1060,6 +1124,8 @@ test.describe("adding to a day", () => {
 
     await page.getByRole("button", { name: "הוספה ליום" }).click();
     await page.getByRole("dialog").getByRole("button", { name: /יום מיוחד/ }).click();
+    await page.getByRole("button", { name: date }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
 
     const sheet = page.getByRole("dialog");
     await sheet.getByRole("button", { name: "סגור כל היום" }).click();
@@ -1071,6 +1137,8 @@ test.describe("adding to a day", () => {
     // And the same day given hours instead: the special day replaces itself.
     await page.getByRole("button", { name: "הוספה ליום" }).click();
     await page.getByRole("dialog").getByRole("button", { name: /יום מיוחד/ }).click();
+    await page.getByRole("button", { name: date }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
     const again = page.getByRole("dialog");
     await again.getByRole("button", { name: "שעות אחרות" }).click();
     await again.locator('input[type="time"]').first().fill("10:00");
@@ -1726,13 +1794,11 @@ test.describe("the month view", () => {
 
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
 
-    // The squares are dated; what they are carrying is said when one is chosen,
-    // per calendar, because the month is the whole business now.
+    // The squares are dated, and tapping one draws that day underneath — where
+    // both bookings are, which is more than a count ever said.
     await page.getByRole("button", { name: aDayFromNow(2) }).click();
-    await expect(page.getByText("2 תורים").first()).toBeVisible();
-
-    // The day below follows the tap, with the customer on it.
     await expect(page.getByText("דנה כהן").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /דנה כהן/ })).toHaveCount(2);
   });
 
 });

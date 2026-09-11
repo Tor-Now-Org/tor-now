@@ -42,6 +42,9 @@ export const Month = ({
   selected,
   onPickDay,
   reloadKey,
+  choosing,
+  onChosen,
+  onCancelChoosing,
 }: {
   token: string;
   business: BusinessDto;
@@ -53,6 +56,18 @@ export const Month = ({
   onPickDay: (date: string) => void;
   /** Changes when something elsewhere edited the month, so it reloads. */
   reloadKey: number;
+  /**
+   * What the owner is choosing days for, if anything.
+   *
+   * Reading a month and changing one are different jobs, and the grid used to
+   * offer both at once: every tap put three buttons under the calendar, two of
+   * which nobody had asked for. Now a tap is only ever "show me this day", and
+   * the actions arrive with an action already chosen from the + — which is also
+   * what makes "these days" a sensible question to ask.
+   */
+  choosing: { readonly title: string } | null;
+  onChosen: (dates: readonly string[]) => void;
+  onCancelChoosing: () => void;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -109,33 +124,6 @@ export const Month = ({
 
   /** Which calendars a change made here would touch. */
   const touching = scope === null ? onOffer : onOffer.filter((one) => one.id === scope);
-
-  const blockAcross = async (dates: readonly string[], calendars: readonly ResourceDto[]) => {
-    for (const calendar of calendars) {
-      await api.createBlocks(
-        token,
-        business.id,
-        calendar.id,
-        dates.map((date) => ({
-          startAt: `${date}T00:00:00.000Z`,
-          endAt: `${date}T23:59:00.000Z`,
-          reason: copy.blockedWord,
-        })),
-      );
-    }
-  };
-
-  const closeAcross = async (dates: readonly string[], calendars: readonly ResourceDto[]) => {
-    for (const calendar of calendars) {
-      for (const date of dates) {
-        await api.putOverride(token, business.id, calendar.id, {
-          date,
-          note: null,
-          ranges: [],
-        });
-      }
-    }
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -199,13 +187,19 @@ export const Month = ({
                     today={date === today}
                     reading={date === selected}
                     label={formatLocalDate(date, language, { day: "numeric" })}
+                    disabled={choosing !== null && date < today}
                     onClick={() => {
+                      if (choosing === null) {
+                        // Reading: the timeline below follows the tap, and
+                        // nothing else happens.
+                        setFrom(null);
+                        setTo(null);
+                        onPickDay(date);
+                        return;
+                      }
                       if (from === null || to !== null) {
                         setFrom(date);
                         setTo(null);
-                        // The day below follows the first tap: the timeline is
-                        // on the same screen, so there is nothing to navigate.
-                        onPickDay(date);
                         return;
                       }
                       setTo(date);
@@ -266,79 +260,52 @@ export const Month = ({
       {error !== null && <Critical>{error}</Critical>}
       {from === null && <Note>{copy.monthHint}</Note>}
 
-      {/* What is selected, and what can be done with it — docked under the
-          grid rather than over it. A sheet here would cover the calendar and
-          swallow the second tap, which is the tap that makes a range. */}
-      {from !== null && (
+      {/* While an action is being aimed: what it is, what has been picked, and
+          the two ways out. Nothing else, because the action was already
+          chosen — this step is only "at which days". */}
+      {choosing !== null && (
         <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ flex: 1, fontWeight: 600 }}>
-              {to === null
-                ? formatLocalDate(from, language, {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  })
-                : `${formatLocalDate(chosen[0] ?? from, language, {
-                    day: "numeric",
-                    month: "long",
-                  })} – ${formatLocalDate(chosen[chosen.length - 1] ?? to, language, {
-                    day: "numeric",
-                    month: "long",
-                  })}`}
-            </span>
-            {chosen.length > 1 && (
+          <span className="label">{choosing.title}</span>
+          {from === null ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span className="hint">{copy.chooseDays}</span>
+              <span className="hint">{copy.cannotDoInThePast}</span>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ flex: 1, fontWeight: 600 }}>
+                {to === null
+                  ? formatLocalDate(from, language, {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    })
+                  : `${formatLocalDate(chosen[0] ?? from, language, {
+                      day: "numeric",
+                      month: "long",
+                    })} – ${formatLocalDate(chosen[chosen.length - 1] ?? to, language, {
+                      day: "numeric",
+                      month: "long",
+                    })}`}
+              </span>
               <span className="tab" style={{ fontSize: 12.5, color: "var(--accent-strong)" }}>
                 {chosen.length} {copy.daysWord}
               </span>
-            )}
-          </div>
-
-          {to === null ? (
-            <>
-              <span className="hint">{copy.orTapAnother}</span>
-              {onOffer.map((resource) => {
-                const line = factsOn(month, from).byCalendar.find(
-                  (one) => one.resourceId === resource.id,
-                );
-                return (
-                  <div key={resource.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ flex: 1, fontWeight: 500 }}>{resource.name}</span>
-                    <span className="hint">
-                      {line?.away === true
-                        ? copy.blockedWord
-                        : `${line?.appointments ?? 0} ${copy.appointmentsWord}`}
-                    </span>
-                  </div>
-                );
-              })}
-            </>
-          ) : (
-            <p className="said" style={{ margin: 0 }}>
-              {copy.willMake
-                .replace("{days}", String(chosen.length))
-                .replace(
-                  "{calendars}",
-                  scope === null ? copy.allCalendars : (touching[0]?.name ?? ""),
-                )}
-            </p>
+            </div>
           )}
+          {from !== null && to === null && <span className="hint">{copy.orTapAnother}</span>}
 
-          <Button
-            intent="quiet"
-            busy={busy}
-            onClick={() => void act(() => blockAcross(chosen, touching))}
-          >
-            {copy.blockTheCalendars}
+          <Button disabled={from === null} onClick={() => onChosen(chosen)}>
+            {copy.continueWord}
           </Button>
           <Button
             intent="quiet"
-            busy={busy}
-            onClick={() => void act(() => closeAcross(chosen, onOffer))}
+            onClick={() => {
+              setFrom(null);
+              setTo(null);
+              onCancelChoosing();
+            }}
           >
-            {copy.closeTheShop}
-          </Button>
-          <Button intent="quiet" onClick={() => { setFrom(null); setTo(null); }}>
             {copy.cancelSelection}
           </Button>
         </Card>
@@ -386,6 +353,7 @@ const DaySquare = ({
   today,
   reading,
   label,
+  disabled,
   onClick,
 }: {
   date: string;
@@ -397,6 +365,8 @@ const DaySquare = ({
   today: boolean;
   /** The day the timeline below is showing. */
   reading: boolean;
+  /** A day that has been and gone, while an action is being aimed at days. */
+  disabled: boolean;
   label: string;
   onClick: () => void;
 }) => {
@@ -418,6 +388,7 @@ const DaySquare = ({
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       aria-label={date}
       aria-pressed={chosen}
       style={{
@@ -440,6 +411,7 @@ const DaySquare = ({
         gap: 2,
         fontSize: 12,
         fontVariantNumeric: "tabular-nums",
+        opacity: disabled ? 0.4 : 1,
       }}
     >
       <span>{label}</span>

@@ -10,112 +10,82 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { Button, Critical, Field, Note, Sheet } from "../ui.tsx";
 
 /**
- * The one button that adds to a day, and the three things it can add.
+ * Adding something to the calendar, in the order a person decides it.
  *
- * They are said in the owner's words rather than the system's — an appointment
- * for a customer, an hour this calendar will not take, a day the whole shop
- * behaves differently — and each carries the day it is about, so "when" is
- * never asked twice.
+ * What, then when, then the details. The + says what is being made; the grid
+ * then asks which days, with the action named above it; and only at the end is
+ * anything asked that depends on both. Doing it the other way round — every tap
+ * on a day offering three things nobody had asked for — is what made the month
+ * feel like a minefield.
  */
 
-type Adding = "block" | "special" | null;
+export type Aim = "block" | "special";
 
-export const AddToDay = ({
-  token,
-  business,
-  date,
-  resources,
-  resource,
-  onChanged,
+export const AddButton = ({
+  hidden,
+  onSheet,
+  onAim,
 }: {
-  token: string;
-  business: BusinessDto;
-  date: string;
-  resources: readonly ResourceDto[];
-  /** The calendar being read, which is what a blockage would belong to. */
-  resource: ResourceDto | null;
-  onChanged: () => void;
+  /** Out of the way while any sheet is up: a button under a sheet is a trap. */
+  hidden: boolean;
+  /** Told both ways, so the button comes back when the sheet is dismissed. */
+  onSheet: (open: boolean) => void;
+  onAim: (aim: Aim) => void;
 }) => {
   const copy = useCopy("owner");
-  const { language } = useLanguage();
-  const errorText = useErrorText();
-
   const [open, setOpen] = useState(false);
-  const [adding, setAdding] = useState<Adding>(null);
-  const [from, setFrom] = useState("12:00");
-  const [until, setUntil] = useState("13:00");
-  const [closedAllDay, setClosedAllDay] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const close = () => {
+  const shut = () => {
     setOpen(false);
-    setAdding(null);
-    setError(null);
+    onSheet(false);
   };
 
-  const act = async (work: () => Promise<unknown>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await work();
-      close();
-      onChanged();
-    } catch (cause) {
-      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
-    } finally {
-      setBusy(false);
-    }
+  const choose = (aim: Aim) => {
+    shut();
+    onAim(aim);
   };
-
-  const said = formatLocalDate(date, language, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        aria-label={copy.addToDay}
-        style={{
-          position: "fixed",
-          insetInlineStart: 18,
-          bottom: 86,
-          width: 52,
-          height: 52,
-          borderRadius: 999,
-          background: "var(--accent)",
-          color: "var(--on-accent)",
-          fontSize: 26,
-          zIndex: 40,
-          boxShadow: "0 4px 16px -4px oklch(52% 0.123 245/.7)",
-        }}
-      >
-        +
-      </button>
+      {!hidden && !open && (
+        <button
+          onClick={() => {
+            setOpen(true);
+            onSheet(true);
+          }}
+          aria-label={copy.addToDay}
+          style={{
+            position: "fixed",
+            insetInlineStart: 18,
+            bottom: 86,
+            width: 52,
+            height: 52,
+            borderRadius: 999,
+            background: "var(--accent)",
+            color: "var(--on-accent)",
+            fontSize: 26,
+            zIndex: 40,
+            boxShadow: "0 4px 16px -4px oklch(52% 0.123 245/.7)",
+          }}
+        >
+          +
+        </button>
+      )}
 
-      {/* What to add. Nothing is asked for until one is chosen. */}
-      <Sheet open={open && adding === null} onClose={close}>
+      <Sheet open={open} onClose={shut}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <h2 style={{ fontSize: 18 }}>{copy.addToDayTitle.replace("{day}", said)}</h2>
-
+          <h2 style={{ fontSize: 18 }}>{copy.whatToAdd}</h2>
           <Choice
             icon="⛔"
             title={copy.addBlockTitle}
-            hint={
-              resource === null
-                ? copy.pickACalendar
-                : copy.addBlockHint.replace("{calendar}", resource.name)
-            }
-            onClick={() => setAdding("block")}
+            hint={copy.addBlockAimHint}
+            onClick={() => choose("block")}
           />
           <Choice
             icon="🏪"
             title={copy.addSpecialTitle}
             hint={copy.addSpecialHint}
-            onClick={() => setAdding("special")}
+            onClick={() => choose("special")}
           />
           <Choice
             icon="📅"
@@ -125,59 +95,161 @@ export const AddToDay = ({
           />
         </div>
       </Sheet>
+    </>
+  );
+};
 
-      {/* An hour this calendar will not take. */}
-      <Sheet open={adding === "block"} onClose={close}>
+/**
+ * The last step: the details that depend on both the action and the days, and
+ * a confirmation that says what is about to be made before it is.
+ */
+export const FinishAim = ({
+  aim,
+  dates,
+  token,
+  business,
+  resources,
+  resource,
+  onClose,
+  onDone,
+}: {
+  aim: Aim | null;
+  dates: readonly string[];
+  token: string;
+  business: BusinessDto;
+  resources: readonly ResourceDto[];
+  /** The calendar being read, which is what a blockage belongs to. */
+  resource: ResourceDto | null;
+  onClose: () => void;
+  onDone: () => void;
+}) => {
+  const copy = useCopy("owner");
+  const { language } = useLanguage();
+  const errorText = useErrorText();
+
+  const [from, setFrom] = useState("12:00");
+  const [until, setUntil] = useState("13:00");
+  const [allDay, setAllDay] = useState(true);
+  const [closedAllDay, setClosedAllDay] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const act = async (work: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await work();
+      onDone();
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const said =
+    dates.length === 0
+      ? ""
+      : dates.length === 1
+        ? formatLocalDate(dates[0] ?? "", language, {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })
+        : `${formatLocalDate(dates[0] ?? "", language, {
+            day: "numeric",
+            month: "long",
+          })} – ${formatLocalDate(dates[dates.length - 1] ?? "", language, {
+            day: "numeric",
+            month: "long",
+          })}`;
+
+  return (
+    <Sheet open={aim !== null && dates.length > 0} onClose={onClose}>
+      {aim === "block" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <h2 style={{ fontSize: 18 }}>{copy.addBlockTitle}</h2>
           <p className="hint" style={{ margin: 0 }}>
             {said} · {resource?.name ?? ""}
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <Field
-              id="add-block-from"
-              label={copy.from}
-              type="time"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-            />
-            <Field
-              id="add-block-to"
-              label={copy.to}
-              type="time"
-              value={until}
-              onChange={(event) => setUntil(event.target.value)}
-            />
+
+          <div style={{ display: "flex", gap: 8 }}>
+            {[true, false].map((whole) => (
+              <button
+                key={String(whole)}
+                className="chip"
+                aria-pressed={allDay === whole}
+                onClick={() => setAllDay(whole)}
+                style={{
+                  flex: 1,
+                  minHeight: 40,
+                  background: allDay === whole ? "var(--accent)" : "var(--raised)",
+                  color: allDay === whole ? "var(--on-accent)" : "var(--ink)",
+                  border: "1px solid var(--line)",
+                }}
+              >
+                {whole ? copy.allDay : copy.partOfDay}
+              </button>
+            ))}
           </div>
-          {until <= from && <Note>{copy.rangeInvalid}</Note>}
+
+          {!allDay && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Field
+                id="aim-block-from"
+                label={copy.from}
+                type="time"
+                value={from}
+                onChange={(event) => setFrom(event.target.value)}
+              />
+              <Field
+                id="aim-block-to"
+                label={copy.to}
+                type="time"
+                value={until}
+                onChange={(event) => setUntil(event.target.value)}
+              />
+            </div>
+          )}
+          {!allDay && until <= from && <Note>{copy.rangeInvalid}</Note>}
+
+          <p className="said" style={{ margin: 0 }}>
+            {copy.willMake
+              .replace("{days}", String(dates.length))
+              .replace("{calendars}", resource?.name ?? "")}
+          </p>
           {error !== null && <Critical>{error}</Critical>}
+
           <Button
             busy={busy}
-            disabled={until <= from || resource === null}
+            disabled={resource === null || (!allDay && until <= from)}
             onClick={() =>
               void act(() =>
-                api.createBlocks(token, business.id, resource?.id ?? "", [
-                  {
-                    startAt: instantOf(date, from, business.timeZone),
-                    endAt: instantOf(date, until, business.timeZone),
+                api.createBlocks(
+                  token,
+                  business.id,
+                  resource?.id ?? "",
+                  dates.map((date) => ({
+                    startAt: instantOf(date, allDay ? "00:00" : from, business.timeZone),
+                    endAt: instantOf(date, allDay ? "23:59" : until, business.timeZone),
                     reason: copy.blockedWord,
-                  },
-                ]),
+                  })),
+                ),
               )
             }
           >
             {copy.save}
           </Button>
         </div>
-      </Sheet>
+      )}
 
-      {/* A day the whole shop behaves differently. */}
-      <Sheet open={adding === "special"} onClose={close}>
+      {aim === "special" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <h2 style={{ fontSize: 18 }}>{copy.addSpecialTitle}</h2>
           <p className="hint" style={{ margin: 0 }}>
             {said} · {copy.allCalendars}
           </p>
+
           <div style={{ display: "flex", gap: 8 }}>
             {[true, false].map((shut) => (
               <button
@@ -197,17 +269,18 @@ export const AddToDay = ({
               </button>
             ))}
           </div>
+
           {!closedAllDay && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <Field
-                id="add-special-from"
+                id="aim-special-from"
                 label={copy.from}
                 type="time"
                 value={from}
                 onChange={(event) => setFrom(event.target.value)}
               />
               <Field
-                id="add-special-to"
+                id="aim-special-to"
                 label={copy.to}
                 type="time"
                 value={until}
@@ -215,8 +288,15 @@ export const AddToDay = ({
               />
             </div>
           )}
+
           <Note>{copy.overrideReplaces}</Note>
+          <p className="said" style={{ margin: 0 }}>
+            {copy.willMake
+              .replace("{days}", String(dates.length))
+              .replace("{calendars}", copy.allCalendars)}
+          </p>
           {error !== null && <Critical>{error}</Critical>}
+
           <Button
             busy={busy}
             disabled={!closedAllDay && until <= from}
@@ -225,11 +305,13 @@ export const AddToDay = ({
                 // The shop is every calendar: a special day the store keeps per
                 // calendar, said once here.
                 for (const one of resources) {
-                  await api.putOverride(token, business.id, one.id, {
-                    date,
-                    note: null,
-                    ranges: closedAllDay ? [] : [{ start: from, end: until }],
-                  });
+                  for (const date of dates) {
+                    await api.putOverride(token, business.id, one.id, {
+                      date,
+                      note: null,
+                      ranges: closedAllDay ? [] : [{ start: from, end: until }],
+                    });
+                  }
                 }
               })
             }
@@ -237,8 +319,8 @@ export const AddToDay = ({
             {copy.save}
           </Button>
         </div>
-      </Sheet>
-    </>
+      )}
+    </Sheet>
   );
 };
 

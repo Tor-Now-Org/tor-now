@@ -20,7 +20,7 @@ import { ActiveFilters, FilterControls } from "./day-filter-bar.tsx";
 import { NOTHING, anyFilter, keptBy, withinReach, type Facets, type Reach } from "./day-filter.ts";
 import { DayTimeline, type Picked } from "./day-timeline.tsx";
 import { DayActionSheet } from "./day-actions.tsx";
-import { AddToDay } from "./day-add.tsx";
+import { AddButton, FinishAim, type Aim } from "./day-add.tsx";
 import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
 
 /**
@@ -70,6 +70,11 @@ export const CalendarDay = ({
   const [reach, setReach] = useState<Reach>("DAY");
   /** Bumped when the day changes something the month draws, so it reloads. */
   const [monthKey, setMonthKey] = useState(0);
+  /** What the + started, and the days it is waiting to be aimed at. */
+  const [aim, setAim] = useState<Aim | null>(null);
+  const [aimedAt, setAimedAt] = useState<readonly string[]>([]);
+  /** Any sheet up: the + gets out of the way rather than sitting under it. */
+  const [sheetUp, setSheetUp] = useState(false);
   /**
    * Everything the named customer has, fetched by their number rather than read
    * off the search box — editing or clearing the query used to empty the very
@@ -343,6 +348,16 @@ export const CalendarDay = ({
         selected={date}
         onPickDay={setDate}
         reloadKey={monthKey}
+        choosing={
+          aim === null
+            ? null
+            : { title: aim === "block" ? copy.aimBlock : copy.aimSpecial }
+        }
+        onChosen={setAimedAt}
+        onCancelChoosing={() => {
+          setAim(null);
+          setAimedAt([]);
+        }}
       />
 
       {error !== null && <Critical>{error}</Critical>}
@@ -396,13 +411,27 @@ export const CalendarDay = ({
       </>
       )}
 
-      <AddToDay
+      <AddButton
+        hidden={sheetUp || picked !== null || selected !== null || aim !== null}
+        onSheet={setSheetUp}
+        onAim={(chosen) => {
+          setSheetUp(false);
+          setAim(chosen);
+          setAimedAt([]);
+        }}
+      />
+
+      <FinishAim
+        aim={aim}
+        dates={aimedAt}
         token={token}
         business={business}
-        date={date}
         resources={resources}
         resource={resource}
-        onChanged={() => {
+        onClose={() => setAimedAt([])}
+        onDone={() => {
+          setAim(null);
+          setAimedAt([]);
           setMonthKey((key) => key + 1);
           void load();
         }}
