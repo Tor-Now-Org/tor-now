@@ -1,0 +1,543 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { api } from "@/lib/api/client.ts";
+import { isApiError } from "@/lib/api/errors.ts";
+import type { BusinessDto, BusinessMonthDto, ResourceDto } from "@/lib/api/types.ts";
+import { formatLocalDate, monthName, todayIn } from "@/lib/format.ts";
+import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { useErrorText } from "@/lib/use-error-text.ts";
+import { Button, Card, Critical, Note, Sheet, Spinner } from "../ui.tsx";
+import { datesBetween, factsOn, segmentIn, weeksOf } from "./month-model.ts";
+
+/**
+ * The month, as the business reads one.
+ *
+ * It answers two questions at once — what does the month look like, and what do
+ * I want to change about it — because those are the same question for an owner
+ * looking at a holiday they have not booked yet. A tap opens a day; a second
+ * tap on another day takes the range between them, which is how a week away is
+ * said in one gesture instead of seven forms.
+ *
+ * Every calendar at once by default: the shop's closures belong to all of them,
+ * and "who is free on Thursday" cannot be answered one calendar at a time. A
+ * business with a single calendar sees none of the chrome — no scope chips, no
+ * marks — because for them there is nothing to tell apart.
+ */
+
+/** The shade of a square: what the shop is doing, before who is busy. */
+type Weather = "open" | "short" | "shut";
+
+const weatherOn = (month: BusinessMonthDto, date: string): Weather => {
+  const facts = factsOn(month, date);
+  if (facts.shopClosed) return "shut";
+  return facts.shopHours.length > 0 ? "short" : "open";
+};
+
+export const Month = ({
+  token,
+  business,
+  resources,
+  onOpenDay,
+}: {
+  token: string;
+  business: BusinessDto;
+  resources: readonly ResourceDto[];
+  onOpenDay: (date: string) => void;
+}) => {
+  const copy = useCopy("owner");
+  const { language } = useLanguage();
+  const errorText = useErrorText();
+
+  const [firstOfMonth, setFirstOfMonth] = useState(
+    () => `${todayIn(business.timeZone).slice(0, 7)}-01`,
+  );
+  const [month, setMonth] = useState<BusinessMonthDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  /** The two taps. The second one turns a day into a range. */
+  const [from, setFrom] = useState<string | null>(null);
+  const [to, setTo] = useState<string | null>(null);
+  const [openGroup, setOpenGroup] = useState<BusinessMonthDto["blockages"][number] | null>(null);
+  /** Which calendar the screen is reading — and therefore what a tap will make. */
+  const [scope, setScope] = useState<string | null>(null);
+
+  const onOffer = resources.filter((resource) => resource.active !== false);
+  const many = onOffer.length > 1;
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      setMonth(await api.businessMonth(token, business.id, firstOfMonth));
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    }
+  }, [token, business.id, firstOfMonth, errorText]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const act = async (work: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await work();
+      setFrom(null);
+      setTo(null);
+      setOpenGroup(null);
+      await load();
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (month === null) return <Spinner />;
+
+  const chosen = from === null ? [] : datesBetween(from, to ?? from);
+  const weeks = weeksOf(firstOfMonth);
+  const today = todayIn(business.timeZone);
+
+  /** Which calendars a change made here would touch. */
+  const touching = scope === null ? onOffer : onOffer.filter((one) => one.id === scope);
+
+  const blockAcross = async (dates: readonly string[], calendars: readonly ResourceDto[]) => {
+    for (const calendar of calendars) {
+      await api.createBlocks(
+        token,
+        business.id,
+        calendar.id,
+        dates.map((date) => ({
+          startAt: `${date}T00:00:00.000Z`,
+          endAt: `${date}T23:59:00.000Z`,
+          reason: copy.blockedWord,
+        })),
+      );
+    }
+  };
+
+  const closeAcross = async (dates: readonly string[], calendars: readonly ResourceDto[]) => {
+    for (const calendar of calendars) {
+      for (const date of dates) {
+        await api.putOverride(token, business.id, calendar.id, {
+          date,
+          note: null,
+          ranges: [],
+        });
+      }
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {many && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <ScopeChip
+            label={copy.allCalendars}
+            chosen={scope === null}
+            onClick={() => setScope(null)}
+          />
+          {onOffer.map((resource) => (
+            <ScopeChip
+              key={resource.id}
+              label={resource.name}
+              chosen={scope === resource.id}
+              onClick={() => setScope(resource.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          className="chip tap"
+          aria-label={copy.previousMonth}
+          onClick={() => setFirstOfMonth(shiftMonth(firstOfMonth, -1))}
+          style={{ minWidth: 44 }}
+        >
+          ‹
+        </button>
+        <span style={{ flex: 1, textAlign: "center", fontWeight: 600 }}>
+          {monthName(firstOfMonth, business.timeZone, language)}
+        </span>
+        <button
+          className="chip tap"
+          aria-label={copy.nextMonth}
+          onClick={() => setFirstOfMonth(shiftMonth(firstOfMonth, 1))}
+          style={{ minWidth: 44 }}
+        >
+          ›
+        </button>
+      </div>
+
+      <div
+        role="grid"
+        aria-label={monthName(firstOfMonth, business.timeZone, language)}
+        style={{ display: "flex", flexDirection: "column", gap: 3 }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(7, 1fr)",
+            gap: 3,
+            fontSize: 10.5,
+            color: "var(--faint)",
+            textAlign: "center",
+          }}
+        >
+          {copy.dayShort.map((short) => (
+            <span key={short}>{short}</span>
+          ))}
+        </div>
+
+        {weeks.map((week, row) => (
+          <div key={row} style={{ position: "relative" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+              {week.map((date, column) =>
+                date === null ? (
+                  <span key={`blank-${column}`} />
+                ) : (
+                  <DaySquare
+                    key={date}
+                    date={date}
+                    weather={weatherOn(month, date)}
+                    facts={factsOn(month, date)}
+                    calendars={touching}
+                    chosen={chosen.includes(date)}
+                    edge={date === from || date === to}
+                    today={date === today}
+                    label={formatLocalDate(date, language, { day: "numeric" })}
+                    onClick={() => {
+                      if (from === null || to !== null) {
+                        setFrom(date);
+                        setTo(null);
+                        return;
+                      }
+                      setTo(date);
+                    }}
+                  />
+                ),
+              )}
+            </div>
+
+            {/* Anything covering more than one day is drawn as one bar across
+                those days: a holiday is one decision and should look like it. */}
+            <div
+              style={{
+                position: "absolute",
+                insetInline: 0,
+                bottom: 3,
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                pointerEvents: "none",
+              }}
+            >
+              {month.blockages
+                .filter((blockage) => blockage.days > 1)
+                .filter((blockage) => scope === null || blockage.resourceId === scope)
+                .map((blockage) => segmentIn(week, blockage))
+                .filter((segment): segment is NonNullable<typeof segment> => segment !== null)
+                .map(({ span, column, width }) => (
+                  <span key={`${span.groupId}-${row}`} style={{ position: "relative", height: 13 }}>
+                    <button
+                      onClick={() => setOpenGroup(span)}
+                      style={{
+                        position: "absolute",
+                        insetInlineStart: `calc(${(column / 7) * 100}% + 2px)`,
+                        width: `calc(${(width / 7) * 100}% - 4px)`,
+                        height: 13,
+                        borderRadius: 999,
+                        background: "var(--cyan)",
+                        color: "var(--on-accent)",
+                        fontSize: 9,
+                        fontWeight: 600,
+                        pointerEvents: "auto",
+                        padding: "0 5px",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {span.reason || copy.blockedWord}
+                    </button>
+                  </span>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Legend copy={copy} many={many} />
+      {error !== null && <Critical>{error}</Critical>}
+      {from === null && <Note>{copy.monthHint}</Note>}
+
+      {/* What is selected, and what can be done with it — docked under the
+          grid rather than over it. A sheet here would cover the calendar and
+          swallow the second tap, which is the tap that makes a range. */}
+      {from !== null && (
+        <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ flex: 1, fontWeight: 600 }}>
+              {to === null
+                ? formatLocalDate(from, language, {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  })
+                : `${formatLocalDate(chosen[0] ?? from, language, {
+                    day: "numeric",
+                    month: "long",
+                  })} – ${formatLocalDate(chosen[chosen.length - 1] ?? to, language, {
+                    day: "numeric",
+                    month: "long",
+                  })}`}
+            </span>
+            {chosen.length > 1 && (
+              <span className="tab" style={{ fontSize: 12.5, color: "var(--accent-strong)" }}>
+                {chosen.length} {copy.daysWord}
+              </span>
+            )}
+          </div>
+
+          {to === null ? (
+            <>
+              <span className="hint">{copy.orTapAnother}</span>
+              {onOffer.map((resource) => {
+                const line = factsOn(month, from).byCalendar.find(
+                  (one) => one.resourceId === resource.id,
+                );
+                return (
+                  <div key={resource.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ flex: 1, fontWeight: 500 }}>{resource.name}</span>
+                    <span className="hint">
+                      {line?.away === true
+                        ? copy.blockedWord
+                        : `${line?.appointments ?? 0} ${copy.appointmentsWord}`}
+                    </span>
+                  </div>
+                );
+              })}
+              <Button onClick={() => onOpenDay(from)}>{copy.openTheDay}</Button>
+            </>
+          ) : (
+            <p className="said" style={{ margin: 0 }}>
+              {copy.willMake
+                .replace("{days}", String(chosen.length))
+                .replace(
+                  "{calendars}",
+                  scope === null ? copy.allCalendars : (touching[0]?.name ?? ""),
+                )}
+            </p>
+          )}
+
+          <Button
+            intent="quiet"
+            busy={busy}
+            onClick={() => void act(() => blockAcross(chosen, touching))}
+          >
+            {copy.blockTheCalendars}
+          </Button>
+          <Button
+            intent="quiet"
+            busy={busy}
+            onClick={() => void act(() => closeAcross(chosen, onOffer))}
+          >
+            {copy.closeTheShop}
+          </Button>
+          <Button intent="quiet" onClick={() => { setFrom(null); setTo(null); }}>
+            {copy.cancelSelection}
+          </Button>
+        </Card>
+      )}
+
+      {/* A blockage, as the one thing it was. */}
+      <Sheet open={openGroup !== null} onClose={() => setOpenGroup(null)}>
+        {openGroup !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <h2 style={{ fontSize: 18 }}>{openGroup.reason || copy.blockedWord}</h2>
+            <p className="hint" style={{ margin: 0 }}>
+              {formatLocalDate(openGroup.fromDate, language, { day: "numeric", month: "long" })}
+              {" – "}
+              {formatLocalDate(openGroup.toDate, language, { day: "numeric", month: "long" })}
+              {" · "}
+              {openGroup.days} {copy.daysWord}
+            </p>
+            <Button
+              intent="danger"
+              busy={busy}
+              onClick={() =>
+                void act(() => api.deleteBlockGroup(token, business.id, openGroup.groupId))
+              }
+            >
+              {copy.removeWholeBlockage.replace("{days}", String(openGroup.days))}
+            </Button>
+          </div>
+        )}
+      </Sheet>
+    </div>
+  );
+};
+
+const ScopeChip = ({
+  label,
+  chosen,
+  onClick,
+}: {
+  label: string;
+  chosen: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    className="chip"
+    aria-pressed={chosen}
+    onClick={onClick}
+    style={{
+      minHeight: 36,
+      padding: "0 12px",
+      background: chosen ? "var(--accent)" : "var(--raised)",
+      color: chosen ? "var(--on-accent)" : "var(--ink)",
+      border: `1px solid ${chosen ? "var(--accent)" : "var(--line)"}`,
+    }}
+  >
+    {label}
+  </button>
+);
+
+/**
+ * One square. The shop's own weather is the fill, because that is what a
+ * customer meets; who is busy is the row of marks underneath.
+ */
+const DaySquare = ({
+  date,
+  weather,
+  facts,
+  calendars,
+  chosen,
+  edge,
+  today,
+  label,
+  onClick,
+}: {
+  date: string;
+  weather: Weather;
+  facts: ReturnType<typeof factsOn>;
+  calendars: readonly ResourceDto[];
+  chosen: boolean;
+  edge: boolean;
+  today: boolean;
+  label: string;
+  onClick: () => void;
+}) => {
+  const background =
+    weather === "shut"
+      ? "var(--accent)"
+      : chosen
+        ? "var(--accent-soft)"
+        : weather === "short"
+          ? "var(--accent-soft)"
+          : "var(--raised)";
+  const colour =
+    weather === "shut"
+      ? "var(--on-accent)"
+      : weather === "short"
+        ? "var(--accent-strong)"
+        : "var(--ink)";
+
+  return (
+    <button
+      onClick={onClick}
+      aria-label={date}
+      aria-pressed={chosen}
+      style={{
+        position: "relative",
+        aspectRatio: "1",
+        borderRadius: 10,
+        background,
+        color: colour,
+        border: `1px solid ${
+          weather === "shut" ? "var(--accent)" : chosen ? "var(--accent)" : "var(--line)"
+        }`,
+        outline: edge ? "2px solid var(--accent)" : undefined,
+        outlineOffset: 1,
+        boxShadow: today ? "inset 0 0 0 1px var(--critical)" : undefined,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "flex-start",
+        paddingTop: 4,
+        gap: 2,
+        fontSize: 12,
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      <span>{label}</span>
+      {weather !== "shut" && (
+        <span style={{ display: "flex", gap: 2, position: "absolute", bottom: 14 }}>
+          {calendars.map((resource) => {
+            const line = facts.byCalendar.find((one) => one.resourceId === resource.id);
+            const busy = line?.appointments ?? 0;
+            return (
+              <i
+                key={resource.id}
+                style={{
+                  width: 4,
+                  height: 4,
+                  borderRadius: 999,
+                  display: "block",
+                  background:
+                    line?.away === true
+                      ? "var(--cyan)"
+                      : busy >= 3
+                        ? "var(--accent-strong)"
+                        : busy > 0
+                          ? "var(--faint)"
+                          : "var(--line)",
+                }}
+              />
+            );
+          })}
+        </span>
+      )}
+    </button>
+  );
+};
+
+const Legend = ({
+  copy,
+  many,
+}: {
+  copy: ReturnType<typeof useCopy<"owner">>;
+  many: boolean;
+}) => (
+  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: 10.5, color: "var(--muted)" }}>
+    <Key colour="var(--accent)" label={copy.closedAllDay} />
+    <Key colour="var(--accent-soft)" label={copy.differentHours} />
+    {many && <Key colour="var(--cyan)" label={copy.blockedWord} />}
+    <Key colour="var(--faint)" label={copy.appointmentsWord} />
+  </div>
+);
+
+const Key = ({ colour, label }: { colour: string; label: string }) => (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <i
+      style={{
+        width: 11,
+        height: 11,
+        borderRadius: 3,
+        display: "inline-block",
+        background: colour,
+        border: "1px solid var(--line)",
+      }}
+    />
+    <span>{label}</span>
+  </span>
+);
+
+/** The first of the month, moved by whole months. */
+const shiftMonth = (firstOfMonth: string, by: number): string => {
+  const [year, month] = firstOfMonth.split("-").map(Number) as [number, number];
+  const moved = new Date(Date.UTC(year, month - 1 + by, 1));
+  return `${moved.getUTCFullYear()}-${String(moved.getUTCMonth() + 1).padStart(2, "0")}-01`;
+};

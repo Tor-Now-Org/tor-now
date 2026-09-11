@@ -2,7 +2,9 @@ import {
   compareByName,
   displayName,
   END_OF_DAY,
+  instantToZoned,
   MIDNIGHT,
+  minutesBetweenInstants,
   notFound,
   parseInstant,
   addDays,
@@ -16,10 +18,41 @@ import {
   type Clock,
   type Customer,
   type LocalDate,
+  type LocalTimeRangeValue,
   type ResourceId,
   type User,
 } from "@tor-now/domain";
 import { SEARCH } from "../config.ts";
+
+/**
+ * What counts as a day taken rather than an hour of one. A blockage made "all
+ * day" runs midnight to a minute before the next, so anything at least this
+ * long is the whole day as far as a month grid is concerned.
+ */
+const WHOLE_DAY_MINUTES = 20 * 60;
+
+/** The month as the grid draws it: every calendar, and the decisions spanning days. */
+export type BusinessMonth = {
+  readonly days: readonly {
+    readonly date: LocalDate;
+    readonly byCalendar: readonly {
+      readonly resourceId: ResourceId;
+      readonly appointments: number;
+      readonly away: boolean;
+    }[];
+    readonly shopClosed: boolean;
+    readonly shopHours: readonly LocalTimeRangeValue[];
+  }[];
+  readonly blockages: readonly {
+    readonly groupId: string;
+    readonly resourceId: ResourceId;
+    readonly reason: string;
+    readonly fromDate: LocalDate;
+    readonly toDate: LocalDate;
+    readonly days: number;
+    readonly allDay: boolean;
+  }[];
+};
 import type { BookedAppointment } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 
@@ -156,6 +189,116 @@ export const calendarService = ({
           blocks: countFor(blocks, date),
         };
       });
+    });
+  },
+
+  /**
+   * The month as the grid draws it: every calendar at once.
+   *
+   * One read rather than one per calendar, because the screen shows the whole
+   * business and a month of three calendars would otherwise be three round
+   * trips and three chances to disagree with itself.
+   *
+   * A day is the shop's own when every calendar says the same thing about it —
+   * all closed, or all keeping the same hours. There is no business-level
+   * closure in the store (ADR 0002 has layers per calendar), so "the shop is
+   * shut" is read rather than recorded: it is what it means for nobody to be
+   * open.
+   */
+  async businessMonth(
+    actor: Actor,
+    businessId: BusinessId,
+    firstOfMonth: string,
+  ): Promise<BusinessMonth> {
+    const first = parseLocalDate(firstOfMonth);
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      const business = await repositories.businesses.findById(businessId);
+      if (business === null) throw notFound("Business", businessId);
+
+      const resources = await repositories.resources.listForBusiness(businessId);
+      const onOffer = resources.filter((resource) => resource.active);
+      const days = daysInMonthOf(first);
+      const last = addDays(first, days - 1);
+      const start = zonedToInstant(first, MIDNIGHT, business.timeZone);
+      const afterLast = zonedToInstant(addDays(first, days), MIDNIGHT, business.timeZone);
+
+      const perResource = await Promise.all(
+        onOffer.map(async (resource) => ({
+          resource,
+          appointments: await repositories.appointments.countsByLocalDay(
+            resource.id, start, afterLast, business.timeZone,
+          ),
+          overrides: await repositories.dateOverrides.listForResource(resource.id, first, last),
+          blocks: await repositories.blocks.listForResourceBetween(resource.id, start, afterLast),
+        })),
+      );
+
+      const countOn = (
+        counts: readonly { date: LocalDate; count: number }[],
+        date: LocalDate,
+      ) => counts.find((entry) => entry.date === date)?.count ?? 0;
+
+      const dayRows = Array.from({ length: days }, (_unused, offset) => {
+        const date = addDays(first, offset);
+        const byCalendar = perResource.map((entry) => ({
+          resourceId: entry.resource.id,
+          appointments: countOn(entry.appointments, date),
+          away: entry.blocks.some(
+            (block) =>
+              instantToZoned(block.startAt, business.timeZone).date === date &&
+              minutesBetweenInstants(block.startAt, block.endAt) >= WHOLE_DAY_MINUTES,
+          ),
+        }));
+
+        // What the shop does that day, when every calendar agrees.
+        const spoken = perResource.map((entry) =>
+          entry.overrides.find((override) => override.date === date) ?? null,
+        );
+        const everyoneSaid = spoken.length > 0 && spoken.every((one) => one !== null);
+        const shut = everyoneSaid && spoken.every((one) => (one?.ranges.length ?? 0) === 0);
+        const sameHours =
+          everyoneSaid && !shut
+            ? JSON.stringify(spoken[0]?.ranges ?? []) ===
+              JSON.stringify(spoken.at(-1)?.ranges ?? [])
+            : false;
+
+        return {
+          date,
+          byCalendar,
+          shopClosed: shut,
+          shopHours: sameHours ? (spoken[0]?.ranges ?? []) : [],
+        };
+      });
+
+      // Blocks that belong to one decision are answered as one thing, so the
+      // grid can draw a band instead of a stripe of marks.
+      const grouped = new Map<string, Block[]>();
+      perResource.forEach((entry) =>
+        entry.blocks.forEach((block) => {
+          const key = block.groupId ?? block.id;
+          grouped.set(key, [...(grouped.get(key) ?? []), block]);
+        }),
+      );
+      const blockages = [...grouped.entries()].map(([key, blocks]) => {
+        const ordered = [...blocks].sort((left, right) => left.startAt - right.startAt);
+        const firstBlock = ordered[0];
+        const lastBlock = ordered[ordered.length - 1];
+        return {
+          groupId: key,
+          resourceId: firstBlock?.resourceId ?? ("" as ResourceId),
+          reason: firstBlock?.reason ?? "",
+          fromDate: instantToZoned(firstBlock?.startAt ?? start, business.timeZone).date,
+          toDate: instantToZoned(lastBlock?.startAt ?? start, business.timeZone).date,
+          days: ordered.length,
+          allDay: ordered.every(
+            (block) =>
+              minutesBetweenInstants(block.startAt, block.endAt) >= WHOLE_DAY_MINUTES,
+          ),
+        };
+      });
+
+      return { days: dayRows, blockages };
     });
   },
 

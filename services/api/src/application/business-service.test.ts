@@ -336,6 +336,72 @@ describe("owning a business", () => {
     expect(test.store.blocks).toHaveLength(1);
   });
 
+  it("answers the month with every calendar at once", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const second = await test.services.business.createResource(
+      shop.owner.actor, shop.business.id, "כיסא שני",
+    );
+    const customer = await signIn(test, "+972500000077", "דנה");
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+    await test.services.calendar.createBlocks(
+      shop.owner.actor, shop.business.id, second.id,
+      [{ startAt: TUESDAY_AT("00:00"), endAt: TUESDAY_AT("23:59"), reason: "חופשה" }],
+    );
+
+    const month = await test.services.calendar.businessMonth(
+      shop.owner.actor, shop.business.id, TUESDAY.slice(0, 8) + "01",
+    );
+
+    const tuesday = month.days.find((day) => day === undefined ? false : day.date === TUESDAY);
+    expect(tuesday?.byCalendar).toHaveLength(2);
+    // The booking belongs to one calendar and the day off to the other, and the
+    // month says which is which rather than adding them up.
+    expect(tuesday?.byCalendar.find((one) => one.resourceId === shop.resource.id))
+      .toMatchObject({ appointments: 1, away: false });
+    expect(tuesday?.byCalendar.find((one) => one.resourceId === second.id))
+      .toMatchObject({ appointments: 0, away: true });
+    expect(tuesday?.shopClosed).toBe(false);
+
+    // And the blockage comes back as one thing, with its group.
+    expect(month.blockages).toHaveLength(1);
+    expect(month.blockages[0]).toMatchObject({ resourceId: second.id, days: 1, allDay: true });
+    expect(month.blockages[0]?.groupId).not.toBe("");
+  });
+
+  it("calls a day the shop's own only when every calendar says so", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const second = await test.services.business.createResource(
+      shop.owner.actor, shop.business.id, "כיסא שני",
+    );
+
+    // One calendar closed is one person's day off, not the shop's.
+    await test.services.business.putOverride(
+      shop.owner.actor, shop.business.id, shop.resource.id,
+      { date: TUESDAY, note: null, ranges: [] },
+    );
+    let month = await test.services.calendar.businessMonth(
+      shop.owner.actor, shop.business.id, TUESDAY.slice(0, 8) + "01",
+    );
+    expect(month.days.find((day) => day.date === TUESDAY)?.shopClosed).toBe(false);
+
+    // Both closed, and the shop is shut — which is the only thing that could
+    // possibly mean, since a customer can book nowhere.
+    await test.services.business.putOverride(
+      shop.owner.actor, shop.business.id, second.id,
+      { date: TUESDAY, note: null, ranges: [] },
+    );
+    month = await test.services.calendar.businessMonth(
+      shop.owner.actor, shop.business.id, TUESDAY.slice(0, 8) + "01",
+    );
+    expect(month.days.find((day) => day.date === TUESDAY)?.shopClosed).toBe(true);
+  });
+
   it("refuses a special day whose hours run into one another", async () => {
     const shop = await anEstablishedBusiness(test);
 

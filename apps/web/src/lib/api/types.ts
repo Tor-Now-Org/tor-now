@@ -84,6 +84,25 @@ export type MonthDayDto = {
   blocks: number;
 };
 
+/** The whole business's month: every calendar, and the decisions spanning days. */
+export type BusinessMonthDto = {
+  days: {
+    date: string;
+    byCalendar: { resourceId: string; appointments: number; away: boolean }[];
+    shopClosed: boolean;
+    shopHours: { start: string; end: string }[];
+  }[];
+  blockages: {
+    groupId: string;
+    resourceId: string;
+    reason: string;
+    fromDate: string;
+    toDate: string;
+    days: number;
+    allDay: boolean;
+  }[];
+};
+
 export type SlotDto = { startAt: string; endAt: string };
 
 /** ADR 0012: why a day is empty decides what the interface offers instead. */

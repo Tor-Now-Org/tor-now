@@ -578,6 +578,17 @@ const ownerRoutes = (services: Services) => {
     });
   });
 
+  // The whole business's month, for the grid that shows every calendar at once.
+  owner.get("/:businessId/calendar/month", async (context) => {
+    const { firstOfMonth } = parseQuery(context, schema.calendarMonthSchema);
+    const month = await services.calendar.businessMonth(
+      actorOf(context),
+      idParam(context, "businessId"),
+      firstOfMonth,
+    );
+    return context.json(month);
+  });
+
   owner.get("/:businessId/resources/:resourceId/calendar/month", async (context) => {
     const { firstOfMonth } = parseQuery(context, schema.calendarMonthSchema);
     const days = await services.calendar.month(

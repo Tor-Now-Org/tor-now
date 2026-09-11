@@ -7,10 +7,9 @@ import type {
   BusinessDto,
   CalendarAppointmentDto,
   CalendarDayDto,
-  MonthDayDto,
   ResourceDto,
 } from "@/lib/api/types.ts";
-import { monthName, timeIn, todayIn, whenIn } from "@/lib/format.ts";
+import { timeIn, todayIn, whenIn } from "@/lib/format.ts";
 import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
@@ -21,7 +20,7 @@ import {
   isCancelled,
   isSpent,
 } from "./appointment-sheet.tsx";
-import { MonthGrid, firstOfMonthFor, shiftMonth } from "./month-grid.tsx";
+import { Month } from "./month.tsx";
 import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
 
 /**
@@ -83,8 +82,6 @@ export const CalendarDay = ({
    */
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<CalendarAppointmentDto[] | null>(null);
-  const [month, setMonth] = useState<MonthDayDto[] | null>(null);
-  const firstOfMonth = firstOfMonthFor(date);
 
   const load = useCallback(async () => {
     if (resource === null) return;
@@ -126,24 +123,6 @@ export const CalendarDay = ({
     };
   }, [query, token, business.id]);
 
-  useEffect(() => {
-    if (view !== "month" || resource === null) {
-      setMonth(null);
-      return;
-    }
-    let current = true;
-    api
-      .calendarMonth(token, business.id, resource.id, firstOfMonth)
-      .then((days) => {
-        if (current) setMonth(days);
-      })
-      .catch(() => {
-        if (current) setMonth([]);
-      });
-    return () => {
-      current = false;
-    };
-  }, [view, token, business.id, resource, firstOfMonth]);
 
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -246,46 +225,18 @@ export const CalendarDay = ({
           weekdayNames={copy.days}
         />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              className="chip"
-              aria-label={copy.previousMonth}
-              onClick={() => setDate(shiftMonth(firstOfMonth, -1))}
-              style={{ border: "1px solid var(--line)", minWidth: 44 }}
-            >
-              ‹
-            </button>
-            <span style={{ flex: 1, textAlign: "center", fontWeight: 600 }}>
-              {monthName(firstOfMonth, business.timeZone, language)}
-            </span>
-            <button
-              className="chip"
-              aria-label={copy.nextMonth}
-              onClick={() => setDate(shiftMonth(firstOfMonth, 1))}
-              style={{ border: "1px solid var(--line)", minWidth: 44 }}
-            >
-              ›
-            </button>
-          </div>
-          {month === null ? (
-            <Spinner />
-          ) : (
-            <MonthGrid
-              firstOfMonth={firstOfMonth}
-              days={month}
-              selected={date}
-              today={todayIn(business.timeZone)}
-              onSelect={setDate}
-              weekdayNames={copy.days}
-              labels={{
-                appointments: copy.appointmentsWord,
-                blocked: copy.blockedWord,
-                empty: copy.noAppointments,
-              }}
-            />
-          )}
-        </div>
+        // The month is the whole business at once, and it is where a holiday
+        // is taken: the grid answers "what does next month look like" and
+        // "change this" with the same taps.
+        <Month
+          token={token}
+          business={business}
+          resources={resources}
+          onOpenDay={(picked) => {
+            setDate(picked);
+            setView("days");
+          }}
+        />
       )}
 
       {error !== null && <Critical>{error}</Critical>}

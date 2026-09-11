@@ -4,6 +4,7 @@ import type {
   AppointmentDto,
   AuditEntryDto,
   BlockDto,
+  BusinessMonthDto,
   BusinessDto,
   BusinessPhotoDto,
   BusinessProfileDto,
@@ -522,6 +523,13 @@ export const api = {
     }),
 
   /** A whole blockage — every day one decision made. */
+  /** Every calendar's month in one read, for the grid. */
+  businessMonth: (token: string, businessId: string, firstOfMonth: string) =>
+    request<BusinessMonthDto>(
+      `/businesses/${businessId}/calendar/month?firstOfMonth=${firstOfMonth}`,
+      { token },
+    ),
+
   blockGroup: (token: string, businessId: string, groupId: string) =>
     request<BlockDto[]>(`/businesses/${businessId}/block-groups/${groupId}`, { token }),
 
