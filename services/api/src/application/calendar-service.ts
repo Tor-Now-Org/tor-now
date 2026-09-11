@@ -66,7 +66,7 @@ const daysInMonthOf = (date: LocalDate): number => {
   const [year, month] = date.split("-").map(Number);
   return new Date(Date.UTC(year ?? 1970, month ?? 1, 0)).getUTCDate();
 };
-import { loadOwnedBusiness, loadOwnedResource, requireResourceAccess } from "./authorization.ts";
+import { loadManagedBusiness, loadOwnedResource, requireResourceAccess } from "./authorization.ts";
 
 /**
  * The owner's view of their own Business: the day's appointments, the Blocks
@@ -136,7 +136,7 @@ export const calendarService = ({
     const trimmed = query.trim();
     if (trimmed.length < SEARCH.minimumQueryLength) return [];
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       return repositories.appointments.searchUpcoming(
         businessId,
         trimmed,
@@ -229,7 +229,7 @@ export const calendarService = ({
   ): Promise<BusinessMonth> {
     const first = parseLocalDate(firstOfMonth);
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       const business = await repositories.businesses.findById(businessId);
       if (business === null) throw notFound("Business", businessId);
 
@@ -333,7 +333,7 @@ export const calendarService = ({
     date: string,
   ): Promise<BusinessDay> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       const business = await repositories.businesses.findById(businessId);
       if (business === null) throw notFound("Business", businessId);
 
@@ -449,7 +449,7 @@ export const calendarService = ({
     spans: readonly { startAt: string; endAt: string; reason: string }[],
   ): Promise<readonly Block[]> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       await loadOwnedResource(repositories, businessId, resourceId);
 
       // Read in full before any of it is written: the transaction would undo a
@@ -488,7 +488,7 @@ export const calendarService = ({
     groupId: string,
   ): Promise<number> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       return repositories.blocks.deleteGroup(businessId, groupId);
     });
   },
@@ -500,7 +500,7 @@ export const calendarService = ({
     groupId: string,
   ): Promise<readonly Block[]> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       return repositories.blocks.listGroup(businessId, groupId);
     });
   },
@@ -511,7 +511,7 @@ export const calendarService = ({
     blockId: BlockId,
   ): Promise<void> {
     await unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       await repositories.blocks.delete(blockId);
     });
   },
@@ -519,7 +519,7 @@ export const calendarService = ({
   /** The Business's customers: Users seen through a Membership with that role. */
   async customers(actor: Actor, businessId: BusinessId) {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       // Two sources for one question. Booking is what makes the relationship,
       // so anyone who has booked belongs here — including an owner who takes an
       // appointment in their own chair, who holds the OWNER role and would
@@ -565,7 +565,7 @@ export const calendarService = ({
     blocked: boolean,
   ) {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       const membership = await repositories.memberships.find(customerId, businessId);
       if (membership === null || membership.role !== "CUSTOMER") {
         throw notFound("Customer", customerId);
@@ -588,7 +588,7 @@ export const calendarService = ({
     customerId: User["id"],
   ) {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadOwnedBusiness(repositories, actor, businessId);
+      await loadManagedBusiness(repositories, actor, businessId);
       const membership = await repositories.memberships.find(customerId, businessId);
       if (membership === null) throw notFound("Customer", customerId);
 
@@ -617,7 +617,7 @@ export const calendarService = ({
 });
 
 const loadCustomers = async (
-  repositories: Parameters<typeof loadOwnedBusiness>[0],
+  repositories: Parameters<typeof loadManagedBusiness>[0],
   ids: readonly User["id"][],
 ): Promise<Map<User["id"], User>> => {
   const unique = [...new Set(ids)];

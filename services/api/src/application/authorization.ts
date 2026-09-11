@@ -146,6 +146,18 @@ export const loadOwnedBusiness = async (
   return business;
 };
 
+/** Same as `loadOwnedBusiness`, but for the OWNER-or-MANAGER work ADR 0016 allows. */
+export const loadManagedBusiness = async (
+  repositories: Repositories,
+  actor: Actor,
+  businessId: BusinessId,
+) => {
+  await requireOwnerOrManager(repositories, actor, businessId);
+  const business = await repositories.businesses.findById(businessId);
+  if (business === null) throw notFound("Business", businessId);
+  return business;
+};
+
 /** A Resource must belong to the Business the caller was authorized against. */
 export const loadOwnedResource = async (
   repositories: Repositories,
