@@ -4,6 +4,7 @@ import type {
   AppointmentDto,
   AuditEntryDto,
   BlockDto,
+  BusinessDayDto,
   BusinessMonthDto,
   BusinessDto,
   BusinessPhotoDto,
@@ -523,6 +524,10 @@ export const api = {
     }),
 
   /** A whole blockage — every day one decision made. */
+  /** One day across every calendar, for the timeline that draws them as lanes. */
+  businessDay: (token: string, businessId: string, date: string) =>
+    request<BusinessDayDto>(`/businesses/${businessId}/calendar/day?date=${date}`, { token }),
+
   /** Every calendar's month in one read, for the grid. */
   businessMonth: (token: string, businessId: string, firstOfMonth: string) =>
     request<BusinessMonthDto>(

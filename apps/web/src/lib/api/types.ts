@@ -84,6 +84,19 @@ export type MonthDayDto = {
   blocks: number;
 };
 
+/** One day, every calendar: lanes, the hours behind them, and what fills them. */
+export type BusinessDayDto = {
+  date: string;
+  calendars: {
+    resourceId: string;
+    resourceName: string;
+    open: { start: string; end: string }[];
+    special: boolean;
+    appointments: CalendarAppointmentDto[];
+    blocks: BlockDto[];
+  }[];
+};
+
 /** The whole business's month: every calendar, and the decisions spanning days. */
 export type BusinessMonthDto = {
   days: {

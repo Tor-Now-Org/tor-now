@@ -20,6 +20,7 @@ import type {
   StaffedBusiness,
   TeamMember,
 } from "../application/business-service.ts";
+import type { BusinessDay } from "../application/calendar-service.ts";
 
 /**
  * What crosses the wire, stated explicitly rather than by serialising whatever
@@ -151,6 +152,24 @@ export const appointmentWithCustomerOut = (
   ...appointmentOut(appointment),
   customerName: appointment.customerName,
   customerPhone: appointment.customerPhone,
+});
+
+/** One day, every calendar: lanes, the hours behind them, and what fills them. */
+export const businessDayOut = (day: BusinessDay) => ({
+  date: day.date,
+  calendars: day.calendars.map((calendar) => ({
+    resourceId: calendar.resourceId,
+    resourceName: calendar.resourceName,
+    // Local Times leave as HH:MM, like everywhere else on the wire — the
+    // domain keeps them as minutes and a client should never have to know.
+    open: calendar.open.map((range) => ({
+      start: formatLocalTime(range.start),
+      end: formatLocalTime(range.end),
+    })),
+    special: calendar.special,
+    appointments: calendar.appointments.map(appointmentWithCustomerOut),
+    blocks: calendar.blocks.map(blockOut),
+  })),
 });
 
 /** A customer's own list names the business, e.g. for an "add to calendar" title. */

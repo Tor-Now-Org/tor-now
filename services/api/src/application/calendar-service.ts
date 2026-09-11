@@ -1,5 +1,6 @@
 import {
   compareByName,
+  dayOfWeekOf,
   displayName,
   END_OF_DAY,
   instantToZoned,
@@ -80,6 +81,22 @@ export type CalendarDay = {
   readonly date: string;
   readonly appointments: readonly (Appointment & { customerName: string; customerPhone: string })[];
   readonly blocks: readonly Block[];
+};
+
+/** One day, every calendar: what is booked, what is blocked, and when it is open. */
+export type BusinessDay = {
+  readonly date: string;
+  readonly calendars: readonly {
+    readonly resourceId: ResourceId;
+    readonly resourceName: string;
+    readonly open: readonly LocalTimeRangeValue[];
+    readonly special: boolean;
+    readonly appointments: readonly (Appointment & {
+      customerName: string;
+      customerPhone: string;
+    })[];
+    readonly blocks: readonly Block[];
+  }[];
 };
 
 /** One square of the month grid. */
@@ -299,6 +316,76 @@ export const calendarService = ({
       });
 
       return { days: dayRows, blockages };
+    });
+  },
+
+  /**
+   * One day, every calendar, and the hours each of them keeps.
+   *
+   * The day screen draws lanes side by side and shades what is outside the
+   * working hours, so it needs all three layers at once: what is booked, what
+   * is blocked, and when the calendar is open at all. One read, for the same
+   * reason the month is one read.
+   */
+  async businessDay(
+    actor: Actor,
+    businessId: BusinessId,
+    date: string,
+  ): Promise<BusinessDay> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await loadOwnedBusiness(repositories, actor, businessId);
+      const business = await repositories.businesses.findById(businessId);
+      if (business === null) throw notFound("Business", businessId);
+
+      const on = parseLocalDate(date);
+      const from = zonedToInstant(on, MIDNIGHT, business.timeZone);
+      const to = zonedToInstant(on, END_OF_DAY, business.timeZone);
+      const weekday = dayOfWeekOf(on);
+
+      const resources = await repositories.resources.listForBusiness(businessId);
+      const onOffer = resources.filter((resource) => resource.active);
+
+      const calendars = await Promise.all(
+        onOffer.map(async (resource) => {
+          const [appointments, blocks, hours, overrides] = await Promise.all([
+            repositories.appointments.listForResourceBetween(resource.id, from, to),
+            repositories.blocks.listForResourceBetween(resource.id, from, to),
+            repositories.workingHours.listForResource(resource.id),
+            repositories.dateOverrides.listForResource(resource.id, on, on),
+          ]);
+          const customers = await loadCustomers(
+            repositories,
+            appointments.map((appointment) => appointment.customerId),
+          );
+          // The override replaces the weekday entirely (ADR 0002); its absence
+          // is what makes the week's own hours the answer.
+          const override = overrides.find((entry) => entry.date === on) ?? null;
+          const open =
+            override !== null
+              ? override.ranges
+              : hours
+                  .filter((entry) => entry.dayOfWeek === weekday)
+                  .map((entry) => ({ start: entry.start, end: entry.end }));
+
+          return {
+            resourceId: resource.id,
+            resourceName: resource.name,
+            open,
+            special: override !== null,
+            appointments: appointments.map((appointment) => {
+              const customer = customers.get(appointment.customerId);
+              return {
+                ...appointment,
+                customerName: customer === undefined ? "—" : displayName(customer),
+                customerPhone: customer?.phone ?? "",
+              };
+            }),
+            blocks,
+          };
+        }),
+      );
+
+      return { date: on, calendars };
     });
   },
 

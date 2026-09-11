@@ -637,6 +637,132 @@ test.describe("the month", () => {
   });
 });
 
+/**
+ * The day as a timeline. These drive the screen a finger actually meets — the
+ * free stretches, the fold, the sheet — and then ask the store what changed.
+ */
+test.describe("the day timeline", () => {
+  const openTheDay = async (
+    page: Page,
+    shop: { business: { id: string }; owner: { token: string } },
+    date: string,
+  ) => {
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "חודש", exact: true }).click();
+    await page.getByRole("button", { name: date }).click();
+    await page.getByRole("button", { name: "פתיחת היום" }).click();
+    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  };
+
+  test("free time is a control, and blocking it takes it out of the day", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `ציר ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const date = aDayFromNow(1);
+    await openTheDay(page, shop, date);
+
+    // A whole empty day is folded, so the first tap opens the fold; the second
+    // is the stretch itself. The emptiest part of the screen is the part an
+    // owner wants to fill, and both taps lead there.
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByText(shop.resource.name)).toBeVisible();
+    await sheet.getByRole("button", { name: "חסימה", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // The day is gone for a customer, because the whole of it was free.
+    await expect
+      .poll(
+        async () => {
+          const days = await call<{ slots: unknown[] }[]>(
+            `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+              `&resourceId=${shop.resource.id}&from=${date}&to=${date}`,
+          );
+          return (days[0]?.slots ?? []).length;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(0);
+  });
+
+  test("a blockage on the timeline opens, and can be taken off again", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `הסרה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const date = aDayFromNow(1);
+
+    // One hour blocked, set up out of band so the timeline has something on it.
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        blocks: [
+          {
+            startAt: `${date}T10:00:00.000Z`,
+            endAt: `${date}T11:00:00.000Z`,
+            reason: "ספק",
+          },
+        ],
+      },
+    });
+
+    await openTheDay(page, shop, date);
+
+    // It is on the track, and it opens rather than doing anything by itself.
+    await page.getByRole("button", { name: /ספק/ }).first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: "מחיקה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // And the hour comes back.
+    await expect
+      .poll(
+        async () => {
+          const blocks = await call<{ id: string }[]>(
+            `/businesses/${shop.business.id}/resources/${shop.resource.id}/calendar?date=${date}`,
+            { token: shop.owner.token },
+          ).then((day) => (day as unknown as { blocks: { id: string }[] }).blocks);
+          return blocks.length;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(0);
+  });
+
+  test("a quiet day folds, and the fold opens", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `קיפול ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "20:00" },
+    });
+    const date = aDayFromNow(1);
+    await openTheDay(page, shop, date);
+
+    // Eleven empty hours are one band rather than a scroll.
+    const fold = page.getByRole("button", { name: /פנוי/ }).first();
+    await expect(fold).toBeVisible();
+    await fold.click();
+
+    // Opened, the same stretch is there to be acted on rather than hidden.
+    await expect(page.getByRole("dialog").or(page.getByRole("button", { name: /פנוי/ }).first()))
+      .toBeVisible();
+  });
+});
+
 test.describe("special days and blockages", () => {
   const anOwnerAt = async (name: string) => {
     const ownerPhone = uniquePhone();

@@ -5,22 +5,20 @@ import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type {
   BusinessDto,
+  BusinessDayDto,
   CalendarAppointmentDto,
   CalendarDayDto,
   ResourceDto,
 } from "@/lib/api/types.ts";
-import { timeIn, todayIn, whenIn } from "@/lib/format.ts";
+import { todayIn, whenIn } from "@/lib/format.ts";
 import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { DateStrip } from "../date-strip.tsx";
-import {
-  AppointmentSheet,
-  StatusTag,
-  isCancelled,
-  isSpent,
-} from "./appointment-sheet.tsx";
+import { AppointmentSheet } from "./appointment-sheet.tsx";
 import { Month } from "./month.tsx";
+import { DayTimeline, type Picked } from "./day-timeline.tsx";
+import { DayActionSheet } from "./day-actions.tsx";
 import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
 
 /**
@@ -59,6 +57,12 @@ export const CalendarDay = ({
   }, [resources]);
   const [date, setDate] = useState(() => todayIn(business.timeZone));
   const [day, setDay] = useState<CalendarDayDto | null>(null);
+  /** The same day across every calendar, which is what the timeline draws. */
+  const [wholeDay, setWholeDay] = useState<BusinessDayDto | null>(null);
+  /** What a tap on the timeline opened: an item, or a stretch of free time. */
+  const [picked, setPicked] = useState<Picked | null>(null);
+  /** Reading every calendar at once, which only means anything past one. */
+  const [showEveryone, setShowEveryone] = useState(false);
   const [selected, setSelected] = useState<CalendarAppointmentDto | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +91,12 @@ export const CalendarDay = ({
     if (resource === null) return;
     setBusy(true);
     try {
-      setDay(await api.calendarDay(token, business.id, resource.id, date));
+      const [oneCalendar, wholeDay] = await Promise.all([
+        api.calendarDay(token, business.id, resource.id, date),
+        api.businessDay(token, business.id, date),
+      ]);
+      setDay(oneCalendar);
+      setWholeDay(wholeDay);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
@@ -128,16 +137,41 @@ export const CalendarDay = ({
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
       {resources.length > 1 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            className="chip"
+            aria-pressed={showEveryone}
+            onClick={() => setShowEveryone(true)}
+            style={{
+              background: showEveryone ? "var(--accent)" : "var(--raised)",
+              color: showEveryone ? "var(--on-accent)" : "var(--ink)",
+              border: `1px solid ${showEveryone ? "var(--accent)" : "var(--line)"}`,
+            }}
+          >
+            {copy.allCalendars}
+          </button>
           {resources.map((candidate) => (
             <button
               key={candidate.id}
               className="chip"
-              aria-pressed={candidate.id === resource?.id}
-              onClick={() => setResource(candidate)}
+              aria-pressed={!showEveryone && candidate.id === resource?.id}
+              onClick={() => {
+                setResource(candidate);
+                setShowEveryone(false);
+              }}
               style={{
-                background: candidate.id === resource?.id ? "var(--accent)" : "var(--raised)",
-                color: candidate.id === resource?.id ? "var(--on-accent)" : "var(--ink)",
-                border: `1px solid ${candidate.id === resource?.id ? "var(--accent)" : "var(--line)"}`,
+                background:
+                  !showEveryone && candidate.id === resource?.id
+                    ? "var(--accent)"
+                    : "var(--raised)",
+                color:
+                  !showEveryone && candidate.id === resource?.id
+                    ? "var(--on-accent)"
+                    : "var(--ink)",
+                border: `1px solid ${
+                  !showEveryone && candidate.id === resource?.id
+                    ? "var(--accent)"
+                    : "var(--line)"
+                }`,
               }}
             >
               {candidate.name}
@@ -241,62 +275,50 @@ export const CalendarDay = ({
 
       {error !== null && <Critical>{error}</Critical>}
 
-      {busy && day === null ? (
+      {busy && wholeDay === null ? (
         <Spinner />
-      ) : day === null || day.appointments.length + day.blocks.length === 0 ? (
+      ) : wholeDay === null ? (
         <Empty title={copy.noAppointments} body={copy.refreshHint} />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <span className="label">
-            {countOf(language, day.appointments.length, copy.appointmentsCount)}
-          </span>
-
-          {day.appointments.map((appointment) => (
-            <button key={appointment.id} onClick={() => setSelected(appointment)} style={{ textAlign: "start" }}>
-              <Card style={{ width: "100%", display: "flex", alignItems: "center", gap: 12 }}>
-                {/* The tag says it, the strike shows it: an owner reading a
-                    day's list should not have to read every tag to see which
-                    of these still stand. The tag itself is left alone. */}
-                <span
-                  className={
-                    isCancelled(appointment)
-                      ? "tab cancelled"
-                      : isSpent(appointment)
-                        ? "tab spent"
-                        : "tab"
-                  }
-                  style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 15 }}
-                >
-                  {timeIn(appointment.startAt, business.timeZone, language)}
-                </span>
-                <span
-                  className={
-                    isCancelled(appointment)
-                      ? "cancelled"
-                      : isSpent(appointment)
-                        ? "spent"
-                        : undefined
-                  }
-                  style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}
-                >
-                  <span style={{ fontWeight: 500 }}>{appointment.customerName}</span>
-                  <span className="hint">{appointment.serviceName}</span>
-                </span>
-                <StatusTag appointment={appointment} copy={copy} />
-              </Card>
-            </button>
-          ))}
-
-          {day.blocks.map((block) => (
-            <Card key={block.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--sunken)" }}>
-              <span className="tab hint">{timeIn(block.startAt, business.timeZone, language)}</span>
-              <span style={{ flex: 1 }} className="hint">{block.reason}</span>
-            </Card>
-          ))}
-        </div>
+        // The day as it will be lived: everything in one column against the
+        // hours, with the free stretches tappable — they are the part an owner
+        // wants to fill, and they used to be the part that was not there.
+        <DayTimeline
+          day={wholeDay}
+          timeZone={business.timeZone}
+          lanes={
+            resource === null
+              ? []
+              : resources.length > 1 && showEveryone
+                ? resources.map((one) => ({ id: one.id, name: one.name }))
+                : [{ id: resource.id, name: resource.name }]
+          }
+          onPick={(entry) => {
+            if (entry.kind === "appointment") {
+              const found = day?.appointments.find((one) => one.id === entry.id) ?? null;
+              setSelected(found);
+              return;
+            }
+            setPicked(entry);
+          }}
+        />
       )}
 
-      <Note>{copy.refreshHint}</Note>
+      <DayActionSheet
+        picked={picked}
+        token={token}
+        business={business}
+        date={date}
+        resources={resources}
+        openHours={Object.fromEntries(
+          (wholeDay?.calendars ?? []).map((calendar) => [calendar.resourceId, calendar.open]),
+        )}
+        onClose={() => setPicked(null)}
+        onChanged={() => {
+          setPicked(null);
+          void load();
+        }}
+      />
       </>
       )}
 

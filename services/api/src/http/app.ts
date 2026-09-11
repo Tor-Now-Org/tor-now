@@ -578,6 +578,17 @@ const ownerRoutes = (services: Services) => {
     });
   });
 
+  // One day across every calendar, for the timeline that draws them as lanes.
+  owner.get("/:businessId/calendar/day", async (context) => {
+    const { date } = parseQuery(context, schema.calendarDaySchema);
+    const day = await services.calendar.businessDay(
+      actorOf(context),
+      idParam(context, "businessId"),
+      date,
+    );
+    return context.json(wire.businessDayOut(day));
+  });
+
   // The whole business's month, for the grid that shows every calendar at once.
   owner.get("/:businessId/calendar/month", async (context) => {
     const { firstOfMonth } = parseQuery(context, schema.calendarMonthSchema);
