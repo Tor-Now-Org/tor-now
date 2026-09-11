@@ -279,7 +279,8 @@ export const membershipRepository = (tx: Transaction): MembershipRepository => (
     const rpcRows = await tx<{ out_user_id: string; out_membership_id: string }[]>`
       select * from app.invite_user_to_business(
         ${businessId}, ${input.phone}, ${input.givenName},
-        ${input.familyName}, ${input.role}
+        ${input.familyName}, ${input.role},
+        ${input.invitedGivenName}, ${input.invitedFamilyName}
       )`;
     const { out_user_id: user_id, out_membership_id: membership_id } = rpcRows[0]!;
 

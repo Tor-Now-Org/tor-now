@@ -90,6 +90,13 @@ export type Membership = {
   readonly createdAt: Instant;
   /** Set by the Business to stop this customer booking there. Null means active. */
   readonly blockedAt: Instant | null;
+  /**
+   * What the inviter typed for this person, kept only as a display hint while
+   * `needsName(user)` is still true — never identity, and irrelevant once the
+   * invitee registers.
+   */
+  readonly invitedGivenName: string | null;
+  readonly invitedFamilyName: string | null;
 };
 
 export const isBlocked = (membership: Pick<Membership, "blockedAt">): boolean =>

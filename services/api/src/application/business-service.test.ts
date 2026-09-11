@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { displayName, MAXIMUM_PHOTOS, parseInstant } from "@tor-now/domain";
+import { displayName, MAXIMUM_PHOTOS, needsName, parseInstant, UNNAMED } from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
@@ -1246,6 +1246,26 @@ describe("the team", () => {
       shop.business.id,
     );
     expect(team.map((each) => each.membership.role).sort()).toEqual(["OWNER", "WORKER"]);
+  });
+
+  it("discards the owner's typed name, so a never-signed-in invitee is still asked their own", async () => {
+    const { member, worker } = await withAWorker();
+
+    expect(member.user.givenName).toBe(UNNAMED);
+    expect(member.user.familyName).toBeNull();
+    expect(needsName(worker.user)).toBe(true);
+    // The owner's typed name survives as a display hint on the membership.
+    expect(member.membership.invitedGivenName).toBe("יעל");
+    expect(member.membership.invitedFamilyName).toBeNull();
+
+    // Filling in their own name, exactly like a normal signup, replaces it.
+    const named = await test.services.profile.updateProfile(worker.actor, {
+      givenName: "יעל",
+      familyName: "כהן",
+    });
+    expect(named.id).toBe(worker.user.id);
+    expect(named.givenName).toBe("יעל");
+    expect(named.familyName).toBe("כהן");
   });
 
   it("keeps a worker to their own calendar and out of everything else", async () => {

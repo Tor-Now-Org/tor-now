@@ -316,20 +316,30 @@ export const describeRepositoryContract = (
             givenName: "נועה",
             familyName: null,
             role: "WORKER",
+            invitedGivenName: "נועה",
+            invitedFamilyName: "כהן",
           },
         );
         expect(user.phone).toBe("+972500002228");
-        expect(membership).toMatchObject({ userId: user.id, role: "WORKER" });
+        expect(membership).toMatchObject({
+          userId: user.id,
+          role: "WORKER",
+          invitedGivenName: "נועה",
+          invitedFamilyName: "כהן",
+        });
 
         const reinvited = await repositories.memberships.invite(context.business.id, {
           phone: "+972500002228",
           givenName: "נועה",
           familyName: null,
           role: "MANAGER",
+          invitedGivenName: "נועה",
+          invitedFamilyName: "לוי",
         });
         expect(reinvited.user.id).toBe(user.id);
         expect(reinvited.membership.id).toBe(membership.id);
         expect(reinvited.membership.role).toBe("MANAGER");
+        expect(reinvited.membership.invitedFamilyName).toBe("לוי");
       });
     });
 
