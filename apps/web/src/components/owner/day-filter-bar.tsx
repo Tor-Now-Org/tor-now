@@ -208,6 +208,7 @@ export const ActiveFilters = ({
   reach,
   onReach,
   count,
+  onClear,
 }: {
   facets: Facets;
   onFacets: (facets: Facets) => void;
@@ -215,6 +216,8 @@ export const ActiveFilters = ({
   reach: Reach;
   onReach: (reach: Reach) => void;
   count: number;
+  /** Back to the whole day: every chip off, and the search box empty with them. */
+  onClear: () => void;
 }) => {
   const copy = useCopy("owner");
   const nameOf = (id: string) => resources.find((one) => one.id === id)?.name ?? id;
@@ -263,7 +266,7 @@ export const ActiveFilters = ({
             }
           />
         ))}
-        <button className="chip tap" onClick={() => onFacets(NOTHING)} style={{ minHeight: 28 }}>
+        <button className="chip tap" onClick={onClear} style={{ minHeight: 28 }}>
           {copy.clearFilters}
         </button>
       </div>

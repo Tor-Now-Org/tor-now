@@ -10,6 +10,7 @@ import {
   WORDS_MINIMUM,
   bandsOf,
   clockOf,
+  columnsOf,
   foldsIn,
   minutesOf,
   placeOf,
@@ -213,7 +214,11 @@ export const DayTimeline = ({
 
         <div style={{ flex: 1, position: "relative", display: "flex", gap: 5 }}>
           {shown.map((calendar, laneIndex) => {
-            const bands = bandsOf(window, itemsOf(calendar));
+            const mine = itemsOf(calendar);
+            const bands = bandsOf(window, mine);
+            // Things happening at once share the width, so a day off and the
+            // appointment inside it are both visible and both the right length.
+            const columns = columnsOf(mine);
             return (
               <div
                 key={calendar.resourceId}
@@ -270,6 +275,7 @@ export const DayTimeline = ({
                       key={`item-${band.start}-${index}`}
                       band={band}
                       place={place}
+                      column={columns.get(band.item) ?? { column: 0, columns: 1 }}
                       laneIndex={laneIndex}
                       laneName={calendar.resourceName}
                       services={services}
@@ -351,7 +357,6 @@ const FreeSpace = ({
           alignItems: "center",
           justifyContent: "center",
           gap: 3,
-          zIndex: 2,
         }}
       >
         <i style={{ flex: 1, height: 1, background: "var(--line)" }} />
@@ -400,6 +405,7 @@ const FreeSpace = ({
 const ItemBand = ({
   band,
   place,
+  column,
   laneIndex,
   laneName,
   services,
@@ -408,6 +414,8 @@ const ItemBand = ({
 }: {
   band: Extract<Band<Item>, { kind: "item" }>;
   place: { top: number; height: number };
+  /** Which slice of the lane's width, when something else is happening too. */
+  column: { column: number; columns: number };
   laneIndex: number;
   laneName: string;
   services: readonly string[];
@@ -427,7 +435,8 @@ const ItemBand = ({
       onClick={onClick}
       style={{
         position: "absolute",
-        insetInline: 3,
+        insetInlineStart: `calc(${(column.column / column.columns) * 100}% + 3px)`,
+        width: `calc(${(1 / column.columns) * 100}% - 6px)`,
         top: place.top + 1,
         height: place.height,
         borderRadius: 8,
@@ -479,7 +488,9 @@ const ItemBand = ({
           </small>
         )}
       </span>
-      {place.height >= 22 && <Mark name={laneName} index={laneIndex} />}
+      {place.height >= 22 && column.columns === 1 && (
+        <Mark name={laneName} index={laneIndex} />
+      )}
     </button>
   );
 };

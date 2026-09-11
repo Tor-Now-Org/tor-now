@@ -6,8 +6,8 @@ import { isApiError } from "@/lib/api/errors.ts";
 import type { BusinessDto, ResourceDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { Button, Critical, Note, Sheet } from "../ui.tsx";
-import { clockOf, spokenLength, withoutSpan } from "./day-model.ts";
+import { Button, Critical, Field, Note, Sheet } from "../ui.tsx";
+import { clockOf, minutesOf, spokenLength, withoutSpan } from "./day-model.ts";
 import type { Picked } from "./day-timeline.tsx";
 
 /**
@@ -105,18 +105,18 @@ export const DayActionSheet = ({
           busy={busy}
           error={error}
           past={past || picked.end <= minutesNow(business.timeZone, date)}
-          onBlock={() =>
+          onBlock={(span) =>
             void act(() =>
               api.createBlocks(token, business.id, picked.resourceId, [
                 {
-                  startAt: instantOf(date, picked.start, business.timeZone),
-                  endAt: instantOf(date, picked.end, business.timeZone),
+                  startAt: instantOf(date, span.start, business.timeZone),
+                  endAt: instantOf(date, span.end, business.timeZone),
                   reason: copy.blockedWord,
                 },
               ]),
             )
           }
-          onCloseShop={() =>
+          onCloseShop={(span) =>
             void act(async () => {
               // The shop keeping other hours that day is a special day for
               // every calendar — the hours either side of what was tapped.
@@ -124,7 +124,7 @@ export const DayActionSheet = ({
                 await api.putOverride(token, business.id, resource.id, {
                   date,
                   note: null,
-                  ranges: withoutSpan(openHours[resource.id] ?? [], picked),
+                  ranges: withoutSpan(openHours[resource.id] ?? [], span),
                 });
               }
             })
@@ -194,11 +194,38 @@ const FreeActions = ({
   busy: boolean;
   error: string | null;
   past: boolean;
-  onBlock: () => void;
-  onCloseShop: () => void;
+  onBlock: (span: { start: number; end: number }) => void;
+  onCloseShop: (span: { start: number; end: number }) => void;
 }) => {
-  const length = picked.end - picked.start;
-  const tooShort = length < SHORTEST_SERVICE_MINUTES;
+  /**
+   * Which part of the free stretch this is about.
+   *
+   * A whole quiet afternoon is one tap on the timeline, and almost nobody means
+   * "block all five hours" — they mean the hour they are about to spend
+   * elsewhere. So the stretch arrives as the default and the two times are
+   * there to narrow it, with the ordinary lengths one tap away.
+   */
+  const [from, setFrom] = useState(clockOf(picked.start));
+  const [until, setUntil] = useState(clockOf(picked.end));
+
+  // A different stretch was tapped: start again from the whole of it.
+  const [about, setAbout] = useState(`${picked.start}-${picked.end}`);
+  if (about !== `${picked.start}-${picked.end}`) {
+    setAbout(`${picked.start}-${picked.end}`);
+    setFrom(clockOf(picked.start));
+    setUntil(clockOf(picked.end));
+  }
+
+  const whole = picked.end - picked.start;
+  const chosen = { start: minutesOf(from), end: minutesOf(until) };
+  const length = chosen.end - chosen.start;
+  const usable = length > 0;
+  const tooShort = whole < SHORTEST_SERVICE_MINUTES;
+
+  const take = (minutes: number) => {
+    setFrom(clockOf(picked.start));
+    setUntil(clockOf(Math.min(picked.start + minutes, picked.end)));
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -206,29 +233,85 @@ const FreeActions = ({
         <h2 style={{ flex: 1, fontSize: 18 }} className="tab">
           {clockOf(picked.start)}–{clockOf(picked.end)}
         </h2>
-        <span className="badge">{spokenLength(length, words)}</span>
+        <span className="badge">{spokenLength(whole, words)}</span>
       </div>
       <p className="hint" style={{ margin: 0 }}>
         {picked.resourceName}
       </p>
 
-      {/* Said rather than discovered. A gap too short for the shortest service
-          cannot become an appointment, and an hour that has gone is not worth
-          blocking — the sheet explains instead of offering a button that would
-          fail or do nothing. */}
       {past ? (
         <Note>{copy.alreadyPassed}</Note>
-      ) : tooShort ? (
-        <Note>{copy.tooShortToBook.replace("{minutes}", String(SHORTEST_SERVICE_MINUTES))}</Note>
-      ) : null}
+      ) : (
+        <>
+          {/* Only worth asking when there is a choice to make: a twenty-minute
+              gap is the whole of itself. */}
+          {whole > SHORTEST_SERVICE_MINUTES * 2 && (
+            <>
+              <span className="label">{copy.whichHours}</span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <Field
+                  id="free-from"
+                  label={copy.from}
+                  type="time"
+                  value={from}
+                  onChange={(event) => setFrom(event.target.value)}
+                />
+                <Field
+                  id="free-to"
+                  label={copy.to}
+                  type="time"
+                  value={until}
+                  onChange={(event) => setUntil(event.target.value)}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {[30, 60, 120]
+                  .filter((minutes) => minutes < whole)
+                  .map((minutes) => (
+                    <button
+                      key={minutes}
+                      className="chip tap"
+                      onClick={() => take(minutes)}
+                      style={{ minHeight: 34, padding: "0 12px" }}
+                    >
+                      {spokenLength(minutes, words)}
+                    </button>
+                  ))}
+                <button
+                  className="chip tap"
+                  onClick={() => {
+                    setFrom(clockOf(picked.start));
+                    setUntil(clockOf(picked.end));
+                  }}
+                  style={{ minHeight: 34, padding: "0 12px" }}
+                >
+                  {copy.wholeStretch}
+                </button>
+              </div>
+            </>
+          )}
+
+          {!usable && <Note>{copy.rangeInvalid}</Note>}
+          {tooShort && (
+            <Note>
+              {copy.tooShortToBook.replace("{minutes}", String(SHORTEST_SERVICE_MINUTES))}
+            </Note>
+          )}
+        </>
+      )}
 
       {error !== null && <Critical>{error}</Critical>}
 
-      <Button busy={busy} disabled={past} onClick={onBlock}>
-        {copy.blockHere}
+      <Button busy={busy} disabled={past || !usable} onClick={() => onBlock(chosen)}>
+        {copy.blockThese.replace("{hours}", `${from}–${until}`)}
       </Button>
-      <Button intent="quiet" busy={busy} disabled={past} onClick={onCloseShop}>
-        {copy.closeShopHere}
+      <Button
+        intent="quiet"
+        busy={busy}
+        disabled={past || !usable}
+        onClick={() => onCloseShop(chosen)}
+      >
+        {copy.closeShopThese.replace("{hours}", `${from}–${until}`)}
       </Button>
     </div>
   );

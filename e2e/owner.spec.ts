@@ -702,7 +702,8 @@ test.describe("the day timeline", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await expect(sheet.getByText(shop.resource.name)).toBeVisible();
-    await sheet.getByRole("button", { name: "חסימה", exact: true }).click();
+    // The whole stretch is what the sheet arrives with, so one tap blocks it.
+    await sheet.getByRole("button", { name: /^חסימה ·/ }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // The day is gone for a customer, because the whole of it was free.
@@ -718,6 +719,44 @@ test.describe("the day timeline", () => {
         { timeout: 15_000 },
       )
       .toBe(0);
+  });
+
+  test("a long free stretch can be narrowed to the part that is being taken", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `חלק ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const date = aDayFromNow(1);
+    await openTheDay(page, shop, date);
+
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+
+    // An empty day is eight hours long and almost nobody means all of it. The
+    // ordinary lengths are one tap, and the button then says what it will do.
+    await sheet.getByRole("button", { name: "שעה", exact: true }).click();
+    await sheet.getByRole("button", { name: /^חסימה ·/ }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // The hour is gone and the rest of the day is not: blocking a stretch no
+    // longer costs the owner the whole afternoon.
+    await expect
+      .poll(
+        async () => {
+          const days = await call<{ slots: { startAt: string }[] }[]>(
+            `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+              `&resourceId=${shop.resource.id}&from=${date}&to=${date}`,
+          );
+          return (days[0]?.slots ?? []).length;
+        },
+        { timeout: 15_000 },
+      )
+      .toBeGreaterThan(0);
   });
 
   test("a blockage on the timeline opens, and can be taken off again", async ({ page }) => {

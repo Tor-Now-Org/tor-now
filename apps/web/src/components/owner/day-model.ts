@@ -129,11 +129,18 @@ export const bandsOf = <T extends Span>(window: Span, items: readonly T[]): Band
 };
 
 /**
- * Where a band is drawn, clamped to the room up to the next one.
+ * Where a band is drawn.
  *
- * This is the whole of the fix for elements climbing onto their neighbours: the
- * form of a band varies with how much room it has, and its size never lies
- * about how long it lasts.
+ * An item keeps its own length, always. Free space is clamped to the next thing
+ * along, because a gap drawn taller than it lasts climbs onto its neighbour —
+ * and where there is too little room, the caller changes the form rather than
+ * the size.
+ *
+ * Items are deliberately not clamped: two of them can overlap — a blockage
+ * across a whole day and the appointments inside it — and clamping made a day
+ * off end wherever the next appointment began, which is a plain lie about how
+ * long it lasts. Overlap is answered by sharing the width instead, which is
+ * what a calendar has always done.
  */
 export const placeOf = <T>(
   bands: readonly Band<T>[],
@@ -143,10 +150,61 @@ export const placeOf = <T>(
   const band = bands[index];
   if (band === undefined) return { top: 0, height: 0 };
   const top = scale.y(band.start);
+  const wanted = scale.y(band.end) - top - 2;
+  if (band.kind === "item") return { top, height: Math.max(wanted, 1) };
+
   const next = bands[index + 1];
   const until = next === undefined ? scale.height : scale.y(next.start);
-  const wanted = scale.y(band.end) - top - 2;
   return { top, height: Math.max(Math.min(wanted, until - top - 2), 1) };
+};
+
+/**
+ * Which column of its lane an item is drawn in.
+ *
+ * Things that overlap in time share the width between them, so a day off and
+ * the appointment inside it are both visible and both the right length. Items
+ * that do not overlap anything keep the whole width.
+ */
+export const columnsOf = <T extends Span>(
+  items: readonly T[],
+): Map<T, { column: number; columns: number }> => {
+  const ordered = [...items].sort(
+    (left, right) => left.start - right.start || right.end - left.end,
+  );
+  const placed = new Map<T, { column: number; columns: number }>();
+
+  let cluster: T[] = [];
+  let clusterEnds = -1;
+
+  const settle = () => {
+    if (cluster.length === 0) return;
+    const columns: number[] = [];
+    cluster.forEach((item) => {
+      // The first column whose last item has finished by the time this starts.
+      let column = columns.findIndex((endsAt) => endsAt <= item.start);
+      if (column < 0) {
+        column = columns.length;
+        columns.push(item.end);
+      } else {
+        columns[column] = item.end;
+      }
+      placed.set(item, { column, columns: 0 });
+    });
+    cluster.forEach((item) => {
+      const at = placed.get(item);
+      if (at !== undefined) placed.set(item, { ...at, columns: columns.length });
+    });
+    cluster = [];
+    clusterEnds = -1;
+  };
+
+  ordered.forEach((item) => {
+    if (cluster.length > 0 && item.start >= clusterEnds) settle();
+    cluster.push(item);
+    clusterEnds = Math.max(clusterEnds, item.end);
+  });
+  settle();
+  return placed;
 };
 
 /**
