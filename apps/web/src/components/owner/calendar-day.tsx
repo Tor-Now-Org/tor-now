@@ -7,7 +7,6 @@ import type {
   BusinessDto,
   BusinessDayDto,
   CalendarAppointmentDto,
-  CalendarDayDto,
   ResourceDto,
 } from "@/lib/api/types.ts";
 import { todayIn, whenIn } from "@/lib/format.ts";
@@ -57,7 +56,6 @@ export const CalendarDay = ({
     );
   }, [resources]);
   const [date, setDate] = useState(() => todayIn(business.timeZone));
-  const [day, setDay] = useState<CalendarDayDto | null>(null);
   /** The same day across every calendar, which is what the timeline draws. */
   const [wholeDay, setWholeDay] = useState<BusinessDayDto | null>(null);
   /** What a tap on the timeline opened: an item, or a stretch of free time. */
@@ -108,12 +106,11 @@ export const CalendarDay = ({
     if (resource === null) return;
     setBusy(true);
     try {
-      const [oneCalendar, wholeDay] = await Promise.all([
-        api.calendarDay(token, business.id, resource.id, date),
-        api.businessDay(token, business.id, date),
-      ]);
-      setDay(oneCalendar);
-      setWholeDay(wholeDay);
+      // One read, for every calendar. Loading the chosen calendar's day as
+      // well was both a second request per tap and a second answer that could
+      // disagree with the first — which is what made an appointment in another
+      // lane unopenable: it was looked up in a day that did not contain it.
+      setWholeDay(await api.businessDay(token, business.id, date));
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
@@ -169,6 +166,19 @@ export const CalendarDay = ({
     };
   }, [query, token, business.id]);
 
+
+  /**
+   * Back to the day itself.
+   *
+   * Taking the chips off is not enough: the words in the search box are a
+   * filter of their own — they answer with the matches rather than with the
+   * day — so "clear" has to mean both, or the day never comes back.
+   */
+  const showTheWholeDay = () => {
+    setFacets(NOTHING);
+    setQuery("");
+    setReach("DAY");
+  };
 
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -267,6 +277,7 @@ export const CalendarDay = ({
                   reach={reach}
                   onReach={setReach}
                   count={kept.length}
+                  onClear={showTheWholeDay}
                 />
                 {facets.customer !== null && theirs === null ? (
                   <Spinner />
@@ -382,7 +393,10 @@ export const CalendarDay = ({
           }
           onPick={(entry) => {
             if (entry.kind === "appointment") {
-              const found = day?.appointments.find((one) => one.id === entry.id) ?? null;
+              const found =
+                (wholeDay?.calendars ?? [])
+                  .flatMap((one) => one.appointments)
+                  .find((one) => one.id === entry.id) ?? null;
               setSelected(found);
               return;
             }

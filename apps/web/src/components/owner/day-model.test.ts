@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BOX_MINIMUM,
+  columnsOf,
   FOLD_HEIGHT,
   bandsOf,
   foldsIn,
@@ -184,5 +185,58 @@ describe("closing part of a day", () => {
       { start: "16:00", end: "17:00" },
       { start: "18:00", end: "20:00" },
     ]);
+  });
+});
+
+describe("things that overlap in a lane", () => {
+  const window = { start: at("08:00"), end: at("20:00") };
+  const scale = scaleOf(window, []);
+
+  it("keeps a day-long blockage its own length, not the next appointment's", () => {
+    // The bug this replaced: a day off drawn as if it ended at ten, because
+    // that is when the first appointment inside it began.
+    const items = [span("08:00", "20:00"), span("10:00", "10:30")];
+    const bands = bandsOf(window, items);
+    const blockage = bands.findIndex(
+      (band) => band.kind === "item" && band.start === at("08:00"),
+    );
+    expect(placeOf(bands, blockage, scale).height).toBe(12 * 60 - 2);
+  });
+
+  it("still clamps free space, which must never climb onto its neighbour", () => {
+    const bands = bandsOf(window, [span("09:00", "09:30"), span("09:40", "10:00")]);
+    const gap = bands.findIndex((band) => band.kind === "free" && band.start === at("09:30"));
+    const place = placeOf(bands, gap, scale);
+    const after = placeOf(bands, gap + 1, scale);
+    expect(place.top + place.height).toBeLessThanOrEqual(after.top);
+  });
+
+  it("shares the width between things happening at once", () => {
+    const blockage = span("08:00", "20:00");
+    const appointment = span("10:00", "10:30");
+    const columns = columnsOf([blockage, appointment]);
+    expect(columns.get(blockage)).toEqual({ column: 0, columns: 2 });
+    expect(columns.get(appointment)).toEqual({ column: 1, columns: 2 });
+  });
+
+  it("gives the whole width to anything standing alone", () => {
+    const one = span("09:00", "09:30");
+    const two = span("11:00", "11:30");
+    const columns = columnsOf([one, two]);
+    expect(columns.get(one)).toEqual({ column: 0, columns: 1 });
+    expect(columns.get(two)).toEqual({ column: 0, columns: 1 });
+  });
+
+  it("reuses a column once its last thing has finished", () => {
+    // Three in a row inside one long blockage: they take turns in column two
+    // rather than making the lane four columns wide.
+    const all = [
+      span("08:00", "20:00"),
+      span("09:00", "09:30"),
+      span("10:00", "10:30"),
+      span("11:00", "11:30"),
+    ];
+    const columns = columnsOf(all);
+    expect(new Set([...columns.values()].map((one) => one.columns))).toEqual(new Set([2]));
   });
 });

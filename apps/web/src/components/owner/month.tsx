@@ -7,7 +7,7 @@ import type { BusinessDto, BusinessMonthDto, ResourceDto } from "@/lib/api/types
 import { formatLocalDate, monthName, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { Button, Card, Critical, Note, Sheet, Spinner } from "../ui.tsx";
+import { Button, Card, Critical, Sheet, Spinner } from "../ui.tsx";
 import { datesBetween, factsOn, segmentIn, weeksOf } from "./month-model.ts";
 
 /**
@@ -258,7 +258,6 @@ export const Month = ({
 
       <Legend copy={copy} many={many} />
       {error !== null && <Critical>{error}</Critical>}
-      {from === null && <Note>{copy.monthHint}</Note>}
 
       {/* While an action is being aimed: what it is, what has been picked, and
           the two ways out. Nothing else, because the action was already
