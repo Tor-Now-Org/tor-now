@@ -45,12 +45,21 @@ import {
  * marks — because for them there is nothing to tell apart.
  */
 
-/** The shade of a square: what the shop is doing, before who is busy. */
-type Weather = "open" | "short" | "shut";
+/**
+ * The shade of a square: what the shop is doing, before who is busy.
+ *
+ * "shut" and "resting" are both closed and are not the same thing. A Saturday
+ * the business never opens on is the shape of its week; a Saturday it decided
+ * to close is a decision somebody made, can undo, and may have written a reason
+ * on. Drawing them alike left an owner unable to tell which Saturdays they had
+ * done something about.
+ */
+type Weather = "open" | "short" | "shut" | "resting";
 
 const weatherOn = (month: BusinessMonthDto, date: string): Weather => {
   const facts = factsOn(month, date);
   if (facts.shopClosed) return "shut";
+  if (!facts.shopOpen) return "resting";
   return facts.shopHours.length > 0 ? "short" : "open";
 };
 
@@ -830,20 +839,26 @@ const DaySquare = ({
   label: string;
   onClick: () => void;
 }) => {
+  // A decision is solid and dark; the week's own shape is a quiet hatch. Both
+  // say "closed", and only one of them is anybody's doing.
   const background =
     weather === "shut"
       ? "var(--closed)"
-      : chosen
-        ? "var(--accent-soft)"
-        : weather === "short"
+      : weather === "resting"
+        ? "repeating-linear-gradient(135deg,var(--sunken) 0 4px,var(--raised) 4px 8px)"
+        : chosen
           ? "var(--accent-soft)"
-          : "var(--raised)";
+          : weather === "short"
+            ? "var(--accent-soft)"
+            : "var(--raised)";
   const colour =
     weather === "shut"
       ? "var(--on-accent)"
       : weather === "short"
         ? "var(--accent-strong)"
-        : "var(--ink)";
+        : weather === "resting"
+          ? "var(--faint)"
+          : "var(--ink)";
 
   return (
     <button
@@ -883,7 +898,7 @@ const DaySquare = ({
       }}
     >
       <span>{label}</span>
-      {weather !== "shut" && (
+      {weather !== "shut" && weather !== "resting" && (
         <span style={{ display: "flex", gap: 2, position: "absolute", bottom: BAND_AREA + 2 }}>
           {/* One mark per calendar, in that calendar's own colour, so a row of
               them says who is busy rather than only how busy the day is. How

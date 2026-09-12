@@ -283,6 +283,7 @@ export const FilterControls = ({
               }}
             >
               <Key colour="var(--closed)" label={copy.closedAllDay} />
+              <Key colour="var(--sunken)" label={copy.restDay} />
               <Key colour="var(--accent-soft)" label={copy.differentHours} />
               <Key colour="var(--blocked)" label={copy.blockedWord} />
               <Key colour="var(--lane-1)" label={copy.appointmentsWord} />

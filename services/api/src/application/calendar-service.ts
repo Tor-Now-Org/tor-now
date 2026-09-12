@@ -45,6 +45,15 @@ export type BusinessMonth = {
       readonly appointments: number;
       readonly away: boolean;
     }[];
+    /**
+     * Whether anybody works that day at all.
+     *
+     * A Saturday the business never opens on and a Saturday it decided to
+     * close are the same to a customer and nothing like the same to an owner —
+     * one is the shape of the week, the other is a decision somebody made and
+     * can unmake.
+     */
+    readonly shopOpen: boolean;
     readonly shopClosed: boolean;
     readonly shopHours: readonly LocalTimeRangeValue[];
     /** Why the shop is doing that, when every calendar was given one reason. */
@@ -342,6 +351,10 @@ export const calendarService = ({
           ),
           overrides: await repositories.dateOverrides.listForResource(resource.id, first, last),
           blocks: await repositories.blocks.listForResourceBetween(resource.id, start, afterLast),
+          // The week itself, so the grid can tell a day nobody works from a day
+          // somebody decided to close. They look the same to a customer and are
+          // not the same thing at all to an owner.
+          hours: await repositories.workingHours.listForResource(resource.id),
         })),
       );
 
@@ -362,6 +375,17 @@ export const calendarService = ({
           ),
         }));
 
+        // Is anybody open at all? An Override replaces the weekday entirely
+        // (ADR 0002), so it answers for the day where there is one, and the
+        // week answers where there is not.
+        const weekday = dayOfWeekOf(date);
+        const openAtAll = perResource.some((entry) => {
+          const override = entry.overrides.find((one) => one.date === date);
+          return override !== undefined
+            ? override.ranges.length > 0
+            : entry.hours.some((one) => one.dayOfWeek === weekday);
+        });
+
         // What the shop does that day, when every calendar agrees.
         const spoken = perResource.map((entry) =>
           entry.overrides.find((override) => override.date === date) ?? null,
@@ -381,6 +405,7 @@ export const calendarService = ({
         return {
           date,
           byCalendar,
+          shopOpen: openAtAll,
           shopClosed: shut,
           shopHours: sameHours ? (spoken[0]?.ranges ?? []) : [],
           shopNote: sameNote ? firstNote : null,

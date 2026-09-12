@@ -68,6 +68,8 @@ export const segmentIn = <T extends Span>(
 /** What a square has to say, gathered from the month the API answered. */
 export type DayFacts = {
   readonly date: string;
+  /** Whether anybody works that day at all, by the week's own shape. */
+  readonly shopOpen: boolean;
   readonly shopClosed: boolean;
   readonly shopHours: readonly { start: string; end: string }[];
   readonly byCalendar: readonly { resourceId: string; appointments: number; away: boolean }[];
@@ -76,7 +78,7 @@ export type DayFacts = {
 export const factsOn = (month: BusinessMonthDto, date: string): DayFacts => {
   const found = month.days.find((day) => day.date === date);
   return (
-    found ?? { date, shopClosed: false, shopHours: [], byCalendar: [] }
+    found ?? { date, shopOpen: true, shopClosed: false, shopHours: [], byCalendar: [] }
   );
 };
 

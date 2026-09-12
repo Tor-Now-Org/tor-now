@@ -208,6 +208,7 @@ export const businessMonthOut = (month: BusinessMonth) => ({
   days: month.days.map((day) => ({
     date: day.date,
     byCalendar: day.byCalendar,
+    shopOpen: day.shopOpen,
     shopClosed: day.shopClosed,
     shopHours: day.shopHours.map((range) => ({
       start: formatLocalTime(range.start),

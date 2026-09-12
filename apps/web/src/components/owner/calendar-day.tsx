@@ -15,6 +15,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { canCloseBusiness } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppointmentSheet } from "./appointment-sheet.tsx";
+import { CalendarScope } from "./calendar-scope.tsx";
 import { ClosedDay } from "./closed-day.tsx";
 import { Month } from "./month.tsx";
 import { ActiveFilters, FilterControls, FindControls } from "./day-filter-bar.tsx";
@@ -245,51 +246,6 @@ export const CalendarDay = ({
 
   return (
     <div style={{ padding: "10px 18px 28px", display: "flex", flexDirection: "column", gap: 11 }}>
-      {resources.length > 1 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button
-            className="chip"
-            aria-pressed={showEveryone}
-            onClick={() => setShowEveryone(true)}
-            style={{
-              background: showEveryone ? "var(--accent)" : "var(--raised)",
-              color: showEveryone ? "var(--on-accent)" : "var(--ink)",
-              border: `1px solid ${showEveryone ? "var(--accent)" : "var(--line)"}`,
-            }}
-          >
-            {copy.allCalendars}
-          </button>
-          {resources.map((candidate) => (
-            <button
-              key={candidate.id}
-              className="chip"
-              aria-pressed={!showEveryone && candidate.id === resource?.id}
-              onClick={() => {
-                setResource(candidate);
-                setShowEveryone(false);
-              }}
-              style={{
-                background:
-                  !showEveryone && candidate.id === resource?.id
-                    ? "var(--accent)"
-                    : "var(--raised)",
-                color:
-                  !showEveryone && candidate.id === resource?.id
-                    ? "var(--on-accent)"
-                    : "var(--ink)",
-                border: `1px solid ${
-                  !showEveryone && candidate.id === resource?.id
-                    ? "var(--accent)"
-                    : "var(--line)"
-                }`,
-              }}
-            >
-              {candidate.name}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* One row for the whole screen: which month it is showing, and the two
           controls for finding things in it. They had a row of their own above
           the calendar, which cost the month most of a week of squares — and
@@ -321,6 +277,18 @@ export const CalendarDay = ({
               ›
             </button>
           </>
+        )}
+        {!looking && (
+          <CalendarScope
+            resources={resources}
+            everyone={showEveryone}
+            chosen={resource}
+            onEveryone={() => setShowEveryone(true)}
+            onChoose={(one) => {
+              setResource(one);
+              setShowEveryone(false);
+            }}
+          />
         )}
         <FindControls
           query={query}
@@ -496,6 +464,15 @@ export const CalendarDay = ({
           busy={busy}
           onReopen={() =>
             void act(() => api.reopenBusiness(token, business.id, date, date))
+          }
+          onDescribe={(said) =>
+            void act(() =>
+              api.describeClosure(token, business.id, {
+                fromDate: date,
+                toDate: date,
+                note: said.trim() === "" ? null : said.trim(),
+              }),
+            )
           }
         />
       ) : (

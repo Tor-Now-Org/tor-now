@@ -163,5 +163,22 @@ begin
     raise exception 'INVARIANT BROKEN: job_target invented a URL rather than refusing';
   end if;
 
+  -- 20260913000200: every Block belongs to a decision.
+  --
+  -- group_id was added nullable, and the screens read a groupless Block back
+  -- with its own id standing in for the group — so renaming one asked to
+  -- rename a group that did not exist, and removing one deleted a group that
+  -- did not exist. Both said they had done it. Nullable is what made that
+  -- possible, and this is what stops it coming back.
+  v_failed := false;
+  begin
+    insert into block (business_id, resource_id, start_at, end_at, reason)
+      values (v_biz, v_res, '2026-10-01T09:00:00Z', '2026-10-01T10:00:00Z', 'no group');
+  exception when not_null_violation then v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'INVARIANT BROKEN: a block was written with no decision behind it';
+  end if;
+
   raise exception 'ALL_INVARIANTS_HELD';
 end $$;

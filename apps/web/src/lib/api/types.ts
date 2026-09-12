@@ -104,6 +104,8 @@ export type BusinessMonthDto = {
   days: {
     date: string;
     byCalendar: { resourceId: string; appointments: number; away: boolean }[];
+    /** Whether anybody works that day at all, by the week's own shape. */
+    shopOpen: boolean;
     shopClosed: boolean;
     shopHours: { start: string; end: string }[];
     /** Why the shop is doing that, when it was given a reason. */
@@ -261,7 +263,8 @@ export type BlockDto = {
   /**
    * What one decision created. Blocks made together share it, so a week away is
    * shown and removed as one thing. Optional in the type: an API deployed
-   * before blockages could span days sends nothing.
+   * before blockages could span days sends nothing. Every block the current
+   * API answers with has one — a blockage of a single day is a group of one.
    */
   groupId?: string | null;
 };

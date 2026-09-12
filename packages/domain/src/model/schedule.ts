@@ -77,7 +77,9 @@ export type Block = BlockedSpan & {
    * show the holiday as one thing and take it back as one thing, while each day
    * of it stays a block of its own that can be given back on its own.
    *
-   * Null for the blocks that existed before a blockage could span days.
+   * Every Block has one. The ones written before a blockage could span days
+   * were each their own decision, and 20260913000200 named them so — a group
+   * of one, which is what every screen had been assuming of them anyway.
    */
-  readonly groupId: string | null;
+  readonly groupId: string;
 };
