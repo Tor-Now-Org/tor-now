@@ -21,10 +21,11 @@ import {
   factsOn,
   BAND_ROWS_IN_A_WEEK,
   labelFitting,
-  labelFor,
+  mergeOverlapping,
   packBands,
   segmentIn,
   weeksOf,
+  type Merged,
   type Segment,
 } from "./month-model.ts";
 
@@ -532,10 +533,26 @@ const WeekBands = ({
   onOpenBlockage: (blockage: BusinessMonthDto["blockages"][number]) => void;
   onOpenWeek: () => void;
 }) => {
-  const here: Segment<WeekThing>[] = [
-    ...closures.map((closure) => segmentIn<WeekThing>(week, closure)),
-    ...blockages.map((blockage) => segmentIn<WeekThing>(week, blockage)),
-  ].filter((segment): segment is Segment<WeekThing> => segment !== null);
+  const shopDays = closures
+    .map((closure) => segmentIn<WeekThing>(week, closure))
+    .filter((segment): segment is Segment<WeekThing> => segment !== null);
+
+  // One bar per calendar per run of days. A chair with five separate blockages
+  // on one Sunday is one thing to somebody reading a month — that chair is
+  // away — and five bars on one square is how a month stops being readable.
+  const away = calendars.flatMap((calendar) =>
+    mergeOverlapping(
+      blockages
+        .filter((blockage) => blockage.resourceId === calendar.id)
+        .map((blockage) => segmentIn<WeekThing>(week, blockage))
+        .filter((segment): segment is Segment<WeekThing> => segment !== null),
+    ),
+  );
+
+  const here: Merged<WeekThing>[] = [
+    ...shopDays.map((segment) => ({ ...segment, count: 1 })),
+    ...away,
+  ];
 
   if (here.length === 0) return null;
 
@@ -569,7 +586,7 @@ const WeekBands = ({
     >
       {rows.map((line, at) => (
         <div key={at} style={{ position: "relative", height: BAND_HEIGHT }}>
-          {line.map(({ span, column, width }) =>
+          {line.map(({ span, column, width, count }) =>
             "kind" in span ? (
               <Band
                 key={`closed-${span.fromDate}-${row}`}
@@ -592,7 +609,9 @@ const WeekBands = ({
                 ink="var(--ink)"
                 edge={laneColourOf(indexOfCalendar(calendars, span.resourceId))}
                 label={labelOfBlockage(span, width, calendars, many, copy)}
-                onClick={() => onOpenBlockage(span)}
+                // One bar standing in for several decisions cannot open any one
+                // of them, so it opens the list of what is in the week.
+                onClick={() => (count > 1 ? onOpenWeek() : onOpenBlockage(span))}
               />
             ),
           )}
@@ -632,13 +651,13 @@ const WeekBands = ({
 };
 
 /**
- * What a blockage's band says, given the room it has.
+ * What a band says: what kind of thing it is, and whose.
  *
- * Whose it is matters — "away" is not an answer in a shop with three chairs —
- * but a one-day band that spends its width on the calendar's name has nothing
- * left for the reason, which is the half a passer-by cannot guess. So both
- * where there is room, the reason where there is not, and the coloured edge
- * carries whose either way.
+ * Short on purpose. A bar is twelve pixels tall and often one day wide, and it
+ * is there to be understood at a glance rather than read — "חסום (שקד)" is the
+ * whole of what a month needs to say about a blockage. The reason behind it,
+ * the hours a shortened day keeps and the dates it covers are all in the sheet
+ * the bar opens, where there is room to say them properly.
  */
 const labelOfBlockage = (
   blockage: BusinessMonthDto["blockages"][number],
@@ -647,17 +666,24 @@ const labelOfBlockage = (
   many: boolean,
   copy: ReturnType<typeof useCopy<"owner">>,
 ) => {
-  const reason = blockage.reason.trim();
   const named = calendars.find((one) => one.id === blockage.resourceId)?.name ?? "";
-  // The calendar's name is only ever worth the width in a shop that has more
-  // than one: "יומן א" on a business with a single chair says nothing at all.
   return labelFitting(
     many && named !== ""
-      ? [`${named} · ${reason}`, reason, named, copy.blockedShort]
-      : [reason, copy.blockedShort],
+      ? [`${copy.blockedShort} (${named})`, copy.blockedShort]
+      : [copy.blockedShort],
     width,
   );
 };
+
+const labelOfClosure = (
+  closure: ClosureBandDto,
+  width: number,
+  copy: ReturnType<typeof useCopy<"owner">>,
+) =>
+  // A closure is the whole shop's, so there is no "whose" to add — and the
+  // hours a shortened day keeps are eleven characters that would not fit and
+  // are in the sheet anyway.
+  labelFitting([closure.kind === "SHUT" ? copy.closedWord : copy.shortDayWord], width);
 
 const indexOfCalendar = (calendars: readonly ResourceDto[], resourceId: string) =>
   calendars.findIndex((one) => one.id === resourceId);
@@ -676,21 +702,6 @@ const thingsIn = (
   ]
     .filter((segment): segment is Segment<WeekThing> => segment !== null)
     .map((segment) => segment.span);
-
-const labelOfClosure = (
-  closure: ClosureBandDto,
-  width: number,
-  copy: ReturnType<typeof useCopy<"owner">>,
-) =>
-  labelFor(
-    closure.note,
-    width,
-    // A word, not the hours: "09:00–12:00" is eleven characters and a band one
-    // day wide holds five, so the hours came out as "09:00–…" — which says
-    // less than "short" does and looks like a fault while doing it. The sheet
-    // behind the band has them in full.
-    closure.kind === "SHUT" ? copy.closedWord : copy.shortDayWord,
-  );
 
 /**
  * What a decision looks like on the grid: a bar across the days it covers.

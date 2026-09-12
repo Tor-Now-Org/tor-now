@@ -114,9 +114,6 @@ export const labelFitting = (candidates: readonly string[], days: number): strin
   return said.find((one) => one.length <= room) ?? said[said.length - 1] ?? "";
 };
 
-export const labelFor = (note: string | null, days: number, fallback: string): string =>
-  labelFitting([note ?? "", fallback], days);
-
 /**
  * How many rows of bands a week may carry before the rest are folded away.
  *
@@ -144,10 +141,10 @@ export type Segment<T> = {
  * First fit, in the order given, which keeps a long span near the top where it
  * reads as the backdrop to the shorter things beside it.
  */
-export const packBands = <T>(
-  segments: readonly Segment<T>[],
-): { readonly rows: Segment<T>[][]; readonly folded: Segment<T>[] } => {
-  const rows: Segment<T>[][] = [];
+export const packBands = <S extends { column: number; width: number }>(
+  segments: readonly S[],
+): { readonly rows: S[][]; readonly folded: S[] } => {
+  const rows: S[][] = [];
 
   segments.forEach((segment) => {
     const room = rows.find((row) =>
@@ -165,4 +162,39 @@ export const packBands = <T>(
     rows: rows.slice(0, BAND_ROWS_IN_A_WEEK),
     folded: rows.slice(BAND_ROWS_IN_A_WEEK).flat(),
   };
+};
+
+export type Merged<T> = Segment<T> & {
+  /** How many decisions this one bar is standing in for. */
+  readonly count: number;
+};
+
+/**
+ * One bar per calendar per run of days, however many decisions made it.
+ *
+ * A chair with five separate blockages on the same Sunday is one fact to
+ * somebody reading a month — that chair is away — and five bars stacked on one
+ * square is how a calendar stops being readable. Overlapping and touching
+ * segments of the same calendar are merged into the run they cover, carrying
+ * the count so the bar can say there is more behind it.
+ *
+ * Only within a calendar: two chairs being away on the same day is two facts,
+ * and merging them would say the shop was shut when it was not.
+ */
+export const mergeOverlapping = <T>(segments: readonly Segment<T>[]): Merged<T>[] => {
+  const ordered = [...segments].sort((left, right) => left.column - right.column);
+
+  return ordered.reduce<Merged<T>[]>((merged, segment) => {
+    const open = merged[merged.length - 1];
+    // Touching counts: Monday and Tuesday taken by two decisions is one run of
+    // days away, which is what the bar is describing.
+    if (open === undefined || segment.column > open.column + open.width) {
+      return [...merged, { ...segment, count: 1 }];
+    }
+    const end = Math.max(open.column + open.width, segment.column + segment.width);
+    return [
+      ...merged.slice(0, -1),
+      { ...open, width: end - open.column, count: open.count + 1 },
+    ];
+  }, []);
 };

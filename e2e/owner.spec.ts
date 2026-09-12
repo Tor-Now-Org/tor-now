@@ -622,9 +622,8 @@ test.describe("the month", () => {
     await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
-    // One band for the whole thing, not a mark per day — saying what it was
-    // told, since that is the half nobody can guess from the calendar.
-    const band = page.getByRole("button", { name: "ספק" }).first();
+    // One band for the whole thing, not a mark per day.
+    const band = page.getByRole("button", { name: "חסום", exact: true }).first();
     await expect(band).toBeVisible({ timeout: 15_000 });
     await band.click();
 
@@ -2474,20 +2473,21 @@ test.describe("closing the business", () => {
     await sheet.getByRole("button", { name: "שמירה", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
-    // One band across the three days, saying what it was told rather than
-    // three squares each saying "closed".
-    const band = page.getByRole("button", { name: "חופשה" });
+    // One band across the three days rather than three squares each saying so.
+    // It says what it is; the words the owner typed are in the sheet.
+    const band = page.getByRole("button", { name: "סגור", exact: true });
     await expect(band.first()).toBeVisible({ timeout: 15_000 });
 
     await band.first().click();
     const closure = page.getByRole("dialog");
+    await expect(closure.getByText("חופשה")).toBeVisible();
     await expect(closure.getByText(/· 3 ימים/).first()).toBeVisible();
     await closure.getByRole("button", { name: /^ביטול הסגירה/ }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // The days are bookable again — and the band is gone with them.
     await expect.poll(async () => slotsOn(shop, first), { timeout: 15_000 }).toBeGreaterThan(0);
-    await expect(page.getByRole("button", { name: "חופשה" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "סגור", exact: true })).toHaveCount(0);
   });
 
   test("is not offered to a worker, who may still block their own calendar", async ({ page }) => {
@@ -2708,7 +2708,7 @@ test.describe("reading a day at a glance", () => {
     });
 
     // The band in the month, which is where a blockage spanning days is undone.
-    await page.getByRole("button", { name: "השתלמות", exact: true }).first().click();
+    await page.getByRole("button", { name: "חסום", exact: true }).first().click();
     const sheet = page.getByRole("dialog");
     await sheet.getByRole("button", { name: /^הסרה של כל/ }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
@@ -2900,8 +2900,9 @@ test.describe("blocking time out", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
 
-    // The band carries the calendar's name, not only the reason.
-    const band = page.getByRole("button", { name: /יומן א · מילואים/ });
+    // The band says what it is and whose it is — short enough to be taken in
+    // at a glance, with the reason in the sheet behind it.
+    const band = page.getByRole("button", { name: "חסום (יומן א)" });
     await expect(band.first()).toBeVisible({ timeout: 15_000 });
 
     await band.first().click();
@@ -2958,13 +2959,14 @@ test.describe("a day the shop keeps its own hours", () => {
 
     // It used to be a slightly paler square and nothing else: no band, nothing
     // to tap, and the only way to find it was the schedule screen.
-    const band = page.getByRole("button", { name: "ערב חג" });
+    const band = page.getByRole("button", { name: "קצר" });
     await expect(band.first()).toBeVisible({ timeout: 15_000 });
 
     await band.first().click();
     const sheet = page.getByRole("dialog");
-    // What the shop is actually doing that day, in hours.
+    // The hours are in the sheet, which is where there is room for them.
     await expect(sheet.getByText("09:00–12:00")).toBeVisible();
+    await expect(sheet.getByText("ערב חג")).toBeVisible();
     await sheet.getByRole("button", { name: /^ביטול הסגירה/ }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
@@ -2997,7 +2999,6 @@ test.describe("a day the shop keeps its own hours", () => {
     });
 
     await openCalendar(page, shop, shop.owner.token);
-    // Nothing was said about why, so the band says what it is.
     await expect(page.getByRole("button", { name: "סגור" }).first()).toBeVisible({
       timeout: 15_000,
     });
@@ -3090,35 +3091,24 @@ test.describe("a day the shop keeps its own hours", () => {
  * week with several of them buried the days it was describing.
  */
 test.describe("a month with a lot decided about it", () => {
-  test("shares a line between days that do not overlap, and folds the rest", async ({
-    page,
-  }) => {
-    const shop = await aBusinessWithOpenHours({
-      name: `עמוס ${Date.now()}`,
-      ownerPhone: uniquePhone(),
-      hours: { start: "09:00", end: "17:00" },
+  const blockOn = async (
+    shop: { business: { id: string }; owner: { token: string } },
+    resourceId: string,
+    date: string,
+    reason: string,
+  ) =>
+    call(`/businesses/${shop.business.id}/resources/${resourceId}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        blocks: [
+          { startAt: `${date}T06:00:00.000Z`, endAt: `${date}T12:00:00.000Z`, reason },
+        ],
+        upcoming: "KEEP",
+      },
     });
 
-    // Four separate single days in one week: three of them can share a line,
-    // because a blockage on Monday does not overlap one on Wednesday.
-    const days = [2, 3, 4, 5].map((ahead) => aDayFromNow(ahead));
-    for (const [at, date] of days.entries()) {
-      await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
-        method: "POST",
-        token: shop.owner.token,
-        body: {
-          blocks: [
-            {
-              startAt: `${date}T06:00:00.000Z`,
-              endAt: `${date}T12:00:00.000Z`,
-              reason: `סיבה ${at}`,
-            },
-          ],
-          upcoming: "KEEP",
-        },
-      });
-    }
-
+  const openMonth = async (page: Page, shop: { business: { id: string }; owner: { token: string } }) => {
     await page.addInitScript(
       ([key, value]) => window.localStorage.setItem(key as string, value as string),
       ["tor-now.session", shop.owner.token],
@@ -3126,18 +3116,59 @@ test.describe("a month with a lot decided about it", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+  };
 
-    // Every square is still a square: the bands sit under the week, so nothing
-    // is covering the days. Four bands that share lines means four are drawn.
+  test("shares one line between days that are nowhere near each other", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `עמוס ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+
+    // Two days with a gap between them: separate runs, so two bars — and one
+    // line, because a bar on Monday does not overlap one on Thursday.
+    const days = [aDayFromNow(2), aDayFromNow(5)];
+    await blockOn(shop, shop.resource.id, days[0]!, "רופא");
+    await blockOn(shop, shop.resource.id, days[1]!, "ספק");
+
+    await openMonth(page, shop);
+
     for (const date of days) {
       await expect(page.getByRole("button", { name: date })).toBeVisible();
     }
-    const drawn = page.getByRole("button", { name: /^סיבה \d$/ });
-    await expect(drawn).toHaveCount(4, { timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "חסום", exact: true })).toHaveCount(2, {
+      timeout: 15_000,
+    });
+    // One line holds both, so nothing had to fold.
+    await expect(page.getByRole("button", { name: /עוד \d+ בשבוע/ })).toHaveCount(0);
 
-    // Nothing is hidden behind the squares — each band can still be opened.
-    await drawn.first().click();
+    // And both are still openable, because nothing is buried.
+    await page.getByRole("button", { name: "חסום", exact: true }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
+  });
+
+  test("joins a run of days one calendar is away into a single bar", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `רצף ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+
+    // Four consecutive days, decided one at a time. To a reader that is one
+    // fact — this chair is away — and four bars would say it four times.
+    const days = [2, 3, 4, 5].map((ahead) => aDayFromNow(ahead));
+    for (const [at, date] of days.entries()) {
+      await blockOn(shop, shop.resource.id, date, `סיבה ${at}`);
+    }
+
+    await openMonth(page, shop);
+
+    const bar = page.getByRole("button", { name: "חסום", exact: true });
+    await expect(bar).toBeVisible({ timeout: 15_000 });
+    // It stands in for four decisions, so it opens the list of them.
+    await bar.click();
+    await expect(page.getByRole("dialog").getByText("מה יש בשבוע הזה")).toBeVisible();
+    await expect(page.getByRole("dialog").getByText(/^סיבה \d$/)).toHaveCount(4);
   });
 
   test("folds a week it cannot carry into a list that opens each one", async ({ page }) => {
@@ -3146,37 +3177,27 @@ test.describe("a month with a lot decided about it", () => {
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
-
-    // Three blockages covering the same day, which cannot share a line, plus
-    // the shop shut on it: four lines' worth in one week.
-    const date = aDayFromNow(2);
-    for (const at of [0, 1, 2]) {
-      await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+    // Three chairs, each away on the same day. Three separate facts, which
+    // cannot share a line and cannot be merged into one another.
+    const chairs = [shop.resource.id];
+    for (const name of ["יומן ב", "יומן ג"]) {
+      const made = await call<{ id: string }>(`/businesses/${shop.business.id}/resources`, {
         method: "POST",
         token: shop.owner.token,
-        body: {
-          blocks: [
-            {
-              startAt: `${date}T0${6 + at}:00:00.000Z`,
-              endAt: `${date}T0${7 + at}:00:00.000Z`,
-              reason: `חפיפה ${at}`,
-            },
-          ],
-          upcoming: "KEEP",
-        },
+        body: { name },
       });
+      chairs.push(made.id);
+    }
+    const date = aDayFromNow(2);
+    for (const [at, resourceId] of chairs.entries()) {
+      await blockOn(shop, resourceId, date, `חפיפה ${at}`);
     }
 
-    await page.addInitScript(
-      ([key, value]) => window.localStorage.setItem(key as string, value as string),
-      ["tor-now.session", shop.owner.token],
-    );
-    await page.goto(`/manage?business=${shop.business.id}`);
-    await ready(page);
-    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    await openMonth(page, shop);
+    await page.getByRole("button", { name: "כל היומנים" }).click();
 
-    // Two lines are drawn and the rest are counted, rather than a third and
-    // fourth bar growing over the days.
+    // Two lines are drawn and the rest counted, rather than a third bar
+    // growing over the days.
     const more = page.getByRole("button", { name: /עוד \d+ בשבוע/ });
     await expect(more).toBeVisible({ timeout: 15_000 });
 
@@ -3187,6 +3208,7 @@ test.describe("a month with a lot decided about it", () => {
     // answer to "what is going on here", which is why it was opened.
     await expect(sheet.getByText(/^חפיפה \d$/)).toHaveCount(3);
 
+    // The list has room for the words the owner typed, which the bar did not.
     await sheet.getByText("חפיפה 0").click();
     await expect(page.getByRole("dialog").getByText("חפיפה 0")).toBeVisible();
   });
@@ -3243,7 +3265,7 @@ test.describe("where a band is drawn", () => {
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
 
-    const band = await page.getByRole("button", { name: "סוף שבוע" }).first().boundingBox();
+    const band = await page.getByRole("button", { name: "סגור" }).first().boundingBox();
     const first = await page.getByRole("button", { name: from }).boundingBox();
     const second = await page.getByRole("button", { name: to }).boundingBox();
     expect(band).not.toBeNull();
@@ -3295,5 +3317,125 @@ test.describe("where a band is drawn", () => {
     const withBand = await page.getByRole("button", { name: busy }).boundingBox();
     const quiet = await page.getByRole("button", { name: aDayFromNow(9) }).boundingBox();
     expect(withBand!.height).toBe(quiet!.height);
+  });
+});
+
+/**
+ * What the month draws, and what it deliberately does not.
+ *
+ * Appointments are the dots on a square: how busy a day is, per calendar. They
+ * are never bars — a month is for finding the day, and the day screen is for
+ * reading it. Bars are for the decisions that span days, and one calendar gets
+ * one bar per run of them however many were made.
+ */
+test.describe("what the month draws", () => {
+  test("gives a calendar one band a day however many blockages it has", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `ערימה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const second = await call<{ id: string }>(`/businesses/${shop.business.id}/resources`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "שימי" },
+    });
+
+    // Five separate all-day blockages on one day across two chairs — the shape
+    // that turned a single square into a wall of bars.
+    const day = aDayFromNow(2);
+    for (const resourceId of [
+      shop.resource.id,
+      second.id,
+      shop.resource.id,
+      second.id,
+      shop.resource.id,
+    ]) {
+      await call(`/businesses/${shop.business.id}/resources/${resourceId}/blocks`, {
+        method: "POST",
+        token: shop.owner.token,
+        body: {
+          blocks: [
+            { startAt: `${day}T00:00:00.000Z`, endAt: `${day}T20:59:00.000Z`, reason: "" },
+          ],
+          upcoming: "KEEP",
+        },
+      });
+    }
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "כל היומנים" }).click();
+
+    // Two bars, one per chair — not five, and not a fold either.
+    const bands = page.getByRole("button", { name: "חסום", exact: true });
+    await expect(bands).toHaveCount(2, { timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /עוד \d+ בשבוע/ })).toHaveCount(0);
+
+    // A bar standing in for several decisions opens the list of them — where
+    // there is room to name each one. Nothing was said about these, so they
+    // are named for what they are rather than described in a sentence.
+    await bands.first().click();
+    const list = page.getByRole("dialog");
+    await expect(list.getByText("מה יש בשבוע הזה")).toBeVisible();
+    await expect(list.getByText("חסימה", { exact: true })).toHaveCount(5);
+  });
+
+  test("draws appointments as dots on the day, never as a band", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `נקודות ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(2);
+    for (const at of ["07:00", "08:00", "09:00"]) {
+      const phone = uniquePhone();
+      const { code } = await call<{ code: string }>("/auth/request-code", {
+        method: "POST",
+        body: { phone },
+      });
+      const { token } = await call<{ token: string }>("/auth/verify", {
+        method: "POST",
+        body: { phone, code, name: { givenName: "לקוחה", familyName: "בדיקה" } },
+      });
+      await call("/appointments", {
+        method: "POST",
+        token,
+        body: {
+          businessId: shop.business.id,
+          serviceId: shop.service.id,
+          resourceId: shop.resource.id,
+          startAt: `${day}T${at}:00.000Z`,
+          customerNote: null,
+        },
+      });
+    }
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    // Three appointments, and the month says so with the square's own mark —
+    // there is no bar for any of them, and the day is still a day.
+    const square = page.getByRole("button", { name: day });
+    await expect(square).toBeVisible({ timeout: 15_000 });
+    await expect(square.locator("i")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "חסום", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "לקוחה בדיקה" })).toHaveCount(0);
+
+    // The day itself is where they are read.
+    await square.click();
+    await expect(page.getByRole("button", { name: /לקוחה בדיקה/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });

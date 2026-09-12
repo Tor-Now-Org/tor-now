@@ -3,7 +3,7 @@ import {
   columnOf,
   datesBetween,
   labelFitting,
-  labelFor,
+  mergeOverlapping,
   packBands,
   segmentIn,
   weeksOf,
@@ -80,33 +80,11 @@ describe("the dates a selection covers", () => {
 });
 
 describe("what a band says", () => {
-  it("says the reason it was given", () => {
-    expect(labelFor("חופשה", 3, "סגור")).toBe("חופשה");
-  });
-
-  it("falls back to the kind when nothing was said", () => {
-    expect(labelFor(null, 3, "סגור")).toBe("סגור");
-    expect(labelFor("   ", 3, "סגור")).toBe("סגור");
-  });
-
-  it("falls back rather than cutting a long reason off mid-word", () => {
-    // Two days of width cannot hold a sentence; half of one reads as a bug.
-    expect(labelFor("שיפוץ במספרה, נחזור ביום ראשון בבוקר", 2, "סגור")).toBe("סגור");
-  });
-
-  it("says the kind on a single day when the reason will not fit in one", () => {
-    // One day is about fifty pixels across, which is seven Hebrew letters —
-    // past that comes "שיפוץ שנת…", a truncation that reads as a fault.
-    expect(labelFor("שיפוץ שנתי במספרה", 1, "חסום")).toBe("חסום");
-    expect(labelFor("מילואים", 1, "חסום")).toBe("מילואים");
-  });
-
   it("takes the first of several things it could say that fits", () => {
-    // Whose it is and why, then why, then what kind of thing it is.
-    const said = ["יומן א · מילואים", "מילואים", "חסום"];
-    expect(labelFitting(said, 3)).toBe("יומן א · מילואים");
-    expect(labelFitting(said, 1)).toBe("מילואים");
-    expect(labelFitting(["שיפוץ שנתי במספרה", "חסום"], 1)).toBe("חסום");
+    // What kind of thing it is and whose, then what kind of thing it is.
+    const said = ["חסום (יומן א)", "חסום"];
+    expect(labelFitting(said, 3)).toBe("חסום (יומן א)");
+    expect(labelFitting(said, 1)).toBe("חסום");
   });
 
   it("falls back to the shortest it was offered, even when that will not fit", () => {
@@ -117,10 +95,6 @@ describe("what a band says", () => {
   it("ignores blanks among the things it could say", () => {
     expect(labelFitting(["", "מילואים", "חסום"], 1)).toBe("מילואים");
     expect(labelFitting(["", ""], 1)).toBe("");
-  });
-
-  it("lets a longer reason through when the band is wide enough for it", () => {
-    expect(labelFor("שיפוץ במספרה", 7, "סגור")).toBe("שיפוץ במספרה");
   });
 });
 
@@ -167,5 +141,54 @@ describe("fitting a week's bands into as few rows as they need", () => {
 
   it("has nothing to arrange in a quiet week", () => {
     expect(packBands([])).toEqual({ rows: [], folded: [] });
+  });
+});
+
+describe("one bar per calendar per run of days", () => {
+  const at = (column: number, width: number, name: string) => ({
+    span: { name },
+    column,
+    width,
+  });
+
+  it("merges several decisions about the same day into one", () => {
+    // Five blockages on one chair on one Sunday is one fact to a reader: that
+    // chair is away. Five bars on one square is how a month stops being read.
+    const merged = mergeOverlapping([
+      at(1, 1, "א"),
+      at(1, 1, "ב"),
+      at(1, 1, "ג"),
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.count).toBe(3);
+    expect(merged[0]?.width).toBe(1);
+  });
+
+  it("keeps days that are nowhere near each other apart", () => {
+    const merged = mergeOverlapping([at(0, 1, "א"), at(4, 1, "ב")]);
+    expect(merged).toHaveLength(2);
+    expect(merged.every((one) => one.count === 1)).toBe(true);
+  });
+
+  it("joins a run made of two decisions on consecutive days", () => {
+    const merged = mergeOverlapping([at(1, 1, "א"), at(2, 1, "ב")]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.width).toBe(2);
+    expect(merged[0]?.count).toBe(2);
+  });
+
+  it("grows the run to cover the longest of what it merged", () => {
+    const merged = mergeOverlapping([at(0, 2, "א"), at(1, 4, "ב")]);
+    expect(merged[0]).toMatchObject({ column: 0, width: 5, count: 2 });
+  });
+
+  it("keeps the first decision's own span when it stands alone", () => {
+    expect(mergeOverlapping([at(2, 3, "א")])).toEqual([
+      { span: { name: "א" }, column: 2, width: 3, count: 1 },
+    ]);
+  });
+
+  it("has nothing to merge in an empty week", () => {
+    expect(mergeOverlapping([])).toEqual([]);
   });
 });
