@@ -3079,3 +3079,112 @@ test.describe("a day the shop keeps its own hours", () => {
     await expect(sheet.getByText(new RegExp(`· ${shop.resource.name}`))).toBeVisible();
   });
 });
+
+/**
+ * A busy month still has to read as a month.
+ *
+ * Every decision used to take a bar of its own, laid over the squares — so a
+ * week with several of them buried the days it was describing.
+ */
+test.describe("a month with a lot decided about it", () => {
+  test("shares a line between days that do not overlap, and folds the rest", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `עמוס ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+
+    // Four separate single days in one week: three of them can share a line,
+    // because a blockage on Monday does not overlap one on Wednesday.
+    const days = [2, 3, 4, 5].map((ahead) => aDayFromNow(ahead));
+    for (const [at, date] of days.entries()) {
+      await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+        method: "POST",
+        token: shop.owner.token,
+        body: {
+          blocks: [
+            {
+              startAt: `${date}T06:00:00.000Z`,
+              endAt: `${date}T12:00:00.000Z`,
+              reason: `סיבה ${at}`,
+            },
+          ],
+          upcoming: "KEEP",
+        },
+      });
+    }
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    // Every square is still a square: the bands sit under the week, so nothing
+    // is covering the days. Four bands that share lines means four are drawn.
+    for (const date of days) {
+      await expect(page.getByRole("button", { name: date })).toBeVisible();
+    }
+    const drawn = page.getByRole("button", { name: /^סיבה \d$/ });
+    await expect(drawn).toHaveCount(4, { timeout: 15_000 });
+
+    // Nothing is hidden behind the squares — each band can still be opened.
+    await drawn.first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+
+  test("folds a week it cannot carry into a list that opens each one", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `גדוש ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+
+    // Three blockages covering the same day, which cannot share a line, plus
+    // the shop shut on it: four lines' worth in one week.
+    const date = aDayFromNow(2);
+    for (const at of [0, 1, 2]) {
+      await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+        method: "POST",
+        token: shop.owner.token,
+        body: {
+          blocks: [
+            {
+              startAt: `${date}T0${6 + at}:00:00.000Z`,
+              endAt: `${date}T0${7 + at}:00:00.000Z`,
+              reason: `חפיפה ${at}`,
+            },
+          ],
+          upcoming: "KEEP",
+        },
+      });
+    }
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    // Two lines are drawn and the rest are counted, rather than a third and
+    // fourth bar growing over the days.
+    const more = page.getByRole("button", { name: /עוד \d+ בשבוע/ });
+    await expect(more).toBeVisible({ timeout: 15_000 });
+
+    await more.click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("מה יש בשבוע הזה")).toBeVisible();
+    // Everything that week, not only what was folded away: the list is the
+    // answer to "what is going on here", which is why it was opened.
+    await expect(sheet.getByText(/^חפיפה \d$/)).toHaveCount(3);
+
+    await sheet.getByText("חפיפה 0").click();
+    await expect(page.getByRole("dialog").getByText("חפיפה 0")).toBeVisible();
+  });
+});

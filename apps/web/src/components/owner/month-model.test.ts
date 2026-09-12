@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { columnOf, datesBetween, labelFor, segmentIn, weeksOf } from "./month-model.ts";
+import {
+  columnOf,
+  datesBetween,
+  labelFor,
+  packBands,
+  segmentIn,
+  weeksOf,
+} from "./month-model.ts";
 
 describe("the month as rows of seven", () => {
   it("starts October 2026 on a Thursday, with three days in the first row", () => {
@@ -88,5 +95,51 @@ describe("what a band says", () => {
 
   it("lets a longer reason through when the band is wide enough for it", () => {
     expect(labelFor("שיפוץ במספרה", 7, "סגור")).toBe("שיפוץ במספרה");
+  });
+});
+
+describe("fitting a week's bands into as few rows as they need", () => {
+  const at = (column: number, width: number, name: string) => ({
+    span: { name },
+    column,
+    width,
+  });
+
+  it("puts days that do not overlap on one line", () => {
+    // The whole point: a Monday off, a Wednesday course and a Friday closure
+    // are one line, not three bars stacked over the days they describe.
+    const { rows, folded } = packBands([at(1, 1, "א"), at(3, 1, "ב"), at(5, 1, "ג")]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveLength(3);
+    expect(folded).toEqual([]);
+  });
+
+  it("gives a second line to something that overlaps the first", () => {
+    const { rows } = packBands([at(0, 4, "שבוע"), at(2, 1, "יום")]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.[0]?.span).toEqual({ name: "שבוע" });
+  });
+
+  it("puts a band back on the first line once there is room again", () => {
+    const { rows } = packBands([at(0, 2, "א"), at(0, 1, "ב"), at(4, 1, "ג")]);
+    expect(rows[0]?.map((one) => one.span)).toEqual([{ name: "א" }, { name: "ג" }]);
+    expect(rows[1]?.map((one) => one.span)).toEqual([{ name: "ב" }]);
+  });
+
+  it("treats touching bands as not overlapping", () => {
+    // Monday–Tuesday and Wednesday are adjacent, not on top of each other.
+    const { rows } = packBands([at(0, 2, "א"), at(2, 1, "ב")]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("folds away everything past the rows a month can spare", () => {
+    const many = [0, 1, 2, 3].map((at_) => at(at_ * 0, 7, `כל השבוע ${at_}`));
+    const { rows, folded } = packBands(many);
+    expect(rows).toHaveLength(2);
+    expect(folded).toHaveLength(2);
+  });
+
+  it("has nothing to arrange in a quiet week", () => {
+    expect(packBands([])).toEqual({ rows: [], folded: [] });
   });
 });

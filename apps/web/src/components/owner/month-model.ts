@@ -104,3 +104,53 @@ export const labelFor = (note: string | null, days: number, fallback: string): s
   if (said === "") return fallback;
   return said.length <= days * CHARACTERS_PER_DAY ? said : fallback;
 };
+
+/**
+ * How many rows of bands a week may carry before the rest are folded away.
+ *
+ * Two is what a month can spare. Beyond that the bands stop being a glance and
+ * start being a list, and a list belongs in a sheet rather than on top of the
+ * days it is describing.
+ */
+export const BAND_ROWS_IN_A_WEEK = 2;
+
+export type Segment<T> = {
+  readonly span: T;
+  readonly column: number;
+  readonly width: number;
+};
+
+/**
+ * Bands arranged into as few rows as they will fit in.
+ *
+ * Every decision used to get a row of its own, so a week with a Monday off, a
+ * Wednesday course and a Friday closure grew three bars — stacked over the
+ * squares they were describing until the month was unreadable. Bands that do
+ * not overlap in time do not need separate rows: three single days sit on one
+ * line, the way a calendar has always drawn them.
+ *
+ * First fit, in the order given, which keeps a long span near the top where it
+ * reads as the backdrop to the shorter things beside it.
+ */
+export const packBands = <T>(
+  segments: readonly Segment<T>[],
+): { readonly rows: Segment<T>[][]; readonly folded: Segment<T>[] } => {
+  const rows: Segment<T>[][] = [];
+
+  segments.forEach((segment) => {
+    const room = rows.find((row) =>
+      row.every(
+        (taken) =>
+          segment.column >= taken.column + taken.width ||
+          taken.column >= segment.column + segment.width,
+      ),
+    );
+    if (room === undefined) rows.push([segment]);
+    else room.push(segment);
+  });
+
+  return {
+    rows: rows.slice(0, BAND_ROWS_IN_A_WEEK),
+    folded: rows.slice(BAND_ROWS_IN_A_WEEK).flat(),
+  };
+};

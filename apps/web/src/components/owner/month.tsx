@@ -15,7 +15,16 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { canCloseBusiness } from "@/lib/roles.ts";
 import { laneColourOf } from "./event-colour.ts";
 import { Button, Card, Critical, Note, Sheet, Spinner } from "../ui.tsx";
-import { datesBetween, factsOn, labelFor, segmentIn, weeksOf } from "./month-model.ts";
+import {
+  DAYS_IN_A_WEEK,
+  datesBetween,
+  factsOn,
+  labelFor,
+  packBands,
+  segmentIn,
+  weeksOf,
+  type Segment,
+} from "./month-model.ts";
 
 /**
  * The month, as the business reads one.
@@ -101,6 +110,8 @@ export const Month = ({
   const [openGroup, setOpenGroup] = useState<BusinessMonthDto["blockages"][number] | null>(null);
   /** A run of shut days, opened to be read or given back. */
   const [openClosure, setOpenClosure] = useState<ClosureBandDto | null>(null);
+  /** A week whose decisions did not all fit under it, opened as a list. */
+  const [openWeek, setOpenWeek] = useState<number | null>(null);
 
   const onOffer = resources.filter((resource) => resource.active !== false);
   const many = onOffer.length > 1;
@@ -127,6 +138,7 @@ export const Month = ({
       setTo(null);
       setOpenGroup(null);
       setOpenClosure(null);
+      setOpenWeek(null);
       await load();
       // The day below is another read of what just changed.
       onChanged();
@@ -191,7 +203,7 @@ export const Month = ({
         </div>
 
         {weeks.map((week, row) => (
-          <div key={row} style={{ position: "relative" }}>
+          <div key={row} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
               {week.map((date, column) =>
                 date === null ? (
@@ -230,133 +242,29 @@ export const Month = ({
               )}
             </div>
 
-            {/* Anything covering more than one day is drawn as one bar across
-                those days: a holiday is one decision and should look like it. */}
-            <div
-              style={{
-                position: "absolute",
-                insetInline: 0,
-                bottom: 3,
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
-                pointerEvents: "none",
-              }}
-            >
-              {/* The shop's own closures first: they cover every calendar, so
-                  they are the widest claim being made about those days. */}
-              {/* One day counts. A single shut Sunday is as much a decision as
-                  a week away, and leaving it to a pale square meant there was
-                  nothing to read and nothing to tap. */}
-              {month.closures
-                .map((closure) => segmentIn(week, closure))
-                .filter((segment): segment is NonNullable<typeof segment> => segment !== null)
-                .map(({ span, column, width }) => (
-                  <span
-                    key={`closed-${span.fromDate}-${row}`}
-                    style={{ position: "relative", height: 13 }}
-                  >
-                    <button
-                      onClick={() => setOpenClosure(span)}
-                      style={{
-                        position: "absolute",
-                        insetInlineStart: `calc(${(column / 7) * 100}% + 2px)`,
-                        width: `calc(${(width / 7) * 100}% - 4px)`,
-                        height: 13,
-                        borderRadius: 999,
-                        background:
-                          span.kind === "SHUT" ? "var(--closed)" : "var(--accent-soft)",
-                        color: span.kind === "SHUT" ? "var(--on-accent)" : "var(--accent-strong)",
-                        border:
-                          span.kind === "SHUT" ? "none" : "1px solid var(--accent)",
-                        fontSize: 9,
-                        fontWeight: 600,
-                        pointerEvents: "auto",
-                        padding: "0 5px",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {labelFor(
-                        span.note,
-                        width,
-                        span.kind === "SHUT"
-                          ? copy.closedWord
-                          : span.hours
-                              .map((range) => `${range.start}–${range.end}`)
-                              .join(", "),
-                      )}
-                    </button>
-                  </span>
-                ))}
+            {/* What was decided about these days, under them rather than on
+                top of them.
 
-              {month.blockages
-                .filter((blockage) => scope === null || blockage.resourceId === scope)
-                .map((blockage) => segmentIn(week, blockage))
-                .filter((segment): segment is NonNullable<typeof segment> => segment !== null)
-                .map(({ span, column, width }) => {
-                  // Whose time this is. A band that says only "away" leaves the
-                  // owner of a three-chair shop to work out which chair — so
-                  // the calendar's own mark leads, in the colour it wears
-                  // everywhere else, and the reason follows it.
-                  const whose = onOffer.findIndex((one) => one.id === span.resourceId);
-                  const named = onOffer[whose]?.name ?? "";
-                  return (
-                    <span
-                      key={`${span.groupId}-${row}`}
-                      style={{ position: "relative", height: 13 }}
-                    >
-                      <button
-                        onClick={() => setOpenGroup(span)}
-                        style={{
-                          position: "absolute",
-                          insetInlineStart: `calc(${(column / 7) * 100}% + 2px)`,
-                          width: `calc(${(width / 7) * 100}% - 4px)`,
-                          height: 13,
-                          borderRadius: 999,
-                          background: "var(--blocked-soft)",
-                          border: `1px solid ${laneColourOf(whose)}`,
-                          color: "var(--ink)",
-                          fontSize: 9,
-                          fontWeight: 600,
-                          pointerEvents: "auto",
-                          padding: "0 5px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 4,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {many && (
-                          <i
-                            aria-hidden="true"
-                            style={{
-                              width: 9,
-                              height: 9,
-                              borderRadius: 999,
-                              flexShrink: 0,
-                              background: laneColourOf(whose),
-                            }}
-                          />
-                        )}
-                        <span
-                          style={{
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {many
-                            ? `${named} · ${labelFor(span.reason, width, copy.blockedShort)}`
-                            : labelFor(span.reason, width, copy.blockedShort)}
-                        </span>
-                      </button>
-                    </span>
-                  );
-                })}
-            </div>
+                Every decision used to take a bar of its own, absolutely
+                positioned over the squares — so a week with three of them
+                buried the days it was describing. They are now laid out
+                beneath the week, sharing a line wherever they do not overlap,
+                and anything past two lines folds into a chip that opens the
+                week rather than growing the grid. */}
+            <WeekBands
+              week={week}
+              row={row}
+              closures={month.closures}
+              blockages={month.blockages.filter(
+                (blockage) => scope === null || blockage.resourceId === scope,
+              )}
+              calendars={onOffer}
+              many={many}
+              copy={copy}
+              onOpenClosure={setOpenClosure}
+              onOpenBlockage={setOpenGroup}
+              onOpenWeek={() => setOpenWeek(row)}
+            />
           </div>
         ))}
       </div>
@@ -414,6 +322,78 @@ export const Month = ({
           </Button>
         </Card>
       )}
+
+      {/* Everything decided about one week, when the grid could not carry it.
+          A list rather than more bars: past two lines the bands stop being a
+          glance and start hiding the days they describe. */}
+      <Sheet open={openWeek !== null} onClose={() => setOpenWeek(null)}>
+        {openWeek !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 style={{ fontSize: 18 }}>{copy.thatWeek}</h2>
+            {thingsIn(weeks[openWeek] ?? [], month, scope).map((thing) => (
+              <button
+                key={"kind" in thing ? `c-${thing.fromDate}` : thing.groupId}
+                onClick={() => {
+                  setOpenWeek(null);
+                  if ("kind" in thing) setOpenClosure(thing);
+                  else setOpenGroup(thing);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 9,
+                  padding: "10px 11px",
+                  borderRadius: 11,
+                  border: "1px solid var(--line)",
+                  background: "var(--raised)",
+                  textAlign: "start",
+                  width: "100%",
+                }}
+              >
+                <i
+                  aria-hidden="true"
+                  style={{
+                    width: 9,
+                    height: 9,
+                    borderRadius: 999,
+                    flexShrink: 0,
+                    background:
+                      "kind" in thing
+                        ? thing.kind === "SHUT"
+                          ? "var(--closed)"
+                          : "var(--accent)"
+                        : laneColourOf(indexOfCalendar(onOffer, thing.resourceId)),
+                  }}
+                />
+                <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <b style={{ fontWeight: 600, fontSize: 13.5 }}>
+                    {"kind" in thing
+                      ? (thing.note ??
+                        (thing.kind === "SHUT" ? copy.closedWord : copy.differentHours))
+                      : thing.reason || copy.blockedWord}
+                  </b>
+                  <span className="hint">
+                    {formatLocalDate(thing.fromDate, language, {
+                      day: "numeric",
+                      month: "long",
+                    })}
+                    {thing.days > 1
+                      ? ` – ${formatLocalDate(thing.toDate, language, {
+                          day: "numeric",
+                          month: "long",
+                        })}`
+                      : ""}
+                    {" · "}
+                    {"kind" in thing
+                      ? copy.allCalendars
+                      : (onOffer.find((one) => one.id === thing.resourceId)?.name ?? "")}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </Sheet>
 
       {/* A closure, as the one decision it was — and the way back out of it. */}
       <Sheet open={openClosure !== null} onClose={() => setOpenClosure(null)}>
@@ -514,6 +494,217 @@ export const Month = ({
     </div>
   );
 };
+
+/**
+ * A week's decisions, laid out under the days they describe.
+ *
+ * Closures lead: they cover every calendar, so they are the widest claim being
+ * made about those days, and a blockage sits inside one. Everything that does
+ * not overlap shares a line, and anything past two lines becomes a count that
+ * opens the week — a month grid can carry two bars per row and stay a glance.
+ */
+/** The two things a week can be told about: the shop's days, and a calendar's. */
+type WeekThing = ClosureBandDto | BusinessMonthDto["blockages"][number];
+
+const WeekBands = ({
+  week,
+  row,
+  closures,
+  blockages,
+  calendars,
+  many,
+  copy,
+  onOpenClosure,
+  onOpenBlockage,
+  onOpenWeek,
+}: {
+  week: readonly (string | null)[];
+  row: number;
+  closures: readonly ClosureBandDto[];
+  blockages: BusinessMonthDto["blockages"];
+  calendars: readonly ResourceDto[];
+  /** More than one calendar, which is what makes "whose" worth saying. */
+  many: boolean;
+  copy: ReturnType<typeof useCopy<"owner">>;
+  onOpenClosure: (closure: ClosureBandDto) => void;
+  onOpenBlockage: (blockage: BusinessMonthDto["blockages"][number]) => void;
+  onOpenWeek: () => void;
+}) => {
+  const here: Segment<WeekThing>[] = [
+    ...closures.map((closure) => segmentIn<WeekThing>(week, closure)),
+    ...blockages.map((blockage) => segmentIn<WeekThing>(week, blockage)),
+  ].filter((segment): segment is Segment<WeekThing> => segment !== null);
+
+  if (here.length === 0) return null;
+
+  const { rows, folded } = packBands(here);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      {rows.map((line, at) => (
+        <div key={at} style={{ position: "relative", height: BAND_HEIGHT }}>
+          {line.map(({ span, column, width }) =>
+            "kind" in span ? (
+              <Band
+                key={`closed-${span.fromDate}-${row}`}
+                column={column}
+                width={width}
+                mark={null}
+                ground={span.kind === "SHUT" ? "var(--closed)" : "var(--accent-soft)"}
+                ink={span.kind === "SHUT" ? "var(--on-accent)" : "var(--accent-strong)"}
+                edge={span.kind === "SHUT" ? "var(--closed)" : "var(--accent)"}
+                label={labelOfClosure(span, width, copy)}
+                onClick={() => onOpenClosure(span)}
+              />
+            ) : (
+              <Band
+                key={`${span.groupId}-${row}`}
+                column={column}
+                width={width}
+                mark={many ? laneColourOf(indexOfCalendar(calendars, span.resourceId)) : null}
+                ground="var(--blocked-soft)"
+                ink="var(--ink)"
+                edge={laneColourOf(indexOfCalendar(calendars, span.resourceId))}
+                label={labelOfBlockage(span, width, calendars, many, copy)}
+                onClick={() => onOpenBlockage(span)}
+              />
+            ),
+          )}
+        </div>
+      ))}
+
+      {/* The rest, counted rather than drawn: a fourth bar costs the week the
+          days underneath it, and this opens the whole week instead. */}
+      {folded.length > 0 && (
+        <button
+          onClick={onOpenWeek}
+          style={{
+            alignSelf: "flex-start",
+            minHeight: BAND_HEIGHT,
+            padding: "0 7px",
+            borderRadius: 999,
+            background: "var(--sunken)",
+            border: "1px solid var(--line)",
+            color: "var(--muted)",
+            fontSize: 9,
+            fontWeight: 600,
+          }}
+        >
+          {copy.moreThatWeek.replace("{count}", String(folded.length))}
+        </button>
+      )}
+    </div>
+  );
+};
+
+const indexOfCalendar = (calendars: readonly ResourceDto[], resourceId: string) =>
+  calendars.findIndex((one) => one.id === resourceId);
+
+/** Everything decided about one week, closures first, in date order. */
+const thingsIn = (
+  week: readonly (string | null)[],
+  month: BusinessMonthDto,
+  scope: string | null,
+): WeekThing[] =>
+  [
+    ...month.closures.map((closure) => segmentIn<WeekThing>(week, closure)),
+    ...month.blockages
+      .filter((blockage) => scope === null || blockage.resourceId === scope)
+      .map((blockage) => segmentIn<WeekThing>(week, blockage)),
+  ]
+    .filter((segment): segment is Segment<WeekThing> => segment !== null)
+    .map((segment) => segment.span);
+
+const labelOfClosure = (
+  closure: ClosureBandDto,
+  width: number,
+  copy: ReturnType<typeof useCopy<"owner">>,
+) =>
+  labelFor(
+    closure.note,
+    width,
+    closure.kind === "SHUT"
+      ? copy.closedWord
+      : closure.hours.map((range) => `${range.start}–${range.end}`).join(", "),
+  );
+
+const labelOfBlockage = (
+  blockage: BusinessMonthDto["blockages"][number],
+  width: number,
+  calendars: readonly ResourceDto[],
+  many: boolean,
+  copy: ReturnType<typeof useCopy<"owner">>,
+) => {
+  const said = labelFor(blockage.reason, width, copy.blockedShort);
+  if (!many) return said;
+  // Whose time it is. A band that says only "away" leaves the owner of a
+  // three-chair shop to work out which chair.
+  const named = calendars.find((one) => one.id === blockage.resourceId)?.name ?? "";
+  return named === "" ? said : `${named} · ${said}`;
+};
+
+/**
+ * What a decision looks like on the grid: a bar across the days it covers.
+ *
+ * One shape for both kinds, because they are the same idea to a reader — a
+ * stretch of days with something true about them — and they differ only in
+ * what they say and who they belong to.
+ */
+const Band = ({
+  column,
+  width,
+  label,
+  mark,
+  ground,
+  ink,
+  edge,
+  onClick,
+}: {
+  column: number;
+  width: number;
+  label: string;
+  /** A calendar's colour, when the band belongs to one of several. */
+  mark: string | null;
+  ground: string;
+  ink: string;
+  edge: string;
+  onClick: () => void;
+}) => (
+  <button
+    onClick={onClick}
+    style={{
+      position: "absolute",
+      insetInlineStart: `calc(${(column / DAYS_IN_A_WEEK) * 100}% + 2px)`,
+      width: `calc(${(width / DAYS_IN_A_WEEK) * 100}% - 4px)`,
+      height: BAND_HEIGHT,
+      borderRadius: 999,
+      background: ground,
+      color: ink,
+      border: `1px solid ${edge}`,
+      fontSize: 9,
+      fontWeight: 600,
+      padding: "0 5px",
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+    }}
+  >
+    {mark !== null && (
+      <i
+        aria-hidden="true"
+        style={{ width: 7, height: 7, borderRadius: 999, flexShrink: 0, background: mark }}
+      />
+    )}
+    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      {label}
+    </span>
+  </button>
+);
+
+/** How tall one line of bands is, and the gap between two of them. */
+const BAND_HEIGHT = 13;
 
 /**
  * One square. The shop's own weather is the fill, because that is what a
