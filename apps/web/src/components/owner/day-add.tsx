@@ -112,6 +112,7 @@ export const FinishAim = ({
   business,
   resource,
   onClose,
+  onCancel,
   onDone,
 }: {
   aim: Aim | null;
@@ -120,7 +121,10 @@ export const FinishAim = ({
   business: BusinessDto;
   /** The calendar being read, which is what a blockage belongs to. */
   resource: ResourceDto | null;
+  /** Dismissed: back to choosing days, with the action still chosen. */
   onClose: () => void;
+  /** Given up on: out of the action altogether. */
+  onCancel: () => void;
   onDone: () => void;
 }) => {
   const copy = useCopy("owner");
@@ -155,29 +159,58 @@ export const FinishAim = ({
   /** How many people the current plan would call off, once it is known. */
   const closing = impact?.appointments.length ?? 0;
 
-  const close = (upcoming: "KEEP" | "CANCEL") =>
-    api.closeBusiness(token, business.id, {
-      fromDate,
-      toDate,
-      note: note.trim() === "" ? null : note.trim(),
-      ranges: hoursOf(),
-      upcoming,
-    });
+  /** The spans a blockage over these days comes to. */
+  const blockSpans = () =>
+    dates.map((date) => ({
+      startAt: instantOf(date, allDay ? "00:00" : from, business.timeZone),
+      endAt: instantOf(date, allDay ? "23:59" : until, business.timeZone),
+      reason: note.trim() === "" ? copy.blockedWord : note.trim(),
+    }));
 
+  const write = (upcoming: "KEEP" | "CANCEL") =>
+    aim === "special"
+      ? api.closeBusiness(token, business.id, {
+          fromDate,
+          toDate,
+          note: note.trim() === "" ? null : note.trim(),
+          ranges: hoursOf(),
+          upcoming,
+        })
+      : api.createBlocks(token, business.id, resource?.id ?? "", blockSpans(), upcoming);
+
+  /**
+   * Who this would strand — asked for both actions, because both strand people.
+   *
+   * A blockage looked like the smaller of the two and was made in silence: the
+   * hours went out of the calendar, the appointments stayed on top of them,
+   * and the owner learnt about it from whoever turned up.
+   */
   useEffect(() => {
-    if (aim !== "special" || fromDate === "") {
+    const sane = aim === "special" ? closedAllDay || until > from : allDay || until > from;
+    if (aim === null || fromDate === "" || !sane) {
       setImpact(null);
       return;
     }
-    // Hours that make no sense are not a question worth asking the server.
-    if (!closedAllDay && until <= from) return;
+    if (aim === "block" && resource === null) return;
     let current = true;
-    api
-      .previewClosure(token, business.id, {
-        fromDate,
-        toDate,
-        ranges: closedAllDay ? [] : [{ start: from, end: until }],
-      })
+    const asked =
+      aim === "special"
+        ? api.previewClosure(token, business.id, {
+            fromDate,
+            toDate,
+            ranges: closedAllDay ? [] : [{ start: from, end: until }],
+          })
+        : api.previewBlocks(
+            token,
+            business.id,
+            resource?.id ?? "",
+            dates.map((date) => ({
+              startAt: instantOf(date, allDay ? "00:00" : from, business.timeZone),
+              endAt: instantOf(date, allDay ? "23:59" : until, business.timeZone),
+              reason: "",
+            })),
+          );
+    asked
       .then((answer) => {
         if (current) setImpact(answer);
       })
@@ -189,7 +222,20 @@ export const FinishAim = ({
     return () => {
       current = false;
     };
-  }, [aim, token, business.id, fromDate, toDate, closedAllDay, from, until]);
+    // `dates` is derived from the two ends, which are both here.
+  }, [
+    aim,
+    token,
+    business.id,
+    business.timeZone,
+    resource,
+    fromDate,
+    toDate,
+    closedAllDay,
+    allDay,
+    from,
+    until,
+  ]);
 
   const act = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -278,6 +324,8 @@ export const FinishAim = ({
             placeholder={copy.notePlaceholder}
           />
 
+          <Costs impact={impact} copy={copy} business={business} language={language} />
+
           <p className="said" style={{ margin: 0 }}>
             {copy.willMake
               .replace("{days}", String(dates.length))
@@ -285,26 +333,16 @@ export const FinishAim = ({
           </p>
           {error !== null && <Critical>{error}</Critical>}
 
-          <Button
+          <Answers
+            copy={copy}
             busy={busy}
+            closing={closing}
             disabled={resource === null || (!allDay && until <= from)}
-            onClick={() =>
-              void act(() =>
-                api.createBlocks(
-                  token,
-                  business.id,
-                  resource?.id ?? "",
-                  dates.map((date) => ({
-                    startAt: instantOf(date, allDay ? "00:00" : from, business.timeZone),
-                    endAt: instantOf(date, allDay ? "23:59" : until, business.timeZone),
-                    reason: note.trim() === "" ? copy.blockedWord : note.trim(),
-                  })),
-                ),
-              )
-            }
-          >
-            {copy.save}
-          </Button>
+            cancelLabel={copy.blockAndCancel}
+            keepLabel={copy.blockAndKeep}
+            onWrite={(upcoming) => void act(() => write(upcoming))}
+            onCancel={onCancel}
+          />
         </div>
       )}
 
@@ -418,32 +456,130 @@ export const FinishAim = ({
           {/* One call, not a loop over the calendars: the business closes, and
               the API writes every calendar and answers for every booking in one
               transaction. Looping here could only ever half-close a shop. */}
-          <Button
-            intent={closing > 0 ? "danger" : "primary"}
+          <Answers
+            copy={copy}
             busy={busy}
+            closing={closing}
             disabled={!closedAllDay && until <= from}
-            onClick={() => void act(() => close("CANCEL"))}
-          >
-            {closing > 0 ? copy.closeAndCancel.replace("{count}", String(closing)) : copy.save}
-          </Button>
-          {closing > 0 && (
-            // Both answers are wrong by default, so both are offered and
-            // neither is assumed: a shut shop with the appointments still on
-            // the books is a real choice when the owner means to ring round.
-            <Button
-              intent="quiet"
-              busy={busy}
-              disabled={!closedAllDay && until <= from}
-              onClick={() => void act(() => close("KEEP"))}
-            >
-              {copy.closeAndKeep}
-            </Button>
-          )}
+            cancelLabel={copy.closeAndCancel}
+            keepLabel={copy.closeAndKeep}
+            onWrite={(upcoming) => void act(() => write(upcoming))}
+            onCancel={onCancel}
+          />
         </div>
       )}
     </Sheet>
   );
 };
+
+/**
+ * Who a change would strand, named.
+ *
+ * Shown for a blockage exactly as for a closure: both take hours away from a
+ * calendar somebody has already booked, and the only difference between them
+ * is how many calendars it happens on.
+ */
+const Costs = ({
+  impact,
+  copy,
+  business,
+  language,
+}: {
+  impact: ClosureImpactDto | null;
+  copy: ReturnType<typeof useCopy<"owner">>;
+  business: BusinessDto;
+  language: ReturnType<typeof useLanguage>["language"];
+}) => {
+  if (impact === null) return null;
+  if (impact.appointments.length === 0) {
+    return (
+      <p className="said" style={{ margin: 0 }}>
+        {copy.nothingBookedThen}
+      </p>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <Critical>
+        {copy.closingWillCancel.replace("{count}", String(impact.appointments.length))}
+      </Critical>
+      <div
+        className="scroll"
+        style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 190 }}
+      >
+        {impact.appointments.map((one) => (
+          <span
+            key={one.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 9px",
+              borderRadius: 10,
+              background: "var(--sunken)",
+              fontSize: 12,
+            }}
+          >
+            <span className="tab hint" style={{ width: 96 }}>
+              {whenIn(one.startAt, business.timeZone, language)}
+            </span>
+            <span style={{ flex: 1, fontWeight: 500 }}>{one.customerName}</span>
+            <span className="hint">{one.serviceName}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * The decision, and the way out of it.
+ *
+ * Both answers about the people already booked are offered whenever there are
+ * any, because both are wrong by default — an owner who means to ring round
+ * keeps them. And there is always a plain way out: a sheet whose only exits
+ * are "do it" and a tap on the backdrop is a sheet people write off as a trap.
+ */
+const Answers = ({
+  copy,
+  busy,
+  closing,
+  disabled,
+  cancelLabel,
+  keepLabel,
+  onWrite,
+  onCancel,
+}: {
+  copy: ReturnType<typeof useCopy<"owner">>;
+  busy: boolean;
+  /** How many appointments this would call off. */
+  closing: number;
+  disabled: boolean;
+  cancelLabel: string;
+  keepLabel: string;
+  onWrite: (upcoming: "KEEP" | "CANCEL") => void;
+  onCancel: () => void;
+}) => (
+  <>
+    <Button
+      intent={closing > 0 ? "danger" : "primary"}
+      busy={busy}
+      disabled={disabled}
+      onClick={() => onWrite("CANCEL")}
+    >
+      {closing > 0 ? cancelLabel.replace("{count}", String(closing)) : copy.save}
+    </Button>
+    {closing > 0 && (
+      <Button intent="quiet" busy={busy} disabled={disabled} onClick={() => onWrite("KEEP")}>
+        {keepLabel}
+      </Button>
+    )}
+    <Button intent="quiet" disabled={busy} onClick={onCancel}>
+      {copy.cancelSelection}
+    </Button>
+  </>
+);
 
 const Choice = ({
   icon,

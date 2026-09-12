@@ -13,6 +13,7 @@ import { formatLocalDate, monthName, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { canCloseBusiness } from "@/lib/roles.ts";
+import { laneColourOf } from "./event-colour.ts";
 import { Button, Card, Critical, Note, Sheet, Spinner } from "../ui.tsx";
 import { datesBetween, factsOn, labelFor, segmentIn, weeksOf } from "./month-model.ts";
 
@@ -282,30 +283,67 @@ export const Month = ({
                 .filter((blockage) => scope === null || blockage.resourceId === scope)
                 .map((blockage) => segmentIn(week, blockage))
                 .filter((segment): segment is NonNullable<typeof segment> => segment !== null)
-                .map(({ span, column, width }) => (
-                  <span key={`${span.groupId}-${row}`} style={{ position: "relative", height: 13 }}>
-                    <button
-                      onClick={() => setOpenGroup(span)}
-                      style={{
-                        position: "absolute",
-                        insetInlineStart: `calc(${(column / 7) * 100}% + 2px)`,
-                        width: `calc(${(width / 7) * 100}% - 4px)`,
-                        height: 13,
-                        borderRadius: 999,
-                        background: "var(--blocked)",
-                        color: "var(--on-accent)",
-                        fontSize: 9,
-                        fontWeight: 600,
-                        pointerEvents: "auto",
-                        padding: "0 5px",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                      }}
+                .map(({ span, column, width }) => {
+                  // Whose time this is. A band that says only "away" leaves the
+                  // owner of a three-chair shop to work out which chair — so
+                  // the calendar's own mark leads, in the colour it wears
+                  // everywhere else, and the reason follows it.
+                  const whose = onOffer.findIndex((one) => one.id === span.resourceId);
+                  const named = onOffer[whose]?.name ?? "";
+                  return (
+                    <span
+                      key={`${span.groupId}-${row}`}
+                      style={{ position: "relative", height: 13 }}
                     >
-                      {labelFor(span.reason, width, copy.blockedWord)}
-                    </button>
-                  </span>
-                ))}
+                      <button
+                        onClick={() => setOpenGroup(span)}
+                        style={{
+                          position: "absolute",
+                          insetInlineStart: `calc(${(column / 7) * 100}% + 2px)`,
+                          width: `calc(${(width / 7) * 100}% - 4px)`,
+                          height: 13,
+                          borderRadius: 999,
+                          background: "var(--blocked-soft)",
+                          border: `1px solid ${laneColourOf(whose)}`,
+                          color: "var(--ink)",
+                          fontSize: 9,
+                          fontWeight: 600,
+                          pointerEvents: "auto",
+                          padding: "0 5px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {many && (
+                          <i
+                            aria-hidden="true"
+                            style={{
+                              width: 9,
+                              height: 9,
+                              borderRadius: 999,
+                              flexShrink: 0,
+                              background: laneColourOf(whose),
+                            }}
+                          />
+                        )}
+                        <span
+                          style={{
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {many
+                            ? `${named} · ${labelFor(span.reason, width, copy.blockedShort)}`
+                            : labelFor(span.reason, width, copy.blockedShort)}
+                        </span>
+                      </button>
+                    </span>
+                  );
+                })}
             </div>
           </div>
         ))}
@@ -410,6 +448,24 @@ export const Month = ({
         {openGroup !== null && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <h2 style={{ fontSize: 18 }}>{openGroup.reason || copy.blockedWord}</h2>
+            {/* Whose calendar it is, said before anything else: "away" is not
+                an answer in a shop with three chairs. */}
+            <p style={{ margin: 0, display: "flex", alignItems: "center", gap: 7 }}>
+              <i
+                aria-hidden="true"
+                style={{
+                  width: 11,
+                  height: 11,
+                  borderRadius: 999,
+                  background: laneColourOf(
+                    onOffer.findIndex((one) => one.id === openGroup.resourceId),
+                  ),
+                }}
+              />
+              <b style={{ fontWeight: 600, fontSize: 14 }}>
+                {onOffer.find((one) => one.id === openGroup.resourceId)?.name ?? ""}
+              </b>
+            </p>
             <p className="hint" style={{ margin: 0 }}>
               {formatLocalDate(openGroup.fromDate, language, { day: "numeric", month: "long" })}
               {" – "}

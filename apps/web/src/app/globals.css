@@ -26,26 +26,38 @@
   --critical:oklch(55% 0.170 22); --critical-soft:oklch(95% 0.030 22);
 
   /* The calendar's own palette.
-     Six hues a service can be given, spaced far enough apart to be told apart
-     at the size a timeline draws them, and held at one lightness so none of
-     them shouts over the others. They are deliberately not the status colours:
-     a red appointment must not read as a warning. Each has a soft ground for
-     the body of an event and a strong edge for its rail.
+
+     Six colours a service can be given. They are separated by lightness and
+     by saturation as well as by hue — six hues rotated at one lightness came
+     out looking like six shades of the same thing, and a timeline is read at a
+     glance and at thumbnail size. Varying lightness also means they survive
+     being colour-blind, and photocopied.
+
+     They are deliberately not the status colours: an appointment must not read
+     as a warning. Each has a ground pale enough to put ink on and a rail that
+     carries the identity.
+
      Colours nobody chose are the bug this replaces — --plum, --moss and
-     --amber were used by the timeline and never defined anywhere, so every
-     service after the first drew with no background and no rail at all. */
-  --event-1:oklch(52% 0.123 245); --event-1-soft:oklch(95.5% 0.030 240);
-  --event-2:oklch(54% 0.135 300); --event-2-soft:oklch(95.5% 0.030 300);
-  --event-3:oklch(56% 0.140 350); --event-3-soft:oklch(95.5% 0.032 350);
-  --event-4:oklch(55% 0.105 195); --event-4-soft:oklch(95.5% 0.030 195);
-  --event-5:oklch(54% 0.110 150); --event-5-soft:oklch(95.5% 0.032 150);
-  --event-6:oklch(58% 0.120 85);  --event-6-soft:oklch(95.5% 0.036 85);
+     --amber were used by the timeline and defined nowhere, so every service
+     after the first drew with no background and no rail at all. */
+  --event-1:oklch(55% 0.150 250); --event-1-soft:oklch(94.5% 0.042 250);
+  --event-2:oklch(47% 0.175 305); --event-2-soft:oklch(93.5% 0.050 305);
+  --event-3:oklch(59% 0.160 345); --event-3-soft:oklch(94.5% 0.045 345);
+  --event-4:oklch(64% 0.110 200); --event-4-soft:oklch(95%   0.048 200);
+  --event-5:oklch(51% 0.130 148); --event-5-soft:oklch(93.5% 0.055 148);
+  --event-6:oklch(67% 0.135 75);  --event-6-soft:oklch(95%   0.062 75);
+
+  /* Whose calendar it is, which is a different question from what is on it.
+     Deeper and quieter than the event hues on purpose: a lane's mark should
+     read as an identity beside the thing it marks, never as another service. */
+  --lane-1:oklch(38% 0.080 262); --lane-2:oklch(42% 0.090 152);
+  --lane-3:oklch(45% 0.110 40);  --lane-4:oklch(40% 0.075 318);
 
   /* The two things that are not appointments. A blockage is somebody's own
      time; a closure is the shop's, and reads heavier because it is the shop's
      to undo. Neither is given an event hue: they are not a kind of service. */
-  --blocked:oklch(58% 0.045 260); --blocked-soft:oklch(94% 0.014 260);
-  --closed:oklch(40% 0.055 262); --closed-soft:oklch(92% 0.020 262);
+  --blocked:oklch(52% 0.040 265); --blocked-soft:oklch(93.5% 0.012 265);
+  --closed:oklch(34% 0.050 264); --closed-soft:oklch(91% 0.020 264);
 
   --shadow:0 1px 2px oklch(25% 0.055 258/.05), 0 8px 24px -12px oklch(25% 0.055 258/.16);
 

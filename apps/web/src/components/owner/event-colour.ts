@@ -49,6 +49,20 @@ export const colourOf = (name: string): EventColour => {
   return { ground: `var(--event-${hue}-soft)`, rail: `var(--event-${hue})` };
 };
 
-/** A calendar's own mark, which is about whose it is rather than what it is. */
-export const markColourOf = (index: number): string =>
-  `var(--event-${(Math.abs(index) % EVENT_HUES) + 1})`;
+/** How many calendars can be told apart by colour before the set repeats. */
+export const LANE_COLOURS = 4;
+
+/**
+ * A calendar's own colour, which answers a different question from a service's.
+ *
+ * Kept off the service palette deliberately: a lane's mark sits right beside
+ * the appointments it marks, and if it is drawn from the same set of colours
+ * the eye reads it as one more service. These are deeper and quieter, so the
+ * mark reads as "whose" rather than "what".
+ *
+ * An index below zero means a calendar this screen does not know about — a
+ * blockage on a chair a worker cannot see — and gets the first colour rather
+ * than throwing the grid off.
+ */
+export const laneColourOf = (index: number): string =>
+  `var(--lane-${(Math.max(0, index) % LANE_COLOURS) + 1})`;

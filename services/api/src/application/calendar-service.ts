@@ -1,4 +1,5 @@
 import {
+  cancelAppointment,
   compareByName,
   dayOfWeekOf,
   manages,
@@ -60,6 +61,9 @@ export type BusinessMonth = {
   readonly closures: readonly ClosureBand[];
 };
 import { closureBandsOf, type ClosureBand } from "./closure-bands.ts";
+import { notificationFor } from "./notifications.ts";
+import { namedFor, stillToCome, type Impact, type Upcoming } from "./stranded.ts";
+import { TEMPLATES } from "../ports/notifier.ts";
 import type { BookedAppointment } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 
@@ -139,6 +143,60 @@ export type MonthDay = {
 
 /** Enough to answer a phone call without becoming a page of its own. */
 const SEARCH_RESULTS = 25;
+
+/** Nothing is booked for longer than this, which is what makes the reach below enough. */
+const A_DAY = 24 * 60 * 60 * 1000;
+
+/** The spans a blockage was asked for, checked before any of them is written. */
+const spansOf = (
+  spans: readonly { startAt: string; endAt: string; reason: string }[],
+  resourceId: ResourceId,
+  businessId: BusinessId,
+) =>
+  spans.map((span) => {
+    const startAt = parseInstant(span.startAt);
+    const endAt = parseInstant(span.endAt);
+    if (endAt <= startAt) {
+      throw validationFailed("A block must end after it starts");
+    }
+    return { resourceId, businessId, startAt, endAt, reason: span.reason };
+  });
+
+/**
+ * What is booked underneath a blockage.
+ *
+ * Overlap rather than containment: a blockage from two o'clock catches the
+ * appointment that started at half past one and runs into it, which is exactly
+ * the one somebody would otherwise turn up for.
+ */
+const bookedInside = async (
+  repositories: Parameters<typeof loadManagedBusiness>[0],
+  businessId: BusinessId,
+  spans: readonly { resourceId: ResourceId; startAt: number; endAt: number }[],
+  now: number,
+): Promise<readonly Appointment[]> => {
+  if (spans.length === 0) return [];
+  const from = Math.min(...spans.map((span) => span.startAt));
+  const to = Math.max(...spans.map((span) => span.endAt));
+  const booked = await repositories.appointments.listForBusinessBetween(
+    businessId,
+    // The query selects on when an appointment *starts*, so it reaches back a
+    // day: the one that began at half past one and runs into a two o'clock
+    // blockage is the very one somebody would otherwise turn up for.
+    (from - A_DAY) as never,
+    to as never,
+  );
+  return booked.filter(
+    (appointment) =>
+      stillToCome(appointment, now) &&
+      spans.some(
+        (span) =>
+          appointment.resourceId === span.resourceId &&
+          appointment.startAt < span.endAt &&
+          span.startAt < appointment.endAt,
+      ),
+  );
+};
 
 export const calendarService = ({
   unitOfWork,
@@ -484,22 +542,41 @@ export const calendarService = ({
     businessId: BusinessId,
     resourceId: ResourceId,
     spans: readonly { startAt: string; endAt: string; reason: string }[],
+    upcoming: Upcoming = "KEEP",
   ): Promise<readonly Block[]> {
-    return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadManagedBusiness(repositories, actor, businessId);
+    return unitOfWork.run(actor, async (session) => {
+      const { repositories } = session;
+      // A worker may keep their own calendar: blocking their own Tuesday is
+      // theirs to do, unlike closing the shop. The screen offers it to them,
+      // and this is what makes that true rather than a button that 403s.
+      await requireResourceAccess(repositories, actor, businessId, resourceId);
+      const business = await repositories.businesses.findById(businessId);
+      if (business === null) throw notFound("Business", businessId);
       await loadOwnedResource(repositories, businessId, resourceId);
 
       // Read in full before any of it is written: the transaction would undo a
       // half-made blockage anyway, but a caller's mistake is better answered
       // than rolled back.
-      const wanted = spans.map((span) => {
-        const startAt = parseInstant(span.startAt);
-        const endAt = parseInstant(span.endAt);
-        if (endAt <= startAt) {
-          throw validationFailed("A block must end after it starts");
+      const wanted = spansOf(spans, resourceId, businessId);
+
+      // The people already booked inside it. Same question the shop closing
+      // asks, and answered the same way: the caller says, and this obeys.
+      if (upcoming === "CANCEL") {
+        const stranded = await bookedInside(repositories, businessId, wanted, clock.now());
+        for (const appointment of stranded) {
+          const outcome = cancelAppointment(appointment, business, "BUSINESS", clock.now());
+          const cancelled = await repositories.appointments.update(appointment.id, {
+            status: "CANCELLED",
+            ...outcome,
+          });
+          const customer = await repositories.users.findById(appointment.customerId);
+          if (customer !== null) {
+            await session.outbox.enqueue(
+              notificationFor(TEMPLATES.bookingCancelled, cancelled, business, customer),
+            );
+          }
         }
-        return { resourceId, businessId, startAt, endAt, reason: span.reason };
-      });
+      }
 
       // One decision, one group — including a blockage of a single day, so
       // "what did this tap create" always has a truthful answer.
@@ -509,6 +586,39 @@ export const calendarService = ({
         made.push(await repositories.blocks.create({ ...span, groupId }));
       }
       return made;
+    });
+  },
+
+  /**
+   * Who is booked inside a blockage that has not been made yet.
+   *
+   * Blocking a fortnight is as capable of stranding somebody as closing the
+   * shop is, and the screen used to make it silently — the blockage went in,
+   * the appointments stayed on top of it, and nobody was told either way.
+   */
+  async blockPreview(
+    actor: Actor,
+    businessId: BusinessId,
+    resourceId: ResourceId,
+    spans: readonly { startAt: string; endAt: string; reason: string }[],
+  ): Promise<Impact> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await requireResourceAccess(repositories, actor, businessId, resourceId);
+      const business = await repositories.businesses.findById(businessId);
+      if (business === null) throw notFound("Business", businessId);
+      await loadOwnedResource(repositories, businessId, resourceId);
+
+      const wanted = spansOf(spans, resourceId, businessId);
+      const stranded = await bookedInside(repositories, businessId, wanted, clock.now());
+      return {
+        // How many days it covers, in the business's own zone — a blockage
+        // from ten at night to two in the morning is two days to its owner.
+        days: new Set(
+          wanted.map((span) => instantToZoned(span.startAt, business.timeZone).date),
+        ).size,
+        calendars: 1,
+        appointments: await namedFor(repositories, stranded),
+      };
     });
   },
 

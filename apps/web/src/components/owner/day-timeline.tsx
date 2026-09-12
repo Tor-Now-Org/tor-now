@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { BusinessDayDto } from "@/lib/api/types.ts";
 import { timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { colourOf, markColourOf } from "./event-colour.ts";
+import { colourOf, laneColourOf } from "./event-colour.ts";
 import {
   BOX_MINIMUM,
   FOLD_HEIGHT,
@@ -490,7 +490,7 @@ const Mark = ({ name, index }: { name: string; index: number }) => (
       fontSize: 9.5,
       fontWeight: 600,
       fontFamily: "Rubik, sans-serif",
-      background: markColourOf(index),
+      background: laneColourOf(index),
       color: "var(--on-accent)",
     }}
   >

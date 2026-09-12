@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EVENT_HUES, colourOf, hueIndexOf, markColourOf } from "./event-colour.ts";
+import { EVENT_HUES, LANE_COLOURS, colourOf, hueIndexOf, laneColourOf } from "./event-colour.ts";
 
 describe("the colour a service keeps", () => {
   it("gives the same service the same colour every time it is asked", () => {
@@ -42,9 +42,22 @@ describe("the colour a service keeps", () => {
     expect(hueIndexOf(" תספורת ")).toBe(hueIndexOf("תספורת"));
   });
 
-  it("wraps a calendar's mark round the palette rather than running off it", () => {
-    expect(markColourOf(0)).toBe("var(--event-1)");
-    expect(markColourOf(EVENT_HUES)).toBe("var(--event-1)");
-    expect(markColourOf(EVENT_HUES + 2)).toBe("var(--event-3)");
+  it("gives a calendar a colour from its own set, never a service's", () => {
+    // A lane mark sits beside the appointments it marks; drawn from the same
+    // palette it reads as one more service rather than as whose calendar it is.
+    const lanes = Array.from({ length: LANE_COLOURS }, (_unused, at) => laneColourOf(at));
+    lanes.forEach((lane) => expect(lane).toMatch(/^var\(--lane-[1-4]\)$/));
+    expect(new Set(lanes).size).toBe(LANE_COLOURS);
+  });
+
+  it("wraps a calendar's colour round its set rather than running off it", () => {
+    expect(laneColourOf(0)).toBe("var(--lane-1)");
+    expect(laneColourOf(LANE_COLOURS)).toBe("var(--lane-1)");
+    expect(laneColourOf(LANE_COLOURS + 2)).toBe("var(--lane-3)");
+  });
+
+  it("gives a calendar it does not recognise the first colour, not a crash", () => {
+    // A blockage can belong to a chair this screen cannot see.
+    expect(laneColourOf(-1)).toBe("var(--lane-1)");
   });
 });

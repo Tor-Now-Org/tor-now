@@ -19,6 +19,7 @@ import {
   type Resource,
 } from "@tor-now/domain";
 import { loadManagedBusiness } from "./authorization.ts";
+import { namedFor, stillToCome, type Impact, type Upcoming } from "./stranded.ts";
 import { notificationFor } from "./notifications.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
 import type { Repositories } from "../ports/repositories.ts";
@@ -51,30 +52,13 @@ export type ClosurePlan = {
   readonly ranges: readonly { start: string; end: string }[];
 };
 
-/** An appointment a plan would strand, said the way a screen has to say it. */
-export type StrandedAppointment = {
-  readonly id: Appointment["id"];
-  readonly startAt: Appointment["startAt"];
-  readonly resourceName: string;
-  readonly serviceName: string;
-  readonly customerName: string;
-  readonly customerPhone: string;
-};
-
-export type ClosureImpact = {
-  readonly days: number;
-  readonly calendars: number;
-  readonly appointments: readonly StrandedAppointment[];
-};
+export type ClosureImpact = Impact;
 
 export type ClosureOutcome = {
   readonly days: number;
   readonly calendars: number;
   readonly cancelled: number;
 };
-
-/** What a closure has to answer for: what is still standing, and still to come. */
-const STILL_STANDING = "CONFIRMED";
 
 const datesOf = (fromDate: string, toDate: string): LocalDate[] => {
   const first = parseLocalDate(fromDate);
@@ -167,10 +151,9 @@ export const closureService = ({
     const covered = new Set<string>(dates);
 
     return booked.filter((appointment) => {
-      if (appointment.status !== STILL_STANDING) return false;
       // A day that has already happened happened. Cancelling what is behind us
       // would rewrite the record and message people about it afterwards.
-      if (appointment.startAt <= clock.now()) return false;
+      if (!stillToCome(appointment, clock.now())) return false;
       const from = instantToZoned(appointment.startAt, business.timeZone);
       const to = instantToZoned(appointment.endAt, business.timeZone);
       if (!covered.has(from.date)) return false;
@@ -203,26 +186,11 @@ export const closureService = ({
           hoursOf(plan.ranges),
         );
 
-        const named = await Promise.all(
-          stranded.map(async (appointment) => {
-            const customer = await repositories.users.findById(appointment.customerId);
-            return {
-              id: appointment.id,
-              startAt: appointment.startAt,
-              resourceName: appointment.resourceName,
-              serviceName: appointment.serviceName,
-              customerName:
-                customer === null
-                  ? ""
-                  : [customer.givenName, customer.familyName]
-                      .filter((part) => part !== null && part !== "")
-                      .join(" "),
-              customerPhone: customer?.phone ?? "",
-            };
-          }),
-        );
-
-        return { days: dates.length, calendars: calendars.length, appointments: named };
+        return {
+          days: dates.length,
+          calendars: calendars.length,
+          appointments: await namedFor(repositories, stranded),
+        };
       });
     },
 
@@ -242,7 +210,7 @@ export const closureService = ({
       actor: Actor,
       businessId: BusinessId,
       plan: ClosurePlan,
-      upcoming: "KEEP" | "CANCEL",
+      upcoming: Upcoming,
     ): Promise<ClosureOutcome> {
       return unitOfWork.run(actor, async (session) => {
         const { repositories } = session;

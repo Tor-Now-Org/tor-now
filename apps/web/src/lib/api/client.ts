@@ -518,10 +518,12 @@ export const api = {
     businessId: string,
     resourceId: string,
     blocks: { startAt: string; endAt: string; reason: string }[],
+    /** What becomes of the appointments already inside it. */
+    upcoming: "KEEP" | "CANCEL" = "KEEP",
   ) =>
     request<BlockDto[]>(`/businesses/${businessId}/resources/${resourceId}/blocks`, {
       method: "POST",
-      body: { blocks },
+      body: { blocks, upcoming },
       token,
     }),
 
@@ -577,6 +579,18 @@ export const api = {
     request<{ removed: number }>(
       `/businesses/${businessId}/closures?from=${from}&to=${to}`,
       { method: "DELETE", token },
+    ),
+
+  /** What a blockage would sit on top of, before it is made. */
+  previewBlocks: (
+    token: string,
+    businessId: string,
+    resourceId: string,
+    blocks: { startAt: string; endAt: string; reason: string }[],
+  ) =>
+    request<ClosureImpactDto>(
+      `/businesses/${businessId}/resources/${resourceId}/blocks/preview`,
+      { method: "POST", body: { blocks }, token },
     ),
 
   blockGroup: (token: string, businessId: string, groupId: string) =>

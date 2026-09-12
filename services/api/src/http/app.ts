@@ -547,7 +547,7 @@ const ownerRoutes = (services: Services) => {
   owner.post("/:businessId/closures/preview", async (context) => {
     const body = await parseBody(context, schema.closurePreviewSchema);
     return context.json(
-      wire.closureImpactOut(
+      wire.impactOut(
         await services.closures.preview(
           actorOf(context),
           idParam(context, "businessId"),
@@ -654,6 +654,21 @@ const ownerRoutes = (services: Services) => {
     return context.json(days);
   });
 
+  // What a blockage would strand, before it is made.
+  owner.post("/:businessId/resources/:resourceId/blocks/preview", async (context) => {
+    const body = await parseBody(context, schema.blockPreviewSchema);
+    return context.json(
+      wire.impactOut(
+        await services.calendar.blockPreview(
+          actorOf(context),
+          idParam(context, "businessId"),
+          idParam(context, "resourceId"),
+          body.blocks,
+        ),
+      ),
+    );
+  });
+
   owner.post("/:businessId/resources/:resourceId/blocks", async (context) => {
     const body = await parseBody(context, schema.blocksSchema);
     const made = await services.calendar.createBlocks(
@@ -661,6 +676,7 @@ const ownerRoutes = (services: Services) => {
       idParam(context, "businessId"),
       idParam(context, "resourceId"),
       body.blocks,
+      body.upcoming,
     );
     return context.json(made.map(wire.blockOut), 201);
   });

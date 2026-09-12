@@ -442,6 +442,10 @@ export const CalendarDay = ({
         business={business}
         resource={resource}
         onClose={() => setAimedAt([])}
+        onCancel={() => {
+          setAim(null);
+          setAimedAt([]);
+        }}
         onDone={() => {
           setAim(null);
           setAimedAt([]);

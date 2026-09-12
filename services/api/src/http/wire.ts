@@ -22,10 +22,7 @@ import type {
   TeamMember,
 } from "../application/business-service.ts";
 import type { BusinessDay, BusinessMonth } from "../application/calendar-service.ts";
-import type {
-  ClosureImpact,
-  StrandedAppointment,
-} from "../application/closure-service.ts";
+import type { Impact, StrandedAppointment } from "../application/stranded.ts";
 
 /**
  * What crosses the wire, stated explicitly rather than by serialising whatever
@@ -143,7 +140,7 @@ export const strandedOut = (stranded: StrandedAppointment) => ({
   customerPhone: stranded.customerPhone,
 });
 
-export const closureImpactOut = (impact: ClosureImpact) => ({
+export const impactOut = (impact: Impact) => ({
   days: impact.days,
   calendars: impact.calendars,
   appointments: impact.appointments.map(strandedOut),

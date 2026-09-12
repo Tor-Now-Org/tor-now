@@ -2408,7 +2408,7 @@ test.describe("closing the business", () => {
     // The warning names the person, because "1 appointment" is not the
     // decision the owner is being asked to make.
     await expect(sheet.getByText("נועה שדה")).toBeVisible({ timeout: 15_000 });
-    await expect(sheet.getByText(/תבטל 1 תורים/)).toBeVisible();
+    await expect(sheet.getByText(/יש כבר 1 תורים/)).toBeVisible();
 
     await sheet.getByRole("button", { name: /^סגירה וביטול/ }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
@@ -2715,5 +2715,194 @@ test.describe("reading a day at a glance", () => {
     await expect(page.getByRole("button", { name: /השתלמות/ })).toHaveCount(0, {
       timeout: 15_000,
     });
+  });
+});
+
+/**
+ * A blockage is the smaller of the two ways to take hours away, and it was the
+ * silent one: it went in on top of whatever was booked, and nobody was told.
+ */
+test.describe("blocking time out", () => {
+  const bookOn = async (
+    shop: { business: { id: string }; service: { id: string }; resource: { id: string } },
+    name: { givenName: string; familyName: string },
+    startAt: string,
+  ) => {
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name },
+    });
+    const appointment = await call<{ id: string }>("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt,
+        customerNote: null,
+      },
+    });
+    return { token, appointment };
+  };
+
+  const aimAt = async (page: Page, what: string, days: readonly string[]) => {
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("button", { name: new RegExp(what) }).click();
+    for (const day of days) await page.getByRole("button", { name: day }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
+  };
+
+  test("names what it would sit on top of, and can call it off", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `חסימה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(2);
+    const { token: theirs, appointment } = await bookOn(
+      shop,
+      { givenName: "מיכל", familyName: "אבן" },
+      `${day}T07:00:00.000Z`,
+    );
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    await aimAt(page, "חסימה", [day]);
+    const sheet = page.getByRole("dialog");
+    // The same warning the shop closing gives, because it costs the same thing.
+    await expect(sheet.getByText("מיכל אבן")).toBeVisible({ timeout: 15_000 });
+    await sheet.getByRole("button", { name: /^חסימה וביטול/ }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    const mine = await call<{ id: string; status: string }[]>("/me/appointments", {
+      token: theirs,
+    });
+    expect(mine.find((one) => one.id === appointment.id)?.status).toBe("CANCELLED");
+  });
+
+  test("can block the day and leave the appointments standing", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `חסימה שומרת ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(2);
+    const { token: theirs, appointment } = await bookOn(
+      shop,
+      { givenName: "אורי", familyName: "גל" },
+      `${day}T07:00:00.000Z`,
+    );
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    await aimAt(page, "חסימה", [day]);
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "חסימה בלי לבטל תורים" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    const mine = await call<{ id: string; status: string }[]>("/me/appointments", {
+      token: theirs,
+    });
+    expect(mine.find((one) => one.id === appointment.id)?.status).toBe("CONFIRMED");
+  });
+
+  test("can be walked away from without writing anything", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `יציאה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(2);
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    await aimAt(page, "יום מיוחד לעסק", [day]);
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+
+    // A sheet whose only exits are "do it" and a tap on the backdrop is one
+    // people learn to distrust.
+    await sheet.getByRole("button", { name: "ביטול הבחירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // Nothing was written, and the + is back rather than the grid still
+    // waiting for days.
+    const days = await call<{ slots: unknown[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+    );
+    expect((days[0]?.slots ?? []).length).toBeGreaterThan(0);
+    await expect(page.getByRole("button", { name: "הוספה ליום" })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("says whose calendar a blockage belongs to", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `שם היומן ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    // A second chair, which is what makes "away" an insufficient answer.
+    await call(`/businesses/${shop.business.id}/resources`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "יומן ב" },
+    });
+
+    const first = aDayFromNow(2);
+    const last = aDayFromNow(3);
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        blocks: [first, last].map((date) => ({
+          startAt: `${date}T06:00:00.000Z`,
+          endAt: `${date}T12:00:00.000Z`,
+          reason: "מילואים",
+        })),
+        upcoming: "KEEP",
+      },
+    });
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    // The band carries the calendar's name, not only the reason.
+    const band = page.getByRole("button", { name: /יומן א · מילואים/ });
+    await expect(band.first()).toBeVisible({ timeout: 15_000 });
+
+    await band.first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("יומן א")).toBeVisible();
+    await expect(sheet.getByText("מילואים")).toBeVisible();
   });
 });

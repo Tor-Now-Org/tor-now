@@ -258,6 +258,19 @@ const blockSpanSchema = z.object({
  */
 export const blocksSchema = z.object({
   blocks: z.array(blockSpanSchema).min(1).max(62),
+  /**
+   * What becomes of the appointments already inside it.
+   *
+   * Defaulted, unlike a closure's, because this route was deployed before the
+   * question was asked: an older client that does not send it means what it
+   * has always meant, which is to leave them standing.
+   */
+  upcoming: z.enum(["KEEP", "CANCEL"]).default("KEEP"),
+});
+
+/** The same spans, asked about rather than made. */
+export const blockPreviewSchema = z.object({
+  blocks: z.array(blockSpanSchema).min(1).max(62),
 });
 
 /**
