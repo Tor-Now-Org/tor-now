@@ -140,6 +140,27 @@ begin
   select count(*) into v_seen from working_hours where business_id = v_biz;
   reset role;
 
+  -- 20260912000100: a manager inviting by phone has to find somebody who signed
+  -- up elsewhere and holds no Membership here. The stranger is a customer of
+  -- the *other* salon, which is exactly that person.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
+  set local role authenticated;
+  select count(*) into v_seen from app_user where id = v_stranger;
+  reset role;
+  if v_seen <> 1 then
+    raise exception 'POLICY BROKEN: an owner cannot look up a user to invite them';
+  end if;
+
+  -- And that reach belongs to management, not to everybody who works there: a
+  -- worker reads the people of their own business and no further.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_worker)::text, true);
+  set local role authenticated;
+  select count(*) into v_seen from app_user where id = v_stranger;
+  reset role;
+  if v_seen <> 0 then
+    raise exception 'POLICY BROKEN: a worker read a user from outside their business';
+  end if;
+
   -- --- writing, as the roles ------------------------------------------------
   -- A worker may not rewrite the business's identity; only management may.
   perform set_config('request.jwt.claims', json_build_object('sub', v_worker)::text, true);

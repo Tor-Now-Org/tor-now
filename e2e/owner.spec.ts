@@ -2279,6 +2279,8 @@ test.describe("the team", () => {
     );
     await page.goto("/manage");
     await ready(page);
+    // The team lives inside the business panel rather than on the bottom bar.
+    await page.getByRole("button", { name: "העסק" }).click();
     await page.getByRole("button", { name: "צוות" }).click();
 
 
@@ -2309,7 +2311,8 @@ test.describe("the team", () => {
     await expect(page.getByRole("button", { name: "יומן א" })).toHaveCount(0);
 
     // The day and the schedule are theirs. The business, its customers and the
-    // team are not, and a tab that is not offered cannot be reached by accident.
+    // team are not, and a tab that is not offered cannot be reached by accident
+    // — the team included, since it now sits inside the business panel.
     await expect(page.getByRole("button", { name: "היומן" })).toBeVisible();
     await expect(page.getByRole("button", { name: "לוח זמנים" })).toBeVisible();
     for (const tab of ["העסק", "לקוחות", "צוות"]) {
