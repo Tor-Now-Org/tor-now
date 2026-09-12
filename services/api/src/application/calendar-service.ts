@@ -1,4 +1,5 @@
 import {
+  absorbBlockages,
   cancelAppointment,
   compareByName,
   dayOfWeekOf,
@@ -6,6 +7,7 @@ import {
   displayName,
   END_OF_DAY,
   instantToZoned,
+  interval,
   MIDNIGHT,
   minutesBetweenInstants,
   notFound,
@@ -578,12 +580,47 @@ export const calendarService = ({
         }
       }
 
+      // A new blockage absorbs the ones it meets rather than lying on top of
+      // them. Two blockages over the same hour is one hour kept free said
+      // twice, and removing either of them gives back nothing — which is how a
+      // calendar stops being something anybody trusts.
+      const reach = {
+        from: Math.min(...wanted.map((span) => span.startAt)) - A_DAY,
+        to: Math.max(...wanted.map((span) => span.endAt)) + A_DAY,
+      };
+      const nearby = await repositories.blocks.listForResourceBetween(
+        resourceId,
+        reach.from as never,
+        reach.to as never,
+      );
+      const { removed, spans: kept } = absorbBlockages(
+        nearby,
+        wanted.map((span) => interval(span.startAt, span.endAt)),
+      );
+      for (const block of removed) await repositories.blocks.delete(block.id);
+
+      // What it is called: what this decision said, or — when it said nothing —
+      // whatever the blockage it swallowed was already called.
+      const reason =
+        wanted.find((span) => span.reason.trim() !== "")?.reason.trim() ??
+        removed.find((block) => block.reason.trim() !== "")?.reason.trim() ??
+        "";
+
       // One decision, one group — including a blockage of a single day, so
       // "what did this tap create" always has a truthful answer.
       const groupId = crypto.randomUUID();
       const made: Block[] = [];
-      for (const span of wanted) {
-        made.push(await repositories.blocks.create({ ...span, groupId }));
+      for (const span of kept) {
+        made.push(
+          await repositories.blocks.create({
+            resourceId,
+            businessId,
+            startAt: span.start,
+            endAt: span.end,
+            reason,
+            groupId,
+          }),
+        );
       }
       return made;
     });

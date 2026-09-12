@@ -8,11 +8,18 @@
  * first; two days of the same calendar could not be compared at a glance,
  * which is the one thing colour was there for.
  *
- * So the hue is derived from the name rather than from the company it keeps.
- * Two services can land on the same hue — six colours and no upper bound on
- * services — and that is the honest trade: shape tells the kinds apart, a
- * calendar's mark says whose it is, and the words are always there. Colour is
- * the fastest channel, not the only one.
+ * So a service takes its colour from where it sits in the business's own list
+ * of services — which is the same on Tuesday as it is on Thursday, and gives
+ * the first six services six different colours by construction. A hash of the
+ * name was the first answer and it collided on the sample that matters: in a
+ * salon offering צבע לשיער and פן, both came out the same blue.
+ *
+ * A service the list does not know — an appointment keeps the name it was
+ * booked under, so a service since renamed or removed still appears — falls
+ * back to that hash. Past the sixth service colours repeat, which is the
+ * honest trade: shape tells the kinds apart, a calendar's mark says whose it
+ * is, and the words are always there. Colour is the fastest channel, not the
+ * only one.
  */
 
 /** How many hues the palette holds. Kept in step with globals.css. */
@@ -41,11 +48,21 @@ const hashOf = (value: string): number => {
   return hash;
 };
 
-/** Which of the palette's hues a name is given. Stable, and never negative. */
-export const hueIndexOf = (name: string): number => hashOf(name.trim()) % EVENT_HUES;
+/**
+ * Which of the palette's hues a name is given.
+ *
+ * `offered` is the business's services in their own order. Anything in it takes
+ * its position; anything else falls back to a hash of the name, which is stable
+ * even though it can collide.
+ */
+export const hueIndexOf = (name: string, offered: readonly string[] = []): number => {
+  const said = name.trim();
+  const at = offered.findIndex((one) => one.trim() === said);
+  return (at < 0 ? hashOf(said) : at) % EVENT_HUES;
+};
 
-export const colourOf = (name: string): EventColour => {
-  const hue = hueIndexOf(name) + 1;
+export const colourOf = (name: string, offered: readonly string[] = []): EventColour => {
+  const hue = hueIndexOf(name, offered) + 1;
   return { ground: `var(--event-${hue}-soft)`, rail: `var(--event-${hue})` };
 };
 

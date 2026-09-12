@@ -243,3 +243,20 @@ export const spokenLength = (
   if (rest === 30) return `${said} ${words.andHalf}`;
   return `${said} · ${rest} ${words.minutes}`;
 };
+
+/**
+ * A span as this day sees it.
+ *
+ * Both ends are read as minutes past midnight, so anything running into the
+ * next day comes back with an end *before* its start — an appointment at 23:42
+ * for half an hour ends at 00:12, which is twelve. Every piece of geometry here
+ * then works on a negative length: the band collapses, and the appointment is
+ * simply not drawn on the day somebody booked it for.
+ *
+ * A day view shows a day. Something that runs past the end of one is drawn to
+ * the end of it, and the rest belongs to tomorrow's screen.
+ */
+export const withinTheDay = (start: number, end: number): Span => ({
+  start,
+  end: end <= start ? MINUTES_IN_A_DAY : end,
+});

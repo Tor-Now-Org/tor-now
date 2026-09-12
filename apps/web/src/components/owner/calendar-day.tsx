@@ -100,6 +100,32 @@ export const CalendarDay = ({
    */
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<CalendarAppointmentDto[] | null>(null);
+  /**
+   * The business's services, in their own order.
+   *
+   * Only for colour: a service takes its hue from where it sits in this list,
+   * so the same haircut is the same colour on every day of the month. Read
+   * once per business rather than per day, because the list does not change
+   * between one Tuesday and the next.
+   */
+  const [offered, setOffered] = useState<readonly string[]>([]);
+
+  useEffect(() => {
+    let current = true;
+    api
+      .listServices(token, business.id)
+      .then((services) => {
+        if (current) setOffered(services.map((one) => one.name));
+      })
+      .catch(() => {
+        // Colour falls back to a hash of the name, which is stable enough to
+        // read a day by; it is not worth an error on a calendar.
+        if (current) setOffered([]);
+      });
+    return () => {
+      current = false;
+    };
+  }, [token, business.id]);
 
   const load = useCallback(async () => {
     if (resource === null) return;
@@ -180,7 +206,7 @@ export const CalendarDay = ({
   };
 
   return (
-    <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ padding: "10px 18px 28px", display: "flex", flexDirection: "column", gap: 11 }}>
       {resources.length > 1 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
@@ -384,6 +410,7 @@ export const CalendarDay = ({
         <DayTimeline
           day={wholeDay}
           timeZone={business.timeZone}
+          offered={offered}
           lanes={
             resource === null
               ? []

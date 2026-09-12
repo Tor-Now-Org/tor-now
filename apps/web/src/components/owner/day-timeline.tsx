@@ -19,6 +19,7 @@ import {
   spokenLength,
   swallowedBy,
   windowOf,
+  withinTheDay,
   type Band,
   type Span,
 } from "./day-model.ts";
@@ -69,12 +70,18 @@ export const DayTimeline = ({
   day,
   timeZone,
   lanes,
+  offered,
   onPick,
 }: {
   day: BusinessDayDto;
   timeZone: string;
   /** Which calendars to draw, in order. One of them is the ordinary case. */
   lanes: readonly { id: string; name: string }[];
+  /**
+   * The business's services, in their own order, which is what a service's
+   * colour is taken from — the same order on Tuesday as on Thursday.
+   */
+  offered: readonly string[];
   onPick: (picked: Picked) => void;
 }) => {
   const copy = useCopy("owner");
@@ -90,6 +97,9 @@ export const DayTimeline = ({
   };
 
   const minutesIn = (iso: string) => minutesOf(timeIn(iso, timeZone, language));
+  /** Both ends, with anything running into tomorrow drawn to the end of today. */
+  const spanOf = (startAt: string, endAt: string) =>
+    withinTheDay(minutesIn(startAt), minutesIn(endAt));
 
   const shown = lanes
     .map((lane) => day.calendars.find((calendar) => calendar.resourceId === lane.id))
@@ -102,29 +112,25 @@ export const DayTimeline = ({
     ...calendar.appointments
       .filter((appointment) => appointment.status !== "CANCELLED")
       .map((appointment) => ({
-      start: minutesIn(appointment.startAt),
-      end: minutesIn(appointment.endAt),
-      entry: {
-        kind: "appointment" as const,
-        id: appointment.id,
-        start: minutesIn(appointment.startAt),
-        end: minutesIn(appointment.endAt),
-        resourceId: calendar.resourceId,
-        resourceName: calendar.resourceName,
-        customerName: appointment.customerName,
-        customerPhone: appointment.customerPhone,
-        serviceName: appointment.serviceName,
-      },
-    })),
+        ...spanOf(appointment.startAt, appointment.endAt),
+        entry: {
+          kind: "appointment" as const,
+          id: appointment.id,
+          ...spanOf(appointment.startAt, appointment.endAt),
+          resourceId: calendar.resourceId,
+          resourceName: calendar.resourceName,
+          customerName: appointment.customerName,
+          customerPhone: appointment.customerPhone,
+          serviceName: appointment.serviceName,
+        },
+      })),
     ...calendar.blocks.map((block) => ({
-      start: minutesIn(block.startAt),
-      end: minutesIn(block.endAt),
+      ...spanOf(block.startAt, block.endAt),
       entry: {
         kind: "block" as const,
         id: block.id,
         groupId: block.groupId ?? null,
-        start: minutesIn(block.startAt),
-        end: minutesIn(block.endAt),
+        ...spanOf(block.startAt, block.endAt),
         resourceId: calendar.resourceId,
         resourceName: calendar.resourceName,
         reason: block.reason,
@@ -260,6 +266,7 @@ export const DayTimeline = ({
                       column={columns.get(band.item) ?? { column: 0, columns: 1 }}
                       laneIndex={laneIndex}
                       laneName={calendar.resourceName}
+                      offered={offered}
                       blockWord={copy.blockedWord}
                       onClick={() => onPick(band.item.entry)}
                     />
@@ -389,6 +396,7 @@ const ItemBand = ({
   column,
   laneIndex,
   laneName,
+  offered,
   blockWord,
   onClick,
 }: {
@@ -398,6 +406,7 @@ const ItemBand = ({
   column: { column: number; columns: number };
   laneIndex: number;
   laneName: string;
+  offered: readonly string[];
   blockWord: string;
   onClick: () => void;
 }) => {
@@ -407,7 +416,7 @@ const ItemBand = ({
   // the single line of time and name.
   const tight = place.height < 24;
   const appointment = entry.kind === "appointment";
-  const colour = appointment ? colourOf(entry.serviceName) : null;
+  const colour = appointment ? colourOf(entry.serviceName, offered) : null;
 
   return (
     <button
@@ -434,7 +443,7 @@ const ItemBand = ({
             ? "repeating-linear-gradient(45deg,var(--blocked-soft) 0 5px,var(--sunken) 5px 10px)"
             : colour.ground,
         border: "1px solid var(--line)",
-        borderInlineStart: `3px solid ${colour?.rail ?? "var(--blocked)"}`,
+        borderInlineStart: `5px solid ${colour?.rail ?? "var(--blocked)"}`,
         color: colour === null ? "var(--muted)" : "var(--ink)",
       }}
     >

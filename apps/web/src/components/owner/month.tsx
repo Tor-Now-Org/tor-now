@@ -475,12 +475,21 @@ export const Month = ({
                 {onOffer.find((one) => one.id === openGroup.resourceId)?.name ?? ""}
               </b>
             </p>
+            {/* One day is a date, not a range from itself to itself. */}
             <p className="hint" style={{ margin: 0 }}>
-              {formatLocalDate(openGroup.fromDate, language, { day: "numeric", month: "long" })}
-              {" – "}
-              {formatLocalDate(openGroup.toDate, language, { day: "numeric", month: "long" })}
-              {" · "}
-              {openGroup.days} {copy.daysWord}
+              {openGroup.days === 1
+                ? formatLocalDate(openGroup.fromDate, language, {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  })
+                : `${formatLocalDate(openGroup.fromDate, language, {
+                    day: "numeric",
+                    month: "long",
+                  })} – ${formatLocalDate(openGroup.toDate, language, {
+                    day: "numeric",
+                    month: "long",
+                  })} · ${openGroup.days} ${copy.daysWord}`}
             </p>
             <Button
               intent="danger"
@@ -489,7 +498,9 @@ export const Month = ({
                 void act(() => api.deleteBlockGroup(token, business.id, openGroup.groupId))
               }
             >
-              {copy.removeWholeBlockage.replace("{days}", String(openGroup.days))}
+              {openGroup.days === 1
+                ? copy.removeBlockage
+                : copy.removeWholeBlockage.replace("{days}", String(openGroup.days))}
             </Button>
           </div>
         )}
@@ -862,25 +873,26 @@ const DaySquare = ({
       <span>{label}</span>
       {weather !== "shut" && (
         <span style={{ display: "flex", gap: 2, position: "absolute", bottom: BAND_AREA + 2 }}>
-          {calendars.map((resource) => {
+          {/* One mark per calendar, in that calendar's own colour, so a row of
+              them says who is busy rather than only how busy the day is. How
+              busy is the weight: solid for a full day, lighter for a quiet one,
+              and an empty outline for a day with nothing on it at all. */}
+          {calendars.map((resource, index) => {
             const line = facts.byCalendar.find((one) => one.resourceId === resource.id);
             const busy = line?.appointments ?? 0;
+            const mine = laneColourOf(index);
             return (
               <i
                 key={resource.id}
+                title={resource.name}
                 style={{
-                  width: 4,
-                  height: 4,
+                  width: 5,
+                  height: 5,
                   borderRadius: 999,
                   display: "block",
-                  background:
-                    line?.away === true
-                      ? "var(--blocked)"
-                      : busy >= 3
-                        ? "var(--accent-strong)"
-                        : busy > 0
-                          ? "var(--faint)"
-                          : "var(--line)",
+                  background: busy > 0 ? mine : "transparent",
+                  border: busy > 0 ? "none" : `1px solid var(--line)`,
+                  opacity: line?.away === true ? 0.35 : busy >= 3 ? 1 : busy > 0 ? 0.6 : 1,
                 }}
               />
             );

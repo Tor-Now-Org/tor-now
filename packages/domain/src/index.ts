@@ -12,6 +12,7 @@ export * from "./model/schedule.ts";
 export * from "./model/appointment.ts";
 export * from "./model/user.ts";
 
+export * from "./schedule/blockage.ts";
 export * from "./schedule/closure.ts";
 export * from "./schedule/open-hours.ts";
 

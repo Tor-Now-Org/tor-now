@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   BOX_MINIMUM,
-  columnsOf,
   FOLD_HEIGHT,
+  MINUTES_IN_A_DAY,
   bandsOf,
+  columnsOf,
   foldsIn,
   minutesOf,
   placeOf,
@@ -12,6 +13,7 @@ import {
   spokenLength,
   swallowedBy,
   windowOf,
+  withinTheDay,
   withoutSpan,
 } from "./day-model.ts";
 
@@ -238,5 +240,25 @@ describe("things that overlap in a lane", () => {
     ];
     const columns = columnsOf(all);
     expect(new Set([...columns.values()].map((one) => one.columns))).toEqual(new Set([2]));
+  });
+});
+
+describe("a span that runs past the end of the day", () => {
+  it("leaves an ordinary span alone", () => {
+    expect(withinTheDay(540, 570)).toEqual({ start: 540, end: 570 });
+  });
+
+  it("draws one that crosses midnight to the end of the day", () => {
+    // 23:42 for half an hour ends at 00:12 — twelve minutes past midnight,
+    // which as a length is negative, and the appointment vanished.
+    expect(withinTheDay(1422, 12)).toEqual({ start: 1422, end: MINUTES_IN_A_DAY });
+  });
+
+  it("treats one that ends exactly at midnight as the whole of what is left", () => {
+    expect(withinTheDay(1380, 0)).toEqual({ start: 1380, end: MINUTES_IN_A_DAY });
+  });
+
+  it("does the same for a zero-length span, which cannot be drawn either", () => {
+    expect(withinTheDay(600, 600)).toEqual({ start: 600, end: MINUTES_IN_A_DAY });
   });
 });

@@ -192,3 +192,107 @@ describe("who may block a calendar", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
+
+describe("blocking time that is already blocked", () => {
+  let test: Harness;
+  let shop: Awaited<ReturnType<typeof anEstablishedBusiness>>;
+
+  beforeEach(async () => {
+    test = harness();
+    shop = await anEstablishedBusiness(test);
+  });
+
+  const block = (
+    spans: { startAt: string; endAt: string; reason?: string }[],
+  ) =>
+    test.services.calendar.createBlocks(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      spans.map((span) => ({ reason: "", ...span })),
+      "KEEP",
+    );
+
+  it("keeps one blockage where two would have lain on top of each other", async () => {
+    await block([{ startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("16:00") }]);
+    await block([{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("18:00") }]);
+
+    // Two blockages over the same hour is one hour kept free said twice, and
+    // removing either of them would have given back nothing.
+    expect(test.store.blocks).toHaveLength(1);
+    expect(test.store.blocks[0]?.startAt).toBe(Date.parse(TUESDAY_AT("09:00")));
+    expect(test.store.blocks[0]?.endAt).toBe(Date.parse(TUESDAY_AT("18:00")));
+  });
+
+  it("grows the one that is there to cover what the new one adds", async () => {
+    await block([{ startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("18:00") }]);
+    await block([{ startAt: TUESDAY_AT("12:00"), endAt: TUESDAY_AT("15:00") }]);
+
+    expect(test.store.blocks).toHaveLength(1);
+    expect(test.store.blocks[0]?.startAt).toBe(Date.parse(TUESDAY_AT("12:00")));
+    expect(test.store.blocks[0]?.endAt).toBe(Date.parse(TUESDAY_AT("18:00")));
+  });
+
+  it("joins one that ends exactly where the new one starts", async () => {
+    await block([{ startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("16:00") }]);
+    await block([{ startAt: TUESDAY_AT("16:00"), endAt: TUESDAY_AT("18:00") }]);
+    expect(test.store.blocks).toHaveLength(1);
+  });
+
+  it("leaves a blockage elsewhere in the day alone", async () => {
+    await block([{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00") }]);
+    await block([{ startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("15:00") }]);
+    expect(test.store.blocks).toHaveLength(2);
+  });
+
+  it("does not reach into another calendar's day", async () => {
+    const other = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      "כיסא שני",
+    );
+    await test.services.calendar.createBlocks(
+      shop.owner.actor,
+      shop.business.id,
+      other.id,
+      [{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("18:00"), reason: "" }],
+      "KEEP",
+    );
+    await block([{ startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("16:00") }]);
+
+    // One chair being away says nothing about the one beside it.
+    expect(test.store.blocks).toHaveLength(2);
+  });
+
+  it("keeps the words somebody typed when the new one said nothing", async () => {
+    await block([
+      { startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("16:00"), reason: "שיניים" },
+    ]);
+    await block([{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("18:00") }]);
+    expect(test.store.blocks[0]?.reason).toBe("שיניים");
+  });
+
+  it("prefers what the new decision said", async () => {
+    await block([
+      { startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("16:00"), reason: "שיניים" },
+    ]);
+    await block([
+      { startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("18:00"), reason: "מילואים" },
+    ]);
+    expect(test.store.blocks[0]?.reason).toBe("מילואים");
+  });
+
+  it("gives the whole run back as one when it is removed", async () => {
+    await block([{ startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("16:00") }]);
+    const made = await block([{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("18:00") }]);
+
+    const groupId = made[0]?.groupId ?? "";
+    await test.services.calendar.deleteBlockGroup(
+      shop.owner.actor,
+      shop.business.id,
+      groupId,
+    );
+    // Nothing survives it: the hour that was blocked twice is given back once.
+    expect(test.store.blocks).toHaveLength(0);
+  });
+});

@@ -21,6 +21,19 @@ import {
  * The month is the owner's calendar — there is no day strip to slide — so a day
  * is reached by its square, which is labelled with the date.
  */
+/**
+ * Bring the search box out.
+ *
+ * It is a button until somebody wants it: a full-width field above the calendar
+ * was costing the month a row of days to answer a question nobody had asked.
+ */
+const openTheSearch = async (page: Page): Promise<void> => {
+  const box = page.getByLabel("חיפוש תור לפי שם או טלפון");
+  if ((await box.count()) === 0) {
+    await page.getByRole("button", { name: "חיפוש" }).click();
+  }
+};
+
 const showOwnerDay = async (page: Page, startAt: string): Promise<void> => {
   const wanted = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(
     new Date(startAt),
@@ -906,6 +919,7 @@ test.describe("finding things in a day", () => {
     await ready(page);
     await showOwnerDay(page, first);
 
+    await openTheSearch(page);
     await page.getByLabel("חיפוש תור לפי שם או טלפון").fill("יעל");
 
     // Two suggestions, not one mixed list: each row is a person, with her own
@@ -944,6 +958,7 @@ test.describe("finding things in a day", () => {
     await ready(page);
     await showOwnerDay(page, startAt);
 
+    await openTheSearch(page);
     await page.getByLabel("חיפוש תור לפי שם או טלפון").fill("אורית");
     await page.getByRole("button", { name: /לקוח\s+אורית שגב/ }).click({ timeout: 15_000 });
     await expect(page.getByText("אורית שגב").first()).toBeVisible();
@@ -993,6 +1008,7 @@ test.describe("finding things in a day", () => {
     await ready(page);
     await showOwnerDay(page, soon);
 
+    await openTheSearch(page);
     await page.getByLabel("חיפוש תור לפי שם או טלפון").fill("נועה");
     await page.getByRole("button", { name: /לקוח\s+נועה שדה/ }).click({ timeout: 15_000 });
 
@@ -1945,6 +1961,7 @@ test.describe("finding one appointment", () => {
 
     // Typing offers the person, and choosing her narrows to her things — which
     // is what tells two customers of the same name apart.
+    await openTheSearch(page);
     await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("אורית");
     await page
       .getByRole("button", { name: /לקוח\s+אורית שגב/ })
@@ -1977,6 +1994,7 @@ test.describe("finding one appointment", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
 
+    await openTheSearch(page);
     await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("0500000000");
     await expect(page.getByText("לא נמצא תור מתאים")).toBeVisible({ timeout: 15_000 });
   });
@@ -2644,7 +2662,7 @@ test.describe("reading a day at a glance", () => {
     painted.forEach((one) => {
       expect(one.background).not.toBe("rgba(0, 0, 0, 0)");
       expect(one.rail).not.toBe("rgba(0, 0, 0, 0)");
-      expect(one.width).toBe("3px");
+      expect(one.width).toBe("5px");
     });
 
     // The same service keeps one colour; a different one is told apart.
@@ -3332,7 +3350,7 @@ test.describe("where a band is drawn", () => {
  * one bar per run of them however many were made.
  */
 test.describe("what the month draws", () => {
-  test("gives a calendar one band a day however many blockages it has", async ({ page }) => {
+  test("keeps one blockage per calendar, and draws one band for it", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `ערימה ${Date.now()}`,
       ownerPhone: uniquePhone(),
@@ -3344,8 +3362,9 @@ test.describe("what the month draws", () => {
       body: { name: "שימי" },
     });
 
-    // Five separate all-day blockages on one day across two chairs — the shape
-    // that turned a single square into a wall of bars.
+    // Five all-day blockages on one day across two chairs, made one at a time —
+    // the shape that turned a single square into a wall of bars, and left five
+    // rows where removing any one of them gave back nothing.
     const day = aDayFromNow(2);
     for (const resourceId of [
       shop.resource.id,
@@ -3366,6 +3385,19 @@ test.describe("what the month draws", () => {
       });
     }
 
+    // Each chair keeps one blockage, not three and two lying on top of
+    // each other: a later one absorbs what it covers.
+    for (const [resourceId, name] of [
+      [shop.resource.id, "יומן א"],
+      [second.id, "שימי"],
+    ] as const) {
+      const day_ = await call<{ blocks: unknown[] }>(
+        `/businesses/${shop.business.id}/resources/${resourceId}/calendar?date=${day}`,
+        { token: shop.owner.token },
+      );
+      expect(day_.blocks, name).toHaveLength(1);
+    }
+
     await page.addInitScript(
       ([key, value]) => window.localStorage.setItem(key as string, value as string),
       ["tor-now.session", shop.owner.token],
@@ -3375,18 +3407,15 @@ test.describe("what the month draws", () => {
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "כל היומנים" }).click();
 
-    // Two bars, one per chair — not five, and not a fold either.
+    // Two bars, one per chair — not five, and nothing folded away.
     const bands = page.getByRole("button", { name: "חסום", exact: true });
     await expect(bands).toHaveCount(2, { timeout: 15_000 });
     await expect(page.getByRole("button", { name: /עוד \d+ בשבוע/ })).toHaveCount(0);
 
-    // A bar standing in for several decisions opens the list of them — where
-    // there is room to name each one. Nothing was said about these, so they
-    // are named for what they are rather than described in a sentence.
+    // And each one opens the blockage it stands for, because there is one.
     await bands.first().click();
-    const list = page.getByRole("dialog");
-    await expect(list.getByText("מה יש בשבוע הזה")).toBeVisible();
-    await expect(list.getByText("חסימה", { exact: true })).toHaveCount(5);
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("button", { name: /^הסרת החסימה/ })).toBeVisible();
   });
 
   test("draws appointments as dots on the day, never as a band", async ({ page }) => {
@@ -3432,6 +3461,12 @@ test.describe("what the month draws", () => {
     const square = page.getByRole("button", { name: day });
     await expect(square).toBeVisible({ timeout: 15_000 });
     await expect(square.locator("i")).toHaveCount(1);
+    // The mark is that calendar's own colour, not a shade of "busy": a row of
+    // them says who is busy, not only how busy the day is.
+    const filled = await square.locator("i").evaluate(
+      (node) => window.getComputedStyle(node).backgroundColor,
+    );
+    expect(filled).not.toBe("rgba(0, 0, 0, 0)");
     await expect(page.getByRole("button", { name: "חסום", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "לקוחה בדיקה" })).toHaveCount(0);
 
@@ -3440,5 +3475,114 @@ test.describe("what the month draws", () => {
     await expect(page.getByRole("button", { name: /לקוחה בדיקה/ }).first()).toBeVisible({
       timeout: 15_000,
     });
+  });
+});
+
+test.describe("telling one thing from another on a day", () => {
+  test("gives each of the business's services a colour of its own", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `צבעים ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "18:00" },
+    });
+    for (const name of ["צבע לשיער", "פן", "החלקה"]) {
+      await call(`/businesses/${shop.business.id}/services`, {
+        method: "POST",
+        token: shop.owner.token,
+        body: { name, durationMinutes: 45, priceMinor: 20000, bufferMinutes: null },
+      });
+    }
+    const profile = await call<{ services: { id: string; name: string }[] }>(
+      `/businesses/${shop.business.id}`,
+    );
+
+    // Real slots, since services of different lengths put the grid somewhere
+    // no fixed list of times would land.
+    const day = aDayFromNow(2);
+    const taken: string[] = [];
+    for (let at = 0; at < 4; at += 1) {
+      const service = profile.services[at]!;
+      const [offered] = await call<{ slots: { startAt: string }[] }[]>(
+        `/businesses/${shop.business.id}/availability?serviceId=${service.id}` +
+          `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+      );
+      const slot = (offered?.slots ?? []).find((one) => !taken.includes(one.startAt));
+      if (slot === undefined) continue;
+      taken.push(slot.startAt);
+
+      const phone = uniquePhone();
+      const { code } = await call<{ code: string }>("/auth/request-code", {
+        method: "POST",
+        body: { phone },
+      });
+      const { token } = await call<{ token: string }>("/auth/verify", {
+        method: "POST",
+        body: { phone, code, name: { givenName: `דגם${at}`, familyName: "צבעוני" } },
+      });
+      await call("/appointments", {
+        method: "POST",
+        token,
+        body: {
+          businessId: shop.business.id,
+          serviceId: service.id,
+          resourceId: shop.resource.id,
+          startAt: slot.startAt,
+          customerNote: null,
+        },
+      });
+    }
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: day }).click();
+
+    const drawn = page.getByRole("button", { name: /דגם\d/ });
+    await expect(drawn).toHaveCount(4, { timeout: 15_000 });
+
+    const painted = await drawn.evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const style = window.getComputedStyle(node);
+        return { ground: style.backgroundColor, rail: style.borderInlineStartColor };
+      }),
+    );
+
+    // Four services, four colours — no two alike. A hash of the name was the
+    // first answer and it put צבע לשיער and פן on the same blue, which is two
+    // appointments a glance cannot tell apart.
+    expect(new Set(painted.map((one) => one.ground)).size).toBe(4);
+    expect(new Set(painted.map((one) => one.rail)).size).toBe(4);
+  });
+
+  test("keeps the search out of the calendar's way until it is wanted", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `מקום ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    // A button, not a field: the calendar is what the screen is for.
+    await expect(page.getByLabel("חיפוש תור לפי שם או טלפון")).toHaveCount(0);
+    const withoutIt = (await page.getByRole("grid").boundingBox())!;
+
+    await page.getByRole("button", { name: "חיפוש" }).click();
+    await expect(page.getByLabel("חיפוש תור לפי שם או טלפון")).toBeVisible();
+    // It takes the row it needs while it is open, and no more than that.
+    const withIt = (await page.getByRole("grid").boundingBox())!;
+    expect(Math.abs(withIt.y - withoutIt.y)).toBeLessThan(8);
+
+    await page.getByRole("button", { name: "סגירת החיפוש" }).click();
+    await expect(page.getByLabel("חיפוש תור לפי שם או טלפון")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "חיפוש" })).toBeVisible();
   });
 });

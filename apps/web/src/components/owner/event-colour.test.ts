@@ -10,7 +10,7 @@ describe("the colour a service keeps", () => {
     // The whole bug: the colour used to be a position in the day's list, so a
     // haircut changed colour on the day a dye job was booked before it.
     const alone = colourOf("תספורת + זקן");
-    const inCompany = ["צבע לשיער", "תספורת + זקן"].map(colourOf)[1];
+    const inCompany = ["צבע לשיער", "תספורת + זקן"].map((one) => colourOf(one))[1];
     expect(inCompany).toEqual(alone);
   });
 
@@ -32,14 +32,32 @@ describe("the colour a service keeps", () => {
   });
 
   it("uses more than one of them across a realistic list", () => {
-    const used = new Set(
-      ["תספורת", "צבע לשיער", "פן", "החלקה", "זקן", "גוונים"].map(hueIndexOf),
-    );
-    expect(used.size).toBeGreaterThan(1);
+    // The list the business itself offers, which is what a colour is taken
+    // from: six services, six colours, no two alike. A hash of the name was
+    // the first answer and it put צבע לשיער and פן on the same blue.
+    const offered = ["תספורת", "צבע לשיער", "פן", "החלקה", "זקן", "גוונים"];
+    const used = new Set(offered.map((one) => hueIndexOf(one, offered)));
+    expect(used.size).toBe(offered.length);
   });
 
   it("ignores surrounding space, which a typed name often carries", () => {
     expect(hueIndexOf(" תספורת ")).toBe(hueIndexOf("תספורת"));
+    expect(hueIndexOf(" פן ", ["תספורת", "פן"])).toBe(1);
+  });
+
+  it("falls back to the name for a service the list has never heard of", () => {
+    // An appointment keeps the name it was booked under, so a service since
+    // renamed or removed still turns up on a day and still needs a colour.
+    const offered = ["תספורת", "פן"];
+    expect(colourOf("שירות שנמחק", offered)).toEqual(colourOf("שירות שנמחק"));
+  });
+
+  it("keeps a service's colour the same whatever else is on the day", () => {
+    const offered = ["תספורת", "צבע לשיער", "פן"];
+    expect(colourOf("פן", offered)).toEqual(colourOf("פן", offered));
+    // And the position is the business's list, not the day's — so a day with
+    // only "פן" on it draws it the same colour as a day full of everything.
+    expect(hueIndexOf("פן", offered)).toBe(2);
   });
 
   it("gives a calendar a colour from its own set, never a service's", () => {

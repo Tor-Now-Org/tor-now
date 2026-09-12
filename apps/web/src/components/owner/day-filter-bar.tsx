@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { CalendarAppointmentDto, ResourceDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { Button, Sheet } from "../ui.tsx";
@@ -24,6 +25,14 @@ import {
 
 const STATUSES: readonly Status[] = ["UPCOMING", "SPENT", "CANCELLED"];
 
+/** Drawn rather than typed: an emoji magnifier renders differently everywhere. */
+const Magnifier = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M10.5 10.5 14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
 export const FilterControls = ({
   query,
   onQuery,
@@ -47,25 +56,64 @@ export const FilterControls = ({
   services: readonly string[];
 }) => {
   const copy = useCopy("owner");
+  const [open, setOpen] = useState(false);
   const people = customersIn(suggestions).filter((one) => matchesQuery(one, query));
+
+  /**
+   * The search box is a guest on this screen, not a fixture.
+   *
+   * A full-width field sat above the calendar at all times, and the calendar is
+   * what the screen is for — the field was costing the month a row of days to
+   * answer a question nobody was asking yet. It is a button until it is needed,
+   * and takes the width only while somebody is typing in it.
+   */
+  const looking = query !== "" || open;
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-        <input
-          className="field"
-          type="search"
-          value={query}
-          onChange={(event) => onQuery(event.target.value)}
-          placeholder={copy.findAppointment}
-          aria-label={copy.findAppointment}
-          style={{ flex: 1 }}
-        />
+      <div style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 34 }}>
+        {looking ? (
+          <>
+            <input
+              className="field"
+              type="search"
+              autoFocus
+              value={query}
+              onChange={(event) => onQuery(event.target.value)}
+              placeholder={copy.findAppointment}
+              aria-label={copy.findAppointment}
+              style={{ flex: 1, minHeight: 34, fontSize: 13 }}
+            />
+            <button
+              className="chip tap"
+              aria-label={copy.closeSearch}
+              onClick={() => {
+                onQuery("");
+                setOpen(false);
+              }}
+              style={{ minHeight: 34, width: 34, padding: 0, display: "grid", placeItems: "center" }}
+            >
+              ✕
+            </button>
+          </>
+        ) : (
+          <button
+            className="chip tap"
+            // No aria-label: it says "search" in words, and borrowing the
+            // field's label made the two of them the same control to anything
+            // looking for one by name.
+            onClick={() => setOpen(true)}
+            style={{ minHeight: 34, gap: 6, paddingInline: 11 }}
+          >
+            <Magnifier />
+            <span style={{ fontSize: 12 }}>{copy.searchWord}</span>
+          </button>
+        )}
         <button
           className="chip tap"
           onClick={() => onSheet(true)}
           style={{
-            minHeight: 40,
+            minHeight: 34,
             gap: 6,
             ...(anyFilter(facets)
               ? {
