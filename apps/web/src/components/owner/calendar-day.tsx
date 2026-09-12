@@ -15,6 +15,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { canCloseBusiness } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppointmentSheet } from "./appointment-sheet.tsx";
+import { ClosedDay } from "./closed-day.tsx";
 import { Month } from "./month.tsx";
 import { ActiveFilters, FilterControls } from "./day-filter-bar.tsx";
 import { NOTHING, anyFilter, keptBy, withinReach, type Facets, type Reach } from "./day-filter.ts";
@@ -199,6 +200,33 @@ export const CalendarDay = ({
    * filter of their own — they answer with the matches rather than with the
    * day — so "clear" has to mean both, or the day never comes back.
    */
+  /**
+   * Whether the shop is shut that day, and why.
+   *
+   * Shut means every calendar being shut: one chair off for the afternoon is
+   * that chair's day, and the screen still has a day to draw.
+   */
+  const shut =
+    wholeDay !== null &&
+    wholeDay.calendars.length > 0 &&
+    wholeDay.calendars.every((calendar) => calendar.open.length === 0)
+      ? { note: wholeDay.calendars[0]?.note ?? null }
+      : null;
+
+  const act = async (work: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await work();
+      setMonthKey((key) => key + 1);
+      await load();
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const showTheWholeDay = () => {
     setFacets(NOTHING);
     setQuery("");
@@ -403,6 +431,21 @@ export const CalendarDay = ({
         <Spinner />
       ) : wholeDay === null ? (
         <Empty title={copy.noAppointments} body={copy.refreshHint} />
+      ) : shut !== null ? (
+        // A day the shop is closed on is not a quiet day. It drew as an empty
+        // timeline full of bookable-looking free time, which is the opposite of
+        // what it is — so it says so, in the words it was closed with.
+        <ClosedDay
+          note={shut.note}
+          date={date}
+          copy={copy}
+          language={language}
+          mayReopen={canCloseBusiness(business)}
+          busy={busy}
+          onReopen={() =>
+            void act(() => api.reopenBusiness(token, business.id, date, date))
+          }
+        />
       ) : (
         // The day as it will be lived: everything in one column against the
         // hours, with the free stretches tappable — they are the part an owner
@@ -438,9 +481,6 @@ export const CalendarDay = ({
         business={business}
         date={date}
         past={date < todayIn(business.timeZone)}
-        openHours={Object.fromEntries(
-          (wholeDay?.calendars ?? []).map((calendar) => [calendar.resourceId, calendar.open]),
-        )}
         onClose={() => setPicked(null)}
         onChanged={() => {
           setPicked(null);

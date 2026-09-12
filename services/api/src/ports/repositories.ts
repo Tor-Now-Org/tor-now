@@ -308,6 +308,14 @@ export type BlockRepository = {
    * still blocking a diary.
    */
   deleteGroup(businessId: BusinessId, groupId: string): Promise<number>;
+  /**
+   * What one decision is called, changed for all of it at once.
+   *
+   * A holiday's reason belongs to the holiday, not to each of its days: renaming
+   * Monday and leaving Tuesday saying something else describes a decision that
+   * was never made. Answers how many it renamed.
+   */
+  renameGroup(businessId: BusinessId, groupId: string, reason: string): Promise<number>;
   /** The blocks of one group, so a screen can say what removing it would take. */
   listGroup(businessId: BusinessId, groupId: string): Promise<readonly Block[]>;
 };

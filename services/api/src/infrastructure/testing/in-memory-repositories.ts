@@ -720,6 +720,15 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         store.blocks = store.blocks.filter((block) => !going.includes(block));
         return going.length;
       },
+      async renameGroup(businessId, groupId, reason) {
+        const theirs = store.blocks.filter(
+          (block) => block.businessId === businessId && block.groupId === groupId,
+        );
+        store.blocks = store.blocks.map((block) =>
+          theirs.includes(block) ? { ...block, reason } : block,
+        );
+        return theirs.length;
+      },
       async listGroup(businessId, groupId) {
         return store.blocks
           .filter((block) => block.businessId === businessId && block.groupId === groupId)

@@ -307,6 +307,17 @@ export const blockRepository = (tx: Transaction): BlockRepository => ({
     return rows.length;
   },
 
+  async renameGroup(businessId, groupId, reason) {
+    // Scoped by business for the same reason deleteGroup is: the id comes from
+    // a URL, and a uuid guessed by somebody else must not reach another
+    // business's diary.
+    const rows = await tx<Row[]>`
+      update block set reason = ${reason}
+      where business_id = ${businessId} and group_id = ${groupId}
+      returning id`;
+    return rows.length;
+  },
+
   async listGroup(businessId, groupId) {
     const rows = await tx<Row[]>`
       select * from block

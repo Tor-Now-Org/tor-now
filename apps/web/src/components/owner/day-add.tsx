@@ -242,6 +242,10 @@ export const FinishAim = ({
     setError(null);
     try {
       await work();
+      // The words belonged to the thing that was just made. Left behind, they
+      // turn up pre-filled on the next one, which is how a holiday ends up
+      // labelled with last week's dentist appointment.
+      setNote("");
       onDone();
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
@@ -268,7 +272,13 @@ export const FinishAim = ({
           })}`;
 
   return (
-    <Sheet open={aim !== null && dates.length > 0} onClose={onClose}>
+    <Sheet
+      open={aim !== null && dates.length > 0}
+      onClose={() => {
+        setNote("");
+        onClose();
+      }}
+    >
       {aim === "block" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <h2 style={{ fontSize: 18 }}>{copy.addBlockTitle}</h2>
@@ -347,7 +357,10 @@ export const FinishAim = ({
             cancelLabel={copy.blockAndCancel}
             keepLabel={copy.blockAndKeep}
             onWrite={(upcoming) => void act(() => write(upcoming))}
-            onCancel={onCancel}
+            onCancel={() => {
+              setNote("");
+              onCancel();
+            }}
           />
         </div>
       )}
@@ -437,7 +450,10 @@ export const FinishAim = ({
             cancelLabel={copy.closeAndCancel}
             keepLabel={copy.closeAndKeep}
             onWrite={(upcoming) => void act(() => write(upcoming))}
-            onCancel={onCancel}
+            onCancel={() => {
+              setNote("");
+              onCancel();
+            }}
           />
         </div>
       )}

@@ -575,6 +575,25 @@ export const api = {
       token,
     }),
 
+  /** Only the words: the days keep their hours and nothing booked is touched. */
+  describeClosure: (
+    token: string,
+    businessId: string,
+    plan: { fromDate: string; toDate: string; note: string | null },
+  ) =>
+    request<{ renamed: number }>(`/businesses/${businessId}/closures`, {
+      method: "PATCH",
+      body: plan,
+      token,
+    }),
+
+  renameBlockGroup: (token: string, businessId: string, groupId: string, reason: string) =>
+    request<{ renamed: number }>(`/businesses/${businessId}/block-groups/${groupId}`, {
+      method: "PATCH",
+      body: { reason },
+      token,
+    }),
+
   reopenBusiness: (token: string, businessId: string, from: string, to: string) =>
     request<{ removed: number }>(
       `/businesses/${businessId}/closures?from=${from}&to=${to}`,

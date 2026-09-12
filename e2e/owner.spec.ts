@@ -1816,12 +1816,12 @@ test.describe("the month view", () => {
     });
 
     // Two on one day, so the square carries a number rather than a mark.
-    const when = (hour: number) => {
-      const now = new Date();
-      return new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 2, hour, 0),
-      ).toISOString();
-    };
+    //
+    // Built from the day the grid will be asked about rather than from the UTC
+    // date: after nine in the evening UTC those are different days, and the
+    // bookings landed on a square the test never opened.
+    const when = (hour: number) =>
+      `${aDayFromNow(2)}T${String(hour).padStart(2, "0")}:00:00.000Z`;
     for (const hour of [6, 8]) {
       const customer = uniquePhone();
       const { code } = await call<{ code: string }>("/auth/request-code", {
@@ -3584,5 +3584,213 @@ test.describe("telling one thing from another on a day", () => {
     await page.getByRole("button", { name: "סגירת החיפוש" }).click();
     await expect(page.getByLabel("חיפוש תור לפי שם או טלפון")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "חיפוש" })).toBeVisible();
+  });
+});
+
+/**
+ * The words on a decision, changed after the fact.
+ *
+ * The days and hours of a blockage can be undone by removing it and saying it
+ * again. A typo in what it is called could only be lived with.
+ */
+test.describe("what a decision is called", () => {
+  const openCalendar = async (page: Page, shop: { business: { id: string } }, token: string) => {
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+  };
+
+  test("a blockage can be renamed, and all its days change together", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `שם ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const days = [aDayFromNow(2), aDayFromNow(3)];
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        blocks: days.map((date) => ({
+          startAt: `${date}T06:00:00.000Z`,
+          endAt: `${date}T12:00:00.000Z`,
+          reason: "רופה",
+        })),
+        upcoming: "KEEP",
+      },
+    });
+
+    await openCalendar(page, shop, shop.owner.token);
+    await page.getByRole("button", { name: "חסום", exact: true }).first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("רופה")).toBeVisible();
+
+    await sheet.getByRole("button", { name: "שינוי ההערה" }).click();
+    await sheet.getByLabel("הערה (לא חובה)").fill("רופא שיניים");
+    await sheet.getByRole("button", { name: "שמירה", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // Both days, because the words belong to the decision rather than to each
+    // of its days.
+    for (const date of days) {
+      const read = await call<{ blocks: { reason: string }[] }>(
+        `/businesses/${shop.business.id}/resources/${shop.resource.id}/calendar?date=${date}`,
+        { token: shop.owner.token },
+      );
+      expect(read.blocks.map((one) => one.reason)).toEqual(["רופא שיניים"]);
+    }
+  });
+
+  test("a closure can be renamed without giving the days back", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `סגירה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const first = aDayFromNow(2);
+    const last = aDayFromNow(3);
+    await call(`/businesses/${shop.business.id}/closures`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { fromDate: first, toDate: last, note: "חופשה", ranges: [], upcoming: "KEEP" },
+    });
+
+    await openCalendar(page, shop, shop.owner.token);
+    await page.getByRole("button", { name: "סגור", exact: true }).first().click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "שינוי ההערה" }).click();
+    await sheet.getByLabel("הערה (לא חובה)").fill("שיפוץ");
+    await sheet.getByRole("button", { name: "שמירה", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // The words changed; the days are still shut.
+    await expect
+      .poll(
+        async () => {
+          const read = await call<{ slots: unknown[] }[]>(
+            `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+              `&resourceId=${shop.resource.id}&from=${first}&to=${first}`,
+          );
+          return (read[0]?.slots ?? []).length;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(0);
+    await page.getByRole("button", { name: "סגור", exact: true }).first().click();
+    await expect(page.getByRole("dialog").getByText("שיפוץ")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("is not offered to a worker for the shop's own days", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `הרשאה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(2);
+    await call(`/businesses/${shop.business.id}/closures`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { fromDate: day, toDate: day, note: "חופשה", ranges: [], upcoming: "KEEP" },
+    });
+    const phone = uniquePhone();
+    await call(`/businesses/${shop.business.id}/users`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        phone,
+        givenName: "עובדת",
+        familyName: null,
+        role: "WORKER",
+        resourceIds: [shop.resource.id],
+      },
+    });
+
+    await signInDirectly(page, phone, "עובדת");
+    await page.goto("/manage");
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("button", { name: "סגור", exact: true }).first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("חופשה")).toBeVisible();
+    // They can read what the shop decided; saying it differently is not theirs.
+    await expect(sheet.getByRole("button", { name: "שינוי ההערה" })).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: /^ביטול הסגירה/ })).toHaveCount(0);
+  });
+});
+
+test.describe("a day the shop is closed on", () => {
+  test("says so, rather than drawing an ordinary empty day", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `סגור ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(2);
+    await call(`/businesses/${shop.business.id}/closures`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { fromDate: day, toDate: day, note: "יום כיפור", ranges: [], upcoming: "KEEP" },
+    });
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: day }).click();
+
+    // It used to draw as a quiet day: hours of free time, every stretch of it
+    // inviting a booking, and nothing saying the shop was shut.
+    await expect(page.getByText("סגור כל היום").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("יום כיפור")).toBeVisible();
+    await expect(page.getByRole("button", { name: /פנוי/ })).toHaveCount(0);
+
+    // And the way back out is right there.
+    await page.getByRole("button", { name: "ביטול הסגירה" }).click();
+    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+});
+
+test.describe("the note on something being made", () => {
+  test("is empty again the next time, not still saying the last thing", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `הערה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    const aim = async (day: string, note: string) => {
+      await page.getByRole("button", { name: "הוספה ליום" }).click();
+      await page.getByRole("button", { name: /חסימה/ }).first().click();
+      await page.getByRole("button", { name: day }).click();
+      await page.getByRole("button", { name: "המשך" }).click();
+      const sheet = page.getByRole("dialog");
+      await expect(sheet.getByLabel("הערה (לא חובה)")).toHaveValue("");
+      if (note !== "") await sheet.getByLabel("הערה (לא חובה)").fill(note);
+      return sheet;
+    };
+
+    const first = await aim(aDayFromNow(2), "רופא");
+    await first.getByRole("button", { name: "שמירה", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // The words belonged to the thing that was made. Left behind, they turn up
+    // on the next one — which is how a holiday gets labelled "רופא".
+    await aim(aDayFromNow(4), "");
   });
 });

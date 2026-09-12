@@ -232,6 +232,40 @@ describe("closing the business", () => {
     expect((after[0]?.slots ?? []).length).toBeGreaterThan(0);
   });
 
+  it("changes what a closure is called without touching the days", async () => {
+    const { appointment } = await aBookingOn(test, shop, "+972500000002", TUESDAY_AT("09:00"));
+    await test.services.closures.close(
+      shop.owner.actor,
+      shop.business.id,
+      { fromDate: TUESDAY, toDate: WEDNESDAY, note: "חופשה", ranges: [] },
+      "KEEP",
+    );
+
+    const renamed = await test.services.closures.describe(
+      shop.owner.actor,
+      shop.business.id,
+      TUESDAY,
+      WEDNESDAY,
+      "מילואים",
+    );
+    expect(renamed).toBe(2);
+
+    const overrides = await test.services.business.listOverrides(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      TUESDAY,
+      WEDNESDAY,
+    );
+    expect(overrides.map((one) => one.note)).toEqual(["מילואים", "מילואים"]);
+    // The days keep their hours, and a typo is not a decision about anybody's
+    // appointment.
+    expect(overrides.every((one) => one.ranges.length === 0)).toBe(true);
+    expect(
+      test.store.appointments.find((one) => one.id === appointment.id)?.status,
+    ).toBe("CONFIRMED");
+  });
+
   it("does not un-cancel what it called off", async () => {
     const { appointment } = await aBookingOn(test, shop, "+972500000002", TUESDAY_AT("09:00"));
     await test.services.closures.close(

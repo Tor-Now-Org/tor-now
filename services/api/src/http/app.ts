@@ -568,6 +568,19 @@ const ownerRoutes = (services: Services) => {
     return context.json(outcome, 201);
   });
 
+  // Only the words. The days keep their hours and nothing booked is touched.
+  owner.patch("/:businessId/closures", async (context) => {
+    const body = await parseBody(context, schema.closureNoteSchema);
+    const renamed = await services.closures.describe(
+      actorOf(context),
+      idParam(context, "businessId"),
+      body.fromDate,
+      body.toDate,
+      body.note,
+    );
+    return context.json({ renamed });
+  });
+
   owner.delete("/:businessId/closures", async (context) => {
     const { from, to } = parseQuery(context, schema.dateRangeSchema);
     const removed = await services.closures.lift(
@@ -689,6 +702,17 @@ const ownerRoutes = (services: Services) => {
       context.req.param("groupId"),
     );
     return context.json(blocks.map(wire.blockOut));
+  });
+
+  owner.patch("/:businessId/block-groups/:groupId", async (context) => {
+    const body = await parseBody(context, schema.blockNoteSchema);
+    const renamed = await services.calendar.renameBlockGroup(
+      actorOf(context),
+      idParam(context, "businessId"),
+      context.req.param("groupId"),
+      body.reason,
+    );
+    return context.json({ renamed });
   });
 
   owner.delete("/:businessId/block-groups/:groupId", async (context) => {

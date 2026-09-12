@@ -299,6 +299,18 @@ export const closureSchema = z.object({
   upcoming: z.enum(["KEEP", "CANCEL"]),
 });
 
+/** Changing what a closure is called, and nothing else about it. */
+export const closureNoteSchema = z.object({
+  fromDate: localDateSchema,
+  toDate: localDateSchema,
+  note: text(TEXT_RULES.reason).nullable().default(null),
+});
+
+/** Changing what a blockage is called. */
+export const blockNoteSchema = z.object({
+  reason: text(TEXT_RULES.reason).default(""),
+});
+
 /** The same question without the answer: what would closing these days cost? */
 export const closurePreviewSchema = closureSchema.omit({ note: true, upcoming: true });
 

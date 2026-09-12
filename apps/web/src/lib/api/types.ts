@@ -92,6 +92,8 @@ export type BusinessDayDto = {
     resourceName: string;
     open: { start: string; end: string }[];
     special: boolean;
+    /** Why the day is special, when the owner said. */
+    note: string | null;
     appointments: CalendarAppointmentDto[];
     blocks: BlockDto[];
   }[];

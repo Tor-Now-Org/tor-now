@@ -14,6 +14,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { canCloseBusiness } from "@/lib/roles.ts";
 import { laneColourOf } from "./event-colour.ts";
+import { RenameNote } from "./rename-note.tsx";
 import { Button, Card, Critical, Note, Sheet, Spinner } from "../ui.tsx";
 import {
   DAYS_IN_A_WEEK,
@@ -427,6 +428,22 @@ export const Month = ({
             {/* Re-opening the days does not un-cancel what closing them called
                 off — those customers were told — and saying so here is better
                 than an owner finding out by looking. */}
+            {canCloseBusiness(business) && (
+              <RenameNote
+                note={openClosure.note}
+                busy={busy}
+                onSave={(said) =>
+                  void act(() =>
+                    api.describeClosure(token, business.id, {
+                      fromDate: openClosure.fromDate,
+                      toDate: openClosure.toDate,
+                      note: said.trim() === "" ? null : said.trim(),
+                    }),
+                  )
+                }
+              />
+            )}
+
             <Note>{copy.reopenKeepsCancellations}</Note>
             {canCloseBusiness(business) && (
               <Button
@@ -491,6 +508,16 @@ export const Month = ({
                     month: "long",
                   })} · ${openGroup.days} ${copy.daysWord}`}
             </p>
+            <RenameNote
+              note={openGroup.reason}
+              busy={busy}
+              onSave={(said) =>
+                void act(() =>
+                  api.renameBlockGroup(token, business.id, openGroup.groupId, said),
+                )
+              }
+            />
+
             <Button
               intent="danger"
               busy={busy}

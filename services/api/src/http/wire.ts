@@ -190,6 +190,7 @@ export const businessDayOut = (day: BusinessDay) => ({
       end: formatLocalTime(range.end),
     })),
     special: calendar.special,
+    note: calendar.note,
     appointments: calendar.appointments.map(appointmentWithCustomerOut),
     blocks: calendar.blocks.map(blockOut),
   })),

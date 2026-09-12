@@ -128,6 +128,8 @@ export type BusinessDay = {
     readonly resourceName: string;
     readonly open: readonly LocalTimeRangeValue[];
     readonly special: boolean;
+    /** Why the day is special, when the owner said. */
+    readonly note: string | null;
     readonly appointments: readonly (Appointment & {
       customerName: string;
       customerPhone: string;
@@ -468,6 +470,7 @@ export const calendarService = ({
             resourceId: resource.id,
             resourceName: resource.name,
             open,
+            note: override?.note ?? null,
             special: override !== null,
             appointments: appointments.map((appointment) => {
               const customer = customers.get(appointment.customerId);
@@ -674,6 +677,30 @@ export const calendarService = ({
     return unitOfWork.run(actor, async ({ repositories }) => {
       await loadManagedBusiness(repositories, actor, businessId);
       return repositories.blocks.deleteGroup(businessId, groupId);
+    });
+  },
+
+  /**
+   * What a blockage is called, changed.
+   *
+   * The words are the only part of a blockage anybody can get wrong and want
+   * back — the days and hours can be undone by removing it and saying it
+   * again, but a typo in "מילואים" was permanent. The reason belongs to the
+   * decision, so all of its days change together.
+   *
+   * Whoever may make one may rename one: a worker keeps their own calendar.
+   */
+  async renameBlockGroup(
+    actor: Actor,
+    businessId: BusinessId,
+    groupId: string,
+    reason: string,
+  ): Promise<number> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      const [first] = await repositories.blocks.listGroup(businessId, groupId);
+      if (first === undefined) throw notFound("Block", groupId);
+      await requireResourceAccess(repositories, actor, businessId, first.resourceId);
+      return repositories.blocks.renameGroup(businessId, groupId, reason.trim());
     });
   },
 

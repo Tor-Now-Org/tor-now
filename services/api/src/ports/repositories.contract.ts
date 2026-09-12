@@ -690,6 +690,34 @@ export const describeRepositoryContract = (
         expect(
           await repositories.blocks.listGroup(context.business.id, "22222222-2222-4222-8222-222222222222"),
         ).toHaveLength(2);
+
+        // What it is called belongs to the decision, not to each of its days:
+        // renaming one and leaving the other describes a decision nobody made.
+        expect(
+          await repositories.blocks.renameGroup(
+            context.business.id,
+            "22222222-2222-4222-8222-222222222222",
+            "מילואים",
+          ),
+        ).toBe(2);
+        expect(
+          (
+            await repositories.blocks.listGroup(
+              context.business.id,
+              "22222222-2222-4222-8222-222222222222",
+            )
+          ).map((block) => block.reason),
+        ).toEqual(["מילואים", "מילואים"]);
+        // And it reaches no further than the business it was asked about.
+        expect(
+          (
+            await repositories.blocks.listGroup(
+              context.business.id,
+              "11111111-1111-4111-8111-111111111111",
+            )
+          ).map((block) => block.reason),
+        ).toEqual(["פגישה אישית"]);
+
         expect(
           await repositories.blocks.deleteGroup(context.business.id, "22222222-2222-4222-8222-222222222222"),
         ).toBe(2);

@@ -251,6 +251,56 @@ export const closureService = ({
     },
 
     /**
+     * What a closure is called, changed.
+     *
+     * Only the words. The days keep the hours they were given, and nothing
+     * booked is touched — renaming a holiday is not a decision about anybody's
+     * appointment, and treating it as one would make a typo expensive.
+     */
+    async describe(
+      actor: Actor,
+      businessId: BusinessId,
+      fromDate: string,
+      toDate: string,
+      note: string | null,
+    ): Promise<number> {
+      return unitOfWork.run(actor, async ({ repositories }) => {
+        await loadManagedBusiness(repositories, actor, businessId);
+        const dates = datesOf(fromDate, toDate);
+        const first = dates[0];
+        const last = dates[dates.length - 1];
+        /* istanbul ignore next -- datesOf never yields an empty range */
+        if (first === undefined || last === undefined) return 0;
+
+        const calendars = await repositories.resources.listForBusiness(businessId);
+        let renamed = 0;
+        for (const calendar of calendars) {
+          const theirs = await repositories.dateOverrides.listForResource(
+            calendar.id,
+            first,
+            last,
+          );
+          for (const override of theirs) {
+            await repositories.dateOverrides.put({
+              resourceId: calendar.id,
+              businessId,
+              date: override.date,
+              note,
+              // The hours as they stand: this changes the words and nothing
+              // else, so what the day keeps is what it already kept.
+              ranges: override.ranges.map((range) => ({
+                startMinutes: range.start,
+                endMinutes: range.end,
+              })),
+            });
+            renamed += 1;
+          }
+        }
+        return renamed;
+      });
+    },
+
+    /**
      * The shop's days given back: every Override across those dates, removed,
      * so each day returns to the week's own hours.
      *

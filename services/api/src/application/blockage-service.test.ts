@@ -180,6 +180,56 @@ describe("who may block a calendar", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  it("lets whoever may make a blockage rename it, all of its days at once", async () => {
+    const worker = await aWorkerOn("+972500000046", [shop.resource.id]);
+    const made = await test.services.calendar.createBlocks(
+      worker.actor,
+      shop.business.id,
+      shop.resource.id,
+      [
+        { startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "רופה" },
+        { startAt: TUESDAY_AT("14:00"), endAt: TUESDAY_AT("15:00"), reason: "רופה" },
+      ],
+      "KEEP",
+    );
+
+    // A typo in the words was the one part of a blockage that could not be
+    // taken back without unpicking the whole thing.
+    const renamed = await test.services.calendar.renameBlockGroup(
+      worker.actor,
+      shop.business.id,
+      made[0]?.groupId ?? "",
+      "רופא",
+    );
+    expect(renamed).toBe(2);
+    expect(test.store.blocks.map((one) => one.reason)).toEqual(["רופא", "רופא"]);
+  });
+
+  it("refuses to rename a blockage on a calendar that is not theirs", async () => {
+    const theirs = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      "כיסא שני",
+    );
+    const worker = await aWorkerOn("+972500000047", [theirs.id]);
+    const made = await test.services.calendar.createBlocks(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      [{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "" }],
+      "KEEP",
+    );
+
+    await expect(
+      test.services.calendar.renameBlockGroup(
+        worker.actor,
+        shop.business.id,
+        made[0]?.groupId ?? "",
+        "שלי",
+      ),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("refuses a stranger outright", async () => {
     const stranger = await signIn(test, "+972500000077");
     await expect(

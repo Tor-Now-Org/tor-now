@@ -5,10 +5,10 @@ import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type { BusinessDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
-import { canCloseBusiness } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { Button, Critical, Field, Note, Sheet } from "../ui.tsx";
-import { clockOf, minutesOf, spokenLength, withoutSpan } from "./day-model.ts";
+import { clockOf, minutesOf, spokenLength } from "./day-model.ts";
+import { RenameNote } from "./rename-note.tsx";
 import type { Picked } from "./day-timeline.tsx";
 
 /**
@@ -34,7 +34,6 @@ export const DayActionSheet = ({
   business,
   date,
   past,
-  openHours,
   onClose,
   onChanged,
 }: {
@@ -44,8 +43,6 @@ export const DayActionSheet = ({
   date: string;
   /** Whether the day being read has already been and gone. */
   past: boolean;
-  /** What each calendar keeps that day, so closing an hour keeps the rest. */
-  openHours: Readonly<Record<string, readonly { start: string; end: string }[]>>;
   onClose: () => void;
   onChanged: () => void;
 }) => {
@@ -104,7 +101,6 @@ export const DayActionSheet = ({
           busy={busy}
           error={error}
           past={past || picked.end <= minutesNow(business.timeZone, date)}
-          canCloseBusiness={canCloseBusiness(business)}
           onBlock={(span, note) =>
             void act(() =>
               api.createBlocks(token, business.id, picked.resourceId, [
@@ -114,24 +110,6 @@ export const DayActionSheet = ({
                   reason: note.trim(),
                 },
               ]),
-            )
-          }
-          onCloseShop={(span, note) =>
-            void act(() =>
-              // The shop keeping other hours is the shop's decision, not one
-              // calendar's — so it goes through the closure, which writes every
-              // calendar at once and answers for what was booked in the hour.
-              api.closeBusiness(token, business.id, {
-                fromDate: date,
-                toDate: date,
-                note: note.trim() === "" ? null : note.trim(),
-                // The hours kept are the tapped calendar's own, minus the
-                // stretch — the lane the owner was looking at is the one whose
-                // day they meant. They are then the shop's hours, which is
-                // what closing the business means.
-                ranges: withoutSpan(openHours[picked.resourceId] ?? [], span),
-                upcoming: "CANCEL",
-              }),
             )
           }
         />
@@ -153,6 +131,18 @@ export const DayActionSheet = ({
             <p className="said" style={{ margin: 0 }}>
               {copy.partOfBlockage.replace("{days}", String(group))}
             </p>
+          )}
+
+          {picked.groupId !== null && (
+            <RenameNote
+              note={picked.reason}
+              busy={busy}
+              onSave={(said) =>
+                void act(() =>
+                  api.renameBlockGroup(token, business.id, picked.groupId ?? "", said),
+                )
+              }
+            />
           )}
 
           {error !== null && <Critical>{error}</Critical>}
@@ -190,9 +180,7 @@ const FreeActions = ({
   busy,
   error,
   past,
-  canCloseBusiness: mayCloseBusiness,
   onBlock,
-  onCloseShop,
 }: {
   picked: Extract<Picked, { kind: "free" }>;
   words: Parameters<typeof spokenLength>[1];
@@ -200,10 +188,7 @@ const FreeActions = ({
   busy: boolean;
   error: string | null;
   past: boolean;
-  /** ADR 0016: the shop's hours are not a worker's to change. */
-  canCloseBusiness: boolean;
   onBlock: (span: { start: number; end: number }, note: string) => void;
-  onCloseShop: (span: { start: number; end: number }, note: string) => void;
 }) => {
   /**
    * Which part of the free stretch this is about.
@@ -328,17 +313,6 @@ const FreeActions = ({
       <Button busy={busy} disabled={past || !usable} onClick={() => onBlock(chosen, note)}>
         {copy.blockThese.replace("{hours}", `${from}–${until}`)}
       </Button>
-      {mayCloseBusiness && (
-        <Button
-          intent="quiet"
-          busy={busy}
-          disabled={past || !usable}
-          onClick={() => onCloseShop(chosen, note)}
-        >
-          {copy.closeShopThese.replace("{hours}", `${from}–${until}`)}
-        </Button>
-      )}
-
       {/* Booking somebody in from here is the obvious third thing to want, and
           it is the one thing the API cannot yet do: every route books as the
           caller, so there is no way to book on a customer's behalf. Shown and
