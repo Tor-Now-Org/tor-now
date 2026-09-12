@@ -163,7 +163,7 @@ export const Team = ({
               <span className="hint tab" dir="ltr" style={{ minWidth: "max-content" }}>
                 {member.phone}
               </span>
-              {mayTouch(member) && (
+              {mayTouch(member) && member.id !== user?.id && (
                 <button
                   className="chip"
                   style={{ border: "1px solid var(--line)", textAlign: "center" }}
