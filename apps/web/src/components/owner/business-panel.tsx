@@ -24,6 +24,7 @@ import {
 import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "../phone-field.tsx";
 import { PhotoPanel } from "./photo-panel.tsx";
+import { Team } from "./team.tsx";
 
 /**
  * How the one control that changes standing is drawn.
@@ -64,7 +65,7 @@ const blankToNull = (value: string | null | undefined): string | null =>
   value === null || value === undefined || value.trim() === "" ? null : value.trim();
 import { Button, Card, Critical, Field, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
 
-type Panel = "services" | "resources" | "photos" | "settings" | "billing";
+type Panel = "services" | "resources" | "photos" | "settings" | "team" | "billing";
 
 const MINOR_UNITS_PER_MAJOR = 100;
 
@@ -78,6 +79,7 @@ export const BusinessPanel = ({
   resources,
   onEditCalendar,
   onChanged,
+  onTeamChanged,
 }: {
   token: string;
   business: BusinessDto;
@@ -86,6 +88,8 @@ export const BusinessPanel = ({
   onEditCalendar: (resourceId: string) => void;
   /** What changed, so the screen reloads that and not the rest. */
   onChanged: (touches: "everything" | "calendars") => void;
+  /** Called when team membership changes. */
+  onTeamChanged?: () => void;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -183,6 +187,7 @@ export const BusinessPanel = ({
             "resources",
             "photos",
             "settings",
+            "team",
             ...(isOwner ? (["billing"] as const) : []),
           ] as const
         ).map((candidate) => (
@@ -201,6 +206,7 @@ export const BusinessPanel = ({
               : candidate === "resources" ? copy.resources
               : candidate === "photos" ? copy.photos
               : candidate === "settings" ? copy.settings
+              : candidate === "team" ? copy.team
               : copy.billing}
           </button>
         ))}
@@ -525,6 +531,17 @@ export const BusinessPanel = ({
             {copy.save}
           </Button>
         </>
+      )}
+
+      {panel === "team" && (
+        <div style={{ marginTop: -16, marginInline: -18, paddingInline: 18 }}>
+          <Team
+            token={token}
+            business={business}
+            resources={resources}
+            onChanged={onTeamChanged ?? (() => {})}
+          />
+        </div>
       )}
 
       {panel === "billing" && billing !== null && (

@@ -15,16 +15,14 @@ import {
   CalendarIcon,
   ClockIcon,
   PeopleIcon,
-  ShieldIcon,
 } from "@/components/bottom-nav.tsx";
 import { BusinessPanel } from "@/components/owner/business-panel.tsx";
 import { CalendarDay } from "@/components/owner/calendar-day.tsx";
 import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
-import { Team } from "@/components/owner/team.tsx";
 import { Button, Card, Empty, Note, Sheet, Spinner } from "@/components/ui.tsx";
 
-const TABS = ["day", "schedule", "business", "customers", "users"] as const;
+const TABS = ["day", "schedule", "business", "customers"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -175,19 +173,12 @@ function ManageApp() {
               if (touches === "everything") void loadBusinesses();
               void loadResources();
             }}
+            // They may have just changed their own terms, and the tabs and the
+            // calendars they may see both hang off that.
+            onTeamChanged={() => void loadBusinesses()}
           />
         )}
         {shown === "customers" && <Customers token={token} business={business} />}
-        {shown === "users" && (
-          <Team
-            token={token}
-            business={business}
-            resources={resources}
-            // They may have just changed their own terms, and the tabs and the
-            // calendars they may see both hang off that.
-            onChanged={() => void loadBusinesses()}
-          />
-        )}
       </main>
 
       <BottomNav
@@ -203,7 +194,6 @@ function ManageApp() {
             ? [
                 { id: "business", label: copy.tabBusiness, icon: <BuildingIcon /> },
                 { id: "customers", label: copy.tabCustomers, icon: <PeopleIcon /> },
-                { id: "users", label: copy.tabUsers, icon: <ShieldIcon /> },
               ]
             : []),
         ]}

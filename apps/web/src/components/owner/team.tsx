@@ -59,7 +59,7 @@ export const Team = ({
   business: BusinessDto;
   resources: readonly ResourceDto[];
   /** The actor may have just changed their own terms, so the screen reloads. */
-  onChanged: () => void;
+  onChanged?: () => void;
 }) => {
   const copy = useCopy("owner");
   const { user } = useSession();
@@ -93,7 +93,7 @@ export const Team = ({
       setDraft(null);
       setRemoving(null);
       await load();
-      onChanged();
+      onChanged?.();
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
