@@ -245,8 +245,10 @@ export const Month = ({
             >
               {/* The shop's own closures first: they cover every calendar, so
                   they are the widest claim being made about those days. */}
+              {/* One day counts. A single shut Sunday is as much a decision as
+                  a week away, and leaving it to a pale square meant there was
+                  nothing to read and nothing to tap. */}
               {month.closures
-                .filter((closure) => closure.days > 1)
                 .map((closure) => segmentIn(week, closure))
                 .filter((segment): segment is NonNullable<typeof segment> => segment !== null)
                 .map(({ span, column, width }) => (
@@ -262,8 +264,11 @@ export const Month = ({
                         width: `calc(${(width / 7) * 100}% - 4px)`,
                         height: 13,
                         borderRadius: 999,
-                        background: "var(--closed)",
-                        color: "var(--on-accent)",
+                        background:
+                          span.kind === "SHUT" ? "var(--closed)" : "var(--accent-soft)",
+                        color: span.kind === "SHUT" ? "var(--on-accent)" : "var(--accent-strong)",
+                        border:
+                          span.kind === "SHUT" ? "none" : "1px solid var(--accent)",
                         fontSize: 9,
                         fontWeight: 600,
                         pointerEvents: "auto",
@@ -273,13 +278,20 @@ export const Month = ({
                         textOverflow: "ellipsis",
                       }}
                     >
-                      {labelFor(span.note, width, copy.closedWord)}
+                      {labelFor(
+                        span.note,
+                        width,
+                        span.kind === "SHUT"
+                          ? copy.closedWord
+                          : span.hours
+                              .map((range) => `${range.start}–${range.end}`)
+                              .join(", "),
+                      )}
                     </button>
                   </span>
                 ))}
 
               {month.blockages
-                .filter((blockage) => blockage.days > 1)
                 .filter((blockage) => scope === null || blockage.resourceId === scope)
                 .map((blockage) => segmentIn(week, blockage))
                 .filter((segment): segment is NonNullable<typeof segment> => segment !== null)
@@ -407,7 +419,19 @@ export const Month = ({
       <Sheet open={openClosure !== null} onClose={() => setOpenClosure(null)}>
         {openClosure !== null && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <h2 style={{ fontSize: 18 }}>{openClosure.note ?? copy.closedWord}</h2>
+            <h2 style={{ fontSize: 18 }}>
+              {openClosure.note ??
+                (openClosure.kind === "SHUT" ? copy.closedWord : copy.differentHours)}
+            </h2>
+            {/* What the shop is actually doing that day — the half-day was the
+                case with nothing to read at all. */}
+            <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }} className="tab">
+              {openClosure.kind === "SHUT"
+                ? copy.closedAllDay
+                : openClosure.hours
+                    .map((range) => `${range.start}–${range.end}`)
+                    .join(" · ")}
+            </p>
             <p className="hint" style={{ margin: 0 }}>
               {formatLocalDate(openClosure.fromDate, language, { day: "numeric", month: "long" })}
               {" – "}
@@ -436,7 +460,9 @@ export const Month = ({
                   )
                 }
               >
-                {copy.reopenDays.replace("{days}", String(openClosure.days))}
+                {openClosure.days === 1
+                  ? copy.reopenOneDay
+                  : copy.reopenDays.replace("{days}", String(openClosure.days))}
               </Button>
             )}
           </div>

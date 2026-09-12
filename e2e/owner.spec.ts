@@ -784,8 +784,9 @@ test.describe("the day timeline", () => {
 
     await openTheDay(page, shop, date);
 
-    // It is on the track, and it opens rather than doing anything by itself.
-    await page.getByRole("button", { name: /ספק/ }).first().click();
+    // The item on the track, named by its hour — the month above it now draws
+    // a band for a single day too, and that band says "ספק" as well.
+    await page.getByRole("button", { name: /\d\d:\d\d ספק/ }).first().click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await sheet.getByRole("button", { name: "מחיקה" }).click();
@@ -2904,5 +2905,177 @@ test.describe("blocking time out", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByText("יומן א")).toBeVisible();
     await expect(sheet.getByText("מילואים")).toBeVisible();
+  });
+});
+
+/**
+ * The shop's own days, read and undone from the calendar rather than only from
+ * the schedule screen — and removed as the one decision they were.
+ */
+test.describe("a day the shop keeps its own hours", () => {
+  const openCalendar = async (page: Page, shop: { business: { id: string } }, token: string) => {
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+  };
+
+  const shortenTheDay = async (
+    shop: { business: { id: string }; owner: { token: string } },
+    date: string,
+    note: string | null,
+  ) =>
+    call(`/businesses/${shop.business.id}/closures`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        fromDate: date,
+        toDate: date,
+        note,
+        ranges: [{ start: "09:00", end: "12:00" }],
+        upcoming: "KEEP",
+      },
+    });
+
+  test("shows a shortened day on the calendar, and gives it back from there", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `יום קצר ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(2);
+    await shortenTheDay(shop, day, "ערב חג");
+
+    await openCalendar(page, shop, shop.owner.token);
+
+    // It used to be a slightly paler square and nothing else: no band, nothing
+    // to tap, and the only way to find it was the schedule screen.
+    const band = page.getByRole("button", { name: "ערב חג" });
+    await expect(band.first()).toBeVisible({ timeout: 15_000 });
+
+    await band.first().click();
+    const sheet = page.getByRole("dialog");
+    // What the shop is actually doing that day, in hours.
+    await expect(sheet.getByText("09:00–12:00")).toBeVisible();
+    await sheet.getByRole("button", { name: /^ביטול הסגירה/ }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // Back on its usual hours: the afternoon is bookable again.
+    await expect
+      .poll(
+        async () => {
+          const days = await call<{ slots: { startAt: string }[] }[]>(
+            `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+              `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+          );
+          return (days[0]?.slots ?? []).filter((slot) => slot.startAt >= `${day}T12:00`).length;
+        },
+        { timeout: 15_000 },
+      )
+      .toBeGreaterThan(0);
+  });
+
+  test("draws a band on a single day, not only on a run of them", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `יום אחד ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(2);
+    await call(`/businesses/${shop.business.id}/closures`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { fromDate: day, toDate: day, note: null, ranges: [], upcoming: "KEEP" },
+    });
+
+    await openCalendar(page, shop, shop.owner.token);
+    // Nothing was said about why, so the band says what it is.
+    await expect(page.getByRole("button", { name: "סגור" }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("removes the shop's day from the schedule screen as the shop's", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `ניהול ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    // A second chair is what made this wrong: deleting one calendar's copy left
+    // the other shut, invisibly to the calendar.
+    await call(`/businesses/${shop.business.id}/resources`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "יומן ב" },
+    });
+    const day = aDayFromNow(2);
+    await shortenTheDay(shop, day, null);
+
+    await openCalendar(page, shop, shop.owner.token);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+    await page.getByRole("button", { name: "ימים חריגים" }).click();
+
+    await expect(page.getByText("כל העסק")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "מחיקה" }).first().click();
+
+    // Gone for every calendar, in one go — and gone from this list with it.
+    await expect(page.getByText("כל העסק")).toHaveCount(0, { timeout: 15_000 });
+    const resources = await call<{ id: string }[]>(
+      `/businesses/${shop.business.id}/resources`,
+      { token: shop.owner.token },
+    );
+    for (const resource of resources) {
+      const left = await call<unknown[]>(
+        `/businesses/${shop.business.id}/resources/${resource.id}/overrides?from=${day}&to=${day}`,
+        { token: shop.owner.token },
+      );
+      expect(left).toHaveLength(0);
+    }
+  });
+
+  test("names the calendar of each appointment a closure would call off", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `יומנים ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(2);
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name: { givenName: "שירה", familyName: "כהן" } },
+    });
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: `${day}T07:00:00.000Z`,
+        customerNote: null,
+      },
+    });
+
+    await openCalendar(page, shop, shop.owner.token);
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("button", { name: /יום מיוחד לעסק/ }).click();
+    await page.getByRole("button", { name: day }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    // Whose chair it is, because closing touches every calendar and a list of
+    // names says nothing about which of them loses their afternoon.
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("שירה כהן")).toBeVisible({ timeout: 15_000 });
+    await expect(sheet.getByText(new RegExp(`· ${shop.resource.name}`))).toBeVisible();
   });
 });

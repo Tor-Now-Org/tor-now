@@ -215,7 +215,17 @@ export const businessMonthOut = (month: BusinessMonth) => ({
     shopNote: day.shopNote,
   })),
   blockages: month.blockages,
-  closures: month.closures,
+  closures: month.closures.map((band) => ({
+    fromDate: band.fromDate,
+    toDate: band.toDate,
+    days: band.days,
+    note: band.note,
+    kind: band.kind,
+    hours: band.hours.map((range) => ({
+      start: formatLocalTime(range.start),
+      end: formatLocalTime(range.end),
+    })),
+  })),
 });
 
 /** A customer's own list names the business, e.g. for an "add to calendar" title. */

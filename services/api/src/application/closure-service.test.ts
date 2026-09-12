@@ -268,6 +268,8 @@ describe("closing the business", () => {
         toDate: parseLocalDate(WEDNESDAY),
         days: 2,
         note: "חופשה",
+        kind: "SHUT",
+        hours: [],
       },
     ]);
     const tuesday = month.days.find((day) => day.date === TUESDAY);

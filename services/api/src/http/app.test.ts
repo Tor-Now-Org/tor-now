@@ -317,7 +317,14 @@ describe("closing the business over HTTP", () => {
       owner.token,
     );
     expect((month.body as { closures: unknown[] }).closures).toEqual([
-      { fromDate: "2026-09-01", toDate: "2026-09-03", days: 3, note: "חופשה" },
+      {
+        fromDate: "2026-09-01",
+        toDate: "2026-09-03",
+        days: 3,
+        note: "חופשה",
+        kind: "SHUT",
+        hours: [],
+      },
     ]);
 
     const reopened = await api.delete(

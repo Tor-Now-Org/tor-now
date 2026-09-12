@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { parseLocalDate } from "@tor-now/domain";
-import { closureBandsOf, type ShutDay } from "./closure-bands.ts";
+import { closureBandsOf, type ShopDay } from "./closure-bands.ts";
+import { parseLocalTime } from "@tor-now/domain";
 
-const day = (date: string, shopClosed: boolean, shopNote: string | null = null): ShutDay => ({
+const day = (date: string, shopClosed: boolean, shopNote: string | null = null): ShopDay => ({
   date: parseLocalDate(date),
   shopClosed,
+  shopHours: [],
+  shopNote,
+});
+
+/** A day the shop keeps hours of its own rather than closing. */
+const shorter = (
+  date: string,
+  hours: { start: string; end: string }[],
+  shopNote: string | null = null,
+): ShopDay => ({
+  date: parseLocalDate(date),
+  shopClosed: false,
+  shopHours: hours.map((range) => ({
+    start: parseLocalTime(range.start),
+    end: parseLocalTime(range.end),
+  })),
   shopNote,
 });
 
@@ -22,7 +39,14 @@ describe("reading a closure back off the month", () => {
       day("2026-09-05", false),
     ]);
     expect(bands).toEqual([
-      { fromDate: "2026-09-02", toDate: "2026-09-04", days: 3, note: "חופשה" },
+      {
+        fromDate: "2026-09-02",
+        toDate: "2026-09-04",
+        days: 3,
+        note: "חופשה",
+        kind: "SHUT",
+        hours: [],
+      },
     ]);
   });
 
@@ -43,9 +67,9 @@ describe("reading a closure back off the month", () => {
       day("2026-09-01", true, "פסח"),
       day("2026-09-02", true, "שיפוץ"),
     ]);
-    expect(bands).toEqual([
-      { fromDate: "2026-09-01", toDate: "2026-09-01", days: 1, note: "פסח" },
-      { fromDate: "2026-09-02", toDate: "2026-09-02", days: 1, note: "שיפוץ" },
+    expect(bands.map((band) => [band.days, band.note])).toEqual([
+      [1, "פסח"],
+      [1, "שיפוץ"],
     ]);
   });
 
@@ -63,7 +87,14 @@ describe("reading a closure back off the month", () => {
 
   it("carries a single shut day as a band of one", () => {
     expect(closureBandsOf([day("2026-09-09", true, "יום כיפור")])).toEqual([
-      { fromDate: "2026-09-09", toDate: "2026-09-09", days: 1, note: "יום כיפור" },
+      {
+        fromDate: "2026-09-09",
+        toDate: "2026-09-09",
+        days: 1,
+        note: "יום כיפור",
+        kind: "SHUT",
+        hours: [],
+      },
     ]);
   });
 
@@ -73,5 +104,40 @@ describe("reading a closure back off the month", () => {
     // proves it.
     const bands = closureBandsOf([day("2026-09-30", true), day("2026-10-02", true)]);
     expect(bands).toHaveLength(2);
+  });
+
+  it("reads a short day back as its own band, which is what makes it undoable", () => {
+    // A half-day used to produce nothing at all: the square went pale and
+    // there was no band to open, nothing to read and no way out of it.
+    const bands = closureBandsOf([shorter("2026-09-15", [{ start: "09:00", end: "12:00" }], "ערב חג")]);
+    expect(bands).toHaveLength(1);
+    expect(bands[0]?.kind).toBe("HOURS");
+    expect(bands[0]?.note).toBe("ערב חג");
+    expect(bands[0]?.hours).toHaveLength(1);
+  });
+
+  it("joins short days that keep the same hours for the same reason", () => {
+    const bands = closureBandsOf([
+      shorter("2026-09-15", [{ start: "09:00", end: "12:00" }], "ערב חג"),
+      shorter("2026-09-16", [{ start: "09:00", end: "12:00" }], "ערב חג"),
+    ]);
+    expect(bands).toHaveLength(1);
+    expect(bands[0]?.days).toBe(2);
+  });
+
+  it("keeps two short days apart when the hours differ", () => {
+    const bands = closureBandsOf([
+      shorter("2026-09-15", [{ start: "09:00", end: "12:00" }]),
+      shorter("2026-09-16", [{ start: "10:00", end: "14:00" }]),
+    ]);
+    expect(bands).toHaveLength(2);
+  });
+
+  it("never joins a shut day to a short one", () => {
+    const bands = closureBandsOf([
+      day("2026-09-15", true, "חג"),
+      shorter("2026-09-16", [{ start: "09:00", end: "12:00" }], "חג"),
+    ]);
+    expect(bands.map((band) => band.kind)).toEqual(["SHUT", "HOURS"]);
   });
 });

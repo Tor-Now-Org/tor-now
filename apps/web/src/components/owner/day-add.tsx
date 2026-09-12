@@ -324,7 +324,13 @@ export const FinishAim = ({
             placeholder={copy.notePlaceholder}
           />
 
-          <Costs impact={impact} copy={copy} business={business} language={language} />
+          <Costs
+            impact={impact}
+            copy={copy}
+            business={business}
+            language={language}
+            everyCalendar={false}
+          />
 
           <p className="said" style={{ margin: 0 }}>
             {copy.willMake
@@ -405,46 +411,13 @@ export const FinishAim = ({
           {/* Who this costs. Closing a fortnight calls off everybody in it, and
               a screen that does that without saying so is not one to trust —
               so the names come first and the button says what it will do. */}
-          {impact !== null && impact.appointments.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Critical>
-                {copy.closingWillCancel.replace(
-                  "{count}",
-                  String(impact.appointments.length),
-                )}
-              </Critical>
-              <div
-                className="scroll"
-                style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 190 }}
-              >
-                {impact.appointments.map((one) => (
-                  <span
-                    key={one.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "7px 9px",
-                      borderRadius: 10,
-                      background: "var(--sunken)",
-                      fontSize: 12,
-                    }}
-                  >
-                    <span className="tab hint" style={{ width: 96 }}>
-                      {whenIn(one.startAt, business.timeZone, language)}
-                    </span>
-                    <span style={{ flex: 1, fontWeight: 500 }}>{one.customerName}</span>
-                    <span className="hint">{one.serviceName}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {impact !== null && impact.appointments.length === 0 && (
-            <p className="said" style={{ margin: 0 }}>
-              {copy.nothingBookedThen}
-            </p>
-          )}
+          <Costs
+            impact={impact}
+            copy={copy}
+            business={business}
+            language={language}
+            everyCalendar
+          />
 
           <p className="said" style={{ margin: 0 }}>
             {copy.willMake
@@ -484,11 +457,21 @@ const Costs = ({
   copy,
   business,
   language,
+  everyCalendar,
 }: {
   impact: ClosureImpactDto | null;
   copy: ReturnType<typeof useCopy<"owner">>;
   business: BusinessDto;
   language: ReturnType<typeof useLanguage>["language"];
+  /**
+   * Whether this touches more than one calendar.
+   *
+   * When it does, whose chair an appointment is in is half of what the owner
+   * needs to decide — a list of names and times says nothing about which of
+   * three people is about to lose their afternoon. A blockage is one calendar
+   * by definition, and repeating its name on every row is noise.
+   */
+  everyCalendar: boolean;
 }) => {
   if (impact === null) return null;
   if (impact.appointments.length === 0) {
@@ -524,8 +507,13 @@ const Costs = ({
             <span className="tab hint" style={{ width: 96 }}>
               {whenIn(one.startAt, business.timeZone, language)}
             </span>
-            <span style={{ flex: 1, fontWeight: 500 }}>{one.customerName}</span>
-            <span className="hint">{one.serviceName}</span>
+            <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 1 }}>
+              <span style={{ fontWeight: 500 }}>{one.customerName}</span>
+              <span className="hint">
+                {one.serviceName}
+                {everyCalendar && one.resourceName !== "" ? ` · ${one.resourceName}` : ""}
+              </span>
+            </span>
           </span>
         ))}
       </div>

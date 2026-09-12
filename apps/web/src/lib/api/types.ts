@@ -125,6 +125,10 @@ export type ClosureBandDto = {
   toDate: string;
   days: number;
   note: string | null;
+  /** Shut altogether, or open on hours of its own. */
+  kind: "SHUT" | "HOURS";
+  /** The hours kept. Empty for a day that is shut. */
+  hours: { start: string; end: string }[];
 };
 
 /** What closing a run of days would call off, before anything is written. */
