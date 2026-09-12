@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   columnOf,
   datesBetween,
+  labelFitting,
   labelFor,
   packBands,
   segmentIn,
@@ -91,6 +92,31 @@ describe("what a band says", () => {
   it("falls back rather than cutting a long reason off mid-word", () => {
     // Two days of width cannot hold a sentence; half of one reads as a bug.
     expect(labelFor("שיפוץ במספרה, נחזור ביום ראשון בבוקר", 2, "סגור")).toBe("סגור");
+  });
+
+  it("says the kind on a single day when the reason will not fit in one", () => {
+    // One day is about fifty pixels across, which is seven Hebrew letters —
+    // past that comes "שיפוץ שנת…", a truncation that reads as a fault.
+    expect(labelFor("שיפוץ שנתי במספרה", 1, "חסום")).toBe("חסום");
+    expect(labelFor("מילואים", 1, "חסום")).toBe("מילואים");
+  });
+
+  it("takes the first of several things it could say that fits", () => {
+    // Whose it is and why, then why, then what kind of thing it is.
+    const said = ["יומן א · מילואים", "מילואים", "חסום"];
+    expect(labelFitting(said, 3)).toBe("יומן א · מילואים");
+    expect(labelFitting(said, 1)).toBe("מילואים");
+    expect(labelFitting(["שיפוץ שנתי במספרה", "חסום"], 1)).toBe("חסום");
+  });
+
+  it("falls back to the shortest it was offered, even when that will not fit", () => {
+    // A floor rather than an empty band: something is always said.
+    expect(labelFitting(["ארוך מאוד מאוד", "גם זה ארוך"], 1)).toBe("גם זה ארוך");
+  });
+
+  it("ignores blanks among the things it could say", () => {
+    expect(labelFitting(["", "מילואים", "חסום"], 1)).toBe("מילואים");
+    expect(labelFitting(["", ""], 1)).toBe("");
   });
 
   it("lets a longer reason through when the band is wide enough for it", () => {

@@ -618,11 +618,13 @@ test.describe("the month", () => {
     await dayCell(page, aDayFromNow(2)).click();
     await page.getByRole("button", { name: "המשך" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "כל היום" }).click();
+    await page.getByRole("dialog").getByLabel("הערה (לא חובה)").fill("ספק");
     await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
-    // One band for the whole thing, not a mark per day.
-    const band = page.getByRole("button", { name: "חסימה" }).first();
+    // One band for the whole thing, not a mark per day — saying what it was
+    // told, since that is the half nobody can guess from the calendar.
+    const band = page.getByRole("button", { name: "ספק" }).first();
     await expect(band).toBeVisible({ timeout: 15_000 });
     await band.click();
 
@@ -2875,13 +2877,14 @@ test.describe("blocking time out", () => {
       body: { name: "יומן ב" },
     });
 
-    const first = aDayFromNow(2);
-    const last = aDayFromNow(3);
+    // Three days, which is room enough for the band to say both whose it is
+    // and why. A narrower one keeps the reason and leaves whose to its colour.
+    const days = [aDayFromNow(2), aDayFromNow(3), aDayFromNow(4)];
     await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
       method: "POST",
       token: shop.owner.token,
       body: {
-        blocks: [first, last].map((date) => ({
+        blocks: days.map((date) => ({
           startAt: `${date}T06:00:00.000Z`,
           endAt: `${date}T12:00:00.000Z`,
           reason: "מילואים",
@@ -3186,5 +3189,111 @@ test.describe("a month with a lot decided about it", () => {
 
     await sheet.getByText("חפיפה 0").click();
     await expect(page.getByRole("dialog").getByText("חפיפה 0")).toBeVisible();
+  });
+});
+
+/**
+ * A band has to land on the days it is about.
+ *
+ * Geometry nobody can check by looking: a bar drawn one column out reads as
+ * perfectly plausible, and a bar mirrored end-for-end reads as plausible too
+ * unless the span it covers is asymmetric within its week.
+ */
+test.describe("where a band is drawn", () => {
+  test("covers exactly the days it is about, and never the dates themselves", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `גאומטריה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+
+    // The first two days of a week. A span in the middle of a row is symmetric
+    // enough to hide a mirrored layout; this one is not.
+    const thisMonth = aDayFromNow(0).slice(0, 7);
+    let from = "";
+    for (let ahead = 1; ahead < 25; ahead += 1) {
+      const date = aDayFromNow(ahead);
+      if (
+        new Date(`${date}T00:00:00Z`).getUTCDay() === 0 &&
+        date.startsWith(thisMonth) &&
+        aDayFromNow(ahead + 1).startsWith(thisMonth)
+      ) {
+        from = date;
+        break;
+      }
+    }
+    expect(from).not.toBe("");
+    const to = aDayFromNow(
+      Math.round((Date.parse(`${from}T00:00:00Z`) - Date.parse(`${aDayFromNow(0)}T00:00:00Z`)) / 86_400_000) + 1,
+    );
+
+    await call(`/businesses/${shop.business.id}/closures`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { fromDate: from, toDate: to, note: "סוף שבוע", ranges: [], upcoming: "KEEP" },
+    });
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    const band = await page.getByRole("button", { name: "סוף שבוע" }).first().boundingBox();
+    const first = await page.getByRole("button", { name: from }).boundingBox();
+    const second = await page.getByRole("button", { name: to }).boundingBox();
+    expect(band).not.toBeNull();
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+
+    const left = Math.min(first!.x, second!.x);
+    const right = Math.max(first!.x + first!.width, second!.x + second!.width);
+    // Within the gap between two squares: the band is laid out in fractions of
+    // the row while the squares have gaps between them.
+    expect(Math.abs(band!.x - left)).toBeLessThan(6);
+    expect(Math.abs(band!.x + band!.width - right)).toBeLessThan(6);
+
+    // And it sits below the date, not over it: every square reserves the strip
+    // the bands live in, which is also why a week never changes height.
+    expect(band!.y).toBeGreaterThan(first!.y + first!.height / 2);
+    expect(band!.y + band!.height).toBeLessThanOrEqual(first!.y + first!.height + 1);
+  });
+
+  test("keeps every week the same height, with or without anything on it", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `גובה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const busy = aDayFromNow(2);
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        blocks: [
+          { startAt: `${busy}T06:00:00.000Z`, endAt: `${busy}T12:00:00.000Z`, reason: "חסום" },
+        ],
+        upcoming: "KEEP",
+      },
+    });
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    // A day in the week that has a blockage, and one in a week that has none.
+    const withBand = await page.getByRole("button", { name: busy }).boundingBox();
+    const quiet = await page.getByRole("button", { name: aDayFromNow(9) }).boundingBox();
+    expect(withBand!.height).toBe(quiet!.height);
   });
 });

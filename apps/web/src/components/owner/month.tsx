@@ -19,6 +19,8 @@ import {
   DAYS_IN_A_WEEK,
   datesBetween,
   factsOn,
+  BAND_ROWS_IN_A_WEEK,
+  labelFitting,
   labelFor,
   packBands,
   segmentIn,
@@ -203,7 +205,7 @@ export const Month = ({
         </div>
 
         {weeks.map((week, row) => (
-          <div key={row} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <div key={row} style={{ position: "relative" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
               {week.map((date, column) =>
                 date === null ? (
@@ -242,15 +244,15 @@ export const Month = ({
               )}
             </div>
 
-            {/* What was decided about these days, under them rather than on
-                top of them.
+            {/* What was decided about these days, written across them.
 
-                Every decision used to take a bar of its own, absolutely
-                positioned over the squares — so a week with three of them
-                buried the days it was describing. They are now laid out
-                beneath the week, sharing a line wherever they do not overlap,
-                and anything past two lines folds into a chip that opens the
-                week rather than growing the grid. */}
+                The bands belong on the grid — a holiday is one bar over the
+                days it covers, and that is the whole reason it reads as one
+                decision. What they must not do is cover the days, or change
+                how tall a week is: every square keeps a strip at its foot for
+                them, so the month has exactly one rhythm whether or not
+                anything is happening. Two lines fit in that strip; anything
+                else becomes a count that opens the week. */}
             <WeekBands
               week={week}
               row={row}
@@ -537,10 +539,34 @@ const WeekBands = ({
 
   if (here.length === 0) return null;
 
-  const { rows, folded } = packBands(here);
+  const packed = packBands(here);
+  // The count needs the end of the last line to itself, or it would sit on top
+  // of whatever band finishes the week.
+  const crowded = packed.folded.length > 0;
+  const rows = crowded
+    ? packed.rows.map((line, at) =>
+        at === packed.rows.length - 1
+          ? line.filter((one) => one.column > 0)
+          : line,
+      )
+    : packed.rows;
+  const folded =
+    packed.folded.length +
+    packed.rows.flat().length -
+    rows.flat().length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <div
+      style={{
+        position: "absolute",
+        insetInline: 0,
+        bottom: BAND_FOOT,
+        display: "flex",
+        flexDirection: "column",
+        gap: BAND_GAP,
+        pointerEvents: "none",
+      }}
+    >
       {rows.map((line, at) => (
         <div key={at} style={{ position: "relative", height: BAND_HEIGHT }}>
           {line.map(({ span, column, width }) =>
@@ -549,10 +575,10 @@ const WeekBands = ({
                 key={`closed-${span.fromDate}-${row}`}
                 column={column}
                 width={width}
-                mark={null}
-                ground={span.kind === "SHUT" ? "var(--closed)" : "var(--accent-soft)"}
-                ink={span.kind === "SHUT" ? "var(--on-accent)" : "var(--accent-strong)"}
+                ground="var(--raised)"
+                ink={span.kind === "SHUT" ? "var(--closed)" : "var(--accent-strong)"}
                 edge={span.kind === "SHUT" ? "var(--closed)" : "var(--accent)"}
+                dot={span.kind === "SHUT" ? "var(--closed)" : "var(--accent)"}
                 label={labelOfClosure(span, width, copy)}
                 onClick={() => onOpenClosure(span)}
               />
@@ -561,8 +587,8 @@ const WeekBands = ({
                 key={`${span.groupId}-${row}`}
                 column={column}
                 width={width}
-                mark={many ? laneColourOf(indexOfCalendar(calendars, span.resourceId)) : null}
-                ground="var(--blocked-soft)"
+                dot={many ? laneColourOf(indexOfCalendar(calendars, span.resourceId)) : null}
+                ground="var(--raised)"
                 ink="var(--ink)"
                 edge={laneColourOf(indexOfCalendar(calendars, span.resourceId))}
                 label={labelOfBlockage(span, width, calendars, many, copy)}
@@ -570,30 +596,66 @@ const WeekBands = ({
               />
             ),
           )}
+
+          {/* The rest, counted rather than drawn. A third line would cost the
+              week the days underneath it; this opens the week instead. */}
+          {crowded && at === rows.length - 1 && (
+            <button
+              onClick={onOpenWeek}
+              // The words are the label a reader hears; the pill itself has one
+              // day's width to live in, and "+2" is what fits there.
+              aria-label={copy.moreThatWeek.replace("{count}", String(folded))}
+              style={{
+                position: "absolute",
+                insetInlineStart: 2,
+                top: 0,
+                height: BAND_HEIGHT,
+                width: `calc(${(1 / DAYS_IN_A_WEEK) * 100}% - 4px)`,
+                display: "grid",
+                placeItems: "center",
+                borderRadius: 999,
+                background: "var(--raised)",
+                border: "1px dashed var(--faint)",
+                color: "var(--muted)",
+                fontSize: 9,
+                fontWeight: 600,
+                pointerEvents: "auto",
+              }}
+            >
+              {`+${folded}`}
+            </button>
+          )}
         </div>
       ))}
-
-      {/* The rest, counted rather than drawn: a fourth bar costs the week the
-          days underneath it, and this opens the whole week instead. */}
-      {folded.length > 0 && (
-        <button
-          onClick={onOpenWeek}
-          style={{
-            alignSelf: "flex-start",
-            minHeight: BAND_HEIGHT,
-            padding: "0 7px",
-            borderRadius: 999,
-            background: "var(--sunken)",
-            border: "1px solid var(--line)",
-            color: "var(--muted)",
-            fontSize: 9,
-            fontWeight: 600,
-          }}
-        >
-          {copy.moreThatWeek.replace("{count}", String(folded.length))}
-        </button>
-      )}
     </div>
+  );
+};
+
+/**
+ * What a blockage's band says, given the room it has.
+ *
+ * Whose it is matters — "away" is not an answer in a shop with three chairs —
+ * but a one-day band that spends its width on the calendar's name has nothing
+ * left for the reason, which is the half a passer-by cannot guess. So both
+ * where there is room, the reason where there is not, and the coloured edge
+ * carries whose either way.
+ */
+const labelOfBlockage = (
+  blockage: BusinessMonthDto["blockages"][number],
+  width: number,
+  calendars: readonly ResourceDto[],
+  many: boolean,
+  copy: ReturnType<typeof useCopy<"owner">>,
+) => {
+  const reason = blockage.reason.trim();
+  const named = calendars.find((one) => one.id === blockage.resourceId)?.name ?? "";
+  // The calendar's name is only ever worth the width in a shop that has more
+  // than one: "יומן א" on a business with a single chair says nothing at all.
+  return labelFitting(
+    many && named !== ""
+      ? [`${named} · ${reason}`, reason, named, copy.blockedShort]
+      : [reason, copy.blockedShort],
+    width,
   );
 };
 
@@ -623,25 +685,12 @@ const labelOfClosure = (
   labelFor(
     closure.note,
     width,
-    closure.kind === "SHUT"
-      ? copy.closedWord
-      : closure.hours.map((range) => `${range.start}–${range.end}`).join(", "),
+    // A word, not the hours: "09:00–12:00" is eleven characters and a band one
+    // day wide holds five, so the hours came out as "09:00–…" — which says
+    // less than "short" does and looks like a fault while doing it. The sheet
+    // behind the band has them in full.
+    closure.kind === "SHUT" ? copy.closedWord : copy.shortDayWord,
   );
-
-const labelOfBlockage = (
-  blockage: BusinessMonthDto["blockages"][number],
-  width: number,
-  calendars: readonly ResourceDto[],
-  many: boolean,
-  copy: ReturnType<typeof useCopy<"owner">>,
-) => {
-  const said = labelFor(blockage.reason, width, copy.blockedShort);
-  if (!many) return said;
-  // Whose time it is. A band that says only "away" leaves the owner of a
-  // three-chair shop to work out which chair.
-  const named = calendars.find((one) => one.id === blockage.resourceId)?.name ?? "";
-  return named === "" ? said : `${named} · ${said}`;
-};
 
 /**
  * What a decision looks like on the grid: a bar across the days it covers.
@@ -654,7 +703,7 @@ const Band = ({
   column,
   width,
   label,
-  mark,
+  dot,
   ground,
   ink,
   edge,
@@ -663,8 +712,8 @@ const Band = ({
   column: number;
   width: number;
   label: string;
-  /** A calendar's colour, when the band belongs to one of several. */
-  mark: string | null;
+  /** Whose it is, or what kind it is — said in colour, so the words can be why. */
+  dot: string | null;
   ground: string;
   ink: string;
   edge: string;
@@ -689,12 +738,13 @@ const Band = ({
       gap: 4,
       whiteSpace: "nowrap",
       overflow: "hidden",
+      pointerEvents: "auto",
     }}
   >
-    {mark !== null && (
+    {dot !== null && width > 1 && (
       <i
         aria-hidden="true"
-        style={{ width: 7, height: 7, borderRadius: 999, flexShrink: 0, background: mark }}
+        style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, background: dot }}
       />
     )}
     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -703,8 +753,19 @@ const Band = ({
   </button>
 );
 
-/** How tall one line of bands is, and the gap between two of them. */
-const BAND_HEIGHT = 13;
+/**
+ * The strip every square keeps at its foot for the bands written across it.
+ *
+ * Fixed, and reserved whether or not there is anything to put in it, because a
+ * month whose rows change height as things are added is a month that moves
+ * under the finger. Two lines is what it holds; past that the week is counted
+ * rather than grown.
+ */
+const BAND_HEIGHT = 12;
+const BAND_GAP = 2;
+/** How far the strip sits above the bottom edge of a square. */
+const BAND_FOOT = 4;
+const BAND_AREA = BAND_HEIGHT * BAND_ROWS_IN_A_WEEK + BAND_GAP + BAND_FOOT;
 
 /**
  * One square. The shop's own weather is the fill, because that is what a
@@ -760,7 +821,13 @@ const DaySquare = ({
       aria-pressed={chosen}
       style={{
         position: "relative",
-        aspectRatio: "1",
+        // Height is set, width is whatever a seventh of the month is. They used
+        // to be square, which with a minimum height made every column at least
+        // that wide too — the grid then overflowed its row, and the bands,
+        // which are positioned against the row, stopped lining up with the
+        // days they cover. A month is seven columns wide, never more.
+        minHeight: 60,
+        paddingBottom: BAND_AREA,
         borderRadius: 10,
         background,
         color: colour,
@@ -775,7 +842,7 @@ const DaySquare = ({
         alignItems: "center",
         justifyContent: "flex-start",
         paddingTop: 4,
-        gap: 2,
+        gap: 3,
         fontSize: 12,
         fontVariantNumeric: "tabular-nums",
         opacity: disabled ? 0.4 : 1,
@@ -783,7 +850,7 @@ const DaySquare = ({
     >
       <span>{label}</span>
       {weather !== "shut" && (
-        <span style={{ display: "flex", gap: 2, position: "absolute", bottom: 14 }}>
+        <span style={{ display: "flex", gap: 2, position: "absolute", bottom: BAND_AREA + 2 }}>
           {calendars.map((resource) => {
             const line = facts.byCalendar.find((one) => one.resourceId === resource.id);
             const busy = line?.appointments ?? 0;

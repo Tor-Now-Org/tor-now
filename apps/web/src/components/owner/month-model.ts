@@ -91,19 +91,31 @@ export const datesBetween = (from: string, to: string): string[] => {
 /**
  * What a band across the month says.
  *
- * A band is thirteen pixels tall and as wide as the days it covers, so a long
- * reason cannot be read on a short one — it would be cut off mid-word, which
- * reads as a rendering fault rather than as a reason. Below about a word per
- * day the band says what kind of thing it is instead; the sheet behind it
+ * A band is twelve pixels tall and as wide as the days it covers — and on a
+ * phone one day is about fifty pixels, which is seven Hebrew letters once the
+ * pill has its padding. A longer reason cut off at that width reads as a
+ * rendering fault rather than as a reason, so a band too narrow for what it
+ * would like to say falls back to something shorter. The sheet behind it
  * always has the whole of it.
  */
-export const CHARACTERS_PER_DAY = 9;
+export const CHARACTERS_PER_DAY = 7;
 
-export const labelFor = (note: string | null, days: number, fallback: string): string => {
-  const said = (note ?? "").trim();
-  if (said === "") return fallback;
-  return said.length <= days * CHARACTERS_PER_DAY ? said : fallback;
+/**
+ * The first of these that fits, or the last as a floor.
+ *
+ * Things a band would like to say, in descending order of how much it says:
+ * whose it is and why, then why alone, then what kind of thing it is. A wide
+ * band carries all of it and a single day carries a word, without either
+ * needing a rule of its own.
+ */
+export const labelFitting = (candidates: readonly string[], days: number): string => {
+  const room = days * CHARACTERS_PER_DAY;
+  const said = candidates.map((one) => one.trim()).filter((one) => one !== "");
+  return said.find((one) => one.length <= room) ?? said[said.length - 1] ?? "";
 };
+
+export const labelFor = (note: string | null, days: number, fallback: string): string =>
+  labelFitting([note ?? "", fallback], days);
 
 /**
  * How many rows of bands a week may carry before the rest are folded away.

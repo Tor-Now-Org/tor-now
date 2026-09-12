@@ -111,7 +111,7 @@ export const DayActionSheet = ({
                 {
                   startAt: instantOf(date, span.start, business.timeZone),
                   endAt: instantOf(date, span.end, business.timeZone),
-                  reason: note.trim() === "" ? copy.blockedWord : note.trim(),
+                  reason: note.trim(),
                 },
               ]),
             )

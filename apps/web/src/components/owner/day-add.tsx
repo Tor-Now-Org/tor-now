@@ -164,7 +164,7 @@ export const FinishAim = ({
     dates.map((date) => ({
       startAt: instantOf(date, allDay ? "00:00" : from, business.timeZone),
       endAt: instantOf(date, allDay ? "23:59" : until, business.timeZone),
-      reason: note.trim() === "" ? copy.blockedWord : note.trim(),
+      reason: note.trim(),
     }));
 
   const write = (upcoming: "KEEP" | "CANCEL") =>
