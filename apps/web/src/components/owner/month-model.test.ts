@@ -6,6 +6,7 @@ import {
   mergeOverlapping,
   packBands,
   segmentIn,
+  shiftMonth,
   weeksOf,
 } from "./month-model.ts";
 
@@ -190,5 +191,21 @@ describe("one bar per calendar per run of days", () => {
 
   it("has nothing to merge in an empty week", () => {
     expect(mergeOverlapping([])).toEqual([]);
+  });
+});
+
+describe("moving between months", () => {
+  it("goes forward and back a month at a time", () => {
+    expect(shiftMonth("2026-09-01", 1)).toBe("2026-10-01");
+    expect(shiftMonth("2026-09-01", -1)).toBe("2026-08-01");
+  });
+
+  it("crosses the turn of a year in both directions", () => {
+    expect(shiftMonth("2026-12-01", 1)).toBe("2027-01-01");
+    expect(shiftMonth("2026-01-01", -1)).toBe("2025-12-01");
+  });
+
+  it("always lands on the first", () => {
+    expect(shiftMonth("2026-01-31", 1)).toBe("2026-02-01");
   });
 });

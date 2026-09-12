@@ -60,6 +60,7 @@ export const Month = ({
   resources,
   scope,
   selected,
+  firstOfMonth,
   onPickDay,
   reloadKey,
   choosing,
@@ -74,6 +75,14 @@ export const Month = ({
   scope: string | null;
   /** The day the timeline below is showing, so the grid can mark it. */
   selected: string;
+  /**
+   * Which month to draw.
+   *
+   * Owned by the screen rather than by the grid: the row carrying the month's
+   * name also carries the find-and-filter controls, and that row has to stay
+   * put when the screen swaps the calendar for a list of search results.
+   */
+  firstOfMonth: string;
   onPickDay: (date: string) => void;
   /** Changes when something elsewhere edited the month, so it reloads. */
   reloadKey: number;
@@ -102,9 +111,6 @@ export const Month = ({
   const { language } = useLanguage();
   const errorText = useErrorText();
 
-  const [firstOfMonth, setFirstOfMonth] = useState(
-    () => `${todayIn(business.timeZone).slice(0, 7)}-01`,
-  );
   const [month, setMonth] = useState<BusinessMonthDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -164,28 +170,6 @@ export const Month = ({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <button
-          className="chip tap"
-          aria-label={copy.previousMonth}
-          onClick={() => setFirstOfMonth(shiftMonth(firstOfMonth, -1))}
-          style={{ minWidth: 44 }}
-        >
-          ‹
-        </button>
-        <span style={{ flex: 1, textAlign: "center", fontWeight: 600 }}>
-          {monthName(firstOfMonth, business.timeZone, language)}
-        </span>
-        <button
-          className="chip tap"
-          aria-label={copy.nextMonth}
-          onClick={() => setFirstOfMonth(shiftMonth(firstOfMonth, 1))}
-          style={{ minWidth: 44 }}
-        >
-          ›
-        </button>
-      </div>
-
       <div
         role="grid"
         aria-label={monthName(firstOfMonth, business.timeZone, language)}
@@ -273,7 +257,6 @@ export const Month = ({
         ))}
       </div>
 
-      <Legend copy={copy} many={many} />
       {error !== null && <Critical>{error}</Critical>}
 
       {/* While an action is being aimed: what it is, what has been picked, and
@@ -875,7 +858,9 @@ const DaySquare = ({
         // that wide too — the grid then overflowed its row, and the bands,
         // which are positioned against the row, stopped lining up with the
         // days they cover. A month is seven columns wide, never more.
-        minHeight: 60,
+        // Bigger, now that the search and the filter share the toolbar above
+        // rather than taking a row of their own.
+        minHeight: 72,
         paddingBottom: BAND_AREA,
         borderRadius: 10,
         background,
@@ -928,42 +913,4 @@ const DaySquare = ({
       )}
     </button>
   );
-};
-
-const Legend = ({
-  copy,
-  many,
-}: {
-  copy: ReturnType<typeof useCopy<"owner">>;
-  many: boolean;
-}) => (
-  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: 10.5, color: "var(--muted)" }}>
-    <Key colour="var(--closed)" label={copy.closedAllDay} />
-    <Key colour="var(--accent-soft)" label={copy.differentHours} />
-    {many && <Key colour="var(--blocked)" label={copy.blockedWord} />}
-    <Key colour="var(--accent-strong)" label={copy.appointmentsWord} />
-  </div>
-);
-
-const Key = ({ colour, label }: { colour: string; label: string }) => (
-  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-    <i
-      style={{
-        width: 11,
-        height: 11,
-        borderRadius: 3,
-        display: "inline-block",
-        background: colour,
-        border: "1px solid var(--line)",
-      }}
-    />
-    <span>{label}</span>
-  </span>
-);
-
-/** The first of the month, moved by whole months. */
-const shiftMonth = (firstOfMonth: string, by: number): string => {
-  const [year, month] = firstOfMonth.split("-").map(Number) as [number, number];
-  const moved = new Date(Date.UTC(year, month - 1 + by, 1));
-  return `${moved.getUTCFullYear()}-${String(moved.getUTCMonth() + 1).padStart(2, "0")}-01`;
 };

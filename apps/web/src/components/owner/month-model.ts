@@ -198,3 +198,10 @@ export const mergeOverlapping = <T>(segments: readonly Segment<T>[]): Merged<T>[
     ];
   }, []);
 };
+
+/** The first of the month, moved by whole months. */
+export const shiftMonth = (firstOfMonth: string, by: number): string => {
+  const [year, month] = firstOfMonth.split("-").map(Number) as [number, number];
+  const moved = new Date(Date.UTC(year, month - 1 + by, 1));
+  return `${moved.getUTCFullYear()}-${String(moved.getUTCMonth() + 1).padStart(2, "0")}-01`;
+};

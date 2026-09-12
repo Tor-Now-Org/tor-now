@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { CalendarAppointmentDto, ResourceDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { Button, Sheet } from "../ui.tsx";
@@ -33,9 +32,122 @@ const Magnifier = () => (
   </svg>
 );
 
-export const FilterControls = ({
+/**
+ * The two controls themselves, small enough to live on the month's own toolbar.
+ *
+ * They had a row of their own above the calendar, which cost the month most of
+ * a week of squares to hold two chips. The month already has a row — the one
+ * with its name and its arrows — and it had space going spare.
+ */
+export const FindControls = ({
   query,
   onQuery,
+  open,
+  onOpen,
+  facets,
+  onSheet,
+}: {
+  query: string;
+  onQuery: (value: string) => void;
+  /** Whether the search has been asked for; it is a button until it is. */
+  open: boolean;
+  onOpen: (open: boolean) => void;
+  facets: Facets;
+  onSheet: (sheetOpen: boolean) => void;
+}) => {
+  const copy = useCopy("owner");
+  const looking = query !== "" || open;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        // While somebody is typing, the field is what the row is for.
+        flex: looking ? 1 : "0 0 auto",
+        minWidth: 0,
+      }}
+    >
+      {looking ? (
+        <>
+          <input
+            className="field"
+            type="search"
+            autoFocus
+            value={query}
+            onChange={(event) => onQuery(event.target.value)}
+            placeholder={copy.findAppointment}
+            aria-label={copy.findAppointment}
+            style={{ flex: 1, minWidth: 0, minHeight: 34, fontSize: 13 }}
+          />
+          <button
+            className="chip tap"
+            aria-label={copy.closeSearch}
+            onClick={() => {
+              onQuery("");
+              onOpen(false);
+            }}
+            style={{ minHeight: 34, width: 34, padding: 0, display: "grid", placeItems: "center" }}
+          >
+            ✕
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            className="chip tap"
+            aria-label={copy.searchWord}
+            onClick={() => onOpen(true)}
+            style={{ minHeight: 34, width: 34, padding: 0, display: "grid", placeItems: "center" }}
+          >
+            <Magnifier />
+          </button>
+          <button
+            className="chip tap"
+            onClick={() => onSheet(true)}
+            style={{
+              minHeight: 34,
+              gap: 5,
+              paddingInline: 10,
+              fontSize: 12,
+              ...(anyFilter(facets)
+                ? {
+                    background: "var(--accent-soft)",
+                    borderColor: "oklch(52% 0.123 245/.3)",
+                    color: "var(--accent-strong)",
+                  }
+                : {}),
+            }}
+          >
+            <span>{copy.filterWord}</span>
+            {countOfFilters(facets) > 0 && (
+              <span
+                style={{
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 4px",
+                  borderRadius: 999,
+                  background: "var(--accent)",
+                  color: "var(--on-accent)",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                {countOfFilters(facets)}
+              </span>
+            )}
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
+export const FilterControls = ({
+  query,
   facets,
   onFacets,
   suggestions,
@@ -45,7 +157,6 @@ export const FilterControls = ({
   services,
 }: {
   query: string;
-  onQuery: (value: string) => void;
   facets: Facets;
   onFacets: (facets: Facets) => void;
   /** Appointments the query might be about, for naming the person meant. */
@@ -56,96 +167,10 @@ export const FilterControls = ({
   services: readonly string[];
 }) => {
   const copy = useCopy("owner");
-  const [open, setOpen] = useState(false);
   const people = customersIn(suggestions).filter((one) => matchesQuery(one, query));
-
-  /**
-   * The search box is a guest on this screen, not a fixture.
-   *
-   * A full-width field sat above the calendar at all times, and the calendar is
-   * what the screen is for — the field was costing the month a row of days to
-   * answer a question nobody was asking yet. It is a button until it is needed,
-   * and takes the width only while somebody is typing in it.
-   */
-  const looking = query !== "" || open;
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 34 }}>
-        {looking ? (
-          <>
-            <input
-              className="field"
-              type="search"
-              autoFocus
-              value={query}
-              onChange={(event) => onQuery(event.target.value)}
-              placeholder={copy.findAppointment}
-              aria-label={copy.findAppointment}
-              style={{ flex: 1, minHeight: 34, fontSize: 13 }}
-            />
-            <button
-              className="chip tap"
-              aria-label={copy.closeSearch}
-              onClick={() => {
-                onQuery("");
-                setOpen(false);
-              }}
-              style={{ minHeight: 34, width: 34, padding: 0, display: "grid", placeItems: "center" }}
-            >
-              ✕
-            </button>
-          </>
-        ) : (
-          <button
-            className="chip tap"
-            // No aria-label: it says "search" in words, and borrowing the
-            // field's label made the two of them the same control to anything
-            // looking for one by name.
-            onClick={() => setOpen(true)}
-            style={{ minHeight: 34, gap: 6, paddingInline: 11 }}
-          >
-            <Magnifier />
-            <span style={{ fontSize: 12 }}>{copy.searchWord}</span>
-          </button>
-        )}
-        <button
-          className="chip tap"
-          onClick={() => onSheet(true)}
-          style={{
-            minHeight: 34,
-            gap: 6,
-            ...(anyFilter(facets)
-              ? {
-                  background: "var(--accent-soft)",
-                  borderColor: "oklch(52% 0.123 245/.3)",
-                  color: "var(--accent-strong)",
-                }
-              : {}),
-          }}
-        >
-          <span>{copy.filterWord}</span>
-          {countOfFilters(facets) > 0 && (
-            <span
-              style={{
-                minWidth: 17,
-                height: 17,
-                padding: "0 4px",
-                borderRadius: 999,
-                background: "var(--accent)",
-                color: "var(--on-accent)",
-                fontSize: 10,
-                fontWeight: 600,
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              {countOfFilters(facets)}
-            </span>
-          )}
-        </button>
-      </div>
-
       {/* A person is chosen, not guessed: two customers called יעל are two
           rows, and picking one is what makes the filter unambiguous. */}
       {facets.customer === null && query.trim() !== "" && people.length > 0 && (
@@ -242,6 +267,27 @@ export const FilterControls = ({
           >
             {copy.clearFilters}
           </Button>
+
+          {/* What the calendar's own marks mean. It used to be a row under the
+              month, which is a lot of screen for something you read once — and
+              this sheet is already where "what am I looking at" is answered. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, paddingTop: 4 }}>
+            <span className="label">{copy.whatTheMarksMean}</span>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                fontSize: 11,
+                color: "var(--muted)",
+              }}
+            >
+              <Key colour="var(--closed)" label={copy.closedAllDay} />
+              <Key colour="var(--accent-soft)" label={copy.differentHours} />
+              <Key colour="var(--blocked)" label={copy.blockedWord} />
+              <Key colour="var(--lane-1)" label={copy.appointmentsWord} />
+            </div>
+          </div>
         </div>
       </Sheet>
     </>
@@ -430,6 +476,22 @@ const Facet = ({
       })}
     </div>
   </div>
+);
+
+const Key = ({ colour, label }: { colour: string; label: string }) => (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <i
+      style={{
+        width: 11,
+        height: 11,
+        borderRadius: 3,
+        display: "inline-block",
+        background: colour,
+        border: "1px solid var(--line)",
+      }}
+    />
+    <span>{label}</span>
+  </span>
 );
 
 const toggled = (values: readonly string[], key: string): string[] =>

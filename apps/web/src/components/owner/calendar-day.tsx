@@ -9,7 +9,7 @@ import type {
   CalendarAppointmentDto,
   ResourceDto,
 } from "@/lib/api/types.ts";
-import { todayIn, whenIn } from "@/lib/format.ts";
+import { monthName, todayIn, whenIn } from "@/lib/format.ts";
 import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { canCloseBusiness } from "@/lib/roles.ts";
@@ -17,12 +17,13 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppointmentSheet } from "./appointment-sheet.tsx";
 import { ClosedDay } from "./closed-day.tsx";
 import { Month } from "./month.tsx";
-import { ActiveFilters, FilterControls } from "./day-filter-bar.tsx";
+import { ActiveFilters, FilterControls, FindControls } from "./day-filter-bar.tsx";
 import { NOTHING, anyFilter, keptBy, withinReach, type Facets, type Reach } from "./day-filter.ts";
 import { DayTimeline, type Picked } from "./day-timeline.tsx";
 import { DayActionSheet } from "./day-actions.tsx";
 import { AddButton, FinishAim, type Aim } from "./day-add.tsx";
 import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
+import { shiftMonth } from "./month-model.ts";
 
 /**
  * The owner's day. ADR 0003 declines to keep this live: it is fetched on open
@@ -67,6 +68,12 @@ export const CalendarDay = ({
   /** Two ways in, one state: a person named, and kinds chosen. */
   const [facets, setFacets] = useState<Facets>(NOTHING);
   const [filterSheet, setFilterSheet] = useState(false);
+  /** Whether the search has been asked for. It is a button until it is. */
+  const [searching, setSearching] = useState(false);
+  /** Which month the grid is showing. The toolbar that says so lives here. */
+  const [firstOfMonth, setFirstOfMonth] = useState(
+    () => `${todayIn(business.timeZone).slice(0, 7)}-01`,
+  );
   const [reach, setReach] = useState<Reach>("DAY");
   /** Bumped when the day changes something the month draws, so it reloads. */
   const [monthKey, setMonthKey] = useState(0);
@@ -227,6 +234,9 @@ export const CalendarDay = ({
     }
   };
 
+  /** While somebody is typing, the row is the field and the month steps aside. */
+  const looking = searching || query !== "";
+
   const showTheWholeDay = () => {
     setFacets(NOTHING);
     setQuery("");
@@ -280,9 +290,50 @@ export const CalendarDay = ({
         </div>
       )}
 
+      {/* One row for the whole screen: which month it is showing, and the two
+          controls for finding things in it. They had a row of their own above
+          the calendar, which cost the month most of a week of squares — and
+          this row had its width going spare. It stays put when the screen
+          swaps the calendar for a list of results, which is why the month it
+          is showing is decided here rather than inside the grid. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 34 }}>
+        {!looking && (
+          <>
+            <button
+              className="chip tap"
+              aria-label={copy.previousMonth}
+              onClick={() => setFirstOfMonth(shiftMonth(firstOfMonth, -1))}
+              style={{ minWidth: 34, minHeight: 34 }}
+            >
+              ‹
+            </button>
+            <span
+              style={{ flex: 1, textAlign: "center", fontWeight: 600, whiteSpace: "nowrap" }}
+            >
+              {monthName(firstOfMonth, business.timeZone, language)}
+            </span>
+            <button
+              className="chip tap"
+              aria-label={copy.nextMonth}
+              onClick={() => setFirstOfMonth(shiftMonth(firstOfMonth, 1))}
+              style={{ minWidth: 34, minHeight: 34 }}
+            >
+              ›
+            </button>
+          </>
+        )}
+        <FindControls
+          query={query}
+          onQuery={setQuery}
+          open={searching}
+          onOpen={setSearching}
+          facets={facets}
+          onSheet={setFilterSheet}
+        />
+      </div>
+
       <FilterControls
         query={query}
-        onQuery={setQuery}
         facets={facets}
         onFacets={(next) => {
           setFacets(next);
@@ -423,6 +474,7 @@ export const CalendarDay = ({
           setAimedAt([]);
         }}
         onChanged={() => void load()}
+        firstOfMonth={firstOfMonth}
       />
 
       {error !== null && <Critical>{error}</Critical>}
