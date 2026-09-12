@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { columnOf, datesBetween, segmentIn, weeksOf } from "./month-model.ts";
+import { columnOf, datesBetween, labelFor, segmentIn, weeksOf } from "./month-model.ts";
 
 describe("the month as rows of seven", () => {
   it("starts October 2026 on a Thursday, with three days in the first row", () => {
@@ -68,5 +68,25 @@ describe("the dates a selection covers", () => {
     expect(datesBetween("2026-10-30", "2026-11-02")).toEqual([
       "2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02",
     ]);
+  });
+});
+
+describe("what a band says", () => {
+  it("says the reason it was given", () => {
+    expect(labelFor("חופשה", 3, "סגור")).toBe("חופשה");
+  });
+
+  it("falls back to the kind when nothing was said", () => {
+    expect(labelFor(null, 3, "סגור")).toBe("סגור");
+    expect(labelFor("   ", 3, "סגור")).toBe("סגור");
+  });
+
+  it("falls back rather than cutting a long reason off mid-word", () => {
+    // Two days of width cannot hold a sentence; half of one reads as a bug.
+    expect(labelFor("שיפוץ במספרה, נחזור ביום ראשון בבוקר", 2, "סגור")).toBe("סגור");
+  });
+
+  it("lets a longer reason through when the band is wide enough for it", () => {
+    expect(labelFor("שיפוץ במספרה", 7, "סגור")).toBe("שיפוץ במספרה");
   });
 });

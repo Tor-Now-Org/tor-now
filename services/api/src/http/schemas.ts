@@ -260,6 +260,35 @@ export const blocksSchema = z.object({
   blocks: z.array(blockSpanSchema).min(1).max(62),
 });
 
+/**
+ * The shop closing, or keeping different hours, over a run of days.
+ *
+ * The same shape says both: no ranges is shut, some ranges are the hours kept.
+ * `upcoming` is the caller's answer for the people already booked inside those
+ * days — there is no default, because both answers are wrong by default.
+ *
+ * Capped at a season. Longer than that is not a closure, it is a business that
+ * has changed its working week.
+ */
+export const closureSchema = z.object({
+  fromDate: localDateSchema,
+  toDate: localDateSchema,
+  note: text(TEXT_RULES.reason).nullable().default(null),
+  ranges: z
+    .array(
+      z
+        .object({ start: localTimeSchema, end: localTimeSchema })
+        .refine((range) => range.end > range.start, {
+          message: "A range must end after it starts",
+        }),
+    )
+    .default([]),
+  upcoming: z.enum(["KEEP", "CANCEL"]),
+});
+
+/** The same question without the answer: what would closing these days cost? */
+export const closurePreviewSchema = closureSchema.omit({ note: true, upcoming: true });
+
 export const dateRangeSchema = z.object({
   from: localDateSchema,
   to: localDateSchema,

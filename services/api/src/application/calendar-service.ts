@@ -44,6 +44,8 @@ export type BusinessMonth = {
     }[];
     readonly shopClosed: boolean;
     readonly shopHours: readonly LocalTimeRangeValue[];
+    /** Why the shop is doing that, when every calendar was given one reason. */
+    readonly shopNote: string | null;
   }[];
   readonly blockages: readonly {
     readonly groupId: string;
@@ -54,7 +56,10 @@ export type BusinessMonth = {
     readonly days: number;
     readonly allDay: boolean;
   }[];
+  /** Runs of shut days, so a week away is drawn as a week away. */
+  readonly closures: readonly ClosureBand[];
 };
+import { closureBandsOf, type ClosureBand } from "./closure-bands.ts";
 import type { BookedAppointment } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 
@@ -306,12 +311,17 @@ export const calendarService = ({
             ? JSON.stringify(spoken[0]?.ranges ?? []) ===
               JSON.stringify(spoken.at(-1)?.ranges ?? [])
             : false;
+        // One reason, or none: a note only belongs to the shop when the shop
+        // was what was being described, which is every calendar saying it.
+        const firstNote = spoken[0]?.note ?? null;
+        const sameNote = everyoneSaid && spoken.every((one) => (one?.note ?? null) === firstNote);
 
         return {
           date,
           byCalendar,
           shopClosed: shut,
           shopHours: sameHours ? (spoken[0]?.ranges ?? []) : [],
+          shopNote: sameNote ? firstNote : null,
         };
       });
 
@@ -342,7 +352,7 @@ export const calendarService = ({
         };
       });
 
-      return { days: dayRows, blockages };
+      return { days: dayRows, blockages, closures: closureBandsOf(dayRows) };
     });
   },
 

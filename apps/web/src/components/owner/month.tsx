@@ -3,12 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type { BusinessDto, BusinessMonthDto, ResourceDto } from "@/lib/api/types.ts";
+import type {
+  BusinessDto,
+  BusinessMonthDto,
+  ClosureBandDto,
+  ResourceDto,
+} from "@/lib/api/types.ts";
 import { formatLocalDate, monthName, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { Button, Card, Critical, Sheet, Spinner } from "../ui.tsx";
-import { datesBetween, factsOn, segmentIn, weeksOf } from "./month-model.ts";
+import { canCloseBusiness } from "@/lib/roles.ts";
+import { Button, Card, Critical, Note, Sheet, Spinner } from "../ui.tsx";
+import { datesBetween, factsOn, labelFor, segmentIn, weeksOf } from "./month-model.ts";
 
 /**
  * The month, as the business reads one.
@@ -45,6 +51,7 @@ export const Month = ({
   choosing,
   onChosen,
   onCancelChoosing,
+  onChanged,
 }: {
   token: string;
   business: BusinessDto;
@@ -68,6 +75,14 @@ export const Month = ({
   choosing: { readonly title: string } | null;
   onChosen: (dates: readonly string[]) => void;
   onCancelChoosing: () => void;
+  /**
+   * Something here changed the calendar.
+   *
+   * The month reloads itself, but the day below it is a different read of the
+   * same thing — taking a blockage off here used to leave it sitting on the
+   * open day until the screen was reopened.
+   */
+  onChanged: () => void;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -83,6 +98,8 @@ export const Month = ({
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
   const [openGroup, setOpenGroup] = useState<BusinessMonthDto["blockages"][number] | null>(null);
+  /** A run of shut days, opened to be read or given back. */
+  const [openClosure, setOpenClosure] = useState<ClosureBandDto | null>(null);
 
   const onOffer = resources.filter((resource) => resource.active !== false);
   const many = onOffer.length > 1;
@@ -108,7 +125,10 @@ export const Month = ({
       setFrom(null);
       setTo(null);
       setOpenGroup(null);
+      setOpenClosure(null);
       await load();
+      // The day below is another read of what just changed.
+      onChanged();
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
@@ -222,6 +242,41 @@ export const Month = ({
                 pointerEvents: "none",
               }}
             >
+              {/* The shop's own closures first: they cover every calendar, so
+                  they are the widest claim being made about those days. */}
+              {month.closures
+                .filter((closure) => closure.days > 1)
+                .map((closure) => segmentIn(week, closure))
+                .filter((segment): segment is NonNullable<typeof segment> => segment !== null)
+                .map(({ span, column, width }) => (
+                  <span
+                    key={`closed-${span.fromDate}-${row}`}
+                    style={{ position: "relative", height: 13 }}
+                  >
+                    <button
+                      onClick={() => setOpenClosure(span)}
+                      style={{
+                        position: "absolute",
+                        insetInlineStart: `calc(${(column / 7) * 100}% + 2px)`,
+                        width: `calc(${(width / 7) * 100}% - 4px)`,
+                        height: 13,
+                        borderRadius: 999,
+                        background: "var(--closed)",
+                        color: "var(--on-accent)",
+                        fontSize: 9,
+                        fontWeight: 600,
+                        pointerEvents: "auto",
+                        padding: "0 5px",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {labelFor(span.note, width, copy.closedWord)}
+                    </button>
+                  </span>
+                ))}
+
               {month.blockages
                 .filter((blockage) => blockage.days > 1)
                 .filter((blockage) => scope === null || blockage.resourceId === scope)
@@ -237,7 +292,7 @@ export const Month = ({
                         width: `calc(${(width / 7) * 100}% - 4px)`,
                         height: 13,
                         borderRadius: 999,
-                        background: "var(--cyan)",
+                        background: "var(--blocked)",
                         color: "var(--on-accent)",
                         fontSize: 9,
                         fontWeight: 600,
@@ -247,7 +302,7 @@ export const Month = ({
                         overflow: "hidden",
                       }}
                     >
-                      {span.reason || copy.blockedWord}
+                      {labelFor(span.reason, width, copy.blockedWord)}
                     </button>
                   </span>
                 ))}
@@ -310,6 +365,46 @@ export const Month = ({
         </Card>
       )}
 
+      {/* A closure, as the one decision it was — and the way back out of it. */}
+      <Sheet open={openClosure !== null} onClose={() => setOpenClosure(null)}>
+        {openClosure !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <h2 style={{ fontSize: 18 }}>{openClosure.note ?? copy.closedWord}</h2>
+            <p className="hint" style={{ margin: 0 }}>
+              {formatLocalDate(openClosure.fromDate, language, { day: "numeric", month: "long" })}
+              {" – "}
+              {formatLocalDate(openClosure.toDate, language, { day: "numeric", month: "long" })}
+              {" · "}
+              {openClosure.days} {copy.daysWord}
+              {" · "}
+              {copy.allCalendars}
+            </p>
+            {/* Re-opening the days does not un-cancel what closing them called
+                off — those customers were told — and saying so here is better
+                than an owner finding out by looking. */}
+            <Note>{copy.reopenKeepsCancellations}</Note>
+            {canCloseBusiness(business) && (
+              <Button
+                intent="danger"
+                busy={busy}
+                onClick={() =>
+                  void act(() =>
+                    api.reopenBusiness(
+                      token,
+                      business.id,
+                      openClosure.fromDate,
+                      openClosure.toDate,
+                    ),
+                  )
+                }
+              >
+                {copy.reopenDays.replace("{days}", String(openClosure.days))}
+              </Button>
+            )}
+          </div>
+        )}
+      </Sheet>
+
       {/* A blockage, as the one thing it was. */}
       <Sheet open={openGroup !== null} onClose={() => setOpenGroup(null)}>
         {openGroup !== null && (
@@ -371,7 +466,7 @@ const DaySquare = ({
 }) => {
   const background =
     weather === "shut"
-      ? "var(--accent)"
+      ? "var(--closed)"
       : chosen
         ? "var(--accent-soft)"
         : weather === "short"
@@ -397,7 +492,7 @@ const DaySquare = ({
         background,
         color: colour,
         border: `1px solid ${
-          weather === "shut" ? "var(--accent)" : chosen ? "var(--accent)" : "var(--line)"
+          weather === "shut" ? "var(--closed)" : chosen ? "var(--accent)" : "var(--line)"
         }`,
         outline: edge || reading ? "2px solid var(--accent)" : undefined,
         outlineOffset: 1,
@@ -429,7 +524,7 @@ const DaySquare = ({
                   display: "block",
                   background:
                     line?.away === true
-                      ? "var(--cyan)"
+                      ? "var(--blocked)"
                       : busy >= 3
                         ? "var(--accent-strong)"
                         : busy > 0
@@ -453,10 +548,10 @@ const Legend = ({
   many: boolean;
 }) => (
   <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: 10.5, color: "var(--muted)" }}>
-    <Key colour="var(--accent)" label={copy.closedAllDay} />
+    <Key colour="var(--closed)" label={copy.closedAllDay} />
     <Key colour="var(--accent-soft)" label={copy.differentHours} />
-    {many && <Key colour="var(--cyan)" label={copy.blockedWord} />}
-    <Key colour="var(--faint)" label={copy.appointmentsWord} />
+    {many && <Key colour="var(--blocked)" label={copy.blockedWord} />}
+    <Key colour="var(--accent-strong)" label={copy.appointmentsWord} />
   </div>
 );
 

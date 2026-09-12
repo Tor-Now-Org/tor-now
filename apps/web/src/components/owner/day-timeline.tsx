@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { BusinessDayDto } from "@/lib/api/types.ts";
 import { timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { colourOf, markColourOf } from "./event-colour.ts";
 import {
   BOX_MINIMUM,
   FOLD_HEIGHT,
@@ -63,22 +64,6 @@ export type Picked =
 
 type Item = Span & { readonly entry: Picked };
 
-/** Service colours, assigned by name so the same service keeps its hue all day. */
-const HUES = ["var(--accent)", "var(--plum)", "var(--moss)", "var(--amber)"] as const;
-const SOFT = [
-  "var(--accent-soft)",
-  "var(--plum-soft)",
-  "var(--moss-soft)",
-  "var(--amber-soft)",
-] as const;
-
-const hueOf = (services: readonly string[], name: string): number => {
-  const at = services.indexOf(name);
-  return at < 0 ? 0 : at % HUES.length;
-};
-
-/** A calendar's mark: the same initial and colour the month uses. */
-const MARK = ["var(--accent)", "var(--plum)", "var(--moss)"] as const;
 
 export const DayTimeline = ({
   day,
@@ -106,20 +91,17 @@ export const DayTimeline = ({
 
   const minutesIn = (iso: string) => minutesOf(timeIn(iso, timeZone, language));
 
-  const services = [
-    ...new Set(
-      day.calendars.flatMap((calendar) =>
-        calendar.appointments.map((appointment) => appointment.serviceName),
-      ),
-    ),
-  ];
-
   const shown = lanes
     .map((lane) => day.calendars.find((calendar) => calendar.resourceId === lane.id))
     .filter((calendar): calendar is BusinessDayDto["calendars"][number] => calendar !== undefined);
 
   const itemsOf = (calendar: BusinessDayDto["calendars"][number]): Item[] => [
-    ...calendar.appointments.map((appointment) => ({
+    // A cancelled appointment is not on the day: that hour is free, and
+    // drawing it as booked told the owner the opposite of the truth. It is
+    // still reachable — the filter has a "cancelled" chip for exactly this.
+    ...calendar.appointments
+      .filter((appointment) => appointment.status !== "CANCELLED")
+      .map((appointment) => ({
       start: minutesIn(appointment.startAt),
       end: minutesIn(appointment.endAt),
       entry: {
@@ -278,7 +260,6 @@ export const DayTimeline = ({
                       column={columns.get(band.item) ?? { column: 0, columns: 1 }}
                       laneIndex={laneIndex}
                       laneName={calendar.resourceName}
-                      services={services}
                       blockWord={copy.blockedWord}
                       onClick={() => onPick(band.item.entry)}
                     />
@@ -408,7 +389,6 @@ const ItemBand = ({
   column,
   laneIndex,
   laneName,
-  services,
   blockWord,
   onClick,
 }: {
@@ -418,7 +398,6 @@ const ItemBand = ({
   column: { column: number; columns: number };
   laneIndex: number;
   laneName: string;
-  services: readonly string[];
   blockWord: string;
   onClick: () => void;
 }) => {
@@ -428,7 +407,7 @@ const ItemBand = ({
   // the single line of time and name.
   const tight = place.height < 24;
   const appointment = entry.kind === "appointment";
-  const hue = appointment ? hueOf(services, entry.serviceName) : 0;
+  const colour = appointment ? colourOf(entry.serviceName) : null;
 
   return (
     <button
@@ -449,12 +428,14 @@ const ItemBand = ({
         lineHeight: 1.2,
         fontSize: 11,
         // Shape carries the kind, so none of this needs colour to be read.
-        background: appointment
-          ? SOFT[hue]
-          : "repeating-linear-gradient(45deg,var(--sunken) 0 5px,oklch(91% 0.012 240) 5px 10px)",
+        // Shape and ground carry the kind; the rail carries the service.
+        background:
+          colour === null
+            ? "repeating-linear-gradient(45deg,var(--blocked-soft) 0 5px,var(--sunken) 5px 10px)"
+            : colour.ground,
         border: "1px solid var(--line)",
-        borderInlineStart: `3px solid ${appointment ? HUES[hue] : "var(--faint)"}`,
-        color: appointment ? "var(--ink)" : "var(--muted)",
+        borderInlineStart: `3px solid ${colour?.rail ?? "var(--blocked)"}`,
+        color: colour === null ? "var(--muted)" : "var(--ink)",
       }}
     >
       <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -509,7 +490,7 @@ const Mark = ({ name, index }: { name: string; index: number }) => (
       fontSize: 9.5,
       fontWeight: 600,
       fontFamily: "Rubik, sans-serif",
-      background: MARK[index % MARK.length],
+      background: markColourOf(index),
       color: "var(--on-accent)",
     }}
   >

@@ -21,7 +21,11 @@ import type {
   StaffedBusiness,
   TeamMember,
 } from "../application/business-service.ts";
-import type { BusinessDay } from "../application/calendar-service.ts";
+import type { BusinessDay, BusinessMonth } from "../application/calendar-service.ts";
+import type {
+  ClosureImpact,
+  StrandedAppointment,
+} from "../application/closure-service.ts";
 
 /**
  * What crosses the wire, stated explicitly rather than by serialising whatever
@@ -124,6 +128,27 @@ export const blockOut = (block: Block) => ({
   groupId: block.groupId,
 });
 
+/**
+ * What a closure would strand, for the screen that has to warn about it.
+ *
+ * The customer is named rather than referred to by id: the owner is deciding
+ * whether to call somebody off, and "12 appointments" is not that decision.
+ */
+export const strandedOut = (stranded: StrandedAppointment) => ({
+  id: stranded.id,
+  startAt: formatInstant(stranded.startAt),
+  resourceName: stranded.resourceName,
+  serviceName: stranded.serviceName,
+  customerName: stranded.customerName,
+  customerPhone: stranded.customerPhone,
+});
+
+export const closureImpactOut = (impact: ClosureImpact) => ({
+  days: impact.days,
+  calendars: impact.calendars,
+  appointments: impact.appointments.map(strandedOut),
+});
+
 export const appointmentOut = (appointment: Appointment) => ({
   id: appointment.id,
   businessId: appointment.businessId,
@@ -171,6 +196,29 @@ export const businessDayOut = (day: BusinessDay) => ({
     appointments: calendar.appointments.map(appointmentWithCustomerOut),
     blocks: calendar.blocks.map(blockOut),
   })),
+});
+
+/**
+ * The month, with its Local Times as HH:MM like everything else on the wire.
+ *
+ * The month used to be answered straight out of the service, which sent the
+ * shop's hours as the minute counts the domain keeps them in — the same slip
+ * that once made the day's timeline draw from NaN. One conversion, in the one
+ * place that owns the wire.
+ */
+export const businessMonthOut = (month: BusinessMonth) => ({
+  days: month.days.map((day) => ({
+    date: day.date,
+    byCalendar: day.byCalendar,
+    shopClosed: day.shopClosed,
+    shopHours: day.shopHours.map((range) => ({
+      start: formatLocalTime(range.start),
+      end: formatLocalTime(range.end),
+    })),
+    shopNote: day.shopNote,
+  })),
+  blockages: month.blockages,
+  closures: month.closures,
 });
 
 /** A customer's own list names the business, e.g. for an "add to calendar" title. */

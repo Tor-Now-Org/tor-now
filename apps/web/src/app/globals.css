@@ -25,6 +25,28 @@
   --caution:oklch(63% 0.125 65); --caution-soft:oklch(95% 0.040 78);
   --critical:oklch(55% 0.170 22); --critical-soft:oklch(95% 0.030 22);
 
+  /* The calendar's own palette.
+     Six hues a service can be given, spaced far enough apart to be told apart
+     at the size a timeline draws them, and held at one lightness so none of
+     them shouts over the others. They are deliberately not the status colours:
+     a red appointment must not read as a warning. Each has a soft ground for
+     the body of an event and a strong edge for its rail.
+     Colours nobody chose are the bug this replaces — --plum, --moss and
+     --amber were used by the timeline and never defined anywhere, so every
+     service after the first drew with no background and no rail at all. */
+  --event-1:oklch(52% 0.123 245); --event-1-soft:oklch(95.5% 0.030 240);
+  --event-2:oklch(54% 0.135 300); --event-2-soft:oklch(95.5% 0.030 300);
+  --event-3:oklch(56% 0.140 350); --event-3-soft:oklch(95.5% 0.032 350);
+  --event-4:oklch(55% 0.105 195); --event-4-soft:oklch(95.5% 0.030 195);
+  --event-5:oklch(54% 0.110 150); --event-5-soft:oklch(95.5% 0.032 150);
+  --event-6:oklch(58% 0.120 85);  --event-6-soft:oklch(95.5% 0.036 85);
+
+  /* The two things that are not appointments. A blockage is somebody's own
+     time; a closure is the shop's, and reads heavier because it is the shop's
+     to undo. Neither is given an event hue: they are not a kind of service. */
+  --blocked:oklch(58% 0.045 260); --blocked-soft:oklch(94% 0.014 260);
+  --closed:oklch(40% 0.055 262); --closed-soft:oklch(92% 0.020 262);
+
   --shadow:0 1px 2px oklch(25% 0.055 258/.05), 0 8px 24px -12px oklch(25% 0.055 258/.16);
 
   /* Layout. The shell is the app's own width; the measure is how wide a column

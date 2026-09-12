@@ -536,6 +536,49 @@ const ownerRoutes = (services: Services) => {
     );
   });
 
+  /**
+   * The shop's own days, rather than one calendar's.
+   *
+   * Kept apart from the Override routes above on purpose: those are a
+   * calendar's schedule and a worker may keep their own, while closing the
+   * business is manager-and-up work that touches every calendar and answers
+   * for everything booked inside it.
+   */
+  owner.post("/:businessId/closures/preview", async (context) => {
+    const body = await parseBody(context, schema.closurePreviewSchema);
+    return context.json(
+      wire.closureImpactOut(
+        await services.closures.preview(
+          actorOf(context),
+          idParam(context, "businessId"),
+          body,
+        ),
+      ),
+    );
+  });
+
+  owner.post("/:businessId/closures", async (context) => {
+    const body = await parseBody(context, schema.closureSchema);
+    const outcome = await services.closures.close(
+      actorOf(context),
+      idParam(context, "businessId"),
+      body,
+      body.upcoming,
+    );
+    return context.json(outcome, 201);
+  });
+
+  owner.delete("/:businessId/closures", async (context) => {
+    const { from, to } = parseQuery(context, schema.dateRangeSchema);
+    const removed = await services.closures.lift(
+      actorOf(context),
+      idParam(context, "businessId"),
+      from,
+      to,
+    );
+    return context.json({ removed });
+  });
+
   owner.delete("/:businessId/overrides/:id", async (context) => {
     await services.business.deleteOverride(
       actorOf(context),
@@ -597,7 +640,7 @@ const ownerRoutes = (services: Services) => {
       idParam(context, "businessId"),
       firstOfMonth,
     );
-    return context.json(month);
+    return context.json(wire.businessMonthOut(month));
   });
 
   owner.get("/:businessId/resources/:resourceId/calendar/month", async (context) => {

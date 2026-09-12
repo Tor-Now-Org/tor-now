@@ -12,6 +12,7 @@ import type {
 import { todayIn, whenIn } from "@/lib/format.ts";
 import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { canCloseBusiness } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppointmentSheet } from "./appointment-sheet.tsx";
 import { Month } from "./month.tsx";
@@ -71,8 +72,6 @@ export const CalendarDay = ({
   /** What the + started, and the days it is waiting to be aimed at. */
   const [aim, setAim] = useState<Aim | null>(null);
   const [aimedAt, setAimedAt] = useState<readonly string[]>([]);
-  /** Any sheet up: the + gets out of the way rather than sitting under it. */
-  const [sheetUp, setSheetUp] = useState(false);
   /**
    * Everything the named customer has, fetched by their number rather than read
    * off the search box — editing or clearing the query used to empty the very
@@ -369,6 +368,7 @@ export const CalendarDay = ({
           setAim(null);
           setAimedAt([]);
         }}
+        onChanged={() => void load()}
       />
 
       {error !== null && <Critical>{error}</Critical>}
@@ -411,7 +411,6 @@ export const CalendarDay = ({
         business={business}
         date={date}
         past={date < todayIn(business.timeZone)}
-        resources={resources}
         openHours={Object.fromEntries(
           (wholeDay?.calendars ?? []).map((calendar) => [calendar.resourceId, calendar.open]),
         )}
@@ -426,10 +425,11 @@ export const CalendarDay = ({
       )}
 
       <AddButton
-        hidden={sheetUp || picked !== null || selected !== null || aim !== null}
-        onSheet={setSheetUp}
+        // Sheets take care of themselves now; what is left is the one state
+        // that is not a sheet — the grid waiting for days to be chosen.
+        hidden={aim !== null}
+        canCloseBusiness={canCloseBusiness(business)}
         onAim={(chosen) => {
-          setSheetUp(false);
           setAim(chosen);
           setAimedAt([]);
         }}
@@ -440,7 +440,6 @@ export const CalendarDay = ({
         dates={aimedAt}
         token={token}
         business={business}
-        resources={resources}
         resource={resource}
         onClose={() => setAimedAt([])}
         onDone={() => {

@@ -1,5 +1,7 @@
 import { ApiError, type ApiErrorCode } from "./errors.ts";
 import type {
+  ClosureImpactDto,
+  ClosureOutcomeDto,
   AllowlistEntryDto,
   AppointmentDto,
   AuditEntryDto,
@@ -533,6 +535,48 @@ export const api = {
     request<BusinessMonthDto>(
       `/businesses/${businessId}/calendar/month?firstOfMonth=${firstOfMonth}`,
       { token },
+    ),
+
+  /**
+   * The shop's own days, rather than one calendar's.
+   *
+   * Separate from `putOverride` on purpose, and not a loop over it: closing is
+   * one decision about the whole business, it is manager-and-up work, and it
+   * has to answer for the appointments already inside those days — none of
+   * which a per-calendar write can do.
+   */
+  previewClosure: (
+    token: string,
+    businessId: string,
+    plan: { fromDate: string; toDate: string; ranges: { start: string; end: string }[] },
+  ) =>
+    request<ClosureImpactDto>(`/businesses/${businessId}/closures/preview`, {
+      method: "POST",
+      body: plan,
+      token,
+    }),
+
+  closeBusiness: (
+    token: string,
+    businessId: string,
+    plan: {
+      fromDate: string;
+      toDate: string;
+      note: string | null;
+      ranges: { start: string; end: string }[];
+      upcoming: "KEEP" | "CANCEL";
+    },
+  ) =>
+    request<ClosureOutcomeDto>(`/businesses/${businessId}/closures`, {
+      method: "POST",
+      body: plan,
+      token,
+    }),
+
+  reopenBusiness: (token: string, businessId: string, from: string, to: string) =>
+    request<{ removed: number }>(
+      `/businesses/${businessId}/closures?from=${from}&to=${to}`,
+      { method: "DELETE", token },
     ),
 
   blockGroup: (token: string, businessId: string, groupId: string) =>

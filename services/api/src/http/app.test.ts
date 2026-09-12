@@ -281,6 +281,86 @@ describe("the owner routes", () => {
   });
 });
 
+describe("closing the business over HTTP", () => {
+  it("previews, closes, and gives the days back again", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const businessId = ((await api.post("/businesses", A_BUSINESS, owner.token)).body as {
+      id: string;
+    }).id;
+
+    const preview = await api.post(
+      `/businesses/${businessId}/closures/preview`,
+      { fromDate: "2026-09-01", toDate: "2026-09-03", ranges: [] },
+      owner.token,
+    );
+    expect(preview.status).toBe(200);
+    expect(preview.body).toMatchObject({ days: 3, calendars: 1, appointments: [] });
+
+    const closed = await api.post(
+      `/businesses/${businessId}/closures`,
+      {
+        fromDate: "2026-09-01",
+        toDate: "2026-09-03",
+        note: "חופשה",
+        ranges: [],
+        upcoming: "CANCEL",
+      },
+      owner.token,
+    );
+    expect(closed.status).toBe(201);
+    expect(closed.body).toMatchObject({ days: 3, cancelled: 0 });
+
+    // The month reads it back as one band, in the words it was given.
+    const month = await api.get(
+      `/businesses/${businessId}/calendar/month?firstOfMonth=2026-09-01`,
+      owner.token,
+    );
+    expect((month.body as { closures: unknown[] }).closures).toEqual([
+      { fromDate: "2026-09-01", toDate: "2026-09-03", days: 3, note: "חופשה" },
+    ]);
+
+    const reopened = await api.delete(
+      `/businesses/${businessId}/closures?from=2026-09-01&to=2026-09-03`,
+      owner.token,
+    );
+    expect(reopened.status).toBe(200);
+    expect(reopened.body).toMatchObject({ removed: 3 });
+  });
+
+  it("refuses a closure that ends before it starts, at the boundary", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001");
+    const businessId = ((await api.post("/businesses", A_BUSINESS, owner.token)).body as {
+      id: string;
+    }).id;
+
+    const answer = await api.post(
+      `/businesses/${businessId}/closures`,
+      { fromDate: "2026-09-03", toDate: "2026-09-01", ranges: [], upcoming: "KEEP" },
+      owner.token,
+    );
+    expect(answer.status).toBe(400);
+  });
+
+  it("will not take an answer it was not given about the people booked", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001");
+    const businessId = ((await api.post("/businesses", A_BUSINESS, owner.token)).body as {
+      id: string;
+    }).id;
+
+    // `upcoming` has no default on purpose: both answers are wrong by default,
+    // so a caller that forgets to say is refused rather than guessed at.
+    const answer = await api.post(
+      `/businesses/${businessId}/closures`,
+      { fromDate: "2026-09-01", toDate: "2026-09-01", ranges: [] },
+      owner.token,
+    );
+    expect(answer.status).toBe(400);
+  });
+});
+
 describe("business photos over HTTP", () => {
   const A_PICTURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
 

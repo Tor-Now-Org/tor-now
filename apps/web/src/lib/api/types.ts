@@ -104,6 +104,8 @@ export type BusinessMonthDto = {
     byCalendar: { resourceId: string; appointments: number; away: boolean }[];
     shopClosed: boolean;
     shopHours: { start: string; end: string }[];
+    /** Why the shop is doing that, when it was given a reason. */
+    shopNote: string | null;
   }[];
   blockages: {
     groupId: string;
@@ -114,6 +116,35 @@ export type BusinessMonthDto = {
     days: number;
     allDay: boolean;
   }[];
+  /** Runs of shut days, so a week away is drawn as a week away. */
+  closures: ClosureBandDto[];
+};
+
+export type ClosureBandDto = {
+  fromDate: string;
+  toDate: string;
+  days: number;
+  note: string | null;
+};
+
+/** What closing a run of days would call off, before anything is written. */
+export type ClosureImpactDto = {
+  days: number;
+  calendars: number;
+  appointments: {
+    id: string;
+    startAt: string;
+    resourceName: string;
+    serviceName: string;
+    customerName: string;
+    customerPhone: string;
+  }[];
+};
+
+export type ClosureOutcomeDto = {
+  days: number;
+  calendars: number;
+  cancelled: number;
 };
 
 export type SlotDto = { startAt: string; endAt: string };

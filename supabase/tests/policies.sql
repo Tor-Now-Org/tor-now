@@ -48,11 +48,20 @@ begin
   -- is another thing that can only be established by calling it.
   perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
 
-  -- 20260908000200 fixed an ambiguous column that only raises on a call.
+  -- 20260908000200 fixed an ambiguous column that only raises on a call, and
+  -- 20260911000200 changed the signature — which is why this calls it rather
+  -- than reading its source.
   select * into v_invited
-    from app.invite_user_to_business(v_biz, '+972500000106', 'מוזמן', 'חדש', 'WORKER');
+    from app.invite_user_to_business(
+      v_biz, '+972500000106', 'מוזמן', 'חדש', 'WORKER', 'מוזמן', 'חדש');
   if v_invited is null then
     raise exception 'POLICY BROKEN: invite_user_to_business returned nothing';
+  end if;
+  -- 20260911000200: the name the inviter typed is kept on the membership, so
+  -- a team list can name somebody who has never signed in.
+  if not exists (select 1 from membership
+                 where business_id = v_biz and invited_given_name = 'מוזמן') then
+    raise exception 'POLICY BROKEN: the invited name was not kept on the membership';
   end if;
   if not exists (select 1 from membership
                  where business_id = v_biz and role = 'WORKER'
@@ -61,9 +70,14 @@ begin
   end if;
 
   -- Inviting the same number twice is a correction, not a second person.
-  perform app.invite_user_to_business(v_biz, '+972500000106', 'מוזמן', 'חדש', 'MANAGER');
+  perform app.invite_user_to_business(
+    v_biz, '+972500000106', 'מוזמן', 'חדש', 'MANAGER', 'מוזמן', 'מתוקן');
   if (select count(*) from app_user where phone = '+972500000106') <> 1 then
     raise exception 'POLICY BROKEN: a repeated invitation made a second user';
+  end if;
+  if not exists (select 1 from membership
+                 where business_id = v_biz and invited_family_name = 'מתוקן') then
+    raise exception 'POLICY BROKEN: a corrected invitation did not refresh the name';
   end if;
 
   -- --- Row Level Security, read as the roles it is written for --------------

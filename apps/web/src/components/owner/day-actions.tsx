@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type { BusinessDto, ResourceDto } from "@/lib/api/types.ts";
+import type { BusinessDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
+import { canCloseBusiness } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { Button, Critical, Field, Note, Sheet } from "../ui.tsx";
 import { clockOf, minutesOf, spokenLength, withoutSpan } from "./day-model.ts";
@@ -33,7 +34,6 @@ export const DayActionSheet = ({
   business,
   date,
   past,
-  resources,
   openHours,
   onClose,
   onChanged,
@@ -44,7 +44,6 @@ export const DayActionSheet = ({
   date: string;
   /** Whether the day being read has already been and gone. */
   past: boolean;
-  resources: readonly ResourceDto[];
   /** What each calendar keeps that day, so closing an hour keeps the rest. */
   openHours: Readonly<Record<string, readonly { start: string; end: string }[]>>;
   onClose: () => void;
@@ -105,29 +104,35 @@ export const DayActionSheet = ({
           busy={busy}
           error={error}
           past={past || picked.end <= minutesNow(business.timeZone, date)}
-          onBlock={(span) =>
+          canCloseBusiness={canCloseBusiness(business)}
+          onBlock={(span, note) =>
             void act(() =>
               api.createBlocks(token, business.id, picked.resourceId, [
                 {
                   startAt: instantOf(date, span.start, business.timeZone),
                   endAt: instantOf(date, span.end, business.timeZone),
-                  reason: copy.blockedWord,
+                  reason: note.trim() === "" ? copy.blockedWord : note.trim(),
                 },
               ]),
             )
           }
-          onCloseShop={(span) =>
-            void act(async () => {
-              // The shop keeping other hours that day is a special day for
-              // every calendar — the hours either side of what was tapped.
-              for (const resource of resources) {
-                await api.putOverride(token, business.id, resource.id, {
-                  date,
-                  note: null,
-                  ranges: withoutSpan(openHours[resource.id] ?? [], span),
-                });
-              }
-            })
+          onCloseShop={(span, note) =>
+            void act(() =>
+              // The shop keeping other hours is the shop's decision, not one
+              // calendar's — so it goes through the closure, which writes every
+              // calendar at once and answers for what was booked in the hour.
+              api.closeBusiness(token, business.id, {
+                fromDate: date,
+                toDate: date,
+                note: note.trim() === "" ? null : note.trim(),
+                // The hours kept are the tapped calendar's own, minus the
+                // stretch — the lane the owner was looking at is the one whose
+                // day they meant. They are then the shop's hours, which is
+                // what closing the business means.
+                ranges: withoutSpan(openHours[picked.resourceId] ?? [], span),
+                upcoming: "CANCEL",
+              }),
+            )
           }
         />
       )}
@@ -185,6 +190,7 @@ const FreeActions = ({
   busy,
   error,
   past,
+  canCloseBusiness: mayCloseBusiness,
   onBlock,
   onCloseShop,
 }: {
@@ -194,8 +200,10 @@ const FreeActions = ({
   busy: boolean;
   error: string | null;
   past: boolean;
-  onBlock: (span: { start: number; end: number }) => void;
-  onCloseShop: (span: { start: number; end: number }) => void;
+  /** ADR 0016: the shop's hours are not a worker's to change. */
+  canCloseBusiness: boolean;
+  onBlock: (span: { start: number; end: number }, note: string) => void;
+  onCloseShop: (span: { start: number; end: number }, note: string) => void;
 }) => {
   /**
    * Which part of the free stretch this is about.
@@ -207,6 +215,12 @@ const FreeActions = ({
    */
   const [from, setFrom] = useState(clockOf(picked.start));
   const [until, setUntil] = useState(clockOf(picked.end));
+  /**
+   * Why, in the owner's words — and optional, because most of the time there
+   * is no why worth typing. When it is there it is what the calendar says
+   * afterwards, which beats a month of squares all reading "blocked".
+   */
+  const [note, setNote] = useState("");
 
   // A different stretch was tapped: start again from the whole of it.
   const [about, setAbout] = useState(`${picked.start}-${picked.end}`);
@@ -214,6 +228,7 @@ const FreeActions = ({
     setAbout(`${picked.start}-${picked.end}`);
     setFrom(clockOf(picked.start));
     setUntil(clockOf(picked.end));
+    setNote("");
   }
 
   const whole = picked.end - picked.start;
@@ -291,6 +306,14 @@ const FreeActions = ({
             </>
           )}
 
+          <Field
+            id="free-note"
+            label={copy.noteOptional}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder={copy.notePlaceholder}
+          />
+
           {!usable && <Note>{copy.rangeInvalid}</Note>}
           {tooShort && (
             <Note>
@@ -302,17 +325,29 @@ const FreeActions = ({
 
       {error !== null && <Critical>{error}</Critical>}
 
-      <Button busy={busy} disabled={past || !usable} onClick={() => onBlock(chosen)}>
+      <Button busy={busy} disabled={past || !usable} onClick={() => onBlock(chosen, note)}>
         {copy.blockThese.replace("{hours}", `${from}–${until}`)}
       </Button>
-      <Button
-        intent="quiet"
-        busy={busy}
-        disabled={past || !usable}
-        onClick={() => onCloseShop(chosen)}
-      >
-        {copy.closeShopThese.replace("{hours}", `${from}–${until}`)}
+      {mayCloseBusiness && (
+        <Button
+          intent="quiet"
+          busy={busy}
+          disabled={past || !usable}
+          onClick={() => onCloseShop(chosen, note)}
+        >
+          {copy.closeShopThese.replace("{hours}", `${from}–${until}`)}
+        </Button>
+      )}
+
+      {/* Booking somebody in from here is the obvious third thing to want, and
+          it is the one thing the API cannot yet do: every route books as the
+          caller, so there is no way to book on a customer's behalf. Shown and
+          disabled rather than hidden — the gap is the answer to "why can I not
+          do this here", and hiding it just makes the screen look finished. */}
+      <Button intent="quiet" disabled title={copy.notYet}>
+        {copy.addAppointmentTitle}
       </Button>
+      <span className="hint">{copy.bookForCustomerSoon}</span>
     </div>
   );
 };

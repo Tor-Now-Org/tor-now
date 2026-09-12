@@ -1,6 +1,7 @@
 "use client";
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import { useSheetPresence } from "./sheet-presence.ts";
 
 /**
  * The canvas defines one button system: weight, depth and a real pressed state,
@@ -297,6 +298,9 @@ export const Sheet = ({
   children: ReactNode;
   labelledBy?: string;
 }) => {
+  // Said here, so that anything which has to yield to a sheet — the + button,
+  // today — never has to be told about a sheet one screen at a time.
+  useSheetPresence(open);
   if (!open) return null;
   return (
     <div

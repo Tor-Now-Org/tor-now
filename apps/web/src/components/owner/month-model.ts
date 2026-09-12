@@ -87,3 +87,20 @@ export const datesBetween = (from: string, to: string): string[] => {
   for (let date = start; date <= end; date = addDaysTo(date, 1)) out.push(date);
   return out;
 };
+
+/**
+ * What a band across the month says.
+ *
+ * A band is thirteen pixels tall and as wide as the days it covers, so a long
+ * reason cannot be read on a short one — it would be cut off mid-word, which
+ * reads as a rendering fault rather than as a reason. Below about a word per
+ * day the band says what kind of thing it is instead; the sheet behind it
+ * always has the whole of it.
+ */
+export const CHARACTERS_PER_DAY = 9;
+
+export const labelFor = (note: string | null, days: number, fallback: string): string => {
+  const said = (note ?? "").trim();
+  if (said === "") return fallback;
+  return said.length <= days * CHARACTERS_PER_DAY ? said : fallback;
+};
