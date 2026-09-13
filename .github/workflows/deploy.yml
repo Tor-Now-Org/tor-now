@@ -69,9 +69,20 @@ jobs:
   plan:
     name: What changed
     runs-on: ubuntu-latest
+    # A deploy needs three things to be true: the checks passed, they passed on
+    # a *branch* rather than on somebody's pull request, and this is the run
+    # that pushing that branch started.
+    #
+    # That last clause is what stops the same commit deploying twice. A merge
+    # is a push, so merging to dev or main lands here the same way a direct
+    # push does — but while a dev → main pull request is open, pushing dev also
+    # updates that pull request, and the checks run a second time on the very
+    # same commit. Both runs say `dev`, both go green, and without this the
+    # second one deploys everything all over again.
     if: >-
       github.event_name == 'workflow_dispatch'
-      || github.event.workflow_run.conclusion == 'success'
+      || (github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push')
     outputs:
       sha: ${{ steps.target.outputs.sha }}
       branch: ${{ steps.target.outputs.branch }}
