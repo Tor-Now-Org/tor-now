@@ -8,22 +8,28 @@ import { Card, Note } from "@/components/ui.tsx";
 
 type AdminStatsCopy = {
   mrr: string;
+  mrrHint: string;
   businessStatus: string;
+  businessStatusHint: string;
   active: string;
   overdue: string;
   inactive: string;
   planMix: string;
+  planMixHint: string;
   free: string;
   standard: string;
   signups: string;
+  signupsHint: string;
   businesses: string;
   users: string;
   appointmentActivity: string;
+  appointmentActivityHint: string;
   confirmed: string;
   cancelled: string;
   noShow: string;
   completed: string;
   topBusinesses: string;
+  topBusinessesHint: string;
   noData: string;
 };
 
@@ -68,6 +74,42 @@ const ChartTooltip = ({ tooltip }: { tooltip: TooltipState }) =>
       {tooltip.text}
     </div>
   );
+
+/** A small "i" mark that reveals what the thing beside it means, on hover or focus. */
+const InfoTip = ({ text }: { text: string }) => (
+  <span
+    title={text}
+    tabIndex={0}
+    role="img"
+    aria-label={text}
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 14,
+      height: 14,
+      flex: "none",
+      borderRadius: 999,
+      border: "1px solid var(--faint)",
+      color: "var(--faint)",
+      fontSize: 10,
+      fontWeight: 600,
+      fontStyle: "italic",
+      lineHeight: 1,
+      cursor: "help",
+    }}
+  >
+    i
+  </span>
+);
+
+/** A section's label, paired with the tooltip that explains what it shows. */
+const Heading = ({ label, hint }: { label: string; hint: string }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <span className="label">{label}</span>
+    <InfoTip text={hint} />
+  </div>
+);
 
 const Legend = ({
   entries,
@@ -270,7 +312,7 @@ export const AdminStats = ({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <span className="label">{copy.businessStatus}</span>
+        <Heading label={copy.businessStatus} hint={copy.businessStatusHint} />
         <StatusDonutRow
           {...stats.businessStatusCounts}
           labels={{ active: copy.active, overdue: copy.overdue, inactive: copy.inactive }}
@@ -279,13 +321,17 @@ export const AdminStats = ({
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <Card style={{ flex: "1 1 140px", display: "flex", flexDirection: "column", gap: 4 }}>
-          <span className="hint">{copy.mrr}</span>
+          <span className="hint" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            {copy.mrr} <InfoTip text={copy.mrrHint} />
+          </span>
           <span style={{ fontSize: 22, fontWeight: 600 }}>
             {formatPrice(stats.monthlyRecurringRevenueMinor, language, "—")}
           </span>
         </Card>
         <Card style={{ flex: "1 1 140px", display: "flex", flexDirection: "column", gap: 4 }}>
-          <span className="hint">{copy.planMix}</span>
+          <span className="hint" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            {copy.planMix} <InfoTip text={copy.planMixHint} />
+          </span>
           <span style={{ fontSize: 15 }}>
             {copy.free} <strong>{stats.planCounts.FREE}</strong> · {copy.standard}{" "}
             <strong>{stats.planCounts.STANDARD}</strong>
@@ -294,7 +340,7 @@ export const AdminStats = ({
       </div>
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <span className="label">{copy.signups}</span>
+        <Heading label={copy.signups} hint={copy.signupsHint} />
         {signupMonths.length === 0 ? (
           <Note>{copy.noData}</Note>
         ) : (
@@ -317,7 +363,7 @@ export const AdminStats = ({
       </Card>
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <span className="label">{copy.appointmentActivity}</span>
+        <Heading label={copy.appointmentActivity} hint={copy.appointmentActivityHint} />
         {activityWeeks.length === 0 ? (
           <Note>{copy.noData}</Note>
         ) : (
@@ -344,7 +390,7 @@ export const AdminStats = ({
       </Card>
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <span className="label">{copy.topBusinesses}</span>
+        <Heading label={copy.topBusinesses} hint={copy.topBusinessesHint} />
         {stats.topBusinesses.length === 0 ? (
           <Note>{copy.noData}</Note>
         ) : (

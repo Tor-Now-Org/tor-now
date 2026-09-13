@@ -294,22 +294,28 @@ export default function AdminPage() {
                 language={language}
                 copy={{
                   mrr: copy.mrr,
+                  mrrHint: copy.mrrHint,
                   businessStatus: copy.businessStatus,
+                  businessStatusHint: copy.businessStatusHint,
                   active: copy.active,
                   overdue: copy.overdue,
                   inactive: copy.inactive,
                   planMix: copy.planMix,
+                  planMixHint: copy.planMixHint,
                   free: copy.free,
                   standard: copy.standard,
                   signups: copy.signups,
+                  signupsHint: copy.signupsHint,
                   businesses: copy.businesses,
                   users: copy.users,
                   appointmentActivity: copy.appointmentActivity,
+                  appointmentActivityHint: copy.appointmentActivityHint,
                   confirmed: copy.confirmed,
                   cancelled: copy.cancelled,
                   noShow: copy.noShow,
                   completed: copy.completed,
                   topBusinesses: copy.topBusinesses,
+                  topBusinessesHint: copy.topBusinessesHint,
                   noData: copy.noData,
                 }}
               />
