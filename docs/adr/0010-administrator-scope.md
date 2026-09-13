@@ -53,5 +53,7 @@ included, as recorded in ADR 0006.
   precisely what tenant isolation forbids between Businesses. The justification is
   no stronger for the operator, and read auditing plus the allowlist are the only
   controls on it.
+- The on-screen isolation warning was removed from the admin businesses list;
+  the bypass is otherwise undocumented for the user at the point of use.
 - The allowlist is operational state that must be maintained; an administrator
   who changes their number is locked out until it is updated.

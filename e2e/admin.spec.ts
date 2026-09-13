@@ -97,8 +97,6 @@ test.describe("the panel itself", () => {
     await page.goto("/admin");
     await ready(page);
 
-    // The warning is part of the control, not decoration.
-    await expect(page.getByText(/עוקף את בידוד הנתונים/)).toBeVisible();
     await expect(page.getByText(shop.business.name)).toBeVisible({ timeout: 20_000 });
   });
 

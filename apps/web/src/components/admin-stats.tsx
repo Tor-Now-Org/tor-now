@@ -10,7 +10,6 @@ type AdminStatsCopy = {
   mrr: string;
   mrrHint: string;
   businessStatus: string;
-  businessStatusHint: string;
   active: string;
   overdue: string;
   inactive: string;
@@ -78,7 +77,8 @@ const ChartTooltip = ({ tooltip }: { tooltip: TooltipState }) =>
 /** A small "i" mark that reveals what the thing beside it means, on hover or focus. */
 const InfoTip = ({ text }: { text: string }) => (
   <span
-    title={text}
+    className="tip"
+    data-tip={text}
     tabIndex={0}
     role="img"
     aria-label={text}
@@ -104,10 +104,10 @@ const InfoTip = ({ text }: { text: string }) => (
 );
 
 /** A section's label, paired with the tooltip that explains what it shows. */
-const Heading = ({ label, hint }: { label: string; hint: string }) => (
+const Heading = ({ label, hint }: { label: string; hint?: string }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
     <span className="label">{label}</span>
-    <InfoTip text={hint} />
+    {hint !== undefined && <InfoTip text={hint} />}
   </div>
 );
 
@@ -174,9 +174,7 @@ const GroupedBars = ({
                     onMouseEnter={(event) => show(event, `${label} · ${line.name}: ${value}`)}
                     onMouseMove={(event) => show(event, `${label} · ${line.name}: ${value}`)}
                     onMouseLeave={hide}
-                  >
-                    <title>{`${label} · ${line.name}: ${value}`}</title>
-                  </rect>
+                  />
                 </g>
               );
             })}
@@ -237,9 +235,7 @@ const StackedBars = ({
                     onMouseEnter={(event) => show(event, text)}
                     onMouseMove={(event) => show(event, text)}
                     onMouseLeave={hide}
-                  >
-                    <title>{text}</title>
-                  </rect>
+                  />
                 );
               })}
               <text x={20} y={BAR_HEIGHT + 14} fontSize={9} fill="var(--faint)" textAnchor="middle">
@@ -273,12 +269,21 @@ const StatusDonutRow = ({
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", height: 10, borderRadius: 999, overflow: "hidden" }}>
-        {segments.map((segment) => (
+      <div style={{ display: "flex", height: 10, borderRadius: 999 }}>
+        {segments.map((segment, index) => (
           <div
             key={segment.label}
-            style={{ width: `${(segment.value / total) * 100}%`, background: segment.color }}
-            title={`${segment.label}: ${segment.value}`}
+            className="tip"
+            data-tip={`${segment.label}: ${segment.value}`}
+            tabIndex={0}
+            style={{
+              width: `${(segment.value / total) * 100}%`,
+              background: segment.color,
+              borderStartStartRadius: index === 0 ? 999 : 0,
+              borderEndStartRadius: index === 0 ? 999 : 0,
+              borderStartEndRadius: index === segments.length - 1 ? 999 : 0,
+              borderEndEndRadius: index === segments.length - 1 ? 999 : 0,
+            }}
           />
         ))}
       </div>
@@ -312,7 +317,7 @@ export const AdminStats = ({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <Heading label={copy.businessStatus} hint={copy.businessStatusHint} />
+        <Heading label={copy.businessStatus} />
         <StatusDonutRow
           {...stats.businessStatusCounts}
           labels={{ active: copy.active, overdue: copy.overdue, inactive: copy.inactive }}
