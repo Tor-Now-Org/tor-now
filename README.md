@@ -9,9 +9,19 @@ contexts and the single seam between them, and [`docs/adr/`](./docs/adr) records
 the fifteen decisions everything here rests on. If something in the code looks
 arbitrary, the ADR that made it is the place to look.
 
-- **Interface** — https://tor-now-tor-now.vercel.app (the Vercel project is
-  still named `tor-now`; renaming it moves this URL)
-- **API** — https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api
+Two environments, each a whole stack of its own — its own interface, its own
+Edge Function, its own database. Nothing is shared between them, so dev is a
+place to be wrong in.
+
+|            | production                                          | dev                                                   |
+| ---------- | --------------------------------------------------- | ----------------------------------------------------- |
+| Interface  | https://tor-panuy.vercel.app                        | https://tor-panuy-dev.vercel.app                      |
+| API        | https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api | https://rhwkoodeeqyuwfymxwqa.supabase.co/functions/v1/api |
+| Deploys on | a push to `main`                                    | a push to `dev`                                       |
+
+Vercel also gives every deployment a generated URL of its own, and the branch
+an alias like `tor-now-git-dev-tor-now.vercel.app`. Those work, but they are
+not the addresses this project goes by — the table is.
 
 ## Layout
 
