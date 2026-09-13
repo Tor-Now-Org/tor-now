@@ -394,3 +394,8 @@ export const pageSchema = z.object({
 export const queryTextSchema = z.object({
   q: z.string().trim().min(1).nullable().catch(null).default(null),
 });
+
+export const statsQuerySchema = z.object({
+  weeks: z.coerce.number().int().min(1).max(52).default(8),
+  months: z.coerce.number().int().min(1).max(36).default(12),
+});

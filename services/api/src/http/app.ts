@@ -1007,6 +1007,13 @@ const adminRoutes = (services: Services) => {
     return context.body(null, 204);
   });
 
+  admin.get("/stats", async (context) => {
+    const { weeks, months } = parseQuery(context, schema.statsQuerySchema);
+    return context.json(
+      wire.platformStatsOut(await services.admin.platformStats(actorOf(context), weeks, months)),
+    );
+  });
+
   admin.get("/audit", async (context) => {
     const page = parseQuery(context, schema.pageSchema);
     const entries = await services.admin.auditLog(actorOf(context), page);

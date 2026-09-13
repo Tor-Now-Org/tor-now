@@ -10,6 +10,7 @@ import type {
   AuditEntryDto,
   BusinessSummaryDto,
   PaymentDto,
+  PlatformStatsDto,
   SubscriptionDto,
   SubscriptionState,
   UserDto,
@@ -24,10 +25,11 @@ import { PhoneField } from "@/components/phone-field.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
-import { BottomNav, BuildingIcon, PeopleIcon, ShieldIcon } from "@/components/bottom-nav.tsx";
+import { BottomNav, BuildingIcon, ChartIcon, PeopleIcon, ShieldIcon } from "@/components/bottom-nav.tsx";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } from "@/components/ui.tsx";
+import { AdminStats } from "@/components/admin-stats.tsx";
 
-type Tab = "businesses" | "users" | "system";
+type Tab = "businesses" | "users" | "stats" | "system";
 type SystemPanel = "admins" | "allowlist" | "audit";
 
 const MINOR_UNITS_PER_MAJOR = 100;
@@ -52,6 +54,7 @@ export default function AdminPage() {
   const [administrators, setAdministrators] = useState<UserDto[]>([]);
   const [allowlist, setAllowlist] = useState<AllowlistEntryDto[]>([]);
   const [audit, setAudit] = useState<AuditEntryDto[]>([]);
+  const [stats, setStats] = useState<PlatformStatsDto | null>(null);
   const [query, setQuery] = useState("");
   const [businessQuery, setBusinessQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "overdue">("all");
@@ -82,18 +85,20 @@ export default function AdminPage() {
   const load = useCallback(async () => {
     if (token === null) return;
     try {
-      const [b, u, a, l, g] = await Promise.all([
+      const [b, u, a, l, g, s] = await Promise.all([
         api.adminBusinesses(token, null),
         api.adminUsers(token, null),
         api.adminAdministrators(token),
         api.adminAllowlist(token),
         api.adminAudit(token),
+        api.adminStats(token),
       ]);
       setBusinesses(b);
       setUsers(u);
       setAdministrators(a);
       setAllowlist(l);
       setAudit(g);
+      setStats(s);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
@@ -280,6 +285,37 @@ export default function AdminPage() {
           </>
         )}
 
+        {tab === "stats" && (
+          stats === null
+            ? <Spinner />
+            : (
+              <AdminStats
+                stats={stats}
+                language={language}
+                copy={{
+                  mrr: copy.mrr,
+                  businessStatus: copy.businessStatus,
+                  active: copy.active,
+                  overdue: copy.overdue,
+                  inactive: copy.inactive,
+                  planMix: copy.planMix,
+                  free: copy.free,
+                  standard: copy.standard,
+                  signups: copy.signups,
+                  businesses: copy.businesses,
+                  users: copy.users,
+                  appointmentActivity: copy.appointmentActivity,
+                  confirmed: copy.confirmed,
+                  cancelled: copy.cancelled,
+                  noShow: copy.noShow,
+                  completed: copy.completed,
+                  topBusinesses: copy.topBusinesses,
+                  noData: copy.noData,
+                }}
+              />
+            )
+        )}
+
         {tab === "system" && (
           <>
             <div style={{ display: "flex", gap: 6 }}>
@@ -361,6 +397,7 @@ export default function AdminPage() {
         items={[
           { id: "businesses", label: copy.businesses, icon: <BuildingIcon /> },
           { id: "users", label: copy.users, icon: <PeopleIcon /> },
+          { id: "stats", label: copy.stats, icon: <ChartIcon /> },
           { id: "system", label: copy.system, icon: <ShieldIcon /> },
         ]}
       />

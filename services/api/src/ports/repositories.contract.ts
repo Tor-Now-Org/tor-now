@@ -1458,6 +1458,134 @@ export const describeRepositoryContract = (
       });
     });
 
+    // --- Platform statistics ---------------------------------------------
+
+    it("adds up a week's appointments by how they ended", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "4201");
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-15T09:00:00Z", "2026-09-15T09:30:00Z", "2026-09-15T09:40:00Z"),
+        );
+        const cancelled = await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-16T09:00:00Z", "2026-09-16T09:30:00Z", "2026-09-16T09:40:00Z"),
+        );
+        await repositories.appointments.update(cancelled.id, {
+          status: "CANCELLED",
+          cancelledAt: parseInstant("2026-09-15T09:00:00Z"),
+          cancelledBy: "CUSTOMER",
+        });
+        const noShow = await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-17T09:00:00Z", "2026-09-17T09:30:00Z", "2026-09-17T09:40:00Z"),
+        );
+        await repositories.appointments.update(noShow.id, { status: "NO_SHOW" });
+        // A different week entirely, so the test also proves the buckets do
+        // not bleed into one another.
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-21T09:00:00Z", "2026-09-21T09:30:00Z", "2026-09-21T09:40:00Z"),
+        );
+
+        const weeks = await repositories.appointments.platformWeeklyActivity(
+          parseInstant("2026-09-14T00:00:00Z"),
+          parseInstant("2026-09-28T00:00:00Z"),
+        );
+
+        expect(weeks).toEqual([
+          {
+            weekStart: parseLocalDate("2026-09-14"),
+            confirmed: 1,
+            cancelled: 1,
+            noShow: 1,
+            completed: 0,
+          },
+          {
+            weekStart: parseLocalDate("2026-09-21"),
+            confirmed: 1,
+            cancelled: 0,
+            noShow: 0,
+            completed: 0,
+          },
+        ]);
+      });
+    });
+
+    it("ranks businesses by appointments booked, cancellations excluded", async () => {
+      await withRepositories(async (repositories) => {
+        const busy = await aBookableBusiness(repositories, "4301");
+        const quiet = await aBookableBusiness(repositories, "4302");
+
+        await repositories.appointments.create(
+          anAppointmentAt(busy, "2026-09-15T09:00:00Z", "2026-09-15T09:30:00Z", "2026-09-15T09:40:00Z"),
+        );
+        await repositories.appointments.create(
+          anAppointmentAt(busy, "2026-09-16T09:00:00Z", "2026-09-16T09:30:00Z", "2026-09-16T09:40:00Z"),
+        );
+        const cancelled = await repositories.appointments.create(
+          anAppointmentAt(busy, "2026-09-17T09:00:00Z", "2026-09-17T09:30:00Z", "2026-09-17T09:40:00Z"),
+        );
+        await repositories.appointments.update(cancelled.id, {
+          status: "CANCELLED",
+          cancelledAt: parseInstant("2026-09-16T09:00:00Z"),
+          cancelledBy: "CUSTOMER",
+        });
+        await repositories.appointments.create(
+          anAppointmentAt(quiet, "2026-09-15T10:00:00Z", "2026-09-15T10:30:00Z", "2026-09-15T10:40:00Z"),
+        );
+
+        const span = [parseInstant("2026-09-14T00:00:00Z"), parseInstant("2026-09-21T00:00:00Z")] as const;
+
+        expect(await repositories.appointments.topBusinessesByVolume(span[0], span[1], 10)).toEqual([
+          { businessId: busy.business.id, businessName: busy.business.name, count: 2 },
+          { businessId: quiet.business.id, businessName: quiet.business.name, count: 1 },
+        ]);
+
+        expect(await repositories.appointments.topBusinessesByVolume(span[0], span[1], 1)).toEqual([
+          { businessId: busy.business.id, businessName: busy.business.name, count: 2 },
+        ]);
+      });
+    });
+
+    it("counts a business in the month it registered", async () => {
+      await withRepositories(async (repositories) => {
+        const from = parseInstant(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+        const to = parseInstant(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+        const before = await repositories.businesses.monthlySignups(from, to);
+        const totalBefore = before.reduce((sum, month) => sum + month.count, 0);
+
+        await aBookableBusiness(repositories, "4401");
+
+        const after = await repositories.businesses.monthlySignups(from, to);
+        const totalAfter = after.reduce((sum, month) => sum + month.count, 0);
+        expect(totalAfter).toBe(totalBefore + 1);
+
+        expect(
+          await repositories.businesses.monthlySignups(
+            parseInstant("2020-01-01T00:00:00Z"),
+            parseInstant("2020-02-01T00:00:00Z"),
+          ),
+        ).toEqual([]);
+      });
+    });
+
+    it("counts a user in the month they registered", async () => {
+      await withRepositories(async (repositories) => {
+        const from = parseInstant(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+        const to = parseInstant(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+        const before = await repositories.users.monthlySignups(from, to);
+        const totalBefore = before.reduce((sum, month) => sum + month.count, 0);
+
+        await repositories.users.create({
+          phone: "+972500004402",
+          givenName: "מאיה",
+          familyName: null,
+          birthDate: null,
+        });
+
+        const after = await repositories.users.monthlySignups(from, to);
+        const totalAfter = after.reduce((sum, month) => sum + month.count, 0);
+        expect(totalAfter).toBe(totalBefore + 1);
+      });
+    });
+
     it("counts blocks the same way, so a day off shows on the grid", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "4104");

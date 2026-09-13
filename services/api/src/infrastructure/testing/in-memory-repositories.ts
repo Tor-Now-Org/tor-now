@@ -27,6 +27,8 @@ import {
   dayOfWeek,
   displayName,
   localTime,
+  monthStartOf,
+  weekStartOf,
 } from "@tor-now/domain";
 import { SEARCH } from "../../config.ts";
 import { PG_ERRORS } from "../pg/client.ts";
@@ -59,6 +61,27 @@ const countByLocalDay = (
   return [...perDay.entries()]
     .map(([date, count]) => ({ date, count }))
     .sort((a, b) => compareLocalDate(a.date, b.date));
+};
+
+/** An instant's calendar date, in UTC — matching `at time zone 'UTC'` in the SQL. */
+const localDateOfInstant = (at: Instant): LocalDate =>
+  parseLocalDate(new Date(at).toISOString().slice(0, 10));
+
+/** Signups grouped by the first of their month, as Postgres does it. */
+const monthlySignupCounts = (
+  createdAts: readonly Instant[],
+  from: Instant,
+  to: Instant,
+): readonly { monthStart: LocalDate; count: number }[] => {
+  const byMonth = new Map<string, number>();
+  for (const createdAt of createdAts) {
+    if (createdAt < from || createdAt >= to) continue;
+    const month = monthStartOf(localDateOfInstant(createdAt));
+    byMonth.set(month, (byMonth.get(month) ?? 0) + 1);
+  }
+  return [...byMonth.entries()]
+    .sort(([left], [right]) => compareLocalDate(left as LocalDate, right as LocalDate))
+    .map(([monthStart, count]) => ({ monthStart: monthStart as LocalDate, count }));
 };
 
 export const inMemoryRepositories = (store: Store): Repositories => {
@@ -147,6 +170,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
         return matching.slice(page.offset, page.offset + page.limit);
       },
+      async monthlySignups(from, to) {
+        return monthlySignupCounts(store.users.map((user) => user.createdAt), from, to);
+      },
     },
 
     businesses: {
@@ -189,6 +215,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           minimumNoticeMinutes: BUSINESS_DEFAULTS.minimumNoticeMinutes,
           bookingHorizonDays: BUSINESS_DEFAULTS.bookingHorizonDays,
           cancellationWindowHours: BUSINESS_DEFAULTS.cancellationWindowHours,
+          createdAt: now(),
         };
         store.businesses = [...store.businesses, business];
         // Every Business has a Subscription, which the database does with a
@@ -222,6 +249,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           candidate.id === id ? updated : candidate,
         );
         return updated;
+      },
+      async monthlySignups(from, to) {
+        return monthlySignupCounts(store.businesses.map((business) => business.createdAt), from, to);
       },
       async setActive(id, active) {
         const business = store.businesses.find((candidate) => candidate.id === id);
@@ -986,6 +1016,52 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           appointment.id === id ? updated : appointment,
         );
         return updated;
+      },
+      async platformWeeklyActivity(from, to) {
+        const byWeek = new Map<
+          string,
+          { confirmed: number; cancelled: number; noShow: number; completed: number }
+        >();
+        for (const appointment of store.appointments) {
+          if (appointment.startAt < from || appointment.startAt >= to) continue;
+          const week = weekStartOf(localDateOfInstant(appointment.startAt));
+          const bucket = byWeek.get(week) ?? {
+            confirmed: 0,
+            cancelled: 0,
+            noShow: 0,
+            completed: 0,
+          };
+          if (appointment.status === "CONFIRMED") bucket.confirmed += 1;
+          else if (appointment.status === "CANCELLED") bucket.cancelled += 1;
+          else if (appointment.status === "NO_SHOW") bucket.noShow += 1;
+          else if (appointment.status === "COMPLETED") bucket.completed += 1;
+          byWeek.set(week, bucket);
+        }
+        return [...byWeek.entries()]
+          .sort(([left], [right]) => compareLocalDate(left as LocalDate, right as LocalDate))
+          .map(([weekStart, counts]) => ({ weekStart: weekStart as LocalDate, ...counts }));
+      },
+      async topBusinessesByVolume(from, to, limit) {
+        const byBusiness = new Map<string, number>();
+        for (const appointment of store.appointments) {
+          if (appointment.startAt < from || appointment.startAt >= to) continue;
+          if (appointment.status === "CANCELLED") continue;
+          byBusiness.set(
+            appointment.businessId,
+            (byBusiness.get(appointment.businessId) ?? 0) + 1,
+          );
+        }
+        return [...byBusiness.entries()]
+          .map(([businessId, count]) => {
+            const business = store.businesses.find((candidate) => candidate.id === businessId);
+            return {
+              businessId: businessId as Business["id"],
+              businessName: business?.name ?? "",
+              count,
+            };
+          })
+          .sort((left, right) => right.count - left.count)
+          .slice(0, limit);
       },
     },
 

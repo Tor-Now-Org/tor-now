@@ -19,6 +19,7 @@ import type { Transaction } from "./client.ts";
 import {
   toBusiness,
   toBusinessPhoto,
+  toLocalDate,
   toMembership,
   toMembershipResource,
   toUser,
@@ -108,6 +109,20 @@ export const userRepository = (tx: Transaction): UserRepository => ({
       limit ${page.limit} offset ${page.offset}`;
     return rows.map(toUser);
   },
+
+  async monthlySignups(from, to) {
+    const rows = await tx<Row[]>`
+      select date_trunc('month', created_at at time zone 'UTC')::date as month_start,
+             count(*)::int as count
+      from app_user
+      where created_at >= ${new Date(from)} and created_at < ${new Date(to)}
+      group by 1
+      order by 1`;
+    return rows.map((row) => ({
+      monthStart: toLocalDate(row["month_start"]),
+      count: Number(row["count"]),
+    }));
+  },
 });
 
 export const businessRepository = (tx: Transaction): BusinessRepository => ({
@@ -183,6 +198,20 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
       order by created_at desc
       limit ${page.limit} offset ${page.offset}`;
     return rows.map(toBusiness);
+  },
+
+  async monthlySignups(from, to) {
+    const rows = await tx<Row[]>`
+      select date_trunc('month', created_at at time zone 'UTC')::date as month_start,
+             count(*)::int as count
+      from business
+      where created_at >= ${new Date(from)} and created_at < ${new Date(to)}
+      group by 1
+      order by 1`;
+    return rows.map((row) => ({
+      monthStart: toLocalDate(row["month_start"]),
+      count: Number(row["count"]),
+    }));
   },
 });
 

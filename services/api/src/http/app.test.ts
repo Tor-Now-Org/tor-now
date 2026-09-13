@@ -113,6 +113,7 @@ describe("who may call what", () => {
     const person = await signInOverHttp(api, "+972500000050");
     expect((await api.get("/admin/businesses", person.token)).status).toBe(403);
     expect((await api.get("/admin/audit", person.token)).status).toBe(403);
+    expect((await api.get("/admin/stats", person.token)).status).toBe(403);
   });
 
   it("keeps the scheduled endpoints closed without the job credential", async () => {

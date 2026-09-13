@@ -21,6 +21,7 @@ import type {
   MyAppointmentDto,
   OverrideDto,
   PaymentDto,
+  PlatformStatsDto,
   RequestCodeDto,
   ResourceDto,
   ServiceDto,
@@ -830,4 +831,7 @@ export const api = {
 
   adminAudit: (token: string) =>
     request<AuditEntryDto[]>("/admin/audit", { token, query: { limit: 100 } }),
+
+  adminStats: (token: string, weeks: number = 8, months: number = 12) =>
+    request<PlatformStatsDto>("/admin/stats", { token, query: { weeks, months } }),
 };

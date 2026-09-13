@@ -76,6 +76,14 @@ export const dayOfWeekOf = (date: LocalDate): DayOfWeek => {
   return dayOfWeek(new Date(Date.UTC(year, month - 1, day)).getUTCDay());
 };
 
+/** The Monday that starts this date's week, matching Postgres `date_trunc('week', ...)`. */
+export const weekStartOf = (date: LocalDate): LocalDate =>
+  addDays(date, -((dayOfWeekOf(date) + 6) % 7));
+
+/** The first of this date's month, matching Postgres `date_trunc('month', ...)`. */
+export const monthStartOf = (date: LocalDate): LocalDate =>
+  parseLocalDate(`${date.slice(0, 7)}-01`);
+
 export const addDays = (date: LocalDate, days: number): LocalDate => {
   const { year, month, day } = partsOf(date);
   const shifted = new Date(

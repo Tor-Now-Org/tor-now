@@ -1,3 +1,4 @@
+import type { Instant } from "../time/instant.ts";
 import type { LocalTime } from "../time/local-time.ts";
 import type { TimeZone } from "../time/zone.ts";
 import type { BusinessId, BusinessPhotoId, ResourceId, ServiceId } from "./ids.ts";
@@ -36,6 +37,7 @@ export type Business = {
   readonly minimumNoticeMinutes: number;
   readonly bookingHorizonDays: number;
   readonly cancellationWindowHours: number;
+  readonly createdAt: Instant;
 };
 
 /**

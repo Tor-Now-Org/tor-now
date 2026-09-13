@@ -29,6 +29,7 @@ export const aBusiness = (overrides: Partial<Business> = {}): Business => ({
   minimumNoticeMinutes: BUSINESS_DEFAULTS.minimumNoticeMinutes,
   bookingHorizonDays: BUSINESS_DEFAULTS.bookingHorizonDays,
   cancellationWindowHours: BUSINESS_DEFAULTS.cancellationWindowHours,
+  createdAt: instant(Date.parse("2026-01-01T00:00:00Z")),
   ...overrides,
 });
 

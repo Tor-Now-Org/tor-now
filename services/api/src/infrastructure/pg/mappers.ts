@@ -96,6 +96,7 @@ export const toBusiness = (row: Row): Business => ({
   minimumNoticeMinutes: int(row["minimum_notice_minutes"]),
   bookingHorizonDays: int(row["booking_horizon_days"]),
   cancellationWindowHours: int(row["cancellation_window_hours"]),
+  createdAt: toInstant(row["created_at"]),
 });
 
 export const toBusinessPhoto = (row: Row): BusinessPhoto => ({

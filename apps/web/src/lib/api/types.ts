@@ -345,6 +345,28 @@ export type BusinessSummaryDto = {
   ownerPhone: string | null;
 };
 
+export type MonthCountDto = { monthStart: string; count: number };
+
+export type WeeklyAppointmentActivityDto = {
+  weekStart: string;
+  confirmed: number;
+  cancelled: number;
+  noShow: number;
+  completed: number;
+};
+
+export type BusinessVolumeDto = { businessId: string; businessName: string; count: number };
+
+export type PlatformStatsDto = {
+  businessStatusCounts: { active: number; overdue: number; inactive: number };
+  planCounts: { FREE: number; STANDARD: number };
+  monthlyRecurringRevenueMinor: number;
+  businessSignupsByMonth: MonthCountDto[];
+  userSignupsByMonth: MonthCountDto[];
+  appointmentActivityByWeek: WeeklyAppointmentActivityDto[];
+  topBusinesses: BusinessVolumeDto[];
+};
+
 export type AuditEntryDto = {
   id: string;
   actorId: string | null;

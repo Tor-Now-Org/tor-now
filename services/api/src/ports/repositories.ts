@@ -55,6 +55,28 @@ export type DayCount = {
   readonly count: number;
 };
 
+/** How many rows were created in a month, for a signup trend. */
+export type MonthCount = {
+  readonly monthStart: LocalDate;
+  readonly count: number;
+};
+
+/** One week's appointments, by how each one ended. */
+export type WeeklyAppointmentActivity = {
+  readonly weekStart: LocalDate;
+  readonly confirmed: number;
+  readonly cancelled: number;
+  readonly noShow: number;
+  readonly completed: number;
+};
+
+/** One Business's share of platform-wide appointment volume. */
+export type BusinessVolume = {
+  readonly businessId: BusinessId;
+  readonly businessName: string;
+  readonly count: number;
+};
+
 export type UserRepository = {
   findById(id: UserId): Promise<User | null>;
   findByPhone(phone: string): Promise<User | null>;
@@ -79,6 +101,8 @@ export type UserRepository = {
   anonymise(id: UserId): Promise<User>;
   setAdministrator(id: UserId, isAdministrator: boolean): Promise<User>;
   list(page: Page, query: string | null): Promise<readonly User[]>;
+  /** Platform-wide signups by month, for the administrator's statistics tab. */
+  monthlySignups(from: Instant, to: Instant): Promise<readonly MonthCount[]>;
 };
 
 export type BusinessSearchResult = {
@@ -103,6 +127,8 @@ export type BusinessRepository = {
   ): Promise<Business>;
   setActive(id: BusinessId, active: boolean): Promise<Business>;
   list(page: Page, query: string | null): Promise<readonly Business[]>;
+  /** Platform-wide registrations by month, for the administrator's statistics tab. */
+  monthlySignups(from: Instant, to: Instant): Promise<readonly MonthCount[]>;
 };
 
 export type BusinessPhotoRepository = {
@@ -511,6 +537,21 @@ export type AppointmentRepository = {
       >
     >,
   ): Promise<Appointment>;
+  /**
+   * Platform-wide booking volume by week, broken down by how each appointment
+   * ended — the administrator's statistics tab, and nothing more specific: no
+   * customer or resource crosses this boundary, only counts.
+   */
+  platformWeeklyActivity(
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly WeeklyAppointmentActivity[]>;
+  /** The busiest Businesses in a span, cancelled appointments excluded. */
+  topBusinessesByVolume(
+    from: Instant,
+    to: Instant,
+    limit: number,
+  ): Promise<readonly BusinessVolume[]>;
 };
 
 export type SubscriptionRepository = {

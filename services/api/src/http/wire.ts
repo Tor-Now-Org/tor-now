@@ -17,6 +17,7 @@ import {
   type User,
   type WorkingHours,
 } from "@tor-now/domain";
+import type { PlatformStats } from "../application/admin-service.ts";
 import type {
   StaffedBusiness,
   TeamMember,
@@ -36,6 +37,8 @@ import type { Impact, StrandedAppointment } from "../application/stranded.ts";
  * counts and an Appointment reaches a customer without its Resource's other
  * bookings.
  */
+
+export const platformStatsOut = (stats: PlatformStats) => stats;
 
 export const businessOut = (business: Business) => ({
   id: business.id,
