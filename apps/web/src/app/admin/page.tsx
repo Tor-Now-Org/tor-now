@@ -375,6 +375,11 @@ export default function AdminPage() {
             {systemPanel === "audit" && (
               <>
                 <Note>{copy.auditNote}</Note>
+                {/* The log's worth is that it cannot be edited, and saying so
+                    is part of the control rather than decoration — an
+                    administrator reading it needs to know nobody tidied it.
+                    Lost when the system tab was split into panels. */}
+                <Note>{copy.auditAppendOnly}</Note>
                 {audit.map((entry) => (
                   <Card key={entry.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     <span style={{ fontWeight: 500, fontSize: 13.5 }}>{entry.action}</span>
