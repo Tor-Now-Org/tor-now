@@ -287,8 +287,8 @@ export default function AdminPage() {
                 stats={stats}
                 language={language}
                 copy={{
-                  mrr: copy.mrr,
-                  mrrHint: copy.mrrHint,
+                  totalUsers: copy.totalUsers,
+                  totalUsersHint: copy.totalUsersHint,
                   businessStatus: copy.businessStatus,
                   active: copy.active,
                   overdue: copy.overdue,
@@ -334,8 +334,6 @@ export default function AdminPage() {
 
             {systemPanel === "admins" && (
               <>
-                <Note>{copy.adminsNote}</Note>
-                <Note>{copy.seededNote}</Note>
                 {administrators.map((candidate) => (
                   <Card key={candidate.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{ flex: 1 }}>{candidate.name}</span>
@@ -373,7 +371,6 @@ export default function AdminPage() {
             {systemPanel === "audit" && (
               <>
                 <Note>{copy.auditNote}</Note>
-                <Note>{copy.auditAppendOnly}</Note>
                 {audit.map((entry) => (
                   <Card key={entry.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     <span style={{ fontWeight: 500, fontSize: 13.5 }}>{entry.action}</span>

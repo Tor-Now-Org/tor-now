@@ -361,6 +361,7 @@ export type PlatformStatsDto = {
   businessStatusCounts: { active: number; overdue: number; inactive: number };
   planCounts: { FREE: number; STANDARD: number };
   monthlyRecurringRevenueMinor: number;
+  totalUsers: number;
   businessSignupsByMonth: MonthCountDto[];
   userSignupsByMonth: MonthCountDto[];
   appointmentActivityByWeek: WeeklyAppointmentActivityDto[];

@@ -1586,6 +1586,21 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("counts a new user in the platform total", async () => {
+      await withRepositories(async (repositories) => {
+        const before = await repositories.users.count();
+
+        await repositories.users.create({
+          phone: "+972500004403",
+          givenName: "נועה",
+          familyName: null,
+          birthDate: null,
+        });
+
+        expect(await repositories.users.count()).toBe(before + 1);
+      });
+    });
+
     it("counts blocks the same way, so a day off shows on the grid", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "4104");
