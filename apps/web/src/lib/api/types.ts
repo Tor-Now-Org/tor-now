@@ -104,8 +104,15 @@ export type BusinessMonthDto = {
   days: {
     date: string;
     byCalendar: { resourceId: string; appointments: number; away: boolean }[];
-    /** Whether anybody works that day at all, by the week's own shape. */
-    shopOpen: boolean;
+    /**
+     * Whether anybody works that day at all, by the week's own shape.
+     *
+     * Optional, like every other field added after a deploy: the interface
+     * ships ahead of the API often enough that "absent" has to mean something
+     * safe. Absent means open — reading it as closed drew every day of every
+     * month as a day nobody works.
+     */
+    shopOpen?: boolean;
     shopClosed: boolean;
     shopHours: { start: string; end: string }[];
     /** Why the shop is doing that, when it was given a reason. */

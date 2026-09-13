@@ -68,18 +68,42 @@ export const segmentIn = <T extends Span>(
 /** What a square has to say, gathered from the month the API answered. */
 export type DayFacts = {
   readonly date: string;
-  /** Whether anybody works that day at all, by the week's own shape. */
-  readonly shopOpen: boolean;
+  /** Whether anybody works that day at all. Absent from an older API. */
+  readonly shopOpen?: boolean;
   readonly shopClosed: boolean;
   readonly shopHours: readonly { start: string; end: string }[];
   readonly byCalendar: readonly { resourceId: string; appointments: number; away: boolean }[];
 };
 
+/**
+ * Whether anybody works that day, as the grid should read it.
+ *
+ * An API that has not been deployed yet says nothing about this, and the one
+ * thing that must not happen is a silent "closed": it drew every day of every
+ * month as a day nobody works, which is exactly what an owner would report as
+ * the calendar breaking.
+ */
+export const worksOn = (facts: DayFacts): boolean => facts.shopOpen !== false;
+
+/**
+ * A day nothing is known about yet.
+ *
+ * Drawn as an ordinary open day rather than as anything in particular: the
+ * answer for this month has not arrived, and every other reading would be an
+ * assertion nobody has made — which is what drew a whole month as closed while
+ * last month's answer was still in hand.
+ */
+export const nothingKnown = (date: string): DayFacts => ({
+  date,
+  shopOpen: true,
+  shopClosed: false,
+  shopHours: [],
+  byCalendar: [],
+});
+
 export const factsOn = (month: BusinessMonthDto, date: string): DayFacts => {
   const found = month.days.find((day) => day.date === date);
-  return (
-    found ?? { date, shopOpen: true, shopClosed: false, shopHours: [], byCalendar: [] }
-  );
+  return found ?? nothingKnown(date);
 };
 
 /** The dates a two-tap selection covers, in order, both ends included. */

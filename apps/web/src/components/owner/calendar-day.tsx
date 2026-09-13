@@ -264,9 +264,25 @@ export const CalendarDay = ({
               ‹
             </button>
             <span
-              style={{ flex: 1, textAlign: "center", fontWeight: 600, whiteSpace: "nowrap" }}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                textAlign: "center",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
             >
-              {monthName(firstOfMonth, business.timeZone, language)}
+              {/* Short where the row is shared with the calendar picker: that
+                  chip and this name are the two things here that can grow, and
+                  only one of them is a name somebody chose. */}
+              {monthName(
+                firstOfMonth,
+                business.timeZone,
+                language,
+                resources.length > 1 ? "short" : "long",
+              )}
             </span>
             <button
               className="chip tap"

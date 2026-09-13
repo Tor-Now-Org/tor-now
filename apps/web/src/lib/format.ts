@@ -169,10 +169,18 @@ export const monthName = (
   firstOfMonth: string,
   timeZone: string,
   language: string,
+  /**
+   * Short where the row is shared.
+   *
+   * The calendar's toolbar carries the month, the arrows, which calendar is
+   * being read, and the two controls for finding things — and "ספטמבר 2026"
+   * is the one part of that which can give ground without losing anything.
+   */
+  length: "long" | "short" = "long",
 ): string =>
   new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
     timeZone,
-    month: "long",
+    month: length,
     year: "numeric",
   }).format(new Date(`${firstOfMonth}T12:00:00Z`));
 

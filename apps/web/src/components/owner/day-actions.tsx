@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type { BusinessDto } from "@/lib/api/types.ts";
@@ -74,15 +74,35 @@ export const DayActionSheet = ({
     }
   };
 
-  /** How many days the blockage under the finger covers, once it is known. */
-  const openBlock = async (groupId: string) => {
-    try {
-      const blocks = await api.blockGroup(token, business.id, groupId);
-      setGroup(blocks.length);
-    } catch {
-      setGroup(1);
+  /**
+   * How many days the blockage under the finger covers.
+   *
+   * Read as the sheet opens rather than behind a button asking "what happens
+   * on this day". That button was a question the sheet is already the answer
+   * to, and pressing it was the only way to find out that removing this would
+   * take a fortnight with it.
+   */
+  const opened = picked !== null && picked.kind === "block" ? picked.groupId : null;
+  useEffect(() => {
+    if (opened === null) {
+      setGroup(null);
+      return;
     }
-  };
+    let current = true;
+    api
+      .blockGroup(token, business.id, opened)
+      .then((blocks) => {
+        if (current) setGroup(blocks.length);
+      })
+      .catch(() => {
+        // One day is the safe reading: it offers to remove this day only,
+        // which is the smaller of the two things it could do.
+        if (current) setGroup(1);
+      });
+    return () => {
+      current = false;
+    };
+  }, [opened, token, business.id]);
 
   return (
     <Sheet
@@ -122,11 +142,6 @@ export const DayActionSheet = ({
             {clockOf(picked.start)}–{clockOf(picked.end)} · {picked.resourceName}
           </p>
 
-          {picked.groupId !== null && group === null && (
-            <Button intent="quiet" onClick={() => void openBlock(picked.groupId ?? "")}>
-              {copy.whatHappens}
-            </Button>
-          )}
           {group !== null && group > 1 && (
             <p className="said" style={{ margin: 0 }}>
               {copy.partOfBlockage.replace("{days}", String(group))}

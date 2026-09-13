@@ -604,6 +604,10 @@ const Choice = ({
     style={{
       display: "flex",
       alignItems: "center",
+      // Said, because the shared button style centres its contents: each row
+      // then centred its own icon and words, so three rows of different
+      // lengths put their icons in three different places.
+      justifyContent: "flex-start",
       gap: 11,
       padding: 11,
       borderRadius: 13,
@@ -623,13 +627,17 @@ const Choice = ({
         display: "grid",
         placeItems: "center",
         fontSize: 17,
-        background: "var(--sunken)",
+        // On the disabled row the tile would otherwise be the same grey as the
+        // row behind it, and the icon would float loose.
+        background: disabled ? "var(--raised)" : "var(--sunken)",
         flexShrink: 0,
       }}
     >
       {icon}
     </span>
-    <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+    <span
+      style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}
+    >
       <b style={{ fontSize: 14, fontWeight: 600 }}>{title}</b>
       <span className="hint">{hint}</span>
     </span>

@@ -4008,3 +4008,46 @@ test.describe("the calendar, altogether", () => {
     await expect(page.getByRole("button", { name: "קצר" })).toHaveCount(0, { timeout: 15_000 });
   });
 });
+
+/**
+ * Stepping through the months.
+ *
+ * The grid draws the dates of whichever month it is on, while the answer for
+ * that month is still in flight. Asking last month's answer about next month's
+ * dates missed on every day — and a day nothing is known about used to draw as
+ * a day nobody works, so a whole month came back closed.
+ */
+test.describe("moving between months", () => {
+  test("comes back to a month that still reads as itself", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `חודשים ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "18:00" },
+    });
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    const today = aDayFromNow(0);
+    const hatched = async () =>
+      page
+        .getByRole("button", { name: today })
+        .evaluate((node) => window.getComputedStyle(node).backgroundImage);
+    const open = await hatched();
+    expect(open).not.toContain("gradient");
+
+    // Forward and back, as fast as the buttons allow — which is what made the
+    // answers arrive out of order.
+    for (const step of ["החודש הבא", "החודש הבא", "החודש הקודם", "החודש הקודם"]) {
+      await page.getByRole("button", { name: step }).click();
+    }
+
+    await expect(page.getByRole("button", { name: today })).toBeVisible({ timeout: 15_000 });
+    // The business works this day, and the month still says so.
+    await expect.poll(hatched, { timeout: 15_000 }).not.toContain("gradient");
+  });
+});

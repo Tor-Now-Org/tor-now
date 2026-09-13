@@ -8,6 +8,7 @@ import {
   segmentIn,
   shiftMonth,
   weeksOf,
+  worksOn,
 } from "./month-model.ts";
 
 describe("the month as rows of seven", () => {
@@ -207,5 +208,27 @@ describe("moving between months", () => {
 
   it("always lands on the first", () => {
     expect(shiftMonth("2026-01-31", 1)).toBe("2026-02-01");
+  });
+});
+
+describe("whether anybody works that day", () => {
+  const facts = (shopOpen?: boolean) => ({
+    date: "2026-09-15",
+    shopClosed: false,
+    shopHours: [],
+    byCalendar: [],
+    ...(shopOpen === undefined ? {} : { shopOpen }),
+  });
+
+  it("takes the answer when the API gives one", () => {
+    expect(worksOn(facts(true))).toBe(true);
+    expect(worksOn(facts(false))).toBe(false);
+  });
+
+  it("reads silence as open, never as closed", () => {
+    // An API deployed before this field says nothing about it. Reading that as
+    // closed drew every day of every month as a day nobody works — which is
+    // what a whole calendar going grey looks like from the outside.
+    expect(worksOn(facts())).toBe(true);
   });
 });

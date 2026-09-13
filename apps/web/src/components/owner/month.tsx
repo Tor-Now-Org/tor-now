@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type {
@@ -23,6 +23,8 @@ import {
   BAND_ROWS_IN_A_WEEK,
   labelFitting,
   mergeOverlapping,
+  nothingKnown,
+  worksOn,
   packBands,
   segmentIn,
   weeksOf,
@@ -59,7 +61,7 @@ type Weather = "open" | "short" | "shut" | "resting";
 const weatherOn = (month: BusinessMonthDto, date: string): Weather => {
   const facts = factsOn(month, date);
   if (facts.shopClosed) return "shut";
-  if (!facts.shopOpen) return "resting";
+  if (!worksOn(facts)) return "resting";
   return facts.shopHours.length > 0 ? "short" : "open";
 };
 
@@ -120,7 +122,18 @@ export const Month = ({
   const { language } = useLanguage();
   const errorText = useErrorText();
 
-  const [month, setMonth] = useState<BusinessMonthDto | null>(null);
+  /**
+   * The month, and which month it is of.
+   *
+   * Kept together because they were not. The grid draws the dates of whatever
+   * `firstOfMonth` says while the answer for that month is still in flight, so
+   * for a moment it was asking last month's answer about next month's dates —
+   * every lookup missed, every day fell back to the default, and a whole month
+   * drew as though nobody worked in it. Stepping forward and back was enough to
+   * see it. A late answer to a question nobody is asking any more is dropped
+   * for the same reason.
+   */
+  const [month, setMonth] = useState<{ of: string; data: BusinessMonthDto } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /** The two taps. The second one turns a day into a range. */
@@ -135,10 +148,20 @@ export const Month = ({
   const onOffer = resources.filter((resource) => resource.active !== false);
   const many = onOffer.length > 1;
 
+  /**
+   * The month the screen is on right now, readable from inside an answer that
+   * is still in flight — which is the only way to tell a late answer to a
+   * question nobody is asking any more from the answer to this one.
+   */
+  const wanted = useRef(firstOfMonth);
+  wanted.current = firstOfMonth;
+
   const load = useCallback(async () => {
     setError(null);
+    const asked = firstOfMonth;
     try {
-      setMonth(await api.businessMonth(token, business.id, firstOfMonth));
+      const data = await api.businessMonth(token, business.id, asked);
+      if (wanted.current === asked) setMonth({ of: asked, data });
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
@@ -169,6 +192,10 @@ export const Month = ({
   };
 
   if (month === null) return <Spinner />;
+
+  // Until the answer for this month arrives, the squares are drawn with nothing
+  // said about them rather than with what was true of another month.
+  const known = month.of === firstOfMonth ? month.data : null;
 
   const chosen = from === null ? [] : datesBetween(from, to ?? from);
   const weeks = weeksOf(firstOfMonth);
@@ -209,8 +236,8 @@ export const Month = ({
                   <DaySquare
                     key={date}
                     date={date}
-                    weather={weatherOn(month, date)}
-                    facts={factsOn(month, date)}
+                    weather={known === null ? "open" : weatherOn(known, date)}
+                    facts={known === null ? nothingKnown(date) : factsOn(known, date)}
                     calendars={touching}
                     chosen={chosen.includes(date)}
                     edge={date === from || date === to}
@@ -251,8 +278,8 @@ export const Month = ({
             <WeekBands
               week={week}
               row={row}
-              closures={month.closures}
-              blockages={month.blockages.filter(
+              closures={known?.closures ?? []}
+              blockages={(known?.blockages ?? []).filter(
                 (blockage) => scope === null || blockage.resourceId === scope,
               )}
               calendars={onOffer}
@@ -326,7 +353,7 @@ export const Month = ({
         {openWeek !== null && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <h2 style={{ fontSize: 18 }}>{copy.thatWeek}</h2>
-            {thingsIn(weeks[openWeek] ?? [], month, scope).map((thing) => (
+            {thingsIn(weeks[openWeek] ?? [], known, scope).map((thing) => (
               <button
                 key={"kind" in thing ? `c-${thing.fromDate}` : thing.groupId}
                 onClick={() => {
@@ -721,10 +748,12 @@ const indexOfCalendar = (calendars: readonly ResourceDto[], resourceId: string) 
 /** Everything decided about one week, closures first, in date order. */
 const thingsIn = (
   week: readonly (string | null)[],
-  month: BusinessMonthDto,
+  month: BusinessMonthDto | null,
   scope: string | null,
 ): WeekThing[] =>
-  [
+  month === null
+    ? []
+    : [
     ...month.closures.map((closure) => segmentIn<WeekThing>(week, closure)),
     ...month.blockages
       .filter((blockage) => scope === null || blockage.resourceId === scope)
