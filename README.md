@@ -61,11 +61,12 @@ where waiting costs nobody's attention. `git push --no-verify` skips it.
 
 ## Deploying
 
-Nothing deploys until the checks pass: [`deploy.yml`](./.github/workflows/deploy.yml)
-runs on the *completion* of the `Pull request` workflow rather than beside it,
-and takes the exact commit that passed. A merge is a push, so merging into `dev`
-or `main` goes through the same gate a direct push does — and deploys what the
-merge brought in, not what the last commit on the branch happened to touch. It then deploys only what changed — the
+Nothing deploys until the checks pass. [`deploy.yml`](./.github/workflows/deploy.yml)
+is *called* by the checks workflow once every one of them is green, so the gate
+is a dependency rather than a second workflow racing the first. A merge is a
+push, so merging into `dev` or `main` goes through it the same way a direct push
+does — and deploys what the merge brought in, not what the last commit on the
+branch happened to touch. It then deploys only what changed — the
 schema when `supabase/migrations` moved, the Edge Function when its bundle did —
 with the schema going first, since a function calling a column that does not
 exist yet is the one ordering that breaks for real users.
