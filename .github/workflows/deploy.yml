@@ -13,16 +13,28 @@ name: Deploy
 # only its own job:
 #
 #   SUPABASE_DB_URL        a Postgres connection string. `db push` talks to the
-#                          database directly, so migrations need no Management
-#                          API access at all, and this cannot deploy anything.
-#   SUPABASE_ACCESS_TOKEN  a *scoped* personal access token (sbp_fc…), granting
-#                          Edge Functions read-write on this project alone. It
-#                          cannot read the database, the billing, the
-#                          organisation, or any other project.
+#                          database directly, so migrations need no Supabase
+#                          account and no Management API access at all — the
+#                          credential that touches the data cannot deploy, and
+#                          reaches exactly one database.
+#   SUPABASE_ACCESS_TOKEN  a token belonging to a Supabase account that exists
+#                          only for this, holding the **Developer** role. That
+#                          role may update Edge Functions and may not change
+#                          project settings, billing, members, or the
+#                          organisation. A token can never do more than the
+#                          account behind it, so the account is where this is
+#                          limited.
 #
-# One classic account-wide token would do both — and would also carry every
-# permission on every project the account can reach, now and in future. Nothing
-# here needs that, so nothing here is given it.
+# One human owner's token would do both — and would carry every permission on
+# every project that person can reach, now and in future. Nothing here needs
+# that, so nothing here is given it.
+#
+# Two tightenings are worth taking when they become available: project-scoped
+# roles (Team plan) confine the CI account to one project, and scoped personal
+# access tokens narrow a token to Edge Functions alone. Neither exists on this
+# organisation's plan today, so the separation between dev and production is
+# kept on the GitHub side: each environment holds its own pair of secrets, and
+# Production's are restricted to the branch that deploys it.
 #
 # Without the credentials the workflow reports what it would have done and
 # succeeds, so a fork or a first-time contributor is not blocked by a secret
@@ -51,7 +63,7 @@ jobs:
     # variables set still deploys the right one rather than the wrong one.
     environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     env:
-      # A scoped token (sbp_fc…): Edge Functions, read-write, this project only.
+      # Belongs to the CI account, which holds the Developer role and nothing more.
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       # A Postgres connection string. Migrations go straight to the database, so
       # this credential can deploy nothing and the one above can read nothing.
