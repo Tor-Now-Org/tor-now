@@ -35,7 +35,18 @@ export const clockOf = (minutes: number): string => {
   return `${hour}:${String(held % 60).padStart(2, "0")}`;
 };
 
-/** The window the timeline covers: the hours worked, with an hour either side. */
+/**
+ * The window the timeline covers: everything the day holds, rounded out to
+ * whole hours so the rail is labelled in them.
+ *
+ * It used to add an hour of padding at each end, which was empty by
+ * construction. Every edge that matters is already an argument here — the hours
+ * worked and every item in the day — so a blockage running to closing time
+ * pushed the window an hour past it and drew sixty minutes of nothing, and a
+ * day shortened to 09:00–14:00 was drawn as 08:00–15:00, reading as a day whose
+ * hours had not changed at all. The rounding is what keeps the rail on the hour;
+ * the padding only ever made the day look longer than it was.
+ */
 export const windowOf = (
   open: readonly { start: string; end: string }[],
   items: readonly Span[],
@@ -45,12 +56,11 @@ export const windowOf = (
     ...items.flatMap((item) => [item.start, item.end]),
   ];
   if (edges.length === 0) return { start: 9 * 60, end: 17 * 60 };
-  const first = Math.min(...edges);
-  const last = Math.max(...edges);
-  return {
-    start: Math.max(0, Math.floor((first - 60) / 60) * 60),
-    end: Math.min(MINUTES_IN_A_DAY, Math.ceil((last + 60) / 60) * 60),
-  };
+  const start = Math.max(0, Math.floor(Math.min(...edges) / 60) * 60);
+  const end = Math.min(MINUTES_IN_A_DAY, Math.ceil(Math.max(...edges) / 60) * 60);
+  // A day holding nothing but a single instant would otherwise have no height
+  // to draw anything in.
+  return end > start ? { start, end } : { start, end: Math.min(MINUTES_IN_A_DAY, start + 60) };
 };
 
 /**

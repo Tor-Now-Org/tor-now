@@ -76,6 +76,17 @@ describe("naming a person rather than filtering on a string", () => {
     expect(her === undefined ? false : matchesQuery(her, "999")).toBe(false);
   });
 
+  it("finds an English name whatever case it is typed in", () => {
+    // Hebrew has no case, so matching the raw string worked for every Hebrew
+    // name and failed for exactly the English ones.
+    const her = customersIn([
+      { ...yael, customerName: "Yael Alon", customerPhone: "+972501112233" },
+    ])[0];
+    expect(her === undefined ? false : matchesQuery(her, "yael")).toBe(true);
+    expect(her === undefined ? false : matchesQuery(her, "YAEL")).toBe(true);
+    expect(her === undefined ? false : matchesQuery(her, "AlOn")).toBe(true);
+  });
+
   it("matches nothing at all on an empty query", () => {
     const her = customersIn([yael])[0];
     expect(her === undefined ? true : matchesQuery(her, "   ")).toBe(false);

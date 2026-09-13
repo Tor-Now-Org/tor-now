@@ -63,10 +63,18 @@ export const customersIn = (
   return [...people.values()].sort((left, right) => left.name.localeCompare(right.name));
 };
 
+/**
+ * Whether a customer is who the query is about.
+ *
+ * Case-insensitively, which matters in exactly one of the two languages here:
+ * Hebrew has no case, so matching on the raw string worked perfectly for every
+ * Hebrew name and quietly failed for "yael" against "Yael". Half the product
+ * working is what a flaky search looks like from the outside.
+ */
 export const matchesQuery = (customer: Customer, query: string): boolean => {
   const trimmed = query.trim();
   if (trimmed === "") return false;
-  if (customer.name.includes(trimmed)) return true;
+  if (customer.name.toLocaleLowerCase().includes(trimmed.toLocaleLowerCase())) return true;
   const digits = digitsOf(trimmed);
   return digits !== "" && digitsOf(customer.phone).includes(digits);
 };

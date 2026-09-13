@@ -21,23 +21,59 @@ const at = (clock: string) => minutesOf(clock);
 const span = (from: string, to: string) => ({ start: at(from), end: at(to) });
 
 describe("the window a day is drawn in", () => {
-  it("is the hours worked, with an hour either side", () => {
+  it("is the hours worked, and no more than them", () => {
     expect(windowOf([{ start: "09:00", end: "17:00" }], [])).toEqual({
-      start: at("08:00"),
-      end: at("18:00"),
+      start: at("09:00"),
+      end: at("17:00"),
     });
   });
 
-  it("stretches to hold anything outside them", () => {
+  it("says a shortened day is shortened", () => {
+    // Drawn with an hour of padding either side, 09:00–14:00 became 08:00–15:00
+    // — the same eight hours an ordinary day is drawn in, so the one thing
+    // making the day special was the one thing invisible.
+    expect(windowOf([{ start: "09:00", end: "14:00" }], [])).toEqual({
+      start: at("09:00"),
+      end: at("14:00"),
+    });
+  });
+
+  it("does not run past a blockage that reaches closing time", () => {
+    expect(
+      windowOf([{ start: "09:00", end: "17:00" }], [span("14:00", "17:00")]),
+    ).toEqual({ start: at("09:00"), end: at("17:00") });
+  });
+
+  it("does not run before a blockage that starts at opening", () => {
+    expect(
+      windowOf([{ start: "09:00", end: "17:00" }], [span("09:00", "11:00")]),
+    ).toEqual({ start: at("09:00"), end: at("17:00") });
+  });
+
+  it("holds a blockage covering the whole day without overflowing it", () => {
+    expect(windowOf([], [span("00:00", "24:00")])).toEqual({
+      start: at("00:00"),
+      end: MINUTES_IN_A_DAY,
+    });
+  });
+
+  it("stretches to hold anything outside the hours worked", () => {
     // A blockage before opening is still part of the day being looked at.
     expect(windowOf([{ start: "09:00", end: "17:00" }], [span("07:30", "08:00")])).toEqual({
-      start: at("06:00"),
-      end: at("18:00"),
+      start: at("07:00"),
+      end: at("17:00"),
     });
   });
 
   it("has something to say about a day with no hours at all", () => {
     expect(windowOf([], [])).toEqual({ start: at("09:00"), end: at("17:00") });
+  });
+
+  it("gives a day holding one instant something to draw in", () => {
+    expect(windowOf([], [span("10:00", "10:00")])).toEqual({
+      start: at("10:00"),
+      end: at("11:00"),
+    });
   });
 });
 

@@ -4,6 +4,7 @@ import {
   asTyped,
   aDayFromNow,
   theNextStart,
+  anInstantAt,
   call,
   ready,
   movedIntoThePast,
@@ -4117,5 +4118,381 @@ test.describe("a calendar's own days off", () => {
     await page.getByRole("dialog").getByRole("button", { name: /שימי/ }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
     await expect(square.getByText("סגור")).toHaveCount(0, { timeout: 15_000 });
+  });
+});
+
+/**
+ * Four things that were wrong together, and are each their own kind of wrong.
+ *
+ * Two were the day drawn an hour longer than it is. One was a screen offering
+ * controls that matched nothing and said nothing when they did nothing. One was
+ * a search that answered the previous question.
+ */
+test.describe("the day as long as it really is", () => {
+  const openCalendarAs = async (
+    page: Page,
+    shop: { business: { id: string }; owner: { token: string } },
+  ) => {
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+  };
+
+  test("a shortened day is drawn in its own hours, not an hour either side", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `שעות קצרות ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(3);
+    await call(`/businesses/${shop.business.id}/closures`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        fromDate: day,
+        toDate: day,
+        note: "ערב חג",
+        ranges: [{ start: "09:00", end: "12:00" }],
+        upcoming: "KEEP",
+      },
+    });
+
+    await openCalendarAs(page, shop);
+    await page.getByRole("button", { name: day }).click();
+
+    // The empty day folds into one stretch, and the stretch is labelled with
+    // the hours it covers — which is the window, said out loud. It used to read
+    // 08:00–13:00: the same eight-to-five shape as any other day, so the one
+    // thing making this day special was the one thing not on the screen.
+    await expect(page.getByText("09:00–12:00")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("08:00–13:00")).toHaveCount(0);
+  });
+
+  test("a blockage reaching closing time does not push the day past it", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `חסימה עד הסוף ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(3);
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        blocks: [
+          {
+            startAt: anInstantAt(day, "14:00"),
+            endAt: anInstantAt(day, "17:00"),
+            reason: "",
+          },
+        ],
+        upcoming: "KEEP",
+      },
+    });
+
+    await openCalendarAs(page, shop);
+    await page.getByRole("button", { name: day }).click();
+
+    // 09:00 to 14:00 is free and folds; the blockage holds the rest. Neither
+    // edge of the day has an hour of nothing beyond it.
+    await expect(page.getByText("09:00–14:00")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("18:00", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("08:00", { exact: true })).toHaveCount(0);
+  });
+
+  test("a blockage starting at opening does not push the day before it", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `חסימה מהבוקר ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(3);
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        blocks: [
+          {
+            startAt: anInstantAt(day, "09:00"),
+            endAt: anInstantAt(day, "11:00"),
+            reason: "",
+          },
+        ],
+        upcoming: "KEEP",
+      },
+    });
+
+    await openCalendarAs(page, shop);
+    await page.getByRole("button", { name: day }).click();
+
+    await expect(page.getByText("11:00–17:00")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("08:00", { exact: true })).toHaveCount(0);
+  });
+});
+
+test.describe("a day nobody works, and why nobody works it", () => {
+  const aWeekdayAhead = (weekday: number): string => {
+    for (let ahead = 1; ahead < 20; ahead += 1) {
+      const date = aDayFromNow(ahead);
+      if (new Date(`${date}T00:00:00Z`).getUTCDay() === weekday) return date;
+    }
+    return "";
+  };
+
+  test("a rest day says it is the usual week, and offers nothing it cannot do", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `יום מנוחה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    // Saturday off, for the whole week ahead and every week after it.
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`, {
+      method: "PUT",
+      token: shop.owner.token,
+      body: {
+        week: [0, 1, 2, 3, 4, 5].map((dayOfWeek) => ({
+          dayOfWeek,
+          start: "09:00",
+          end: "17:00",
+        })),
+      },
+    });
+    const saturday = aWeekdayAhead(6);
+    expect(saturday).not.toBe("");
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: saturday }).click();
+
+    await expect(page.getByText("יום שבו לא עובדים")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/כך נראה השבוע הרגיל/)).toBeVisible();
+
+    // The two controls that used to be here matched no closure — there is no
+    // decision about this Saturday to name or to undo — so they did nothing at
+    // all, twice, in silence.
+    await expect(page.getByRole("button", { name: "ביטול הסגירה" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "שמירה" })).toHaveCount(0);
+    await expect(page.getByText("סגור כל היום")).toHaveCount(0);
+  });
+
+  test("a closed day offers both, and both of them work", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `סגירה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(4);
+    await call(`/businesses/${shop.business.id}/closures`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        fromDate: day,
+        toDate: day,
+        note: "חופשה",
+        ranges: [],
+        upcoming: "KEEP",
+      },
+    });
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: day }).click();
+
+    await expect(page.getByText("סגור כל היום")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("חופשה")).toBeVisible();
+
+    // The words change, and stay changed.
+    await page.getByRole("button", { name: /חופשה|שינוי/ }).first().click();
+    const note = page.getByRole("textbox").last();
+    await note.fill("חופשה משפחתית");
+    await page.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByText("חופשה משפחתית")).toBeVisible({ timeout: 15_000 });
+
+    // And the closure comes off, leaving an ordinary day behind it.
+    await page.getByRole("button", { name: "ביטול הסגירה" }).click();
+    await expect(page.getByText("סגור כל היום")).toHaveCount(0, { timeout: 15_000 });
+  });
+});
+
+test.describe("a search that answers the question it was asked", () => {
+  const aCustomerWithAnAppointment = async (
+    shop: {
+      business: { id: string };
+      service: { id: string };
+      resource: { id: string };
+    },
+    name: { givenName: string; familyName: string },
+    daysAhead: number,
+  ) => {
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name },
+    });
+    const day = aDayFromNow(daysAhead);
+    const [available] = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+    );
+    const slot = available?.slots[0]?.startAt ?? "";
+    expect(slot).not.toBe("");
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: slot,
+        customerNote: null,
+      },
+    });
+    return { phone, token };
+  };
+
+  test("never shows one query's matches under another", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `חיפוש יציב ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aCustomerWithAnAppointment(shop, { givenName: "דנה", familyName: "כהן" }, 20);
+    await aCustomerWithAnAppointment(shop, { givenName: "דניאל", familyName: "לוי" }, 21);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    const box = page.getByPlaceholder("חיפוש תור לפי שם או טלפון");
+
+    // "דנ" reaches both.
+    await box.fill("דנ");
+    await expect(page.getByText("דניאל לוי").first()).toBeVisible({ timeout: 15_000 });
+
+    // Now hold the next answer open. Without this the wrong answer is only on
+    // screen for the debounce plus a local request — a few hundred milliseconds
+    // that a retrying assertion sits straight through, which is exactly why the
+    // bug survived a suite this size. Held, the question is unambiguous: with
+    // "דנה" typed and its answer not back yet, what is on the screen?
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/appointments\?/, async (route) => {
+      await held;
+      await route.continue();
+    });
+
+    await box.fill("דנה");
+
+    // Not דניאל. He answered the previous question, and the screen used to
+    // keep showing him as though he answered this one.
+    await expect(page.getByText("דניאל לוי")).toHaveCount(0, { timeout: 15_000 });
+
+    release();
+    await page.unroute(/\/appointments\?/);
+    await expect(page.getByText("דנה כהן").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("דניאל לוי")).toHaveCount(0);
+  });
+
+  test("emptying the box gives the calendar back", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `חיפוש ריק ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aCustomerWithAnAppointment(shop, { givenName: "רותם", familyName: "שגב" }, 22);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    const box = page.getByPlaceholder("חיפוש תור לפי שם או טלפון");
+    await box.fill("רותם");
+    await expect(page.getByText("רותם שגב").first()).toBeVisible({ timeout: 15_000 });
+
+    await box.fill("");
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("a single letter is not a search, and does not hide the calendar", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `אות אחת ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aCustomerWithAnAppointment(shop, { givenName: "נועה", familyName: "ברק" }, 23);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("נ");
+
+    // One letter is everybody, so it is not a question — and the calendar
+    // stays rather than being replaced by a list or by "no matches".
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("לא נמצא תור מתאים")).toHaveCount(0);
+  });
+
+  test("finds an English name whatever case it is typed in", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `case ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aCustomerWithAnAppointment(shop, { givenName: "Yael", familyName: "Alon" }, 24);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    const box = page.getByPlaceholder("חיפוש תור לפי שם או טלפון");
+
+    // The suggestion — "did you mean this customer" — is matched in the
+    // browser, and that match was case-sensitive. Hebrew has no case, so it
+    // worked for every Hebrew name and failed only in the half of the product
+    // written in the other language. The results list below it comes from the
+    // server and was always case-insensitive, which is what made this look
+    // like the search working intermittently rather than not working.
+    await box.fill("yael");
+    await expect(
+      page.getByRole("button", { name: /לקוח\s+Yael Alon/ }),
+    ).toBeVisible({ timeout: 15_000 });
+
+    await box.fill("ALON");
+    await expect(
+      page.getByRole("button", { name: /לקוח\s+Yael Alon/ }),
+    ).toBeVisible({ timeout: 15_000 });
   });
 });

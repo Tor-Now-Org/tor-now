@@ -20,6 +20,12 @@ import { ClosedDay } from "./closed-day.tsx";
 import { Month } from "./month.tsx";
 import { ActiveFilters, FilterControls, FindControls } from "./day-filter-bar.tsx";
 import { NOTHING, anyFilter, keptBy, withinReach, type Facets, type Reach } from "./day-filter.ts";
+import {
+  answerTo,
+  hasFailed,
+  isPending,
+  useAppointmentSearch,
+} from "./day-search.ts";
 import { DayTimeline, type Picked } from "./day-timeline.tsx";
 import { DayActionSheet } from "./day-actions.tsx";
 import { AddButton, FinishAim, type Aim } from "./day-add.tsx";
@@ -32,7 +38,6 @@ import { shiftMonth } from "./month-model.ts";
  * believe a stale screen is current.
  */
 /** Long enough that a name is one request, short enough to feel immediate. */
-const SEARCH_SETTLE_MS = 250;
 
 export const CalendarDay = ({
   token,
@@ -92,23 +97,16 @@ export const CalendarDay = ({
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Two ways of looking at the same calendar. The strip answers "what is
-   * happening this week"; the month answers "which days are busy" — the
-   * question behind a holiday, an extra shift, or ringing a customer back next
-   * Tuesday. Both end at the same day's list, so switching never loses the day.
-   */
-  /**
-   * Finding an appointment by who booked it.
+   * What is being looked for, and what came back.
    *
-   * A customer rings up about a time two months out. The calendar answers "what
-   * is on this day", which is the wrong question — the owner knows the name and
-   * not the date, and paging forward until it appears is a search conducted by
-   * scrolling. While this box has something in it, it replaces the calendar
-   * rather than sitting beside it: the owner is looking for one appointment,
-   * not at a day.
+   * While this box has something in it, the search replaces the calendar rather
+   * than sitting beside it: the owner is looking for one appointment, not at a
+   * day. The answer lives in day-search.ts, which keeps it tied to the query it
+   * answers — see the note there for why a bare list could not be trusted.
    */
   const [query, setQuery] = useState("");
-  const [found, setFound] = useState<CalendarAppointmentDto[] | null>(null);
+  const search = useAppointmentSearch(token, business.id, query);
+  const found = answerTo(search, query);
   /**
    * The business's services, in their own order.
    *
@@ -176,49 +174,27 @@ export const CalendarDay = ({
     };
   }, [facets.customer, token, business.id]);
 
-  useEffect(() => {
-    const trimmed = query.trim();
-    if (trimmed.length < 2) {
-      setFound(null);
-      return;
-    }
-    let current = true;
-    // A short wait, so typing a name is one request rather than one per letter.
-    const timer = window.setTimeout(() => {
-      api
-        .searchAppointments(token, business.id, trimmed)
-        .then((matches) => {
-          if (current) setFound(matches);
-        })
-        .catch(() => {
-          if (current) setFound([]);
-        });
-    }, SEARCH_SETTLE_MS);
-    return () => {
-      current = false;
-      window.clearTimeout(timer);
-    };
-  }, [query, token, business.id]);
-
-
   /**
-   * Back to the day itself.
-   *
-   * Taking the chips off is not enough: the words in the search box are a
-   * filter of their own — they answer with the matches rather than with the
-   * day — so "clear" has to mean both, or the day never comes back.
-   */
-  /**
-   * Whether the shop is shut that day, and why.
+   * Whether the shop is shut that day, and whether anybody decided it.
    *
    * Shut means every calendar being shut: one chair off for the afternoon is
    * that chair's day, and the screen still has a day to draw.
+   *
+   * `decided` separates a closure from a rest day. A closure is an override on
+   * this date (ADR 0002) — it carries words, and it can be described or undone.
+   * A rest day is the week's own shape, with no override behind it and so
+   * nothing on this date to describe or undo. Both look identical from `open`
+   * alone, which is why the day used to offer a closure's controls on a
+   * Saturday, where they matched no closure and silently did nothing.
    */
   const shut =
     wholeDay !== null &&
     wholeDay.calendars.length > 0 &&
     wholeDay.calendars.every((calendar) => calendar.open.length === 0)
-      ? { note: wholeDay.calendars[0]?.note ?? null }
+      ? {
+          decided: wholeDay.calendars.some((calendar) => calendar.special),
+          note: wholeDay.calendars.find((calendar) => calendar.special)?.note ?? null,
+        }
       : null;
 
   const act = async (work: () => Promise<unknown>) => {
@@ -238,6 +214,13 @@ export const CalendarDay = ({
   /** While somebody is typing, the row is the field and the month steps aside. */
   const looking = searching || query !== "";
 
+  /**
+   * Back to the day itself.
+   *
+   * Taking the chips off is not enough: the words in the search box are a
+   * filter of their own — they answer with the matches rather than with the
+   * day — so "clear" has to mean both, or the day never comes back.
+   */
   const showTheWholeDay = () => {
     setFacets(NOTHING);
     setQuery("");
@@ -400,6 +383,12 @@ export const CalendarDay = ({
             );
           })()}
         </div>
+      ) : isPending(search, query) ? (
+        // A question being asked is not an answer, and it is certainly not the
+        // previous question's answer, which is what used to sit here.
+        <Spinner />
+      ) : hasFailed(search, query) ? (
+        <Critical>{copy.findFailed}</Critical>
       ) : found !== null ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {found.length === 0 ? (
@@ -472,6 +461,7 @@ export const CalendarDay = ({
         // timeline full of bookable-looking free time, which is the opposite of
         // what it is — so it says so, in the words it was closed with.
         <ClosedDay
+          decided={shut.decided}
           note={shut.note}
           date={date}
           copy={copy}
