@@ -19,6 +19,7 @@ import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner } from "../u
 import { Stretches } from "./stretches.tsx";
 import { isUsable } from "./usual-week.ts";
 import { spansOf } from "./blockage.ts";
+import { shopWideDates } from "./shop-days.ts";
 import {
   emptyWeek,
   rangesFor,
@@ -80,6 +81,8 @@ export const Schedule = ({
   const [week, setWeek] = useState<DayHours[]>(emptyWeek);
   const [saved, setSaved] = useState(false);
   const [overrides, setOverrides] = useState<OverrideDto[]>([]);
+  /** The dates on which this override is the shop's decision, not this chair's. */
+  const [shopDates, setShopDates] = useState<Set<string>>(new Set());
   const [blocks, setBlocks] = useState<BlockDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -113,19 +116,26 @@ export const Schedule = ({
     const from = todayIn(business.timeZone);
     const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
     try {
-      const [loadedHours, loadedOverrides, calendarDays] = await Promise.all([
+      const [loadedHours, loadedOverrides, calendarDays, everyCalendar] = await Promise.all([
         api.listWorkingHours(token, business.id, resource.id),
         api.listOverrides(token, business.id, resource.id, { from, to }),
         api.calendarDay(token, business.id, resource.id, from),
+        // Every calendar's special days, not only this one's. A day the shop
+        // closed is one Override per calendar, and a row here that offers to
+        // delete a single copy of it leaves the shop half shut.
+        Promise.all(
+          resources.map((one) => api.listOverrides(token, business.id, one.id, { from, to })),
+        ),
       ]);
       setHours(loadedHours);
       setWeek(weekFromRanges(loadedHours));
       setOverrides(loadedOverrides);
+      setShopDates(shopWideDates(everyCalendar, resources.length));
       setBlocks(calendarDays.blocks);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
-  }, [token, business.id, business.timeZone, resource, errorText]);
+  }, [token, business.id, business.timeZone, resource, resources, errorText]);
 
   useEffect(() => {
     void load();
@@ -249,24 +259,55 @@ export const Schedule = ({
           {/* ADR 0002: an override replaces the weekday's rules entirely. */}
           <Note>{copy.overrideNote}</Note>
           {overrides.length === 0 && <Empty title={copy.noHoursYet} />}
-          {overrides.map((override) => (
-            <Card key={override.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontWeight: 500 }}>{formatLocalDate(override.date, language)}</span>
-                <span className="hint">
-                  {override.closed
-                    ? copy.closedAllDay
-                    : override.ranges.map((r) => `${r.start}–${r.end}`).join(", ")}
+          {overrides.map((override) => {
+            // A day the whole shop was given is removed as the whole shop's,
+            // or it is not removed at all: taking this calendar's copy away
+            // used to leave the others shut, invisibly.
+            const shopWide = shopDates.has(override.date);
+            return (
+              <Card key={override.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span
+                    style={{ fontWeight: 500, display: "flex", alignItems: "center", gap: 7 }}
+                  >
+                    {formatLocalDate(override.date, language)}
+                    {shopWide && resources.length > 1 && (
+                      <span
+                        style={{
+                          fontSize: 9.5,
+                          fontWeight: 600,
+                          padding: "2px 7px",
+                          borderRadius: 999,
+                          background: "var(--closed-soft)",
+                          color: "var(--closed)",
+                        }}
+                      >
+                        {copy.wholeBusiness}
+                      </span>
+                    )}
+                  </span>
+                  <span className="hint">
+                    {override.closed
+                      ? copy.closedAllDay
+                      : override.ranges.map((r) => `${r.start}–${r.end}`).join(", ")}
+                    {override.note === null ? "" : ` · ${override.note}`}
+                  </span>
                 </span>
-              </span>
-              <button
-                onClick={() => act(() => api.deleteOverride(token, business.id, override.id))}
-                style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
-              >
-                {copy.delete}
-              </button>
-            </Card>
-          ))}
+                <button
+                  onClick={() =>
+                    act(() =>
+                      shopWide
+                        ? api.reopenBusiness(token, business.id, override.date, override.date)
+                        : api.deleteOverride(token, business.id, override.id),
+                    )
+                  }
+                  style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
+                >
+                  {copy.delete}
+                </button>
+              </Card>
+            );
+          })}
           <Button
             intent="quiet"
             onClick={() =>
@@ -295,7 +336,17 @@ export const Schedule = ({
                 </span>
               </span>
               <button
-                onClick={() => act(() => api.deleteBlock(token, business.id, block.id))}
+                // The decision, not one day of it — the same thing the band in
+                // the month removes. Deleting a single span of a week away
+                // leaves six days of it behind, in a list that only ever shows
+                // one day and so cannot show what was left.
+                onClick={() =>
+                  act(() =>
+                    block.groupId === null || block.groupId === undefined
+                      ? api.deleteBlock(token, business.id, block.id)
+                      : api.deleteBlockGroup(token, business.id, block.groupId),
+                  )
+                }
                 style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
               >
                 {copy.delete}

@@ -15,6 +15,7 @@ import {
   type LocalDate,
   type TimeZone,
   type Membership,
+  type MembershipResource,
   type Resource,
   type Service,
   type Subscription,
@@ -26,6 +27,8 @@ import {
   dayOfWeek,
   displayName,
   localTime,
+  monthStartOf,
+  weekStartOf,
 } from "@tor-now/domain";
 import { SEARCH } from "../../config.ts";
 import { PG_ERRORS } from "../pg/client.ts";
@@ -58,6 +61,27 @@ const countByLocalDay = (
   return [...perDay.entries()]
     .map(([date, count]) => ({ date, count }))
     .sort((a, b) => compareLocalDate(a.date, b.date));
+};
+
+/** An instant's calendar date, in UTC — matching `at time zone 'UTC'` in the SQL. */
+const localDateOfInstant = (at: Instant): LocalDate =>
+  parseLocalDate(new Date(at).toISOString().slice(0, 10));
+
+/** Signups grouped by the first of their month, as Postgres does it. */
+const monthlySignupCounts = (
+  createdAts: readonly Instant[],
+  from: Instant,
+  to: Instant,
+): readonly { monthStart: LocalDate; count: number }[] => {
+  const byMonth = new Map<string, number>();
+  for (const createdAt of createdAts) {
+    if (createdAt < from || createdAt >= to) continue;
+    const month = monthStartOf(localDateOfInstant(createdAt));
+    byMonth.set(month, (byMonth.get(month) ?? 0) + 1);
+  }
+  return [...byMonth.entries()]
+    .sort(([left], [right]) => compareLocalDate(left as LocalDate, right as LocalDate))
+    .map(([monthStart, count]) => ({ monthStart: monthStart as LocalDate, count }));
 };
 
 export const inMemoryRepositories = (store: Store): Repositories => {
@@ -146,6 +170,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
         return matching.slice(page.offset, page.offset + page.limit);
       },
+      async monthlySignups(from, to) {
+        return monthlySignupCounts(store.users.map((user) => user.createdAt), from, to);
+      },
     },
 
     businesses: {
@@ -188,6 +215,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           minimumNoticeMinutes: BUSINESS_DEFAULTS.minimumNoticeMinutes,
           bookingHorizonDays: BUSINESS_DEFAULTS.bookingHorizonDays,
           cancellationWindowHours: BUSINESS_DEFAULTS.cancellationWindowHours,
+          createdAt: now(),
         };
         store.businesses = [...store.businesses, business];
         // Every Business has a Subscription, which the database does with a
@@ -221,6 +249,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           candidate.id === id ? updated : candidate,
         );
         return updated;
+      },
+      async monthlySignups(from, to) {
+        return monthlySignupCounts(store.businesses.map((business) => business.createdAt), from, to);
       },
       async setActive(id, active) {
         const business = store.businesses.find((candidate) => candidate.id === id);
@@ -283,6 +314,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
     },
 
     memberships: {
+      async findById(id) {
+        return store.memberships.find((membership) => membership.id === id) ?? null;
+      },
       async find(userId, businessId) {
         return (
           store.memberships.find(
@@ -298,6 +332,11 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         return store.memberships.filter(
           (membership) =>
             membership.businessId === businessId && membership.role === role,
+        );
+      },
+      async listAllForBusiness(businessId) {
+        return store.memberships.filter(
+          (membership) => membership.businessId === businessId,
         );
       },
       async create(userId, businessId, role) {
@@ -316,6 +355,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           role,
           createdAt: now(),
           blockedAt: null,
+          invitedGivenName: null,
+          invitedFamilyName: null,
         };
         store.memberships = [...store.memberships, membership];
         return membership;
@@ -334,6 +375,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           role: "CUSTOMER",
           createdAt: now(),
           blockedAt: null,
+          invitedGivenName: null,
+          invitedFamilyName: null,
         };
         store.memberships = [...store.memberships, membership];
         return membership;
@@ -349,6 +392,106 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           membership === existing ? updated : membership,
         );
         return updated;
+      },
+      async setRole(id, role) {
+        const existing = store.memberships.find((membership) => membership.id === id);
+        if (existing === undefined) throw notFound("Membership", id);
+        const updated: Membership = { ...existing, role };
+        store.memberships = store.memberships.map((membership) =>
+          membership.id === id ? updated : membership,
+        );
+        return updated;
+      },
+      async delete(id) {
+        store.memberships = store.memberships.filter(
+          (membership) => membership.id !== id,
+        );
+        // The composite foreign key cascades in Postgres; here it is explicit.
+        store.membershipResources = store.membershipResources.filter(
+          (assignment) => assignment.membershipId !== id,
+        );
+      },
+      async invite(businessId, input) {
+        let user = store.users.find((existing) => existing.phone === input.phone);
+        if (user === undefined) {
+          user = {
+            id: asId(nextId("user")),
+            phone: input.phone,
+            givenName: input.givenName,
+            familyName: input.familyName,
+            birthDate: null,
+            deletedAt: null,
+            anonymisedAt: null,
+            isAdministrator: false,
+            createdAt: now(),
+          };
+          store.users = [...store.users, user];
+        }
+
+        const existingMembership = store.memberships.find(
+          (membership) =>
+            membership.userId === user.id && membership.businessId === businessId,
+        );
+        const membership: Membership = existingMembership
+          ? {
+              ...existingMembership,
+              role: input.role,
+              invitedGivenName: input.invitedGivenName,
+              invitedFamilyName: input.invitedFamilyName,
+            }
+          : {
+              id: asId(nextId("membership")),
+              userId: user.id,
+              businessId,
+              role: input.role,
+              createdAt: now(),
+              blockedAt: null,
+              invitedGivenName: input.invitedGivenName,
+              invitedFamilyName: input.invitedFamilyName,
+            };
+        store.memberships = existingMembership
+          ? store.memberships.map((m) => (m.id === membership.id ? membership : m))
+          : [...store.memberships, membership];
+
+        return { user, membership };
+      },
+    },
+
+    membershipResources: {
+      async listForMembership(membershipId) {
+        return store.membershipResources.filter(
+          (assignment) => assignment.membershipId === membershipId,
+        );
+      },
+      async listForResource(resourceId) {
+        return store.membershipResources.filter(
+          (assignment) => assignment.resourceId === resourceId,
+        );
+      },
+      async create({ membershipId, businessId, resourceId }) {
+        if (
+          store.membershipResources.some(
+            (assignment) =>
+              assignment.membershipId === membershipId &&
+              assignment.resourceId === resourceId,
+          )
+        ) {
+          throw new DomainError("CONFLICT", "That resource is already assigned");
+        }
+        const assignment: MembershipResource = {
+          id: asId(nextId("membershipResource")),
+          membershipId,
+          businessId,
+          resourceId,
+          createdAt: now(),
+        };
+        store.membershipResources = [...store.membershipResources, assignment];
+        return assignment;
+      },
+      async delete(id) {
+        store.membershipResources = store.membershipResources.filter(
+          (assignment) => assignment.id !== id,
+        );
       },
     },
 
@@ -387,11 +530,17 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         const booked = store.appointments.some(
           (appointment) => appointment.resourceId === id,
         );
-        store.resources = booked
-          ? store.resources.map((resource) =>
-              resource.id === id ? { ...resource, active: false } : resource,
-            )
-          : store.resources.filter((resource) => resource.id !== id);
+        if (booked) {
+          store.resources = store.resources.map((resource) =>
+            resource.id === id ? { ...resource, active: false } : resource,
+          );
+          return;
+        }
+        store.resources = store.resources.filter((resource) => resource.id !== id);
+        // The composite foreign key cascades in Postgres; here it is explicit.
+        store.membershipResources = store.membershipResources.filter(
+          (assignment) => assignment.resourceId !== id,
+        );
       },
     },
 
@@ -586,12 +735,34 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           startAt: input.startAt,
           endAt: input.endAt,
           reason: input.reason,
+          groupId: input.groupId,
         } as (typeof store.blocks)[number];
         store.blocks = [...store.blocks, block];
         return block;
       },
       async delete(id) {
         store.blocks = store.blocks.filter((block) => block.id !== id);
+      },
+      async deleteGroup(businessId, groupId) {
+        const going = store.blocks.filter(
+          (block) => block.businessId === businessId && block.groupId === groupId,
+        );
+        store.blocks = store.blocks.filter((block) => !going.includes(block));
+        return going.length;
+      },
+      async renameGroup(businessId, groupId, reason) {
+        const theirs = store.blocks.filter(
+          (block) => block.businessId === businessId && block.groupId === groupId,
+        );
+        store.blocks = store.blocks.map((block) =>
+          theirs.includes(block) ? { ...block, reason } : block,
+        );
+        return theirs.length;
+      },
+      async listGroup(businessId, groupId) {
+        return store.blocks
+          .filter((block) => block.businessId === businessId && block.groupId === groupId)
+          .sort((left, right) => left.startAt - right.startAt);
       },
     },
 
@@ -845,6 +1016,52 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           appointment.id === id ? updated : appointment,
         );
         return updated;
+      },
+      async platformWeeklyActivity(from, to) {
+        const byWeek = new Map<
+          string,
+          { confirmed: number; cancelled: number; noShow: number; completed: number }
+        >();
+        for (const appointment of store.appointments) {
+          if (appointment.startAt < from || appointment.startAt >= to) continue;
+          const week = weekStartOf(localDateOfInstant(appointment.startAt));
+          const bucket = byWeek.get(week) ?? {
+            confirmed: 0,
+            cancelled: 0,
+            noShow: 0,
+            completed: 0,
+          };
+          if (appointment.status === "CONFIRMED") bucket.confirmed += 1;
+          else if (appointment.status === "CANCELLED") bucket.cancelled += 1;
+          else if (appointment.status === "NO_SHOW") bucket.noShow += 1;
+          else if (appointment.status === "COMPLETED") bucket.completed += 1;
+          byWeek.set(week, bucket);
+        }
+        return [...byWeek.entries()]
+          .sort(([left], [right]) => compareLocalDate(left as LocalDate, right as LocalDate))
+          .map(([weekStart, counts]) => ({ weekStart: weekStart as LocalDate, ...counts }));
+      },
+      async topBusinessesByVolume(from, to, limit) {
+        const byBusiness = new Map<string, number>();
+        for (const appointment of store.appointments) {
+          if (appointment.startAt < from || appointment.startAt >= to) continue;
+          if (appointment.status === "CANCELLED") continue;
+          byBusiness.set(
+            appointment.businessId,
+            (byBusiness.get(appointment.businessId) ?? 0) + 1,
+          );
+        }
+        return [...byBusiness.entries()]
+          .map(([businessId, count]) => {
+            const business = store.businesses.find((candidate) => candidate.id === businessId);
+            return {
+              businessId: businessId as Business["id"],
+              businessName: business?.name ?? "",
+              count,
+            };
+          })
+          .sort((left, right) => right.count - left.count)
+          .slice(0, limit);
       },
     },
 

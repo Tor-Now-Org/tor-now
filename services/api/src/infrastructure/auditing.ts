@@ -6,6 +6,8 @@ import type {
   BusinessPhotoRepository,
   BusinessRepository,
   DateOverrideRepository,
+  MembershipRepository,
+  MembershipResourceRepository,
   Repositories,
   ResourceRepository,
   ServiceRepository,
@@ -143,6 +145,71 @@ export const auditedServices = (
     const before = await inner.findById(id);
     await inner.delete(id);
     await record(context, AUDIT_ACTIONS.serviceDeleted, "Service", id, before, null);
+  },
+});
+
+/**
+ * Only the writes that change what somebody may do. `create` and
+ * `ensureCustomer` are how a customer arrives at a business and say nothing
+ * about permission, so they stay out of the log along with `setBlocked`, which
+ * the appointment trail already explains.
+ */
+export const auditedMemberships = (
+  inner: MembershipRepository,
+  context: Context,
+): MembershipRepository => ({
+  ...inner,
+  async setRole(id, role) {
+    const before = await inner.findById(id);
+    const after = await inner.setRole(id, role);
+    await record(
+      context,
+      AUDIT_ACTIONS.membershipRoleChanged,
+      "Membership",
+      id,
+      before,
+      after,
+    );
+    return after;
+  },
+  async delete(id) {
+    const before = await inner.findById(id);
+    await inner.delete(id);
+    await record(context, AUDIT_ACTIONS.membershipRemoved, "Membership", id, before, null);
+  },
+});
+
+export const auditedMembershipResources = (
+  inner: MembershipResourceRepository,
+  context: Context,
+): MembershipResourceRepository => ({
+  ...inner,
+  async create(assignment) {
+    const created = await inner.create(assignment);
+    await record(
+      context,
+      AUDIT_ACTIONS.membershipResourceAssigned,
+      "MembershipResource",
+      created.id,
+      null,
+      created,
+    );
+    return created;
+  },
+  /**
+   * There is no `findById` on this port and no reason to add one: the row is
+   * three ids, and the id in the entry identifies it.
+   */
+  async delete(id) {
+    await inner.delete(id);
+    await record(
+      context,
+      AUDIT_ACTIONS.membershipResourceUnassigned,
+      "MembershipResource",
+      id,
+      null,
+      null,
+    );
   },
 });
 
@@ -348,6 +415,8 @@ export const withAuditing = (
   users: auditedUsers(repositories.users, context),
   businesses: auditedBusinesses(repositories.businesses, context),
   businessPhotos: auditedBusinessPhotos(repositories.businessPhotos, context),
+  memberships: auditedMemberships(repositories.memberships, context),
+  membershipResources: auditedMembershipResources(repositories.membershipResources, context),
   resources: auditedResources(repositories.resources, context),
   services: auditedServices(repositories.services, context),
   workingHours: auditedWorkingHours(repositories.workingHours, context),

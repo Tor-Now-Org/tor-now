@@ -40,6 +40,7 @@ describe("administrator scope", () => {
     const summaries = await test.services.admin.listBusinesses(admin.administrator, null);
     const summary = summaries.find((row) => row.business.id === shop.business.id);
     expect(summary?.ownerName).toBe("רן");
+    expect(summary?.ownerPhone).toBe("+972500000001");
     expect(summary?.subscriptionState).toBe("CURRENT");
   });
 

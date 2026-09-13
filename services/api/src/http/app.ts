@@ -139,7 +139,7 @@ export const createApp = (services: Services) => {
 
   app.get("/me/businesses", async (context) => {
     const businesses = await services.business.listMine(actorOf(context));
-    return context.json(businesses.map(wire.businessOut));
+    return context.json(businesses.map(wire.staffedBusinessOut));
   });
 
   // ---------------------------------------------------------------------------
@@ -536,6 +536,62 @@ const ownerRoutes = (services: Services) => {
     );
   });
 
+  /**
+   * The shop's own days, rather than one calendar's.
+   *
+   * Kept apart from the Override routes above on purpose: those are a
+   * calendar's schedule and a worker may keep their own, while closing the
+   * business is manager-and-up work that touches every calendar and answers
+   * for everything booked inside it.
+   */
+  owner.post("/:businessId/closures/preview", async (context) => {
+    const body = await parseBody(context, schema.closurePreviewSchema);
+    return context.json(
+      wire.impactOut(
+        await services.closures.preview(
+          actorOf(context),
+          idParam(context, "businessId"),
+          body,
+        ),
+      ),
+    );
+  });
+
+  owner.post("/:businessId/closures", async (context) => {
+    const body = await parseBody(context, schema.closureSchema);
+    const outcome = await services.closures.close(
+      actorOf(context),
+      idParam(context, "businessId"),
+      body,
+      body.upcoming,
+    );
+    return context.json(outcome, 201);
+  });
+
+  // Only the words. The days keep their hours and nothing booked is touched.
+  owner.patch("/:businessId/closures", async (context) => {
+    const body = await parseBody(context, schema.closureNoteSchema);
+    const renamed = await services.closures.describe(
+      actorOf(context),
+      idParam(context, "businessId"),
+      body.fromDate,
+      body.toDate,
+      body.note,
+    );
+    return context.json({ renamed });
+  });
+
+  owner.delete("/:businessId/closures", async (context) => {
+    const { from, to } = parseQuery(context, schema.dateRangeSchema);
+    const removed = await services.closures.lift(
+      actorOf(context),
+      idParam(context, "businessId"),
+      from,
+      to,
+    );
+    return context.json({ removed });
+  });
+
   owner.delete("/:businessId/overrides/:id", async (context) => {
     await services.business.deleteOverride(
       actorOf(context),
@@ -578,6 +634,28 @@ const ownerRoutes = (services: Services) => {
     });
   });
 
+  // One day across every calendar, for the timeline that draws them as lanes.
+  owner.get("/:businessId/calendar/day", async (context) => {
+    const { date } = parseQuery(context, schema.calendarDaySchema);
+    const day = await services.calendar.businessDay(
+      actorOf(context),
+      idParam(context, "businessId"),
+      date,
+    );
+    return context.json(wire.businessDayOut(day));
+  });
+
+  // The whole business's month, for the grid that shows every calendar at once.
+  owner.get("/:businessId/calendar/month", async (context) => {
+    const { firstOfMonth } = parseQuery(context, schema.calendarMonthSchema);
+    const month = await services.calendar.businessMonth(
+      actorOf(context),
+      idParam(context, "businessId"),
+      firstOfMonth,
+    );
+    return context.json(wire.businessMonthOut(month));
+  });
+
   owner.get("/:businessId/resources/:resourceId/calendar/month", async (context) => {
     const { firstOfMonth } = parseQuery(context, schema.calendarMonthSchema);
     const days = await services.calendar.month(
@@ -589,6 +667,21 @@ const ownerRoutes = (services: Services) => {
     return context.json(days);
   });
 
+  // What a blockage would strand, before it is made.
+  owner.post("/:businessId/resources/:resourceId/blocks/preview", async (context) => {
+    const body = await parseBody(context, schema.blockPreviewSchema);
+    return context.json(
+      wire.impactOut(
+        await services.calendar.blockPreview(
+          actorOf(context),
+          idParam(context, "businessId"),
+          idParam(context, "resourceId"),
+          body.blocks,
+        ),
+      ),
+    );
+  });
+
   owner.post("/:businessId/resources/:resourceId/blocks", async (context) => {
     const body = await parseBody(context, schema.blocksSchema);
     const made = await services.calendar.createBlocks(
@@ -596,8 +689,39 @@ const ownerRoutes = (services: Services) => {
       idParam(context, "businessId"),
       idParam(context, "resourceId"),
       body.blocks,
+      body.upcoming,
     );
     return context.json(made.map(wire.blockOut), 201);
+  });
+
+  // A whole blockage, by the group one decision created.
+  owner.get("/:businessId/block-groups/:groupId", async (context) => {
+    const blocks = await services.calendar.blockGroup(
+      actorOf(context),
+      idParam(context, "businessId"),
+      context.req.param("groupId"),
+    );
+    return context.json(blocks.map(wire.blockOut));
+  });
+
+  owner.patch("/:businessId/block-groups/:groupId", async (context) => {
+    const body = await parseBody(context, schema.blockNoteSchema);
+    const renamed = await services.calendar.renameBlockGroup(
+      actorOf(context),
+      idParam(context, "businessId"),
+      context.req.param("groupId"),
+      body.reason,
+    );
+    return context.json({ renamed });
+  });
+
+  owner.delete("/:businessId/block-groups/:groupId", async (context) => {
+    const removed = await services.calendar.deleteBlockGroup(
+      actorOf(context),
+      idParam(context, "businessId"),
+      context.req.param("groupId"),
+    );
+    return context.json({ removed });
   });
 
   owner.delete("/:businessId/blocks/:blockId", async (context) => {
@@ -621,6 +745,54 @@ const ownerRoutes = (services: Services) => {
       payments: result.payments.map(wire.paymentOut),
       state: result.state,
     });
+  });
+
+  owner.get("/:businessId/users", async (context) => {
+    const members = await services.business.listUsers(
+      actorOf(context),
+      idParam(context, "businessId"),
+    );
+    return context.json(members.map(wire.teamMemberOut));
+  });
+
+  owner.get("/:businessId/users/lookup", async (context) => {
+    const { phone } = parseQuery(context, schema.userLookupSchema);
+    const result = await services.business.lookupUserByPhone(
+      actorOf(context),
+      idParam(context, "businessId"),
+      phone,
+    );
+    return context.json(result);
+  });
+
+  owner.post("/:businessId/users", async (context) => {
+    const body = await parseBody(context, schema.invitationSchema);
+    const member = await services.business.inviteUser(
+      actorOf(context),
+      idParam(context, "businessId"),
+      { ...body, resourceIds: body.resourceIds as never },
+    );
+    return context.json(wire.teamMemberOut(member), 201);
+  });
+
+  owner.patch("/:businessId/users/:membershipId", async (context) => {
+    const body = await parseBody(context, schema.membershipUpdateSchema);
+    const member = await services.business.updateUser(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "membershipId"),
+      { ...body, resourceIds: body.resourceIds as never },
+    );
+    return context.json(wire.teamMemberOut(member));
+  });
+
+  owner.delete("/:businessId/users/:membershipId", async (context) => {
+    await services.business.removeUser(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "membershipId"),
+    );
+    return context.body(null, 204);
   });
 
   owner.get("/:businessId/customers", async (context) => {
@@ -679,6 +851,7 @@ const adminRoutes = (services: Services) => {
           summary.subscription === null ? null : wire.subscriptionOut(summary.subscription),
         subscriptionState: summary.subscriptionState,
         ownerName: summary.ownerName,
+        ownerPhone: summary.ownerPhone,
       })),
     );
   });
@@ -832,6 +1005,13 @@ const adminRoutes = (services: Services) => {
     const phone = parse(schema.phoneSchema, context.req.param("phone"));
     await services.admin.removeFromAllowlist(actorOf(context), phone);
     return context.body(null, 204);
+  });
+
+  admin.get("/stats", async (context) => {
+    const { weeks, months } = parseQuery(context, schema.statsQuerySchema);
+    return context.json(
+      wire.platformStatsOut(await services.admin.platformStats(actorOf(context), weeks, months)),
+    );
   });
 
   admin.get("/audit", async (context) => {

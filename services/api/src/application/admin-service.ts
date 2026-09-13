@@ -2,6 +2,7 @@ import {
   applyPayment,
   forbidden,
   displayName,
+  instant,
   money,
   notFound,
   parseLocalDate,
@@ -15,6 +16,7 @@ import {
   type Clock,
   type Patch,
   type Payment,
+  type Plan,
   type Subscription,
   type SubscriptionState,
   type User,
@@ -22,7 +24,12 @@ import {
 } from "@tor-now/domain";
 import { PAGINATION } from "../config.ts";
 import { AUDIT_ACTIONS, type AuditLogEntry } from "../ports/audit.ts";
-import type { Page } from "../ports/repositories.ts";
+import type {
+  BusinessVolume,
+  MonthCount,
+  Page,
+  WeeklyAppointmentActivity,
+} from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { requireAdministrator, requireOperator } from "./authorization.ts";
 
@@ -41,11 +48,31 @@ import { requireAdministrator, requireOperator } from "./authorization.ts";
  * which is why every action is audited without exception — reads included.
  */
 
+/**
+ * A read-only snapshot of the platform's health: no customer, no Business
+ * name beyond a leaderboard's, nothing an administrator could not already see
+ * one Business at a time. Only counted differently.
+ */
+export type PlatformStats = {
+  readonly businessStatusCounts: {
+    readonly active: number;
+    readonly overdue: number;
+    readonly inactive: number;
+  };
+  readonly planCounts: Record<Plan, number>;
+  readonly monthlyRecurringRevenueMinor: number;
+  readonly businessSignupsByMonth: readonly MonthCount[];
+  readonly userSignupsByMonth: readonly MonthCount[];
+  readonly appointmentActivityByWeek: readonly WeeklyAppointmentActivity[];
+  readonly topBusinesses: readonly BusinessVolume[];
+};
+
 export type BusinessSummary = {
   readonly business: Business;
   readonly subscription: Subscription | null;
   readonly subscriptionState: SubscriptionState | null;
   readonly ownerName: string | null;
+  readonly ownerPhone: string | null;
 };
 
 export const adminService = (dependencies: {
@@ -81,6 +108,7 @@ export const adminService = (dependencies: {
               subscriptionState:
                 subscription === null ? null : subscriptionStateOn(subscription, today),
               ownerName: owner === null || owner === undefined ? null : displayName(owner),
+              ownerPhone: owner === null || owner === undefined ? null : owner.phone,
             };
           }),
         );
@@ -377,6 +405,82 @@ export const adminService = (dependencies: {
             : { amount: money(changes.amountMinor) }),
         }),
       );
+    },
+
+    /**
+     * Counts only, never an identity. A business's status, plan and place on
+     * the leaderboard are all things its own row on the Businesses tab already
+     * shows one at a time — this is the same facts, summed. Not audited: it
+     * exposes nothing a customer-record read does (ADR 0006), so it is a read
+     * like `listBusinesses`, not like `readCustomerRecord`.
+     */
+    async platformStats(
+      actor: Actor,
+      weeks: number = 8,
+      months: number = 12,
+    ): Promise<PlatformStats> {
+      requireAdministrator(actor);
+      return unitOfWork.run(actor, async ({ repositories }) => {
+        const businesses = await repositories.businesses.list(
+          { limit: PAGINATION.maxPageSize, offset: 0 },
+          null,
+        );
+        const subscriptions = await Promise.all(
+          businesses.map((business) => repositories.subscriptions.findByBusiness(business.id)),
+        );
+
+        const businessStatusCounts = { active: 0, overdue: 0, inactive: 0 };
+        const planCounts: Record<Plan, number> = { FREE: 0, STANDARD: 0 };
+        let monthlyRecurringRevenueMinor = 0;
+
+        businesses.forEach((business, index) => {
+          const subscription = subscriptions[index] ?? null;
+          const state =
+            subscription === null
+              ? null
+              : subscriptionStateOn(subscription, todayIn(clock.now(), business.timeZone));
+
+          // The same rule the Businesses tab uses (admin/page.tsx's
+          // `businessStatus`): deactivated wins over any billing state.
+          if (!business.active) businessStatusCounts.inactive += 1;
+          else if (state === "IN_GRACE" || state === "LAPSED") businessStatusCounts.overdue += 1;
+          else businessStatusCounts.active += 1;
+
+          if (subscription !== null) {
+            planCounts[subscription.plan] += 1;
+            if (business.active && state !== "LAPSED") {
+              monthlyRecurringRevenueMinor +=
+                subscription.billingPeriod === "YEARLY"
+                  ? Math.round(subscription.amount / 12)
+                  : subscription.amount;
+            }
+          }
+        });
+
+        const to = clock.now();
+        const weeksFrom = instant(to - weeks * 7 * 24 * 60 * 60 * 1000);
+        // A month's length varies; this is a chart's lookback, not a billing
+        // date, so 30 days per month is close enough.
+        const monthsFrom = instant(to - months * 30 * 24 * 60 * 60 * 1000);
+
+        const [businessSignupsByMonth, userSignupsByMonth, appointmentActivityByWeek, topBusinesses] =
+          await Promise.all([
+            repositories.businesses.monthlySignups(monthsFrom, to),
+            repositories.users.monthlySignups(monthsFrom, to),
+            repositories.appointments.platformWeeklyActivity(weeksFrom, to),
+            repositories.appointments.topBusinessesByVolume(weeksFrom, to, 10),
+          ]);
+
+        return {
+          businessStatusCounts,
+          planCounts,
+          monthlyRecurringRevenueMinor,
+          businessSignupsByMonth,
+          userSignupsByMonth,
+          appointmentActivityByWeek,
+          topBusinesses,
+        };
+      });
     },
 
     async auditLog(

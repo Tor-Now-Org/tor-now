@@ -1,47 +1,167 @@
 name: Deploy
 
-# The interface deploys itself: Vercel builds every push to main, configured by
+# The interface deploys itself: Vercel builds every push, configured by
 # vercel.json rather than by dashboard settings. This workflow covers the two
 # things Vercel does not — the database schema and the Edge Function.
 #
-# Both steps need a Supabase access token. Without one the workflow reports what
-# it would have done and succeeds, so a fork or a first-time contributor is not
-# blocked by a secret they cannot have.
+# Both branches, because dev had neither. Its schema and its function were
+# whatever somebody last pushed by hand, which is how it ended up running an
+# API from before a week of work: every report of "it still does not work on
+# dev" was that, and no amount of testing here could have found it.
+#
+# It runs *after* the checks, not beside them. It used to start on the same
+# push that started them, so a commit that failed lint, types or a single test
+# was deployed anyway — the two workflows raced, and the deploy usually won.
+# `workflow_run` makes the checks a precondition rather than a companion, and
+# the deploy takes the exact commit they passed on.
+#
+# The two credentials carry two different jobs on purpose, each able to do only
+# its own:
+#
+#   SUPABASE_DB_URL        a Postgres connection string. `db push` talks to the
+#                          database directly, so migrations need no Supabase
+#                          account and no Management API access at all — the
+#                          credential that touches the data cannot deploy, and
+#                          reaches exactly one database.
+#   SUPABASE_ACCESS_TOKEN  a token belonging to a Supabase account that exists
+#                          only for this, holding the **Developer** role. That
+#                          role may update Edge Functions and may not change
+#                          project settings, billing, members, or the
+#                          organisation. A token can never do more than the
+#                          account behind it, so the account is where this is
+#                          limited.
+#
+# One human owner's token would do both — and would carry every permission on
+# every project that person can reach, now and in future. Nothing here needs
+# that, so nothing here is given it.
+#
+# Two tightenings are worth taking when they become available: project-scoped
+# roles (Team plan) confine the CI account to one project, and scoped personal
+# access tokens narrow a token to Edge Functions alone. Neither exists on this
+# organisation's plan today, so the separation between dev and production is
+# kept on the GitHub side: each environment holds its own pair of secrets, and
+# Production's are restricted to the branch that deploys it.
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["Pull request"]
+    types: [completed]
+    branches: [main, dev]
   workflow_dispatch:
 
+# One deploy at a time per branch, and never cancelled half way: a migration
+# interrupted between two statements is the one thing here that cannot be
+# retried out of.
 concurrency:
-  group: deploy-production
+  group: deploy-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
+env:
+  NODE_VERSION: "20"
+
 jobs:
-  supabase:
-    name: Schema and Edge Function
+  # What is being deployed, whether it is worth deploying, and where to.
+  #
+  # Every other job reads its answers, so the branch-to-project mapping and the
+  # "has this actually changed" question are each decided once.
+  plan:
+    name: What changed
     runs-on: ubuntu-latest
-    environment: production
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || 'kbybnveitlxkffqptvqm' }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    # A deploy needs three things to be true: the checks passed, they passed on
+    # a *branch* rather than on somebody's pull request, and this is the run
+    # that pushing that branch started.
+    #
+    # That last clause is what stops the same commit deploying twice. A merge
+    # is a push, so merging to dev or main lands here the same way a direct
+    # push does — but while a dev → main pull request is open, pushing dev also
+    # updates that pull request, and the checks run a second time on the very
+    # same commit. Both runs say `dev`, both go green, and without this the
+    # second one deploys everything all over again.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push')
+    outputs:
+      sha: ${{ steps.target.outputs.sha }}
+      branch: ${{ steps.target.outputs.branch }}
+      environment: ${{ steps.target.outputs.environment }}
+      schema: ${{ steps.changed.outputs.schema }}
+      function: ${{ steps.changed.outputs.function }}
+    steps:
+      - id: target
+        run: |
+          sha="${{ github.event.workflow_run.head_sha || github.sha }}"
+          branch="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          if [ "$branch" = "main" ]; then
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=development" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          # Two commits, so the push can be compared with what came before it.
+          fetch-depth: 2
+
+      # Deploying what did not change costs a function version and a cold start
+      # for nothing. A hand-run deploy always goes ahead: somebody asking for
+      # one by name is usually asking precisely because the last one is in
+      # doubt.
+      - id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "::notice::Asked for by hand; deploying both regardless of the diff."
+            echo "schema=true" >> "$GITHUB_OUTPUT"
+            echo "function=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # No parent to compare against — the first commit on a branch — means
+          # nothing is known to be unchanged.
+          if ! git rev-parse --verify --quiet HEAD^ >/dev/null; then
+            echo "::notice::No parent commit to compare; deploying both."
+            echo "schema=true" >> "$GITHUB_OUTPUT"
+            echo "function=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed() { ! git diff --quiet HEAD^ HEAD -- "$1"; }
+          if changed supabase/migrations; then
+            echo "schema=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "schema=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No migrations changed."
+          fi
+          # The committed bundle is the build of services/api/src — the stale
+          # check below is what makes that true — so an unchanged bundle is
+          # proof the API itself did not change.
+          if changed supabase/functions/api/index.js; then
+            echo "function=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "function=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The Edge Function bundle is unchanged."
+          fi
+
+  # The artifact is committed, and the function is deployed by pinning its
+  # commit. A drift here means a branch would deploy code that is not in it.
+  bundle:
+    name: The bundle is the source
+    needs: plan
+    if: needs.plan.outputs.function == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-
-      - name: Rebuild the Edge Function bundle
-        run: npm run build:api
-
-      # The deployed artifact is committed, and the Edge Function is deployed by
-      # pinning its commit. A drift here means main would deploy code that is
-      # not in main.
+      - run: npm run build:api
       - name: Refuse to deploy a stale bundle
         run: |
           if ! git diff --quiet -- supabase/functions/api/index.js; then
@@ -49,33 +169,83 @@ jobs:
             exit 1
           fi
 
-      - name: Check for credentials
+  # Schema before code: a function calling a column that does not exist yet is
+  # the one ordering that breaks, and it breaks for real users.
+  migrations:
+    name: Schema
+    needs: plan
+    if: needs.plan.outputs.schema == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.plan.outputs.environment }}
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - name: Check for the connection string
+        id: credentials
+        run: |
+          if [ -n "$SUPABASE_DB_URL" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No SUPABASE_DB_URL; skipping the migrations."
+          fi
+      - uses: supabase/setup-cli@v1
+        if: steps.credentials.outputs.present == 'true'
+        with:
+          version: latest
+      # Straight to the database, with no Management API in the path — which is
+      # why this needs no access token and can reach nothing but this schema.
+      # Give it the session-mode pooler string: runners are IPv4, and a
+      # project's direct host may not be.
+      - name: Apply migrations
+        if: steps.credentials.outputs.present == 'true'
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all
+
+  functions:
+    name: Edge Function
+    needs: [plan, bundle, migrations]
+    # `always()` because either of the two before it may legitimately be
+    # skipped — a push that changes only the schema, or only the code. What
+    # must not be tolerated is one of them having *failed*.
+    if: >-
+      always()
+      && needs.plan.outputs.function == 'true'
+      && needs.bundle.result == 'success'
+      && needs.migrations.result != 'failure'
+      && needs.migrations.result != 'cancelled'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.plan.outputs.environment }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: >-
+        ${{ vars.SUPABASE_PROJECT_REF
+            || (needs.plan.outputs.branch == 'main' && 'kbybnveitlxkffqptvqm'
+                                                    || 'rhwkoodeeqyuwfymxwqa') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - name: Check for the token
         id: credentials
         run: |
           if [ -n "$SUPABASE_ACCESS_TOKEN" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No SUPABASE_ACCESS_TOKEN; skipping the Supabase deploy."
+            echo "::notice::No SUPABASE_ACCESS_TOKEN; skipping the Edge Function."
           fi
-
       - uses: supabase/setup-cli@v1
         if: steps.credentials.outputs.present == 'true'
         with:
           version: latest
-
-      - name: Apply migrations
-        if: steps.credentials.outputs.present == 'true'
-        run: |
-          supabase link --project-ref "$SUPABASE_PROJECT_REF"
-          supabase db push --include-all
-
-      - name: Deploy the Edge Function
+      - name: Deploy
         if: steps.credentials.outputs.present == 'true'
         # ADR 0004 and ADR 0007: the function authenticates its own callers, so
         # the platform's JWT gate is off and this flag is deliberate.
-        run: supabase functions deploy api --no-verify-jwt
-
+        run: supabase functions deploy api --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
       - name: Check it answers
         if: steps.credentials.outputs.present == 'true'
         run: |

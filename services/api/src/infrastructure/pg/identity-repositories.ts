@@ -11,6 +11,7 @@ import type {
   BusinessRepository,
   BusinessSearchResult,
   MembershipRepository,
+  MembershipResourceRepository,
   Page,
   UserRepository,
 } from "../../ports/repositories.ts";
@@ -18,7 +19,9 @@ import type { Transaction } from "./client.ts";
 import {
   toBusiness,
   toBusinessPhoto,
+  toLocalDate,
   toMembership,
+  toMembershipResource,
   toUser,
   type Row,
 } from "./mappers.ts";
@@ -106,6 +109,20 @@ export const userRepository = (tx: Transaction): UserRepository => ({
       limit ${page.limit} offset ${page.offset}`;
     return rows.map(toUser);
   },
+
+  async monthlySignups(from, to) {
+    const rows = await tx<Row[]>`
+      select date_trunc('month', created_at at time zone 'UTC')::date as month_start,
+             count(*)::int as count
+      from app_user
+      where created_at >= ${new Date(from)} and created_at < ${new Date(to)}
+      group by 1
+      order by 1`;
+    return rows.map((row) => ({
+      monthStart: toLocalDate(row["month_start"]),
+      count: Number(row["count"]),
+    }));
+  },
 });
 
 export const businessRepository = (tx: Transaction): BusinessRepository => ({
@@ -182,6 +199,20 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
       limit ${page.limit} offset ${page.offset}`;
     return rows.map(toBusiness);
   },
+
+  async monthlySignups(from, to) {
+    const rows = await tx<Row[]>`
+      select date_trunc('month', created_at at time zone 'UTC')::date as month_start,
+             count(*)::int as count
+      from business
+      where created_at >= ${new Date(from)} and created_at < ${new Date(to)}
+      group by 1
+      order by 1`;
+    return rows.map((row) => ({
+      monthStart: toLocalDate(row["month_start"]),
+      count: Number(row["count"]),
+    }));
+  },
 });
 
 export const membershipRepository = (tx: Transaction): MembershipRepository => ({
@@ -247,6 +278,85 @@ export const membershipRepository = (tx: Transaction): MembershipRepository => (
       where user_id = ${userId} and business_id = ${businessId}
       returning *`;
     return one(rows, toMembership, "Membership");
+  },
+
+  async findById(id) {
+    const rows = await tx<Row[]>`select * from membership where id = ${id}`;
+    const row = rows[0];
+    return row === undefined ? null : toMembership(row);
+  },
+
+  async listAllForBusiness(businessId: BusinessId) {
+    const rows = await tx<Row[]>`
+      select * from membership
+      where business_id = ${businessId}
+      order by created_at`;
+    return rows.map(toMembership);
+  },
+
+  async setRole(id, role) {
+    const rows = await tx<Row[]>`
+      update membership set role = ${role} where id = ${id} returning *`;
+    return one(rows, toMembership, "Membership");
+  },
+
+  async delete(id) {
+    await tx`delete from membership where id = ${id}`;
+  },
+
+  async invite(businessId, input) {
+    const rpcRows = await tx<{ out_user_id: string; out_membership_id: string }[]>`
+      select * from app.invite_user_to_business(
+        ${businessId}, ${input.phone}, ${input.givenName},
+        ${input.familyName}, ${input.role},
+        ${input.invitedGivenName}, ${input.invitedFamilyName}
+      )`;
+    const { out_user_id: user_id, out_membership_id: membership_id } = rpcRows[0]!;
+
+    const userRows = await tx<Row[]>`select * from app_user where id = ${user_id}`;
+    const membershipRows = await tx<Row[]>`
+      select * from membership where id = ${membership_id}`;
+
+    return {
+      user: one(userRows, toUser, "User"),
+      membership: one(membershipRows, toMembership, "Membership"),
+    };
+  },
+});
+
+/**
+ * The assignment of a Resource to a WORKER. Deleting either parent takes the
+ * row with it, so a removed Resource leaves no assignment behind.
+ */
+export const membershipResourceRepository = (
+  tx: Transaction,
+): MembershipResourceRepository => ({
+  async listForMembership(membershipId) {
+    const rows = await tx<Row[]>`
+      select * from membership_resource
+      where membership_id = ${membershipId}
+      order by created_at`;
+    return rows.map(toMembershipResource);
+  },
+
+  async listForResource(resourceId) {
+    const rows = await tx<Row[]>`
+      select * from membership_resource
+      where resource_id = ${resourceId}
+      order by created_at`;
+    return rows.map(toMembershipResource);
+  },
+
+  async create({ membershipId, businessId, resourceId }) {
+    const rows = await tx<Row[]>`
+      insert into membership_resource (membership_id, business_id, resource_id)
+      values (${membershipId}, ${businessId}, ${resourceId})
+      returning *`;
+    return one(rows, toMembershipResource, "MembershipResource");
+  },
+
+  async delete(id) {
+    await tx`delete from membership_resource where id = ${id}`;
   },
 });
 

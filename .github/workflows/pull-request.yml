@@ -111,6 +111,16 @@ jobs:
             -f supabase/tests/invariants.sql 2>&1) || true
           echo "$output"
           echo "$output" | grep -q ALL_INVARIANTS_HELD
+      # Applying is not working. This calls the SECURITY DEFINER functions and
+      # reads the tables as `authenticated` with a real claim, which is the only
+      # way a policy that denies what it was written to allow — or a function
+      # that raises on its first call — can be caught before somebody meets it.
+      - name: Prove the policies and the functions
+        run: |
+          output=$(psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=0 \
+            -f supabase/tests/policies.sql 2>&1) || true
+          echo "$output"
+          echo "$output" | grep -q ALL_POLICIES_HELD
       - uses: actions/upload-artifact@v4
         if: always()
         with:

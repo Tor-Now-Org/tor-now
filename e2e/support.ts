@@ -303,6 +303,21 @@ export const aDayFromNow = (days: number): string => {
 const BUSINESS_TIMEZONE = "Asia/Jerusalem";
 
 /**
+ * The instant at which a clock in the business's own zone reads this time.
+ *
+ * Blockages and appointments are written as instants, and the hours they are
+ * meant to line up with are written as local clock times. Subtracting three
+ * hours by hand works for two thirds of the year and quietly puts a test an
+ * hour out for the other third, so the offset is asked for rather than assumed.
+ */
+export const anInstantAt = (date: string, clock: string): string => {
+  const guess = new Date(`${date}T${clock}:00.000Z`);
+  const shownAsUtc = new Date(guess.toLocaleString("en-US", { timeZone: "UTC" }));
+  const shownHere = new Date(guess.toLocaleString("en-US", { timeZone: BUSINESS_TIMEZONE }));
+  return new Date(guess.getTime() - (shownHere.getTime() - shownAsUtc.getTime())).toISOString();
+};
+
+/**
  * Bring the day strip to the day an appointment actually falls on.
  *
  * Both calendars open on today. Once the journeys stopped assuming today has a

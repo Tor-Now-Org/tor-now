@@ -25,6 +25,38 @@
   --caution:oklch(63% 0.125 65); --caution-soft:oklch(95% 0.040 78);
   --critical:oklch(55% 0.170 22); --critical-soft:oklch(95% 0.030 22);
 
+  /* The calendar's own palette.
+
+     Six colours a service can be given. The first attempt spaced them by hue
+     alone and they came out as six shades of the same pale blue: at the size a
+     timeline draws them, what the eye has to go on is the *ground*, and six
+     grounds at 95% lightness with a trace of chroma are one colour. So these
+     are separated three ways at once — hue, lightness and saturation — and the
+     grounds carry enough colour to be told apart at a glance and across the
+     width of a phone.
+
+     Deliberately not the status colours: an appointment must not read as a
+     warning. Each has a ground pale enough to put ink on and a rail that
+     carries the identity. */
+  --event-1:oklch(52% 0.190 255); --event-1-soft:oklch(92.5% 0.055 255);
+  --event-2:oklch(56% 0.215 340); --event-2-soft:oklch(93%   0.062 340);
+  --event-3:oklch(71% 0.160 72);  --event-3-soft:oklch(94.5% 0.085 75);
+  --event-4:oklch(62% 0.125 195); --event-4-soft:oklch(93.5% 0.062 195);
+  --event-5:oklch(55% 0.160 148); --event-5-soft:oklch(93%   0.070 148);
+  --event-6:oklch(45% 0.200 295); --event-6-soft:oklch(92%   0.060 295);
+
+  /* Whose calendar it is, which is a different question from what is on it.
+     Deeper and quieter than the event hues on purpose: a lane's mark should
+     read as an identity beside the thing it marks, never as another service. */
+  --lane-1:oklch(34% 0.070 262); --lane-2:oklch(38% 0.085 152);
+  --lane-3:oklch(41% 0.105 40);  --lane-4:oklch(36% 0.070 318);
+
+  /* The two things that are not appointments. A blockage is somebody's own
+     time; a closure is the shop's, and reads heavier because it is the shop's
+     to undo. Neither is given an event hue: they are not a kind of service. */
+  --blocked:oklch(52% 0.040 265); --blocked-soft:oklch(93.5% 0.012 265);
+  --closed:oklch(34% 0.050 264); --closed-soft:oklch(91% 0.020 264);
+
   --shadow:0 1px 2px oklch(25% 0.055 258/.05), 0 8px 24px -12px oklch(25% 0.055 258/.16);
 
   /* Layout. The shell is the app's own width; the measure is how wide a column
@@ -50,6 +82,20 @@ input,select{font:inherit;color:inherit}
   font-family:inherit;font-size:14.5px}
 .label{font-size:12.5px;font-weight:500;color:var(--muted)}
 .hint{font-size:12px;color:var(--faint);line-height:1.5}
+/* A hover/focus tooltip in the app's own style, not the browser's native
+   `title` box — which is slow to appear, unstyled, and never shows on touch. */
+.tip{position:relative}
+.tip::after{
+  content:attr(data-tip);
+  position:absolute;left:50%;bottom:calc(100% + 8px);
+  transform:translateX(-50%);
+  width:max-content;max-width:220px;
+  background:var(--ink);color:var(--on-accent);
+  font-size:12px;font-weight:500;line-height:1.4;text-align:center;
+  padding:6px 10px;border-radius:8px;box-shadow:var(--shadow);
+  pointer-events:none;opacity:0;visibility:hidden;
+  transition:opacity .12s ease;z-index:5}
+.tip:hover::after,.tip:focus-visible::after{opacity:1;visibility:visible}
 /* One button system. Weight, depth and a real pressed state — a 1px
    outline on white reads as a label, not a control. */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;

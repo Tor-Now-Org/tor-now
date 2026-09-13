@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
+import type { UserId } from "@tor-now/domain";
 import { describeRepositoryContract } from "../../ports/repositories.contract.ts";
-import { createPool, type Transaction } from "./client.ts";
+import { assumeIdentity, createPool, type Transaction } from "./client.ts";
 import { appointmentRepository } from "./appointment-repository.ts";
 import { paymentRepository, subscriptionRepository } from "./billing-repositories.ts";
 import {
@@ -8,6 +9,7 @@ import {
   businessPhotoRepository,
   businessRepository,
   membershipRepository,
+  membershipResourceRepository,
   userRepository,
 } from "./identity-repositories.ts";
 import {
@@ -101,6 +103,10 @@ if (databaseUrl === undefined || databaseUrl === "") {
         businesses: recording("businesses", businessRepository(transaction)),
         businessPhotos: recording("businessPhotos", businessPhotoRepository(transaction)),
         memberships: recording("memberships", membershipRepository(transaction)),
+        membershipResources: recording(
+          "membershipResources",
+          membershipResourceRepository(transaction),
+        ),
         resources: recording("resources", resourceRepository(transaction)),
         services: recording("services", serviceRepository(transaction)),
         workingHours: recording("workingHours", workingHoursRepository(transaction)),
@@ -117,6 +123,7 @@ if (databaseUrl === undefined || databaseUrl === "") {
       cleanUp: async () => {
         release();
       },
+      actAs: (userId: UserId) => assumeIdentity(transaction, { kind: "USER", userId }),
     };
   });
 

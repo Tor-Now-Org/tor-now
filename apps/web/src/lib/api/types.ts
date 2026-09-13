@@ -24,6 +24,15 @@ export type BusinessDto = {
   minimumNoticeMinutes: number;
   bookingHorizonDays: number;
   cancellationWindowHours: number;
+  /**
+   * The terms the person asking works here under, on the businesses list only.
+   * Optional in the type as well as the data — an API deployed before roles
+   * existed sends neither key, and the manage screen has to survive that by
+   * treating the absence as the old world, where anybody staffing was an OWNER.
+   */
+  role?: "OWNER" | "MANAGER" | "WORKER" | "CUSTOMER";
+  /** The calendars a WORKER is on. Empty for an OWNER or MANAGER, who reach all of them. */
+  resourceIds?: string[];
 };
 
 export type ServiceDto = {
@@ -73,6 +82,90 @@ export type MonthDayDto = {
   /** Appointments that still stand; a cancelled one is not counted. */
   appointments: number;
   blocks: number;
+};
+
+/** One day, every calendar: lanes, the hours behind them, and what fills them. */
+export type BusinessDayDto = {
+  date: string;
+  calendars: {
+    resourceId: string;
+    resourceName: string;
+    open: { start: string; end: string }[];
+    special: boolean;
+    /** Why the day is special, when the owner said. */
+    note: string | null;
+    appointments: CalendarAppointmentDto[];
+    blocks: BlockDto[];
+  }[];
+};
+
+/** The whole business's month: every calendar, and the decisions spanning days. */
+export type BusinessMonthDto = {
+  days: {
+    date: string;
+    byCalendar: {
+      resourceId: string;
+      /** Whether this calendar works that day. Absent from an older API. */
+      works?: boolean;
+      appointments: number;
+      away: boolean;
+    }[];
+    /**
+     * Whether anybody works that day at all, by the week's own shape.
+     *
+     * Optional, like every other field added after a deploy: the interface
+     * ships ahead of the API often enough that "absent" has to mean something
+     * safe. Absent means open — reading it as closed drew every day of every
+     * month as a day nobody works.
+     */
+    shopOpen?: boolean;
+    shopClosed: boolean;
+    shopHours: { start: string; end: string }[];
+    /** Why the shop is doing that, when it was given a reason. */
+    shopNote: string | null;
+  }[];
+  blockages: {
+    groupId: string;
+    resourceId: string;
+    reason: string;
+    fromDate: string;
+    toDate: string;
+    days: number;
+    allDay: boolean;
+  }[];
+  /** Runs of shut days, so a week away is drawn as a week away. */
+  closures: ClosureBandDto[];
+};
+
+export type ClosureBandDto = {
+  fromDate: string;
+  toDate: string;
+  days: number;
+  note: string | null;
+  /** Shut altogether, or open on hours of its own. */
+  kind: "SHUT" | "HOURS";
+  /** The hours kept. Empty for a day that is shut. */
+  hours: { start: string; end: string }[];
+};
+
+/** What closing a run of days would call off, before anything is written. */
+export type ClosureImpactDto = {
+  days: number;
+  calendars: number;
+  appointments: {
+    id: string;
+    startAt: string;
+    resourceName: string;
+    serviceName: string;
+    customerName: string;
+    customerPhone: string;
+  }[];
+};
+
+export type ClosureOutcomeDto = {
+  days: number;
+  calendars: number;
+  cancelled: number;
 };
 
 export type SlotDto = { startAt: string; endAt: string };
@@ -180,6 +273,13 @@ export type BlockDto = {
   startAt: string;
   endAt: string;
   reason: string;
+  /**
+   * What one decision created. Blocks made together share it, so a week away is
+   * shown and removed as one thing. Optional in the type: an API deployed
+   * before blockages could span days sends nothing. Every block the current
+   * API answers with has one — a blockage of a single day is a group of one.
+   */
+  groupId?: string | null;
 };
 
 export type CalendarDayDto = {
@@ -190,6 +290,15 @@ export type CalendarDayDto = {
 
 /** A User as one Business sees them: the person, plus their standing there. */
 export type CustomerDto = UserDto & { blocked: boolean };
+
+/** A colleague: the person, the terms, and the calendars they are on. */
+export type TeamMemberDto = UserDto & {
+  membershipId: string;
+  role: "OWNER" | "MANAGER" | "WORKER" | "CUSTOMER";
+  resourceIds: string[];
+  joinedAt: string;
+  pending: boolean;
+};
 
 export type CustomerRecordDto = {
   user: UserDto;
@@ -233,6 +342,29 @@ export type BusinessSummaryDto = {
   subscription: SubscriptionDto | null;
   subscriptionState: SubscriptionState | null;
   ownerName: string | null;
+  ownerPhone: string | null;
+};
+
+export type MonthCountDto = { monthStart: string; count: number };
+
+export type WeeklyAppointmentActivityDto = {
+  weekStart: string;
+  confirmed: number;
+  cancelled: number;
+  noShow: number;
+  completed: number;
+};
+
+export type BusinessVolumeDto = { businessId: string; businessName: string; count: number };
+
+export type PlatformStatsDto = {
+  businessStatusCounts: { active: number; overdue: number; inactive: number };
+  planCounts: { FREE: number; STANDARD: number };
+  monthlyRecurringRevenueMinor: number;
+  businessSignupsByMonth: MonthCountDto[];
+  userSignupsByMonth: MonthCountDto[];
+  appointmentActivityByWeek: WeeklyAppointmentActivityDto[];
+  topBusinesses: BusinessVolumeDto[];
 };
 
 export type AuditEntryDto = {
@@ -259,3 +391,7 @@ export type RequestCodeDto = {
 };
 
 export type AllowlistEntryDto = { phone: string; note: string | null };
+
+export type UserLookupDto =
+  | { exists: false }
+  | { exists: true; givenName: string; familyName: string | null };

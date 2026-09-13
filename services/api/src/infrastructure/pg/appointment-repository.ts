@@ -317,4 +317,60 @@ export const appointmentRepository = (
       throw error;
     }
   },
+
+  /**
+   * One row per week x status; pivoted here rather than in SQL because four
+   * named counts read better as an object than as four dynamic columns.
+   */
+  async platformWeeklyActivity(from, to) {
+    const rows = await tx<Row[]>`
+      select date_trunc('week', start_at at time zone 'UTC')::date as week_start,
+             status,
+             count(*)::int as count
+      from appointment
+      where start_at >= ${asDate(from)} and start_at < ${asDate(to)}
+      group by 1, 2
+      order by 1`;
+    const byWeek = new Map<
+      string,
+      { confirmed: number; cancelled: number; noShow: number; completed: number }
+    >();
+    for (const row of rows) {
+      const week = String(toLocalDate(row["week_start"]));
+      const bucket = byWeek.get(week) ?? {
+        confirmed: 0,
+        cancelled: 0,
+        noShow: 0,
+        completed: 0,
+      };
+      const count = Number(row["count"]);
+      switch (row["status"]) {
+        case "CONFIRMED": bucket.confirmed = count; break;
+        case "CANCELLED": bucket.cancelled = count; break;
+        case "NO_SHOW": bucket.noShow = count; break;
+        case "COMPLETED": bucket.completed = count; break;
+      }
+      byWeek.set(week, bucket);
+    }
+    return [...byWeek.entries()]
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([weekStart, counts]) => ({ weekStart: toLocalDate(weekStart), ...counts }));
+  },
+
+  async topBusinessesByVolume(from, to, limit) {
+    const rows = await tx<Row[]>`
+      select a.business_id, b.name as business_name, count(*)::int as count
+      from appointment a
+      join business b on b.id = a.business_id
+      where a.start_at >= ${asDate(from)} and a.start_at < ${asDate(to)}
+        and a.status <> 'CANCELLED'
+      group by a.business_id, b.name
+      order by count desc
+      limit ${limit}`;
+    return rows.map((row) => ({
+      businessId: asId(text(row["business_id"])),
+      businessName: text(row["business_name"]),
+      count: Number(row["count"]),
+    }));
+  },
 });

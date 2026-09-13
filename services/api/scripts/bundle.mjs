@@ -1,5 +1,6 @@
 import { build } from "esbuild";
 import { readFile, mkdir } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +13,33 @@ const serverOutfile = resolve(packageRoot, "dist/server.mjs");
 const manifest = JSON.parse(
   await readFile(resolve(packageRoot, "package.json"), "utf8"),
 );
+
+/**
+ * The version of a dependency that is actually installed here.
+ *
+ * Not the floor of the range in package.json, which is what this used to pin:
+ * `^4.6.14` became `npm:hono@4.6.14` while npm had resolved 4.13.5, so every
+ * test ran against one version of Hono and the deployed function ran another —
+ * seven minor releases apart, and drifting further with each install. A route
+ * that matched in the tested version returned 404 in the deployed one, and
+ * nothing in the suite could have found it: the suite never runs the version
+ * being deployed.
+ *
+ * Reading the installed version makes the artifact say what was tested. If the
+ * lockfile moves, the bundle moves with it, and the diff says so.
+ */
+const installedVersion = (scope) => {
+  for (const root of [packageRoot, repoRoot]) {
+    const manifestPath = resolve(root, "node_modules", scope, "package.json");
+    if (existsSync(manifestPath)) {
+      return JSON.parse(readFileSync(manifestPath, "utf8")).version;
+    }
+  }
+  throw new Error(
+    `"${scope}" is declared but not installed. Run npm ci, so the bundle pins ` +
+      `the version the tests actually ran against.`,
+  );
+};
 
 /**
  * The Edge Function is deployed as one file. Our own sources are bundled into
@@ -48,9 +76,11 @@ const denoSpecifiers = {
             `Add it to services/api/package.json so the deployed bundle pins a version.`,
         );
       }
-      const version = range.replace(/^[\^~]/, "");
       const subpath = rest.length > 0 ? `/${rest}` : "";
-      return { path: `npm:${scope}@${version}${subpath}`, external: true };
+      return {
+        path: `npm:${scope}@${installedVersion(scope)}${subpath}`,
+        external: true,
+      };
     });
   },
 };

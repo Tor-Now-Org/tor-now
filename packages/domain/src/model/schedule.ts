@@ -71,4 +71,15 @@ export type Block = BlockedSpan & {
   readonly resourceId: ResourceId;
   readonly businessId: BusinessId;
   readonly reason: string;
+  /**
+   * What this block was made with. Blocks created by one decision — a week
+   * away, an hour kept free across a fortnight — share it, so the interface can
+   * show the holiday as one thing and take it back as one thing, while each day
+   * of it stays a block of its own that can be given back on its own.
+   *
+   * Every Block has one. The ones written before a blockage could span days
+   * were each their own decision, and 20260913000200 named them so — a group
+   * of one, which is what every screen had been assuming of them anyway.
+   */
+  readonly groupId: string;
 };

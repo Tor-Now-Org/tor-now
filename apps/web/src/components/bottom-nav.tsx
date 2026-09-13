@@ -91,6 +91,12 @@ export const ShieldIcon = () => (
   </svg>
 );
 
+export const ChartIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" {...stroke} stroke="currentColor">
+    <path d="M4 20V10M11 20V4M18 20v-7" />
+  </svg>
+);
+
 export const ListIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" {...stroke} stroke="currentColor">
     <path d="M4 7h16M4 12h16M4 17h10" />

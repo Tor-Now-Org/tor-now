@@ -12,6 +12,7 @@ import {
   type BusinessPhoto,
   type DateOverride,
   type Membership,
+  type MembershipResource,
   type Payment,
   type Resource,
   type PhotoSlot,
@@ -95,6 +96,7 @@ export const toBusiness = (row: Row): Business => ({
   minimumNoticeMinutes: int(row["minimum_notice_minutes"]),
   bookingHorizonDays: int(row["booking_horizon_days"]),
   cancellationWindowHours: int(row["cancellation_window_hours"]),
+  createdAt: toInstant(row["created_at"]),
 });
 
 export const toBusinessPhoto = (row: Row): BusinessPhoto => ({
@@ -115,6 +117,16 @@ export const toMembership = (row: Row): Membership => ({
   role: text(row["role"]) as Membership["role"],
   createdAt: toInstant(row["created_at"]),
   blockedAt: nullableInstant(row["blocked_at"]),
+  invitedGivenName: nullableText(row["invited_given_name"]),
+  invitedFamilyName: nullableText(row["invited_family_name"]),
+});
+
+export const toMembershipResource = (row: Row): MembershipResource => ({
+  id: asId(text(row["id"])),
+  membershipId: asId(text(row["membership_id"])),
+  businessId: asId(text(row["business_id"])),
+  resourceId: asId(text(row["resource_id"])),
+  createdAt: toInstant(row["created_at"]),
 });
 
 export const toResource = (row: Row): Resource => ({
@@ -168,6 +180,7 @@ export const toBlock = (row: Row): Block => ({
   startAt: toInstant(row["start_at"]),
   endAt: toInstant(row["end_at"]),
   reason: text(row["reason"]),
+  groupId: text(row["group_id"]),
 });
 
 export const toAppointment = (row: Row): Appointment => ({

@@ -13,6 +13,7 @@ import {
   timeZone,
   type Instant,
   type PhotoSlot,
+  type UserId,
 } from "@tor-now/domain";
 import type { Repositories } from "./repositories.ts";
 
@@ -30,6 +31,11 @@ export type RepositoryFactory = () => Promise<{
   repositories: Repositories;
   /** Undo everything this run wrote, so the next case starts clean. */
   cleanUp: () => Promise<void>;
+  /**
+   * Establish who Postgres RLS sees as the caller for the rest of this case
+   * (ADR 0007). The in-memory adapter has no RLS to fool, so it may no-op.
+   */
+  actAs?: (userId: UserId) => Promise<void>;
 }>;
 
 const AT = (iso: string): Instant => parseInstant(iso);
@@ -40,11 +46,14 @@ export const describeRepositoryContract = (
 ): void => {
   describe(`repository contract (${implementation})`, () => {
     const withRepositories = async (
-      body: (repositories: Repositories) => Promise<void>,
+      body: (
+        repositories: Repositories,
+        actAs: (userId: UserId) => Promise<void>,
+      ) => Promise<void>,
     ): Promise<void> => {
-      const { repositories, cleanUp } = await open();
+      const { repositories, cleanUp, actAs } = await open();
       try {
-        await body(repositories);
+        await body(repositories, actAs ?? (async () => {}));
       } finally {
         await cleanUp();
       }
@@ -259,6 +268,172 @@ export const describeRepositoryContract = (
           null,
         );
         expect(cleared.blockedAt).toBeNull();
+      });
+    });
+
+    it("promotes and removes a team member, and lists every role at once", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "02004");
+        const worker = await repositories.users.create({
+          phone: "+972500002224",
+          givenName: "יעל",
+          familyName: null,
+          birthDate: null,
+        });
+        const membership = await repositories.memberships.create(
+          worker.id,
+          context.business.id,
+          "WORKER",
+        );
+
+        expect(await repositories.memberships.findById(membership.id)).toMatchObject({
+          role: "WORKER",
+        });
+
+        const promoted = await repositories.memberships.setRole(membership.id, "MANAGER");
+        expect(promoted.role).toBe("MANAGER");
+
+        // listForBusiness takes one role; this one takes the whole team, which is
+        // what a users list has to show.
+        expect(
+          await repositories.memberships.listAllForBusiness(context.business.id),
+        ).toHaveLength(2);
+
+        await repositories.memberships.delete(membership.id);
+        expect(await repositories.memberships.findById(membership.id)).toBeNull();
+      });
+    });
+
+    it("invites a not-yet-registered phone, then re-invites to update the role", async () => {
+      await withRepositories(async (repositories, actAs) => {
+        const context = await aBookableBusiness(repositories, "02008");
+        await actAs(context.owner.id);
+
+        const { user, membership } = await repositories.memberships.invite(
+          context.business.id,
+          {
+            phone: "+972500002228",
+            givenName: "נועה",
+            familyName: null,
+            role: "WORKER",
+            invitedGivenName: "נועה",
+            invitedFamilyName: "כהן",
+          },
+        );
+        expect(user.phone).toBe("+972500002228");
+        expect(membership).toMatchObject({
+          userId: user.id,
+          role: "WORKER",
+          invitedGivenName: "נועה",
+          invitedFamilyName: "כהן",
+        });
+
+        const reinvited = await repositories.memberships.invite(context.business.id, {
+          phone: "+972500002228",
+          givenName: "נועה",
+          familyName: null,
+          role: "MANAGER",
+          invitedGivenName: "נועה",
+          invitedFamilyName: "לוי",
+        });
+        expect(reinvited.user.id).toBe(user.id);
+        expect(reinvited.membership.id).toBe(membership.id);
+        expect(reinvited.membership.role).toBe("MANAGER");
+        expect(reinvited.membership.invitedFamilyName).toBe("לוי");
+      });
+    });
+
+    // --- Membership resources ------------------------------------------
+
+    it("assigns a resource to a worker, and lists it from either side", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "02005");
+        const worker = await repositories.users.create({
+          phone: "+972500002225",
+          givenName: "אורי",
+          familyName: null,
+          birthDate: null,
+        });
+        const membership = await repositories.memberships.create(
+          worker.id,
+          context.business.id,
+          "WORKER",
+        );
+
+        const assignment = await repositories.membershipResources.create({
+          membershipId: membership.id,
+          businessId: context.business.id,
+          resourceId: context.resource.id,
+        });
+
+        expect(
+          await repositories.membershipResources.listForMembership(membership.id),
+        ).toHaveLength(1);
+        expect(
+          await repositories.membershipResources.listForResource(context.resource.id),
+        ).toMatchObject([{ id: assignment.id }]);
+
+        await repositories.membershipResources.delete(assignment.id);
+        expect(
+          await repositories.membershipResources.listForMembership(membership.id),
+        ).toEqual([]);
+      });
+    });
+
+    it("refuses the same resource twice for one membership", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "02006");
+        const worker = await repositories.users.create({
+          phone: "+972500002226",
+          givenName: "נועה",
+          familyName: null,
+          birthDate: null,
+        });
+        const membership = await repositories.memberships.create(
+          worker.id,
+          context.business.id,
+          "WORKER",
+        );
+        const assignment = {
+          membershipId: membership.id,
+          businessId: context.business.id,
+          resourceId: context.resource.id,
+        };
+        await repositories.membershipResources.create(assignment);
+
+        await expect(
+          repositories.membershipResources.create(assignment),
+        ).rejects.toThrow();
+      });
+    });
+
+    it("takes the assignments with the membership", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "02007");
+        const worker = await repositories.users.create({
+          phone: "+972500002227",
+          givenName: "גיל",
+          familyName: null,
+          birthDate: null,
+        });
+        const membership = await repositories.memberships.create(
+          worker.id,
+          context.business.id,
+          "WORKER",
+        );
+        await repositories.membershipResources.create({
+          membershipId: membership.id,
+          businessId: context.business.id,
+          resourceId: context.resource.id,
+        });
+
+        await repositories.memberships.delete(membership.id);
+
+        // The composite foreign key cascades: no assignment outlives the
+        // membership it granted, so nobody keeps reach after being removed.
+        expect(
+          await repositories.membershipResources.listForResource(context.resource.id),
+        ).toEqual([]);
       });
     });
 
@@ -491,7 +666,64 @@ export const describeRepositoryContract = (
           startAt: AT("2026-09-01T09:00:00.000Z"),
           endAt: AT("2026-09-01T10:00:00.000Z"),
           reason: "פגישה אישית",
+          groupId: "11111111-1111-4111-8111-111111111111",
         });
+
+        // A blockage made as one decision comes back as one, and goes away as
+        // one — scoped by business, since the group id travels in a URL.
+        await repositories.blocks.create({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          startAt: AT("2026-09-02T09:00:00.000Z"),
+          endAt: AT("2026-09-02T10:00:00.000Z"),
+          reason: "חופשה",
+          groupId: "22222222-2222-4222-8222-222222222222",
+        });
+        await repositories.blocks.create({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          startAt: AT("2026-09-03T09:00:00.000Z"),
+          endAt: AT("2026-09-03T10:00:00.000Z"),
+          reason: "חופשה",
+          groupId: "22222222-2222-4222-8222-222222222222",
+        });
+        expect(
+          await repositories.blocks.listGroup(context.business.id, "22222222-2222-4222-8222-222222222222"),
+        ).toHaveLength(2);
+
+        // What it is called belongs to the decision, not to each of its days:
+        // renaming one and leaving the other describes a decision nobody made.
+        expect(
+          await repositories.blocks.renameGroup(
+            context.business.id,
+            "22222222-2222-4222-8222-222222222222",
+            "מילואים",
+          ),
+        ).toBe(2);
+        expect(
+          (
+            await repositories.blocks.listGroup(
+              context.business.id,
+              "22222222-2222-4222-8222-222222222222",
+            )
+          ).map((block) => block.reason),
+        ).toEqual(["מילואים", "מילואים"]);
+        // And it reaches no further than the business it was asked about.
+        expect(
+          (
+            await repositories.blocks.listGroup(
+              context.business.id,
+              "11111111-1111-4111-8111-111111111111",
+            )
+          ).map((block) => block.reason),
+        ).toEqual(["פגישה אישית"]);
+
+        expect(
+          await repositories.blocks.deleteGroup(context.business.id, "22222222-2222-4222-8222-222222222222"),
+        ).toBe(2);
+        expect(
+          await repositories.blocks.listGroup(context.business.id, "22222222-2222-4222-8222-222222222222"),
+        ).toEqual([]);
 
         const spans = await repositories.blocks.blockedBetween(
           context.resource.id,
@@ -829,6 +1061,7 @@ export const describeRepositoryContract = (
           startAt: parseInstant("2026-09-16T06:00:00Z"),
           endAt: parseInstant("2026-09-16T08:00:00Z"),
           reason: "ספק",
+          groupId: "11111111-1111-4111-8111-111111111111",
         });
         expect(
           await repositories.blocks.listForResourceBetween(
@@ -1225,6 +1458,134 @@ export const describeRepositoryContract = (
       });
     });
 
+    // --- Platform statistics ---------------------------------------------
+
+    it("adds up a week's appointments by how they ended", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "4201");
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-15T09:00:00Z", "2026-09-15T09:30:00Z", "2026-09-15T09:40:00Z"),
+        );
+        const cancelled = await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-16T09:00:00Z", "2026-09-16T09:30:00Z", "2026-09-16T09:40:00Z"),
+        );
+        await repositories.appointments.update(cancelled.id, {
+          status: "CANCELLED",
+          cancelledAt: parseInstant("2026-09-15T09:00:00Z"),
+          cancelledBy: "CUSTOMER",
+        });
+        const noShow = await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-17T09:00:00Z", "2026-09-17T09:30:00Z", "2026-09-17T09:40:00Z"),
+        );
+        await repositories.appointments.update(noShow.id, { status: "NO_SHOW" });
+        // A different week entirely, so the test also proves the buckets do
+        // not bleed into one another.
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-21T09:00:00Z", "2026-09-21T09:30:00Z", "2026-09-21T09:40:00Z"),
+        );
+
+        const weeks = await repositories.appointments.platformWeeklyActivity(
+          parseInstant("2026-09-14T00:00:00Z"),
+          parseInstant("2026-09-28T00:00:00Z"),
+        );
+
+        expect(weeks).toEqual([
+          {
+            weekStart: parseLocalDate("2026-09-14"),
+            confirmed: 1,
+            cancelled: 1,
+            noShow: 1,
+            completed: 0,
+          },
+          {
+            weekStart: parseLocalDate("2026-09-21"),
+            confirmed: 1,
+            cancelled: 0,
+            noShow: 0,
+            completed: 0,
+          },
+        ]);
+      });
+    });
+
+    it("ranks businesses by appointments booked, cancellations excluded", async () => {
+      await withRepositories(async (repositories) => {
+        const busy = await aBookableBusiness(repositories, "4301");
+        const quiet = await aBookableBusiness(repositories, "4302");
+
+        await repositories.appointments.create(
+          anAppointmentAt(busy, "2026-09-15T09:00:00Z", "2026-09-15T09:30:00Z", "2026-09-15T09:40:00Z"),
+        );
+        await repositories.appointments.create(
+          anAppointmentAt(busy, "2026-09-16T09:00:00Z", "2026-09-16T09:30:00Z", "2026-09-16T09:40:00Z"),
+        );
+        const cancelled = await repositories.appointments.create(
+          anAppointmentAt(busy, "2026-09-17T09:00:00Z", "2026-09-17T09:30:00Z", "2026-09-17T09:40:00Z"),
+        );
+        await repositories.appointments.update(cancelled.id, {
+          status: "CANCELLED",
+          cancelledAt: parseInstant("2026-09-16T09:00:00Z"),
+          cancelledBy: "CUSTOMER",
+        });
+        await repositories.appointments.create(
+          anAppointmentAt(quiet, "2026-09-15T10:00:00Z", "2026-09-15T10:30:00Z", "2026-09-15T10:40:00Z"),
+        );
+
+        const span = [parseInstant("2026-09-14T00:00:00Z"), parseInstant("2026-09-21T00:00:00Z")] as const;
+
+        expect(await repositories.appointments.topBusinessesByVolume(span[0], span[1], 10)).toEqual([
+          { businessId: busy.business.id, businessName: busy.business.name, count: 2 },
+          { businessId: quiet.business.id, businessName: quiet.business.name, count: 1 },
+        ]);
+
+        expect(await repositories.appointments.topBusinessesByVolume(span[0], span[1], 1)).toEqual([
+          { businessId: busy.business.id, businessName: busy.business.name, count: 2 },
+        ]);
+      });
+    });
+
+    it("counts a business in the month it registered", async () => {
+      await withRepositories(async (repositories) => {
+        const from = parseInstant(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+        const to = parseInstant(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+        const before = await repositories.businesses.monthlySignups(from, to);
+        const totalBefore = before.reduce((sum, month) => sum + month.count, 0);
+
+        await aBookableBusiness(repositories, "4401");
+
+        const after = await repositories.businesses.monthlySignups(from, to);
+        const totalAfter = after.reduce((sum, month) => sum + month.count, 0);
+        expect(totalAfter).toBe(totalBefore + 1);
+
+        expect(
+          await repositories.businesses.monthlySignups(
+            parseInstant("2020-01-01T00:00:00Z"),
+            parseInstant("2020-02-01T00:00:00Z"),
+          ),
+        ).toEqual([]);
+      });
+    });
+
+    it("counts a user in the month they registered", async () => {
+      await withRepositories(async (repositories) => {
+        const from = parseInstant(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+        const to = parseInstant(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+        const before = await repositories.users.monthlySignups(from, to);
+        const totalBefore = before.reduce((sum, month) => sum + month.count, 0);
+
+        await repositories.users.create({
+          phone: "+972500004402",
+          givenName: "מאיה",
+          familyName: null,
+          birthDate: null,
+        });
+
+        const after = await repositories.users.monthlySignups(from, to);
+        const totalAfter = after.reduce((sum, month) => sum + month.count, 0);
+        expect(totalAfter).toBe(totalBefore + 1);
+      });
+    });
+
     it("counts blocks the same way, so a day off shows on the grid", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "4104");
@@ -1234,6 +1595,7 @@ export const describeRepositoryContract = (
           startAt: parseInstant("2026-09-20T06:00:00Z"),
           endAt: parseInstant("2026-09-20T14:00:00Z"),
           reason: "חופשה",
+          groupId: "11111111-1111-4111-8111-111111111111",
         });
         expect(
           await repositories.blocks.countsByLocalDay(

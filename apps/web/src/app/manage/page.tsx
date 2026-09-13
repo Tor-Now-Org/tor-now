@@ -68,7 +68,15 @@ function ManageApp() {
 
   const loadResources = useCallback(async () => {
     if (token === null || business === null) return;
-    setResources(await api.listResources(token, business.id));
+    const all = await api.listResources(token, business.id);
+    // A WORKER is on some of the calendars, not all of them, and every screen
+    // here is fed from this one list — so the narrowing belongs here rather
+    // than in each of them (ADR 0016).
+    setResources(
+      business.role === "WORKER"
+        ? all.filter((resource) => (business.resourceIds ?? []).includes(resource.id))
+        : all,
+    );
   }, [token, business]);
 
   useEffect(() => {
@@ -107,6 +115,13 @@ function ManageApp() {
     );
   }
 
+  // Absent means an API deployed before roles existed, where anybody staffing
+  // was an owner (ADR 0016).
+  const manages = (business.role ?? "OWNER") !== "WORKER";
+  // A WORKER reaching a tab they may not have — an old link, a role changed
+  // under them — sees their calendar rather than an empty screen.
+  const shown: Tab = manages || tab === "day" || tab === "schedule" ? tab : "day";
+
   return (
     <>
       <AppHeader
@@ -129,10 +144,10 @@ function ManageApp() {
       />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0 }}>
-        {tab === "day" && (
+        {shown === "day" && (
           <CalendarDay token={token} business={business} resources={resources} />
         )}
-        {tab === "schedule" && (
+        {shown === "schedule" && (
           <Schedule
             token={token}
             business={business}
@@ -140,7 +155,7 @@ function ManageApp() {
             {...(editingCalendar === null ? {} : { openOn: editingCalendar })}
           />
         )}
-        {tab === "business" && (
+        {shown === "business" && (
           <BusinessPanel
             token={token}
             business={business}
@@ -158,13 +173,16 @@ function ManageApp() {
               if (touches === "everything") void loadBusinesses();
               void loadResources();
             }}
+            // They may have just changed their own terms, and the tabs and the
+            // calendars they may see both hang off that.
+            onTeamChanged={() => void loadBusinesses()}
           />
         )}
-        {tab === "customers" && <Customers token={token} business={business} />}
+        {shown === "customers" && <Customers token={token} business={business} />}
       </main>
 
       <BottomNav
-        current={tab}
+        current={shown}
         onSelect={(id) => {
           setEditingCalendar(null);
           setTab(id as Tab);
@@ -172,8 +190,12 @@ function ManageApp() {
         items={[
           { id: "day", label: copy.tabDay, icon: <CalendarIcon /> },
           { id: "schedule", label: copy.tabSchedule, icon: <ClockIcon /> },
-          { id: "business", label: copy.tabBusiness, icon: <BuildingIcon /> },
-          { id: "customers", label: copy.tabCustomers, icon: <PeopleIcon /> },
+          ...(manages
+            ? [
+                { id: "business", label: copy.tabBusiness, icon: <BuildingIcon /> },
+                { id: "customers", label: copy.tabCustomers, icon: <PeopleIcon /> },
+              ]
+            : []),
         ]}
       />
 

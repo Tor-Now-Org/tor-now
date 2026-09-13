@@ -12,6 +12,7 @@ import type {
   SlotDto,
 } from "@/lib/api/types.ts";
 import { formatLocalDate, formatPrice, timeIn, todayIn } from "@/lib/format.ts";
+import { fillParts } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useSession } from "@/lib/session.tsx";
@@ -584,20 +585,34 @@ export const BookingFlow = ({
                     person cannot tell whether they meant to book another
                     without recognising the first. The calendar is part of that
                     — it may not be the one they are looking at. */}
+                {/* The three facts that decide it — who, what and when — are
+                    set apart from the sentence carrying them. A reader is
+                    checking "is this the one I already booked", and that is a
+                    glance rather than a paragraph. */}
                 <Warning>
-                  {(question.kind === "SAME_SERVICE"
-                    ? copy.alreadyBooked
-                    : copy.overlapsAnother
-                  )
-                    .replace("{service}", question.serviceName)
-                    .replace("{business}", question.businessName)
-                    .replace("{when}", whenOf(question))
-                    .replace(
-                      "{with}",
-                      question.resourceName === ""
-                        ? ""
-                        : ` ${copy.withProvider} ${question.resourceName}`,
-                    )}
+                  {fillParts(
+                    question.kind === "SAME_SERVICE"
+                      ? question.resourceName === ""
+                        ? copy.alreadyBookedAlone
+                        : copy.alreadyBooked
+                      : question.resourceName === ""
+                        ? copy.overlapsAnotherAlone
+                        : copy.overlapsAnother,
+                    {
+                      service: question.serviceName,
+                      provider: question.resourceName,
+                      business: question.businessName,
+                      when: whenOf(question),
+                    },
+                  ).map((part, at) =>
+                    part.filled ? (
+                      <b key={at} style={{ fontWeight: 600 }}>
+                        {part.text}
+                      </b>
+                    ) : (
+                      <span key={at}>{part.text}</span>
+                    ),
+                  )}
                 </Warning>
                 <Button onClick={() => void answer()} busy={busy}>
                   {question.kind === "SAME_SERVICE" ? copy.bookAnyway : copy.bookOverAnyway}

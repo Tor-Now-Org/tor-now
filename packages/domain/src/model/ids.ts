@@ -10,6 +10,7 @@ export type ServiceId = Id<"Service">;
 export type UserId = Id<"User">;
 export type AppointmentId = Id<"Appointment">;
 export type MembershipId = Id<"Membership">;
+export type MembershipResourceId = Id<"MembershipResource">;
 export type BlockId = Id<"Block">;
 export type WorkingHoursId = Id<"WorkingHours">;
 export type DateOverrideId = Id<"DateOverride">;

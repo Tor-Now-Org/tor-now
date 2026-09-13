@@ -9,9 +9,19 @@ contexts and the single seam between them, and [`docs/adr/`](./docs/adr) records
 the fifteen decisions everything here rests on. If something in the code looks
 arbitrary, the ADR that made it is the place to look.
 
-- **Interface** — https://tor-now-tor-now.vercel.app (the Vercel project is
-  still named `tor-now`; renaming it moves this URL)
-- **API** — https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api
+Two environments, each a whole stack of its own — its own interface, its own
+Edge Function, its own database. Nothing is shared between them, so dev is a
+place to be wrong in.
+
+|            | production                                          | dev                                                   |
+| ---------- | --------------------------------------------------- | ----------------------------------------------------- |
+| Interface  | https://tor-panuy.vercel.app                        | https://tor-panuy-dev.vercel.app                      |
+| API        | https://kbybnveitlxkffqptvqm.supabase.co/functions/v1/api | https://rhwkoodeeqyuwfymxwqa.supabase.co/functions/v1/api |
+| Deploys on | a push to `main`                                    | a push to `dev`                                       |
+
+Vercel also gives every deployment a generated URL of its own, and the branch
+an alias like `tor-now-git-dev-tor-now.vercel.app`. Those work, but they are
+not the addresses this project goes by — the table is.
 
 ## Layout
 
@@ -42,26 +52,52 @@ npm run check        # typecheck all three projects, then the unit tests
 `NEXT_PUBLIC_API_URL` points the web app at an API; with nothing set it uses the
 deployed one above.
 
+`npm install` also points git at [`.githooks`](./.githooks), which runs types,
+lint, the unit suite and a bundle-freshness check before a push — about thirty
+seconds, against the five minutes CI takes to tell you the same thing, and on a
+shared branch a red check is also a deploy that never happens. The slower half —
+the database contract, the SQL proofs, the end-to-end journeys — stays in CI,
+where waiting costs nobody's attention. `git push --no-verify` skips it.
+
 ## Deploying
 
-**The interface** deploys itself: Vercel builds `main` on every push, and
-[`vercel.json`](./vercel.json) describes the build so the settings live in the
-repository rather than in a dashboard.
+Nothing deploys until the checks pass: [`deploy.yml`](./.github/workflows/deploy.yml)
+runs on the *completion* of the `Pull request` workflow rather than beside it,
+and takes the exact commit that passed. A merge is a push, so merging into `dev`
+or `main` goes through the same gate a direct push does — and deploys what the
+merge brought in, not what the last commit on the branch happened to touch. It then deploys only what changed — the
+schema when `supabase/migrations` moved, the Edge Function when its bundle did —
+with the schema going first, since a function calling a column that does not
+exist yet is the one ordering that breaks for real users.
 
-**The API** is bundled, committed, and deployed by
-[`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) on every push
-to `main`:
+Both long-lived branches deploy themselves, to their own project: `dev` to the
+development one, `main` to production. Nothing has to be pushed by hand.
+
+**The interface** deploys itself through Vercel's git integration, on both
+branches, with [`vercel.json`](./vercel.json) describing the build so the
+settings live in the repository rather than in a dashboard. This one is not
+gated: Vercel starts building on the push, so for the minutes before the checks
+finish, the interface of a commit that turns out to be red is live. That is a
+deliberate trade — the interface is the part where seeing it quickly is worth
+most, and the schema and the API, where a bad deploy is expensive to undo, are
+gated.
+
+**The API** is bundled, committed, and deployed by the workflow above:
 
 ```bash
 npm run build:api    # services/api/src → supabase/functions/api/index.js
 git commit && git push
 ```
 
-The workflow rebuilds the bundle and refuses to deploy if the committed artifact
-differs from the build of `services/api/src`, so what runs is exactly what is in
-git at that revision. It needs two repository secrets — `SUPABASE_ACCESS_TOKEN`
-and `SUPABASE_DB_PASSWORD` — and without them it reports what it would have done
-and succeeds, so a fork is not blocked by a secret it cannot have.
+`build:api` is not optional, and neither the hook nor CI will take your word for
+it: both rebuild the bundle and refuse the push, or the deploy, if the committed
+artifact differs from the build of `services/api/src`. What runs is therefore
+exactly what is in git at that revision — which is also what lets the workflow
+treat an unchanged bundle as proof the API did not change, and skip deploying it.
+
+Each environment holds its own `SUPABASE_DB_URL` and `SUPABASE_ACCESS_TOKEN`.
+Without them the workflow reports what it would have done and succeeds, so a
+fork is not blocked by a secret it cannot have.
 
 ### Where it runs
 

@@ -52,6 +52,15 @@ export const AUDIT_ACTIONS = {
    * retained them would defeat the request it is recording.
    */
   userAnonymised: "USER_ANONYMISED",
+  /**
+   * A change to who works at a Business and what they may reach. Audited for the
+   * same reason administrator grants are: it is a permission change, and the log
+   * is the only place to ask later who granted it.
+   */
+  membershipRoleChanged: "MEMBERSHIP_ROLE_CHANGED",
+  membershipRemoved: "MEMBERSHIP_REMOVED",
+  membershipResourceAssigned: "MEMBERSHIP_RESOURCE_ASSIGNED",
+  membershipResourceUnassigned: "MEMBERSHIP_RESOURCE_UNASSIGNED",
   administratorGranted: "ADMINISTRATOR_GRANTED",
   administratorRevoked: "ADMINISTRATOR_REVOKED",
   allowlistChanged: "ADMINISTRATOR_ALLOWLIST_CHANGED",

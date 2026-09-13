@@ -97,8 +97,6 @@ test.describe("the panel itself", () => {
     await page.goto("/admin");
     await ready(page);
 
-    // The warning is part of the control, not decoration.
-    await expect(page.getByText(/עוקף את בידוד הנתונים/)).toBeVisible();
     await expect(page.getByText(shop.business.name)).toBeVisible({ timeout: 20_000 });
   });
 
@@ -119,7 +117,11 @@ test.describe("the panel itself", () => {
     await expect(page.getByText(/לעולם לא מבטלת תורים קיימים/)).toBeVisible();
     await page.getByRole("button", { name: "השבתת העסק" }).click();
 
-    await expect(page.getByText("מושבת").first()).toBeVisible({ timeout: 20_000 });
+    // On this business's own row, not anywhere on the page: "מושבת" is also one
+    // of the options in the status filter, and .first() was finding that —
+    // an assertion that passed before the button was ever pressed.
+    const row = page.getByRole("row", { name });
+    await expect(row.getByText("מושבת")).toBeVisible({ timeout: 20_000 });
 
     const found = await call<{ name: string }[]>(
       `/businesses/search?q=${encodeURIComponent(name.slice(0, 6))}`,

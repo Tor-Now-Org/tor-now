@@ -1,9 +1,13 @@
 import { ApiError, type ApiErrorCode } from "./errors.ts";
 import type {
+  ClosureImpactDto,
+  ClosureOutcomeDto,
   AllowlistEntryDto,
   AppointmentDto,
   AuditEntryDto,
   BlockDto,
+  BusinessDayDto,
+  BusinessMonthDto,
   BusinessDto,
   BusinessPhotoDto,
   BusinessProfileDto,
@@ -17,13 +21,16 @@ import type {
   MyAppointmentDto,
   OverrideDto,
   PaymentDto,
+  PlatformStatsDto,
   RequestCodeDto,
   ResourceDto,
   ServiceDto,
   SessionDto,
   SubscriptionDto,
   SubscriptionState,
+  TeamMemberDto,
   UserDto,
+  UserLookupDto,
   WorkingHoursDto,
 } from "./types.ts";
 
@@ -512,10 +519,106 @@ export const api = {
     businessId: string,
     resourceId: string,
     blocks: { startAt: string; endAt: string; reason: string }[],
+    /** What becomes of the appointments already inside it. */
+    upcoming: "KEEP" | "CANCEL" = "KEEP",
   ) =>
     request<BlockDto[]>(`/businesses/${businessId}/resources/${resourceId}/blocks`, {
       method: "POST",
-      body: { blocks },
+      body: { blocks, upcoming },
+      token,
+    }),
+
+  /** A whole blockage — every day one decision made. */
+  /** One day across every calendar, for the timeline that draws them as lanes. */
+  businessDay: (token: string, businessId: string, date: string) =>
+    request<BusinessDayDto>(`/businesses/${businessId}/calendar/day?date=${date}`, { token }),
+
+  /** Every calendar's month in one read, for the grid. */
+  businessMonth: (token: string, businessId: string, firstOfMonth: string) =>
+    request<BusinessMonthDto>(
+      `/businesses/${businessId}/calendar/month?firstOfMonth=${firstOfMonth}`,
+      { token },
+    ),
+
+  /**
+   * The shop's own days, rather than one calendar's.
+   *
+   * Separate from `putOverride` on purpose, and not a loop over it: closing is
+   * one decision about the whole business, it is manager-and-up work, and it
+   * has to answer for the appointments already inside those days — none of
+   * which a per-calendar write can do.
+   */
+  previewClosure: (
+    token: string,
+    businessId: string,
+    plan: { fromDate: string; toDate: string; ranges: { start: string; end: string }[] },
+  ) =>
+    request<ClosureImpactDto>(`/businesses/${businessId}/closures/preview`, {
+      method: "POST",
+      body: plan,
+      token,
+    }),
+
+  closeBusiness: (
+    token: string,
+    businessId: string,
+    plan: {
+      fromDate: string;
+      toDate: string;
+      note: string | null;
+      ranges: { start: string; end: string }[];
+      upcoming: "KEEP" | "CANCEL";
+    },
+  ) =>
+    request<ClosureOutcomeDto>(`/businesses/${businessId}/closures`, {
+      method: "POST",
+      body: plan,
+      token,
+    }),
+
+  /** Only the words: the days keep their hours and nothing booked is touched. */
+  describeClosure: (
+    token: string,
+    businessId: string,
+    plan: { fromDate: string; toDate: string; note: string | null },
+  ) =>
+    request<{ renamed: number }>(`/businesses/${businessId}/closures`, {
+      method: "PATCH",
+      body: plan,
+      token,
+    }),
+
+  renameBlockGroup: (token: string, businessId: string, groupId: string, reason: string) =>
+    request<{ renamed: number }>(`/businesses/${businessId}/block-groups/${groupId}`, {
+      method: "PATCH",
+      body: { reason },
+      token,
+    }),
+
+  reopenBusiness: (token: string, businessId: string, from: string, to: string) =>
+    request<{ removed: number }>(
+      `/businesses/${businessId}/closures?from=${from}&to=${to}`,
+      { method: "DELETE", token },
+    ),
+
+  /** What a blockage would sit on top of, before it is made. */
+  previewBlocks: (
+    token: string,
+    businessId: string,
+    resourceId: string,
+    blocks: { startAt: string; endAt: string; reason: string }[],
+  ) =>
+    request<ClosureImpactDto>(
+      `/businesses/${businessId}/resources/${resourceId}/blocks/preview`,
+      { method: "POST", body: { blocks }, token },
+    ),
+
+  blockGroup: (token: string, businessId: string, groupId: string) =>
+    request<BlockDto[]>(`/businesses/${businessId}/block-groups/${groupId}`, { token }),
+
+  deleteBlockGroup: (token: string, businessId: string, groupId: string) =>
+    request<{ removed: number }>(`/businesses/${businessId}/block-groups/${groupId}`, {
+      method: "DELETE",
       token,
     }),
 
@@ -552,6 +655,58 @@ export const api = {
       `/businesses/${businessId}/customers/${customerId}`,
       { token },
     ),
+
+  // --- The team (ADR 0016) -------------------------------------------------
+
+  listUsers: (token: string, businessId: string) =>
+    request<TeamMemberDto[]>(`/businesses/${businessId}/users`, { token }),
+
+  /** Whether a phone typed into the invite sheet already belongs to someone. */
+  lookupUserByPhone: (token: string, businessId: string, phone: string) =>
+    request<UserLookupDto>(
+      `/businesses/${businessId}/users/lookup?phone=${encodeURIComponent(phone)}`,
+      { token },
+    ),
+
+  /**
+   * By phone number, which is the identity: a colleague who has never signed in
+   * gets a User row from this, and finds the membership waiting at their first
+   * verification. Nothing is sent to the number.
+   */
+  inviteUser: (
+    token: string,
+    businessId: string,
+    invitation: {
+      phone: string;
+      givenName: string;
+      familyName?: string | null;
+      role: "OWNER" | "MANAGER" | "WORKER";
+      resourceIds?: string[];
+    },
+  ) =>
+    request<TeamMemberDto>(`/businesses/${businessId}/users`, {
+      method: "POST",
+      body: invitation,
+      token,
+    }),
+
+  updateUser: (
+    token: string,
+    businessId: string,
+    membershipId: string,
+    changes: { role?: "OWNER" | "MANAGER" | "WORKER"; resourceIds?: string[] },
+  ) =>
+    request<TeamMemberDto>(`/businesses/${businessId}/users/${membershipId}`, {
+      method: "PATCH",
+      body: changes,
+      token,
+    }),
+
+  removeUser: (token: string, businessId: string, membershipId: string) =>
+    request<void>(`/businesses/${businessId}/users/${membershipId}`, {
+      method: "DELETE",
+      token,
+    }),
 
   // --- Administrator (ADR 0010) -------------------------------------------
 
@@ -676,4 +831,7 @@ export const api = {
 
   adminAudit: (token: string) =>
     request<AuditEntryDto[]>("/admin/audit", { token, query: { limit: 100 } }),
+
+  adminStats: (token: string, weeks: number = 8, months: number = 12) =>
+    request<PlatformStatsDto>("/admin/stats", { token, query: { weeks, months } }),
 };

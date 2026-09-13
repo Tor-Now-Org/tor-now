@@ -336,6 +336,14 @@ test.describe("booking a second one of the same", () => {
     await expect(page.getByText(/כבר יש לכם תור/)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(new RegExp(`עם ${shop.resource.name}`))).toBeVisible();
     await expect(page.getByText(/בשעה \d\d:\d\d/)).toBeVisible();
+
+    // The three facts that decide it — who, what and when — are set apart from
+    // the sentence carrying them. A reader is checking "is this the one I
+    // already booked", and that should be a glance, not a paragraph.
+    const warning = page.getByRole("dialog").locator("b");
+    await expect(warning.filter({ hasText: shop.resource.name })).toHaveCount(1);
+    await expect(warning.filter({ hasText: shop.service.name })).toHaveCount(1);
+    await expect(warning.filter({ hasText: /\d\d:\d\d/ })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "כן, להזמין עוד תור" })).toBeVisible();
 
     await page.getByRole("button", { name: "כן, להזמין עוד תור" }).click();
@@ -396,12 +404,16 @@ test.describe("booking over an appointment somewhere else", () => {
 
     // Named, because "you are busy then" is no use without saying where: the
     // clash is at a business this screen knows nothing about.
-    const warning = page.getByText(/חופפת לתור/);
+    // The warning as a whole, not the fragment of it that matched: the
+    // sentence sets its facts apart, so it is made of several elements.
+    const warning = page.getByRole("status").filter({ hasText: /חופפת לתור/ });
     await expect(warning).toBeVisible({ timeout: 20_000 });
     await expect(warning).toContainText(barberName);
     // Asserted on the warning itself: the sheet behind it shows a span too, and
     // the point is that this sentence carries one.
     await expect(warning).toContainText(/\d\d:\d\d–\d\d:\d\d/);
+    // Where and when are what the reader is checking, so they are set apart.
+    await expect(warning.locator("b").filter({ hasText: barberName })).toHaveCount(1);
 
     // Their call, not ours: the other one may be for somebody else.
     await page.getByRole("button", { name: "כן, להזמין בכל זאת" }).click();

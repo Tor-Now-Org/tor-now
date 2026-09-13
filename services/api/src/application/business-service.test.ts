@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { displayName, MAXIMUM_PHOTOS, parseInstant } from "@tor-now/domain";
+import { displayName, MAXIMUM_PHOTOS, needsName, parseInstant, UNNAMED } from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
@@ -270,6 +270,136 @@ describe("owning a business", () => {
     // One decision, one transaction: a holiday blocked to Wednesday and failing
     // on Thursday is a calendar nobody can trust.
     expect(test.store.blocks).toHaveLength(0);
+  });
+
+  it("gives a blockage made together one identity, and takes it back as one", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    const made = await test.services.calendar.createBlocks(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      [
+        { startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "חופשה" },
+        { startAt: TUESDAY_AT("11:00"), endAt: TUESDAY_AT("12:00"), reason: "חופשה" },
+      ],
+    );
+
+    // One decision, one group — which is what lets a screen say "2 days" and
+    // undo the lot without walking the rows.
+    const groups = new Set(made.map((block) => block.groupId));
+    expect(groups.size).toBe(1);
+    const groupId = made[0]?.groupId ?? "";
+    expect(groupId).not.toBe("");
+
+    expect(
+      await test.services.calendar.blockGroup(shop.owner.actor, shop.business.id, groupId),
+    ).toHaveLength(2);
+    expect(
+      await test.services.calendar.deleteBlockGroup(shop.owner.actor, shop.business.id, groupId),
+    ).toBe(2);
+    expect(test.store.blocks).toHaveLength(0);
+  });
+
+  it("gives each decision its own group, so one holiday is not another", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const first = await test.services.calendar.createBlocks(
+      shop.owner.actor, shop.business.id, shop.resource.id,
+      [{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "א" }],
+    );
+    const second = await test.services.calendar.createBlocks(
+      shop.owner.actor, shop.business.id, shop.resource.id,
+      [{ startAt: TUESDAY_AT("11:00"), endAt: TUESDAY_AT("12:00"), reason: "ב" }],
+    );
+    expect(first[0]?.groupId).not.toBe(second[0]?.groupId);
+
+    // Removing one leaves the other standing.
+    await test.services.calendar.deleteBlockGroup(
+      shop.owner.actor, shop.business.id, first[0]?.groupId ?? "",
+    );
+    expect(test.store.blocks).toHaveLength(1);
+  });
+
+  it("will not let one business remove another's blockage", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const stranger = await signIn(test, "+972500000055", "זר");
+    const made = await test.services.calendar.createBlocks(
+      shop.owner.actor, shop.business.id, shop.resource.id,
+      [{ startAt: TUESDAY_AT("09:00"), endAt: TUESDAY_AT("10:00"), reason: "חופשה" }],
+    );
+
+    await expect(
+      test.services.calendar.deleteBlockGroup(
+        stranger.actor, shop.business.id, made[0]?.groupId ?? "",
+      ),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(test.store.blocks).toHaveLength(1);
+  });
+
+  it("answers the month with every calendar at once", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const second = await test.services.business.createResource(
+      shop.owner.actor, shop.business.id, "כיסא שני",
+    );
+    const customer = await signIn(test, "+972500000077", "דנה");
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+    await test.services.calendar.createBlocks(
+      shop.owner.actor, shop.business.id, second.id,
+      [{ startAt: TUESDAY_AT("00:00"), endAt: TUESDAY_AT("23:59"), reason: "חופשה" }],
+    );
+
+    const month = await test.services.calendar.businessMonth(
+      shop.owner.actor, shop.business.id, TUESDAY.slice(0, 8) + "01",
+    );
+
+    const tuesday = month.days.find((day) => day === undefined ? false : day.date === TUESDAY);
+    expect(tuesday?.byCalendar).toHaveLength(2);
+    // The booking belongs to one calendar and the day off to the other, and the
+    // month says which is which rather than adding them up.
+    expect(tuesday?.byCalendar.find((one) => one.resourceId === shop.resource.id))
+      .toMatchObject({ appointments: 1, away: false });
+    expect(tuesday?.byCalendar.find((one) => one.resourceId === second.id))
+      .toMatchObject({ appointments: 0, away: true });
+    expect(tuesday?.shopClosed).toBe(false);
+
+    // And the blockage comes back as one thing, with its group.
+    expect(month.blockages).toHaveLength(1);
+    expect(month.blockages[0]).toMatchObject({ resourceId: second.id, days: 1, allDay: true });
+    expect(month.blockages[0]?.groupId).not.toBe("");
+  });
+
+  it("calls a day the shop's own only when every calendar says so", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const second = await test.services.business.createResource(
+      shop.owner.actor, shop.business.id, "כיסא שני",
+    );
+
+    // One calendar closed is one person's day off, not the shop's.
+    await test.services.business.putOverride(
+      shop.owner.actor, shop.business.id, shop.resource.id,
+      { date: TUESDAY, note: null, ranges: [] },
+    );
+    let month = await test.services.calendar.businessMonth(
+      shop.owner.actor, shop.business.id, TUESDAY.slice(0, 8) + "01",
+    );
+    expect(month.days.find((day) => day.date === TUESDAY)?.shopClosed).toBe(false);
+
+    // Both closed, and the shop is shut — which is the only thing that could
+    // possibly mean, since a customer can book nowhere.
+    await test.services.business.putOverride(
+      shop.owner.actor, shop.business.id, second.id,
+      { date: TUESDAY, note: null, ranges: [] },
+    );
+    month = await test.services.calendar.businessMonth(
+      shop.owner.actor, shop.business.id, TUESDAY.slice(0, 8) + "01",
+    );
+    expect(month.days.find((day) => day.date === TUESDAY)?.shopClosed).toBe(true);
   });
 
   it("refuses a special day whose hours run into one another", async () => {
@@ -1071,5 +1201,302 @@ describe("business photos", () => {
       shop.business.id,
     );
     expect(profile.photos.map((photo) => photo.slot)).toEqual([0, 2]);
+  });
+});
+
+describe("the team", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  /** A WORKER on one calendar, plus a second calendar they have nothing to do with. */
+  const withAWorker = async () => {
+    const shop = await anEstablishedBusiness(test);
+    const other = await test.services.business.createResource(
+      shop.owner.actor,
+      shop.business.id,
+      "דנה",
+    );
+    const member = await test.services.business.inviteUser(
+      shop.owner.actor,
+      shop.business.id,
+      {
+        phone: "+972500000042",
+        givenName: "יעל",
+        role: "WORKER",
+        resourceIds: [shop.resource.id],
+      },
+    );
+    const worker = await signIn(test, "+972500000042");
+    return { shop, other, member, worker };
+  };
+
+  it("adds somebody who has never signed in, and finds them waiting when they do", async () => {
+    const { shop, member, worker } = await withAWorker();
+
+    expect(member.user.phone).toBe("+972500000042");
+    expect(member.resourceIds).toEqual([shop.resource.id]);
+    // The same User row, not a second one made at sign-in.
+    expect(worker.user.id).toBe(member.user.id);
+
+    const team = await test.services.business.listUsers(
+      shop.owner.actor,
+      shop.business.id,
+    );
+    expect(team.map((each) => each.membership.role).sort()).toEqual(["OWNER", "WORKER"]);
+  });
+
+  it("discards the owner's typed name, so a never-signed-in invitee is still asked their own", async () => {
+    const { member, worker } = await withAWorker();
+
+    expect(member.user.givenName).toBe(UNNAMED);
+    expect(member.user.familyName).toBeNull();
+    expect(needsName(worker.user)).toBe(true);
+    // The owner's typed name survives as a display hint on the membership.
+    expect(member.membership.invitedGivenName).toBe("יעל");
+    expect(member.membership.invitedFamilyName).toBeNull();
+
+    // Filling in their own name, exactly like a normal signup, replaces it.
+    const named = await test.services.profile.updateProfile(worker.actor, {
+      givenName: "יעל",
+      familyName: "כהן",
+    });
+    expect(named.id).toBe(worker.user.id);
+    expect(named.givenName).toBe("יעל");
+    expect(named.familyName).toBe("כהן");
+  });
+
+  it("keeps a worker to their own calendar and out of everything else", async () => {
+    const { shop, other, worker } = await withAWorker();
+
+    // Their own calendar is theirs.
+    await expect(
+      test.services.business.listWorkingHours(
+        worker.actor,
+        shop.business.id,
+        shop.resource.id,
+      ),
+    ).resolves.toHaveLength(1);
+
+    for (const forbidden of [
+      test.services.business.update(worker.actor, shop.business.id, { name: "אחר" }),
+      test.services.business.listServices(worker.actor, shop.business.id),
+      test.services.business.listUsers(worker.actor, shop.business.id),
+      test.services.business.listWorkingHours(worker.actor, shop.business.id, other.id),
+      test.services.business.putOverride(worker.actor, shop.business.id, other.id, {
+        date: TUESDAY,
+        note: null,
+        ranges: [],
+      }),
+    ]) {
+      await expect(forbidden).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+  });
+
+  it("lets a worker see their own calendar, and no other", async () => {
+    const { shop, other, worker } = await withAWorker();
+
+    await expect(
+      test.services.calendar.day(worker.actor, shop.business.id, shop.resource.id, TUESDAY),
+    ).resolves.toMatchObject({ date: TUESDAY });
+    await expect(
+      test.services.calendar.month(worker.actor, shop.business.id, shop.resource.id, TUESDAY),
+    ).resolves.toBeInstanceOf(Array);
+
+    await expect(
+      test.services.calendar.day(worker.actor, shop.business.id, other.id, TUESDAY),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      test.services.calendar.month(worker.actor, shop.business.id, other.id, TUESDAY),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("refuses a worker with no calendar, and calendars for anybody else", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    await expect(
+      test.services.business.inviteUser(shop.owner.actor, shop.business.id, {
+        phone: "+972500000043",
+        givenName: "נועה",
+        role: "WORKER",
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+
+    await expect(
+      test.services.business.inviteUser(shop.owner.actor, shop.business.id, {
+        phone: "+972500000043",
+        givenName: "נועה",
+        role: "MANAGER",
+        resourceIds: [shop.resource.id],
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+  });
+
+  it("changes the terms of somebody already here rather than adding them twice", async () => {
+    const { shop, other, member } = await withAWorker();
+
+    const again = await test.services.business.inviteUser(
+      shop.owner.actor,
+      shop.business.id,
+      {
+        phone: "+972500000042",
+        givenName: "יעל",
+        role: "WORKER",
+        resourceIds: [other.id],
+      },
+    );
+    expect(again.membership.id).toBe(member.membership.id);
+    expect(again.resourceIds).toEqual([other.id]);
+    expect(
+      test.store.memberships.filter(
+        (candidate) =>
+          candidate.userId === member.user.id &&
+          candidate.businessId === shop.business.id,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("drops the calendars of a worker who becomes a manager", async () => {
+    const { shop, member } = await withAWorker();
+
+    const promoted = await test.services.business.updateUser(
+      shop.owner.actor,
+      shop.business.id,
+      member.membership.id,
+      { role: "MANAGER" },
+    );
+    expect(promoted.membership.role).toBe("MANAGER");
+    expect(promoted.resourceIds).toEqual([]);
+    expect(
+      test.store.membershipResources.filter(
+        (row) => row.membershipId === member.membership.id,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("lets a manager run the business but keeps the owner's three things", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const invited = await test.services.business.inviteUser(
+      shop.owner.actor,
+      shop.business.id,
+      { phone: "+972500000044", givenName: "אור", role: "MANAGER" },
+    );
+    const manager = await signIn(test, "+972500000044");
+
+    // Everything running the place involves.
+    await expect(
+      test.services.business.update(manager.actor, shop.business.id, { name: "מספרה" }),
+    ).resolves.toMatchObject({ name: "מספרה" });
+    await expect(
+      test.services.business.inviteUser(manager.actor, shop.business.id, {
+        phone: "+972500000045",
+        givenName: "טל",
+        role: "WORKER",
+        resourceIds: [shop.resource.id],
+      }),
+    ).resolves.toMatchObject({ membership: { role: "WORKER" } });
+
+    // Billing is the owner's.
+    await expect(
+      test.services.business.subscription(manager.actor, shop.business.id),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    // And so is an owner, in either direction.
+    await expect(
+      test.services.business.inviteUser(manager.actor, shop.business.id, {
+        phone: "+972500000046",
+        givenName: "גיל",
+        role: "OWNER",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      test.services.business.updateUser(
+        manager.actor,
+        shop.business.id,
+        invited.membership.id,
+        { role: "OWNER" },
+      ),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const ownerMembership = test.store.memberships.find(
+      (candidate) =>
+        candidate.userId === shop.owner.user.id &&
+        candidate.businessId === shop.business.id,
+    );
+    await expect(
+      test.services.business.removeUser(
+        manager.actor,
+        shop.business.id,
+        ownerMembership!.id,
+      ),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("refuses to leave a business without an owner", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const sole = test.store.memberships.find(
+      (candidate) =>
+        candidate.userId === shop.owner.user.id &&
+        candidate.businessId === shop.business.id,
+    )!;
+
+    await expect(
+      test.services.business.removeUser(shop.owner.actor, shop.business.id, sole.id),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      test.services.business.updateUser(shop.owner.actor, shop.business.id, sole.id, {
+        role: "MANAGER",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    // With a second owner in place, the first may step down.
+    await test.services.business.inviteUser(shop.owner.actor, shop.business.id, {
+      phone: "+972500000047",
+      givenName: "עמית",
+      role: "OWNER",
+    });
+    await expect(
+      test.services.business.updateUser(shop.owner.actor, shop.business.id, sole.id, {
+        role: "MANAGER",
+      }),
+    ).resolves.toMatchObject({ membership: { role: "MANAGER" } });
+  });
+
+  it("takes a member off the team without touching the person", async () => {
+    const { shop, member } = await withAWorker();
+
+    await test.services.business.removeUser(
+      shop.owner.actor,
+      shop.business.id,
+      member.membership.id,
+    );
+
+    expect(
+      await test.services.business.listUsers(shop.owner.actor, shop.business.id),
+    ).toHaveLength(1);
+    // The assignment went with the membership; the User did not.
+    expect(
+      test.store.membershipResources.filter(
+        (row) => row.membershipId === member.membership.id,
+      ),
+    ).toHaveLength(0);
+    expect(test.store.users.some((user) => user.id === member.user.id)).toBe(true);
+  });
+
+  it("does not show a customer on the team, or let one manage it", async () => {
+    const { shop } = await withAWorker();
+    const customer = await signIn(test, "+972500000048");
+    await test.services.discovery.profile(customer.actor, shop.business.id);
+
+    await expect(
+      test.services.business.listUsers(customer.actor, shop.business.id),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const team = await test.services.business.listUsers(
+      shop.owner.actor,
+      shop.business.id,
+    );
+    expect(team.some((each) => each.user.id === customer.user.id)).toBe(false);
   });
 });

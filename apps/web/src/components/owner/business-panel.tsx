@@ -24,6 +24,7 @@ import {
 import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "../phone-field.tsx";
 import { PhotoPanel } from "./photo-panel.tsx";
+import { Team } from "./team.tsx";
 
 /**
  * How the one control that changes standing is drawn.
@@ -64,7 +65,7 @@ const blankToNull = (value: string | null | undefined): string | null =>
   value === null || value === undefined || value.trim() === "" ? null : value.trim();
 import { Button, Card, Critical, Field, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
 
-type Panel = "services" | "resources" | "photos" | "settings" | "billing";
+type Panel = "services" | "resources" | "photos" | "settings" | "team" | "billing";
 
 const MINOR_UNITS_PER_MAJOR = 100;
 
@@ -78,6 +79,7 @@ export const BusinessPanel = ({
   resources,
   onEditCalendar,
   onChanged,
+  onTeamChanged,
 }: {
   token: string;
   business: BusinessDto;
@@ -86,6 +88,8 @@ export const BusinessPanel = ({
   onEditCalendar: (resourceId: string) => void;
   /** What changed, so the screen reloads that and not the rest. */
   onChanged: (touches: "everything" | "calendars") => void;
+  /** Called when team membership changes. */
+  onTeamChanged?: () => void;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -122,20 +126,24 @@ export const BusinessPanel = ({
   const [error, setError] = useState<string | null>(null);
   const problem = useFieldProblem();
 
+  // Billing is the OWNER's alone (ADR 0016) — absent role means an API
+  // deployed before roles existed, where anybody staffing was an OWNER.
+  const isOwner = (business.role ?? "OWNER") === "OWNER";
+
   const load = useCallback(async () => {
     try {
       // Together: neither answer depends on the other, and asked one after the
       // other they cost two round trips to Frankfurt instead of one.
       const [loadedServices, loadedBilling] = await Promise.all([
         api.listServices(token, business.id),
-        api.subscription(token, business.id),
+        isOwner ? api.subscription(token, business.id) : Promise.resolve(null),
       ]);
       setServices(loadedServices);
       setBilling(loadedBilling);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
-  }, [token, business.id, errorText]);
+  }, [token, business.id, isOwner, errorText]);
 
   useEffect(() => {
     void load();
@@ -173,7 +181,16 @@ export const BusinessPanel = ({
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {(["services", "resources", "photos", "settings", "billing"] as const).map((candidate) => (
+        {(
+          [
+            "services",
+            "resources",
+            "photos",
+            "settings",
+            "team",
+            ...(isOwner ? (["billing"] as const) : []),
+          ] as const
+        ).map((candidate) => (
           <button
             key={candidate}
             className="chip"
@@ -189,6 +206,7 @@ export const BusinessPanel = ({
               : candidate === "resources" ? copy.resources
               : candidate === "photos" ? copy.photos
               : candidate === "settings" ? copy.settings
+              : candidate === "team" ? copy.team
               : copy.billing}
           </button>
         ))}
@@ -513,6 +531,17 @@ export const BusinessPanel = ({
             {copy.save}
           </Button>
         </>
+      )}
+
+      {panel === "team" && (
+        <div style={{ marginTop: -16, marginInline: -18, paddingInline: 18 }}>
+          <Team
+            token={token}
+            business={business}
+            resources={resources}
+            onChanged={onTeamChanged ?? (() => {})}
+          />
+        </div>
       )}
 
       {panel === "billing" && billing !== null && (
