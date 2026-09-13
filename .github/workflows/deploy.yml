@@ -1,19 +1,28 @@
 name: Deploy
 
-# The interface deploys itself: Vercel builds every push to main, configured by
+# The interface deploys itself: Vercel builds every push, configured by
 # vercel.json rather than by dashboard settings. This workflow covers the two
 # things Vercel does not — the database schema and the Edge Function.
 #
+# Both branches, because dev had neither. Its schema and its function were
+# whatever somebody last pushed by hand, which is how it ended up running an
+# API from before a week of work: every report of "it still does not work on
+# dev" was that, and no amount of testing here could have found it.
+#
 # Both steps need a Supabase access token. Without one the workflow reports what
 # it would have done and succeeds, so a fork or a first-time contributor is not
-# blocked by a secret they cannot have.
+# blocked by a secret they cannot have — and a dev environment without the
+# secret says so rather than appearing to deploy.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
+# One deploy at a time per environment, and never cancelled half way: a
+# migration interrupted between two statements is the one thing here that
+# cannot be retried out of.
 concurrency:
-  group: deploy-production
+  group: deploy-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -23,10 +32,16 @@ jobs:
   supabase:
     name: Schema and Edge Function
     runs-on: ubuntu-latest
-    environment: production
+    # Each branch deploys to its own project, with its own secrets. The
+    # fallbacks are the two projects this repository has, so a checkout with no
+    # variables set still deploys the right one rather than the wrong one.
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || 'kbybnveitlxkffqptvqm' }}
+      SUPABASE_PROJECT_REF: >-
+        ${{ vars.SUPABASE_PROJECT_REF
+            || (github.ref_name == 'main' && 'kbybnveitlxkffqptvqm'
+                                          || 'rhwkoodeeqyuwfymxwqa') }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
