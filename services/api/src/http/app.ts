@@ -851,6 +851,7 @@ const adminRoutes = (services: Services) => {
           summary.subscription === null ? null : wire.subscriptionOut(summary.subscription),
         subscriptionState: summary.subscriptionState,
         ownerName: summary.ownerName,
+        ownerPhone: summary.ownerPhone,
       })),
     );
   });

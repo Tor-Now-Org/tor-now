@@ -53,6 +53,8 @@ export default function AdminPage() {
   const [allowlist, setAllowlist] = useState<AllowlistEntryDto[]>([]);
   const [audit, setAudit] = useState<AuditEntryDto[]>([]);
   const [query, setQuery] = useState("");
+  const [businessQuery, setBusinessQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "overdue">("all");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -142,6 +144,16 @@ export default function AdminPage() {
     ? users
     : users.filter((candidate) => candidate.name.toLowerCase().includes(needle) || candidate.phone.includes(needle));
 
+  const businessNeedle = businessQuery.trim().toLowerCase();
+  const shownBusinesses = businesses.filter((summary) => {
+    const matchesText =
+      businessNeedle === "" ||
+      summary.business.name.toLowerCase().includes(businessNeedle) ||
+      (summary.ownerName ?? "").toLowerCase().includes(businessNeedle) ||
+      (summary.ownerPhone ?? "").includes(businessNeedle);
+    return matchesText && (statusFilter === "all" || businessStatus(summary) === statusFilter);
+  });
+
   return (
     <>
       <AppHeader
@@ -157,52 +169,85 @@ export default function AdminPage() {
       />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0, padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 14 }}>
-        {/* Every screen here runs over a connection that bypasses tenant
-            isolation. Saying so is part of the control, not decoration. */}
-        <Warning>{copy.bypassNote}</Warning>
-
         {error !== null && <Critical>{error}</Critical>}
 
-        {tab === "businesses" &&
-          businesses.map((summary) => (
-            <button key={summary.business.id} style={{ textAlign: "start" }}
-              onClick={() => {
-                setOpenBusiness(summary);
-                setEdits({
-                  name: summary.business.name,
-                  phone: summary.business.phone,
-                  address: summary.business.address ?? "",
-                  description: summary.business.description ?? "",
-                });
-                setPlan(
-                  summary.subscription === null
-                    ? null
-                    : {
-                        plan: summary.subscription.plan,
-                        amount: String(summary.subscription.amount),
-                        billingPeriod: summary.subscription.billingPeriod,
-                      },
-                );
-                void api
-                  .adminSubscription(token, summary.business.id)
-                  .then(setBilling)
-                  .catch(() => setBilling(null));
-              }}>
-              <Card style={{ width: "100%", display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontWeight: 600 }}>{summary.business.name}</span>
-                  <span className="hint">
-                    {copy.owner}: {summary.ownerName ?? "—"}
-                  </span>
-                </span>
-                <StateTag
-                  active={summary.business.active}
-                  state={summary.subscriptionState}
-                  labels={{ active: copy.active, inactive: copy.inactive, overdue: copy.overdue }}
-                />
-              </Card>
-            </button>
-          ))}
+        {tab === "businesses" && (
+          <>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input className="field" style={{ flex: 2, minWidth: 200 }}
+                value={businessQuery} onChange={(e) => setBusinessQuery(e.target.value)}
+                placeholder={copy.searchBusiness} aria-label={copy.searchBusiness} />
+              <select className="field" style={{ flex: 1, minWidth: 140 }}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                aria-label={copy.status}>
+                <option value="all">{copy.allStatuses}</option>
+                <option value="active">{copy.active}</option>
+                <option value="overdue">{copy.overdue}</option>
+                <option value="inactive">{copy.inactive}</option>
+              </select>
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                <thead>
+                  <tr>
+                    {[copy.fName, copy.owner, copy.phone, copy.paidThrough, copy.plan, copy.status].map((head) => (
+                      <th key={head} style={{
+                        textAlign: "start", padding: "8px 10px", borderBottom: `1px solid var(--line)`,
+                        color: "var(--muted)", fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap",
+                      }}>
+                        {head}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {shownBusinesses.map((summary) => (
+                    <tr key={summary.business.id} className="tap" style={{ cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+                      onClick={() => {
+                        setOpenBusiness(summary);
+                        setEdits({
+                          name: summary.business.name,
+                          phone: summary.business.phone,
+                          address: summary.business.address ?? "",
+                          description: summary.business.description ?? "",
+                        });
+                        setPlan(
+                          summary.subscription === null
+                            ? null
+                            : {
+                                plan: summary.subscription.plan,
+                                amount: String(summary.subscription.amount),
+                                billingPeriod: summary.subscription.billingPeriod,
+                              },
+                        );
+                        void api
+                          .adminSubscription(token, summary.business.id)
+                          .then(setBilling)
+                          .catch(() => setBilling(null));
+                      }}>
+                      <td style={{ padding: "18px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>{summary.business.name}</td>
+                      <td style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>{summary.ownerName ?? "—"}</td>
+                      <td className="tab" dir="ltr" style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>{summary.ownerPhone ?? "—"}</td>
+                      <td className="tab" style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>
+                        {summary.subscription === null ? "—" : formatPaidDate(summary.subscription.paidThrough)}
+                      </td>
+                      <td style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>{summary.subscription?.plan ?? "—"}</td>
+                      <td style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>
+                        <StateTag
+                          status={businessStatus(summary)}
+                          labels={{ active: copy.active, inactive: copy.inactive, overdue: copy.overdue }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {shownBusinesses.length === 0 && <Note>{copy.noResults}</Note>}
+            </div>
+          </>
+        )}
 
         {tab === "users" && (
           <>
@@ -342,7 +387,6 @@ export default function AdminPage() {
             </Card>
 
             <span className="label">{copy.recordPayment}</span>
-            <Note>{copy.paymentNote}</Note>
             <Field id="payment-amount" label={copy.amount} type="number" value={paymentAmount}
               placeholder={copy.paymentNotePlaceholder}
               onChange={(e) => setPaymentAmount(e.target.value)} />
@@ -424,10 +468,6 @@ export default function AdminPage() {
             )}
 
             <span className="label">{copy.editOnBehalf}</span>
-            <Note>{copy.editOnBehalfHint}</Note>
-            {/* No impersonation: the edit is recorded against the administrator
-                who made it, with the reason they gave. */}
-            <Warning>{copy.editAudited}</Warning>
             {edits !== null && (
               <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <Field id="edit-name" label={copy.fName} value={edits.name}
@@ -591,20 +631,29 @@ const Row = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
+const formatPaidDate = (localDate: string): string => {
+  const [year, month, day] = localDate.split("-");
+  return `${day}/${month}/${year}`;
+};
+
+const businessStatus = (summary: BusinessSummaryDto): "active" | "inactive" | "overdue" =>
+  !summary.business.active
+    ? "inactive"
+    : summary.subscriptionState === "IN_GRACE" || summary.subscriptionState === "LAPSED"
+      ? "overdue"
+      : "active";
+
 const StateTag = ({
-  active,
-  state,
+  status,
   labels,
 }: {
-  active: boolean;
-  state: SubscriptionState | null;
+  status: "active" | "inactive" | "overdue";
   labels: { active: string; inactive: string; overdue: string };
 }) => {
-  const tone = !active ? "critical" : state === "IN_GRACE" || state === "LAPSED" ? "caution" : "positive";
-  const text = !active ? labels.inactive : state === "CURRENT" || state === null ? labels.active : labels.overdue;
+  const tone = status === "inactive" ? "critical" : status === "overdue" ? "caution" : "positive";
   return (
     <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 999, background: `var(--${tone}-soft)`, color: `var(--${tone})` }}>
-      {text}
+      {labels[status]}
     </span>
   );
 };

@@ -46,6 +46,7 @@ export type BusinessSummary = {
   readonly subscription: Subscription | null;
   readonly subscriptionState: SubscriptionState | null;
   readonly ownerName: string | null;
+  readonly ownerPhone: string | null;
 };
 
 export const adminService = (dependencies: {
@@ -81,6 +82,7 @@ export const adminService = (dependencies: {
               subscriptionState:
                 subscription === null ? null : subscriptionStateOn(subscription, today),
               ownerName: owner === null || owner === undefined ? null : displayName(owner),
+              ownerPhone: owner === null || owner === undefined ? null : owner.phone,
             };
           }),
         );

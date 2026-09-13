@@ -342,6 +342,7 @@ export type BusinessSummaryDto = {
   subscription: SubscriptionDto | null;
   subscriptionState: SubscriptionState | null;
   ownerName: string | null;
+  ownerPhone: string | null;
 };
 
 export type AuditEntryDto = {
