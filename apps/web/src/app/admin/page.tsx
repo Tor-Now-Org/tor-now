@@ -173,6 +173,12 @@ export default function AdminPage() {
 
         {tab === "businesses" && (
           <>
+            {/* Every other screen in the product can only reach one business.
+                This one reaches all of them, which is the whole point of it and
+                also the thing most worth being reminded of — so it is said on
+                the screen rather than left to whoever remembers ADR 0016. */}
+            <Warning>{copy.isolationNote}</Warning>
+
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <input className="field" style={{ flex: 2, minWidth: 200 }}
                 value={businessQuery} onChange={(e) => setBusinessQuery(e.target.value)}
