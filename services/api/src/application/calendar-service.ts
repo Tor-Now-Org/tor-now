@@ -42,6 +42,8 @@ export type BusinessMonth = {
     readonly date: LocalDate;
     readonly byCalendar: readonly {
       readonly resourceId: ResourceId;
+      /** Whether this calendar works that day at all, by its own week. */
+      readonly works: boolean;
       readonly appointments: number;
       readonly away: boolean;
     }[];
@@ -365,8 +367,20 @@ export const calendarService = ({
 
       const dayRows = Array.from({ length: days }, (_unused, offset) => {
         const date = addDays(first, offset);
+        const weekday = dayOfWeekOf(date);
+        // Whether this calendar works that day at all. An Override replaces the
+        // weekday entirely (ADR 0002), so it answers where there is one and the
+        // week answers where there is not.
+        const worksOn = (entry: (typeof perResource)[number]) => {
+          const override = entry.overrides.find((one) => one.date === date);
+          return override !== undefined
+            ? override.ranges.length > 0
+            : entry.hours.some((one) => one.dayOfWeek === weekday);
+        };
+
         const byCalendar = perResource.map((entry) => ({
           resourceId: entry.resource.id,
+          works: worksOn(entry),
           appointments: countOn(entry.appointments, date),
           away: entry.blocks.some(
             (block) =>
@@ -375,16 +389,8 @@ export const calendarService = ({
           ),
         }));
 
-        // Is anybody open at all? An Override replaces the weekday entirely
-        // (ADR 0002), so it answers for the day where there is one, and the
-        // week answers where there is not.
-        const weekday = dayOfWeekOf(date);
-        const openAtAll = perResource.some((entry) => {
-          const override = entry.overrides.find((one) => one.date === date);
-          return override !== undefined
-            ? override.ranges.length > 0
-            : entry.hours.some((one) => one.dayOfWeek === weekday);
-        });
+        // Is anybody open at all?
+        const openAtAll = perResource.some(worksOn);
 
         // What the shop does that day, when every calendar agrees.
         const spoken = perResource.map((entry) =>

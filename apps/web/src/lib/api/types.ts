@@ -103,7 +103,13 @@ export type BusinessDayDto = {
 export type BusinessMonthDto = {
   days: {
     date: string;
-    byCalendar: { resourceId: string; appointments: number; away: boolean }[];
+    byCalendar: {
+      resourceId: string;
+      /** Whether this calendar works that day. Absent from an older API. */
+      works?: boolean;
+      appointments: number;
+      away: boolean;
+    }[];
     /**
      * Whether anybody works that day at all, by the week's own shape.
      *

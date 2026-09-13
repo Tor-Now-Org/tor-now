@@ -3890,6 +3890,10 @@ test.describe("the calendar, altogether", () => {
     expect(closed.background).not.toContain("gradient");
     expect(resting.colour).not.toBe(closed.colour);
 
+    // And it says so. A pale square reads as disabled; the word is what makes
+    // it read as the shop being shut that day.
+    await expect(restSquare.getByText("סגור")).toBeVisible();
+
     // And only the decision carries a band, because only it was decided.
     await expect(page.getByRole("button", { name: "סגור", exact: true })).toHaveCount(1);
   });
@@ -4049,5 +4053,69 @@ test.describe("moving between months", () => {
     await expect(page.getByRole("button", { name: today })).toBeVisible({ timeout: 15_000 });
     // The business works this day, and the month still says so.
     await expect.poll(hatched, { timeout: 15_000 }).not.toContain("gradient");
+  });
+});
+
+test.describe("a calendar's own days off", () => {
+  test("marks the days the calendar being read does not work", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `ימי מנוחה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "18:00" },
+    });
+    const second = await call<{ id: string }>(`/businesses/${shop.business.id}/resources`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "שימי" },
+    });
+    // One chair takes Fridays off; the other works the whole week, so the shop
+    // is open and only this calendar is not.
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`, {
+      method: "PUT",
+      token: shop.owner.token,
+      body: {
+        week: [0, 1, 2, 3, 4].map((dayOfWeek) => ({ dayOfWeek, start: "09:00", end: "18:00" })),
+      },
+    });
+    await call(`/businesses/${shop.business.id}/resources/${second.id}/working-hours`, {
+      method: "PUT",
+      token: shop.owner.token,
+      body: {
+        week: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+          dayOfWeek,
+          start: "09:00",
+          end: "18:00",
+        })),
+      },
+    });
+
+    let friday = "";
+    for (let ahead = 1; ahead < 20; ahead += 1) {
+      const date = aDayFromNow(ahead);
+      if (new Date(`${date}T00:00:00Z`).getUTCDay() === 5) {
+        friday = date;
+        break;
+      }
+    }
+    expect(friday).not.toBe("");
+
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    // Reading the chair that takes Fridays off: the Friday says so.
+    const square = page.getByRole("button", { name: friday });
+    await expect(square.getByText("סגור")).toBeVisible({ timeout: 15_000 });
+
+    // Reading the one that works it: the same Friday is an ordinary day. An
+    // owner looking at one diary wants that diary's days off, not the shop's.
+    await page.getByRole("button", { name: /^יומן:/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שימי/ }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+    await expect(square.getByText("סגור")).toHaveCount(0, { timeout: 15_000 });
   });
 });

@@ -72,7 +72,12 @@ export type DayFacts = {
   readonly shopOpen?: boolean;
   readonly shopClosed: boolean;
   readonly shopHours: readonly { start: string; end: string }[];
-  readonly byCalendar: readonly { resourceId: string; appointments: number; away: boolean }[];
+  readonly byCalendar: readonly {
+    resourceId: string;
+    works?: boolean;
+    appointments: number;
+    away: boolean;
+  }[];
 };
 
 /**
@@ -83,7 +88,15 @@ export type DayFacts = {
  * month as a day nobody works, which is exactly what an owner would report as
  * the calendar breaking.
  */
-export const worksOn = (facts: DayFacts): boolean => facts.shopOpen !== false;
+export const worksOn = (facts: DayFacts, scope: string | null = null): boolean => {
+  // Scoped to one calendar, the question is about that calendar: an owner
+  // reading Shaked's diary wants Shaked's days off marked, not the shop's.
+  if (scope !== null) {
+    const theirs = facts.byCalendar.find((one) => one.resourceId === scope);
+    if (theirs?.works !== undefined) return theirs.works;
+  }
+  return facts.shopOpen !== false;
+};
 
 /**
  * A day nothing is known about yet.

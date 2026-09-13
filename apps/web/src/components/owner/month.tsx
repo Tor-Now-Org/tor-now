@@ -58,10 +58,10 @@ import {
  */
 type Weather = "open" | "short" | "shut" | "resting";
 
-const weatherOn = (month: BusinessMonthDto, date: string): Weather => {
+const weatherOn = (month: BusinessMonthDto, date: string, scope: string | null): Weather => {
   const facts = factsOn(month, date);
   if (facts.shopClosed) return "shut";
-  if (!worksOn(facts)) return "resting";
+  if (!worksOn(facts, scope)) return "resting";
   return facts.shopHours.length > 0 ? "short" : "open";
 };
 
@@ -236,7 +236,7 @@ export const Month = ({
                   <DaySquare
                     key={date}
                     date={date}
-                    weather={known === null ? "open" : weatherOn(known, date)}
+                    weather={known === null ? "open" : weatherOn(known, date, scope)}
                     facts={known === null ? nothingKnown(date) : factsOn(known, date)}
                     calendars={touching}
                     chosen={chosen.includes(date)}
@@ -244,6 +244,7 @@ export const Month = ({
                     today={date === today}
                     reading={date === selected}
                     label={formatLocalDate(date, language, { day: "numeric" })}
+                    closedWord={copy.closedWord}
                     disabled={choosing !== null && date < today}
                     onClick={() => {
                       if (choosing === null) {
@@ -852,6 +853,7 @@ const DaySquare = ({
   reading,
   label,
   disabled,
+  closedWord,
   onClick,
 }: {
   date: string;
@@ -866,6 +868,8 @@ const DaySquare = ({
   /** A day that has been and gone, while an action is being aimed at days. */
   disabled: boolean;
   label: string;
+  /** What a day nobody works says on it. */
+  closedWord: string;
   onClick: () => void;
 }) => {
   // A decision is solid and dark; the week's own shape is a quiet hatch. Both
@@ -874,7 +878,7 @@ const DaySquare = ({
     weather === "shut"
       ? "var(--closed)"
       : weather === "resting"
-        ? "repeating-linear-gradient(135deg,var(--sunken) 0 4px,var(--raised) 4px 8px)"
+        ? "repeating-linear-gradient(135deg,var(--line) 0 1.5px,var(--sunken) 1.5px 7px)"
         : chosen
           ? "var(--accent-soft)"
           : weather === "short"
@@ -927,6 +931,21 @@ const DaySquare = ({
       }}
     >
       <span>{label}</span>
+      {/* Said, not implied. A pale square reads as disabled; the word is what
+          makes it read as the shop being shut that day. */}
+      {weather === "resting" && (
+        <span
+          style={{
+            position: "absolute",
+            bottom: BAND_AREA + 1,
+            fontSize: 8.5,
+            fontWeight: 600,
+            color: "var(--muted)",
+          }}
+        >
+          {closedWord}
+        </span>
+      )}
       {weather !== "shut" && weather !== "resting" && (
         <span style={{ display: "flex", gap: 2, position: "absolute", bottom: BAND_AREA + 2 }}>
           {/* One mark per calendar, in that calendar's own colour, so a row of
