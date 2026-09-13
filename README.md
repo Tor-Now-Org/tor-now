@@ -58,24 +58,34 @@ schema when `supabase/migrations` moved, the Edge Function when its bundle did �
 with the schema going first, since a function calling a column that does not
 exist yet is the one ordering that breaks for real users.
 
-**The interface** deploys itself: Vercel builds `main` on every push, and
-[`vercel.json`](./vercel.json) describes the build so the settings live in the
-repository rather than in a dashboard.
+Both long-lived branches deploy themselves, to their own project: `dev` to the
+development one, `main` to production. Nothing has to be pushed by hand.
 
-**The API** is bundled, committed, and deployed by
-[`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) on every push
-to `main`:
+**The interface** deploys itself through Vercel's git integration, on both
+branches, with [`vercel.json`](./vercel.json) describing the build so the
+settings live in the repository rather than in a dashboard. This one is not
+gated: Vercel starts building on the push, so for the minutes before the checks
+finish, the interface of a commit that turns out to be red is live. That is a
+deliberate trade — the interface is the part where seeing it quickly is worth
+most, and the schema and the API, where a bad deploy is expensive to undo, are
+gated.
+
+**The API** is bundled, committed, and deployed by the workflow above:
 
 ```bash
 npm run build:api    # services/api/src → supabase/functions/api/index.js
 git commit && git push
 ```
 
-The workflow rebuilds the bundle and refuses to deploy if the committed artifact
-differs from the build of `services/api/src`, so what runs is exactly what is in
-git at that revision. It needs two repository secrets — `SUPABASE_ACCESS_TOKEN`
-and `SUPABASE_DB_PASSWORD` — and without them it reports what it would have done
-and succeeds, so a fork is not blocked by a secret it cannot have.
+`build:api` is not optional, and neither the hook nor CI will take your word for
+it: both rebuild the bundle and refuse the push, or the deploy, if the committed
+artifact differs from the build of `services/api/src`. What runs is therefore
+exactly what is in git at that revision — which is also what lets the workflow
+treat an unchanged bundle as proof the API did not change, and skip deploying it.
+
+Each environment holds its own `SUPABASE_DB_URL` and `SUPABASE_ACCESS_TOKEN`.
+Without them the workflow reports what it would have done and succeeds, so a
+fork is not blocked by a secret it cannot have.
 
 ### Where it runs
 
