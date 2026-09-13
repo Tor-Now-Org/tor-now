@@ -1,4 +1,5 @@
 import {
+  DomainError,
   forbidden,
   isStaff,
   manages,
@@ -45,6 +46,25 @@ export const requireOperator = (actor: Actor): UserId | null => {
   return requireAdministrator(actor);
 };
 
+/**
+ * A deactivated Business is off-limits to whoever staffs it, not only to
+ * customers (CONTEXT.md's Deactivation entry is silent on this, but leaving an
+ * owner free to keep running a Business the platform has taken out of search
+ * defeats the point of deactivating it). An administrator is unrestricted —
+ * ADR 0010 — since reactivating the Business is itself an administrator
+ * action and cannot happen from inside a lockout.
+ */
+const requireActiveBusiness = async (
+  repositories: Repositories,
+  businessId: BusinessId,
+): Promise<void> => {
+  const business = await repositories.businesses.findById(businessId);
+  if (business === null) throw notFound("Business", businessId);
+  if (!business.active) {
+    throw new DomainError("BUSINESS_INACTIVE", "This business is deactivated");
+  }
+};
+
 export const requireOwnership = async (
   repositories: Repositories,
   actor: Actor,
@@ -59,6 +79,7 @@ export const requireOwnership = async (
   if (membership === null || membership.role !== "OWNER") {
     throw forbidden("You do not manage this business");
   }
+  await requireActiveBusiness(repositories, businessId);
 };
 
 /**
@@ -82,6 +103,7 @@ export const requireOwnerOrManager = async (
   if (membership === null || !manages(membership)) {
     throw forbidden("You do not manage this business");
   }
+  await requireActiveBusiness(repositories, businessId);
   return membership;
 };
 
@@ -103,6 +125,7 @@ export const requireStaff = async (
   if (membership === null || !isStaff(membership)) {
     throw forbidden("You do not work at this business");
   }
+  await requireActiveBusiness(repositories, businessId);
   return membership;
 };
 
@@ -125,6 +148,7 @@ export const requireResourceAccess = async (
   if (membership === null || !isStaff(membership)) {
     throw forbidden("You do not work at this business");
   }
+  await requireActiveBusiness(repositories, businessId);
   if (manages(membership)) return;
 
   const assignments = await repositories.membershipResources.listForMembership(

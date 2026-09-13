@@ -209,7 +209,11 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {shownBusinesses.map((summary) => (
-                    <tr key={summary.business.id} className="tap" style={{ cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+                    <tr key={summary.business.id} className="tap" style={{
+                      cursor: "pointer",
+                      borderBottom: "1px solid var(--line)",
+                      ...(businessStatus(summary) === "overdue" ? { boxShadow: "inset 0 0 0 1px var(--critical)" } : {}),
+                    }}
                       onClick={() => {
                         setOpenBusiness(summary);
                         setEdits({
