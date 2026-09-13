@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# What CI would tell you in five minutes, told here in thirty seconds.
+#
+# The checks run on every push to a shared branch, and a red one is noise
+# everybody else has to read past — and on main or dev it also means the deploy
+# that follows never happens. Most of what goes red is caught by types, lint and
+# the unit suite, all of which run locally in well under a minute.
+#
+# Deliberately not the whole gate. The database contract, the SQL proofs and the
+# end-to-end journeys need a throwaway Postgres and a browser, which is minutes
+# rather than seconds; those stay in CI, where waiting costs nobody's attention.
+#
+# In a hurry, or pushing something deliberately unfinished to a branch of your
+# own:
+#
+#   git push --no-verify
+#
+set -euo pipefail
+
+# Git names what is being pushed on stdin, a line per ref:
+#
+#   <local ref> <local sha> <remote ref> <remote sha>
+#
+# A deletion has an all-zero *local* sha — there is no commit to check. A brand
+# new branch has an all-zero *remote* sha and very much does need checking,
+# which is the mistake worth not making here.
+if [ ! -t 0 ]; then
+  refs="$(cat)"
+  if [ -n "$refs" ] &&
+     ! printf '%s\n' "$refs" | awk '$2 !~ /^0+$/ { found = 1 } END { exit !found }'; then
+    exit 0
+  fi
+fi
+
+say() { printf '\n\033[1m→ %s\033[0m\n' "$1"; }
+
+say "types"
+npm run --silent typecheck
+
+say "lint"
+npm run --silent lint
+
+say "unit and integration tests"
+npm run --silent test
+
+# The committed bundle is what gets deployed, and CI refuses a stale one. It is
+# the single most common way a push goes red without anything being *wrong*:
+# somebody changed services/api/src and did not rebuild.
+say "the deployed bundle is the build of services/api/src"
+npm run --silent build:api >/dev/null
+if ! git diff --quiet -- supabase/functions/api/index.js; then
+  printf '\n\033[31mThe committed bundle is out of date.\033[0m\n'
+  printf 'It has just been rebuilt — commit it and push again:\n\n'
+  printf '  git add supabase/functions/api/index.js && git commit --amend --no-edit\n\n'
+  exit 1
+fi
+
+printf '\n\033[32mAll clear.\033[0m The rest — database contract, SQL proofs, end-to-end — runs in CI.\n'

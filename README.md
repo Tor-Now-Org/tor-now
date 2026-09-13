@@ -42,7 +42,21 @@ npm run check        # typecheck all three projects, then the unit tests
 `NEXT_PUBLIC_API_URL` points the web app at an API; with nothing set it uses the
 deployed one above.
 
+`npm install` also points git at [`.githooks`](./.githooks), which runs types,
+lint, the unit suite and a bundle-freshness check before a push — about thirty
+seconds, against the five minutes CI takes to tell you the same thing, and on a
+shared branch a red check is also a deploy that never happens. The slower half —
+the database contract, the SQL proofs, the end-to-end journeys — stays in CI,
+where waiting costs nobody's attention. `git push --no-verify` skips it.
+
 ## Deploying
+
+Nothing deploys until the checks pass: [`deploy.yml`](./.github/workflows/deploy.yml)
+runs on the *completion* of the `Pull request` workflow rather than beside it,
+and takes the exact commit that passed. It then deploys only what changed — the
+schema when `supabase/migrations` moved, the Edge Function when its bundle did —
+with the schema going first, since a function calling a column that does not
+exist yet is the one ordering that breaks for real users.
 
 **The interface** deploys itself: Vercel builds `main` on every push, and
 [`vercel.json`](./vercel.json) describes the build so the settings live in the
