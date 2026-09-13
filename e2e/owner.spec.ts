@@ -4496,3 +4496,319 @@ test.describe("a search that answers the question it was asked", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 });
+
+test.describe("acting on something the search found", () => {
+  /**
+   * Open a day by its date, paging the month along if it is not this one.
+   *
+   * The grid only holds one month, so a day three weeks out is often not on it
+   * — a test that clicked straight at the square waited forty-five seconds for
+   * a square in a month nobody had turned to.
+   */
+  const openTheDay = async (page: Page, date: string) => {
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    const square = page.getByRole("button", { name: date });
+    for (let turns = 0; turns < 6 && (await square.count()) === 0; turns += 1) {
+      await page.getByRole("button", { name: "החודש הבא" }).click();
+      await page.waitForTimeout(300);
+    }
+    await square.click({ timeout: 15_000 });
+  };
+
+  /** The time a result card shows for an instant, in the business's own zone. */
+  const clockShownFor = (instant: string): string =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Jerusalem",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(instant));
+
+  const aCustomerWithTwo = async (shop: {
+    business: { id: string };
+    service: { id: string };
+    resource: { id: string };
+  }) => {
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name: { givenName: "תמר", familyName: "בן דוד" } },
+    });
+    const starts: string[] = [];
+    for (const ahead of [25, 26]) {
+      const day = aDayFromNow(ahead);
+      const [available] = await call<{ slots: { startAt: string }[] }[]>(
+        `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+          `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+      );
+      const slot = available?.slots[0]?.startAt ?? "";
+      expect(slot).not.toBe("");
+      await call("/appointments", {
+        method: "POST",
+        token,
+        body: {
+          businessId: shop.business.id,
+          serviceId: shop.service.id,
+          resourceId: shop.resource.id,
+          startAt: slot,
+          customerNote: null,
+        },
+      });
+      starts.push(slot);
+    }
+    return { phone, starts };
+  };
+
+  test("cancelling one leaves her other one on screen, not an empty result", async ({
+    page,
+  }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `אחרי פעולה ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aCustomerWithTwo(shop);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("תמר");
+    // One card per appointment. Her name is also on the suggestion chip above
+    // them, so the cards are counted by the service on them rather than by her.
+    const results = page.getByRole("button").filter({ hasText: "תמר בן דוד" }).filter({
+      hasText: "תספורת",
+    });
+    await expect(results).toHaveCount(2, { timeout: 15_000 });
+
+    await results.first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("button", { name: "ביטול התור" }).click();
+
+    // She still has one. The list has to be the answer to the question still
+    // in the box, which means asking it again — the appointment that was just
+    // cancelled is no longer one of its answers.
+    await expect(results).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.getByText("לא נמצא תור מתאים")).toHaveCount(0);
+  });
+
+  test("moving one shows it at its new time, not its old one", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `העברה מחיפוש ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const { starts } = await aCustomerWithTwo(shop);
+    const wasAt = clockShownFor(starts[0] ?? "");
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("תמר");
+    const results = page
+      .getByRole("button")
+      .filter({ hasText: "תמר בן דוד" })
+      .filter({ hasText: "תספורת" });
+    await expect(results).toHaveCount(2, { timeout: 15_000 });
+    await expect(page.getByText(wasAt).first()).toBeVisible();
+
+    await results.first().click();
+    await page.getByRole("button", { name: "העברת התור לשעה אחרת" }).click();
+    // Any other time that day; the first offered one that is not where it is.
+    const other = page.getByRole("button", { name: /^\d\d:\d\d$/ }).filter({
+      hasNotText: wasAt,
+    });
+    await other.first().click();
+
+    // Still two of hers, and the old time is not one of them.
+    await expect(results).toHaveCount(2, { timeout: 15_000 });
+    await expect(page.getByText(wasAt)).toHaveCount(0);
+  });
+
+  test("cancelling her only one says so, rather than leaving it on screen", async ({
+    page,
+  }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `אחרון ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name: { givenName: "אביגיל", familyName: "נוי" } },
+    });
+    const day = aDayFromNow(27);
+    const [available] = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+    );
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: available?.slots[0]?.startAt ?? "",
+        customerNote: null,
+      },
+    });
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("אביגיל");
+    const results = page
+      .getByRole("button")
+      .filter({ hasText: "אביגיל נוי" })
+      .filter({ hasText: "תספורת" });
+    await expect(results).toHaveCount(1, { timeout: 15_000 });
+
+    await results.first().click();
+    await page.getByRole("button", { name: "ביטול התור" }).click();
+
+    // Empty is the right answer here, and it has to be arrived at rather than
+    // left over: the cancelled appointment must not still be sitting there.
+    await expect(results).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByText("לא נמצא תור מתאים")).toBeVisible();
+  });
+
+  test("a named customer's list is re-asked too, not only the day", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `צ׳יפ לקוח ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aCustomerWithTwo(shop);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("תמר");
+    // Naming her is a different question from searching for her: it is answered
+    // by her own appointments, fetched by number, and that answer went stale in
+    // exactly the same way.
+    await page.getByRole("button", { name: /לקוח\s+תמר בן דוד/ }).click({ timeout: 15_000 });
+
+    const hers = page
+      .getByRole("button")
+      .filter({ hasText: "תמר בן דוד" })
+      .filter({ hasText: "תספורת" });
+    await expect(hers).toHaveCount(2, { timeout: 15_000 });
+
+    await hers.first().click();
+    await page.getByRole("button", { name: "ביטול התור" }).click();
+    await expect(hers).toHaveCount(1, { timeout: 15_000 });
+  });
+
+  test("the status filter finds the one that was just cancelled", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `סטטוס ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const { starts } = await aCustomerWithTwo(shop);
+    const day = (starts[0] ?? "").slice(0, 10);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    // On the day itself, so the cancellation happens in the day's own list.
+    await openTheDay(page, day);
+    await page.getByText("תמר בן דוד").first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("button", { name: "ביטול התור" }).click();
+
+    // A cancelled appointment is not gone, it is cancelled — and the filter
+    // that asks for cancelled ones has to be able to find it.
+    await page.getByRole("button", { name: /סינון/ }).click();
+    await page.getByRole("button", { name: "בוטל" }).click();
+    await page.getByRole("button", { name: "הצגת התוצאות" }).click();
+    await expect(page.getByText("תמר בן דוד").first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("filters narrow together, and clearing gives the whole day back", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `צירוף ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const { starts } = await aCustomerWithTwo(shop);
+    const day = (starts[0] ?? "").slice(0, 10);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await openTheDay(page, day);
+
+    // A status nothing on this day has: the filter is an "and", so it leaves
+    // nothing rather than falling back to everything.
+    await page.getByRole("button", { name: /סינון/ }).click();
+    await page.getByRole("button", { name: "בוטל" }).click();
+    await page.getByRole("button", { name: "הצגת התוצאות" }).click();
+    await expect(page.getByText("לא נמצא תור מתאים")).toBeVisible({ timeout: 15_000 });
+
+    // And off again: the calendar comes back, not an empty filtered view.
+    await page.getByRole("button", { name: "ניקוי" }).first().click();
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("how far a named customer's list looks is hers to change", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `טווח ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aCustomerWithTwo(shop);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("תמר");
+    await page.getByRole("button", { name: /לקוח\s+תמר בן דוד/ }).click({ timeout: 15_000 });
+
+    const hers = page
+      .getByRole("button")
+      .filter({ hasText: "תמר בן דוד" })
+      .filter({ hasText: "תספורת" });
+    // Naming her opens at everything, because "when is she next in" is almost
+    // never about today.
+    await expect(hers).toHaveCount(2, { timeout: 15_000 });
+
+    // Narrowed to the day the screen is on, she has nothing — both of hers are
+    // weeks out. That is an answer, not a failure.
+    await page.getByRole("button", { name: "היום", exact: true }).click();
+    await expect(hers).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByText("לא נמצא תור מתאים")).toBeVisible();
+
+    // And back out again.
+    await page.getByRole("button", { name: "הכול", exact: true }).click();
+    await expect(hers).toHaveCount(2, { timeout: 15_000 });
+  });
+});

@@ -81,6 +81,16 @@ export const CalendarDay = ({
     () => `${todayIn(business.timeZone).slice(0, 7)}-01`,
   );
   const [reach, setReach] = useState<Reach>("DAY");
+  /**
+   * Bumped when anything on this screen changed what the answers would be.
+   *
+   * Every question the screen has open reads it: the month, the search, and
+   * the named customer's own list. Only the day used to be re-asked after a
+   * cancellation or a move, so the other two went on showing what had been
+   * true before the button was pressed — most visibly the search, which kept
+   * an appointment on screen that the same screen had just cancelled.
+   */
+  const [freshness, setFreshness] = useState(0);
   /** Bumped when the day changes something the month draws, so it reloads. */
   const [monthKey, setMonthKey] = useState(0);
   /** What the + started, and the days it is waiting to be aimed at. */
@@ -105,7 +115,7 @@ export const CalendarDay = ({
    * answers — see the note there for why a bare list could not be trusted.
    */
   const [query, setQuery] = useState("");
-  const search = useAppointmentSearch(token, business.id, query);
+  const search = useAppointmentSearch(token, business.id, query, freshness);
   const found = answerTo(search, query);
   /**
    * The business's services, in their own order.
@@ -172,7 +182,7 @@ export const CalendarDay = ({
     return () => {
       current = false;
     };
-  }, [facets.customer, token, business.id]);
+  }, [facets.customer, token, business.id, freshness]);
 
   /**
    * Whether the shop is shut that day, and whether anybody decided it.
@@ -197,13 +207,27 @@ export const CalendarDay = ({
         }
       : null;
 
+  /**
+   * Ask everything on screen again.
+   *
+   * One function rather than each caller remembering the list: the day, the
+   * month, the search and the named customer's appointments are four answers
+   * to the same underlying facts, and anything that changes those facts
+   * invalidates all four. Refreshing a subset is how the search came to
+   * contradict the day.
+   */
+  const refreshEverything = useCallback(async () => {
+    setFreshness((key) => key + 1);
+    setMonthKey((key) => key + 1);
+    await load();
+  }, [load]);
+
   const act = async (work: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
     try {
       await work();
-      setMonthKey((key) => key + 1);
-      await load();
+      await refreshEverything();
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
@@ -519,8 +543,7 @@ export const CalendarDay = ({
         onClose={() => setPicked(null)}
         onChanged={() => {
           setPicked(null);
-          setMonthKey((key) => key + 1);
-          void load();
+          void refreshEverything();
         }}
       />
       </>
@@ -551,8 +574,7 @@ export const CalendarDay = ({
         onDone={() => {
           setAim(null);
           setAimedAt([]);
-          setMonthKey((key) => key + 1);
-          void load();
+          void refreshEverything();
         }}
       />
 
@@ -561,7 +583,7 @@ export const CalendarDay = ({
         business={business}
         appointment={selected}
         onClose={() => setSelected(null)}
-        onChanged={load}
+        onChanged={refreshEverything}
       />
     </div>
   );

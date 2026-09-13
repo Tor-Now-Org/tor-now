@@ -81,6 +81,16 @@ export const useAppointmentSearch = (
   token: string,
   businessId: string,
   query: string,
+  /**
+   * Bumped when something on the screen changed what the answer would be.
+   *
+   * A search is a question about the appointments, so cancelling or moving one
+   * of its answers makes it a question again. Without this the list went on
+   * showing the appointment that had just been cancelled — and the screen
+   * that had performed the cancellation was the one insisting it had not
+   * happened.
+   */
+  freshness: number,
 ): Search => {
   const [search, setSearch] = useState<Search>(IDLE);
 
@@ -108,7 +118,7 @@ export const useAppointmentSearch = (
       current = false;
       window.clearTimeout(timer);
     };
-  }, [query, token, businessId]);
+  }, [query, token, businessId, freshness]);
 
   return search;
 };
