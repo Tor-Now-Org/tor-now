@@ -61,6 +61,7 @@ export type PlatformStats = {
   };
   readonly planCounts: Record<Plan, number>;
   readonly monthlyRecurringRevenueMinor: number;
+  readonly totalUsers: number;
   readonly businessSignupsByMonth: readonly MonthCount[];
   readonly userSignupsByMonth: readonly MonthCount[];
   readonly appointmentActivityByWeek: readonly WeeklyAppointmentActivity[];
@@ -463,18 +464,25 @@ export const adminService = (dependencies: {
         // date, so 30 days per month is close enough.
         const monthsFrom = instant(to - months * 30 * 24 * 60 * 60 * 1000);
 
-        const [businessSignupsByMonth, userSignupsByMonth, appointmentActivityByWeek, topBusinesses] =
-          await Promise.all([
-            repositories.businesses.monthlySignups(monthsFrom, to),
-            repositories.users.monthlySignups(monthsFrom, to),
-            repositories.appointments.platformWeeklyActivity(weeksFrom, to),
-            repositories.appointments.topBusinessesByVolume(weeksFrom, to, 10),
-          ]);
+        const [
+          businessSignupsByMonth,
+          userSignupsByMonth,
+          appointmentActivityByWeek,
+          topBusinesses,
+          totalUsers,
+        ] = await Promise.all([
+          repositories.businesses.monthlySignups(monthsFrom, to),
+          repositories.users.monthlySignups(monthsFrom, to),
+          repositories.appointments.platformWeeklyActivity(weeksFrom, to),
+          repositories.appointments.topBusinessesByVolume(weeksFrom, to, 10),
+          repositories.users.count(),
+        ]);
 
         return {
           businessStatusCounts,
           planCounts,
           monthlyRecurringRevenueMinor,
+          totalUsers,
           businessSignupsByMonth,
           userSignupsByMonth,
           appointmentActivityByWeek,

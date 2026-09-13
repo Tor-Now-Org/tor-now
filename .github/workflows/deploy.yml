@@ -9,11 +9,13 @@ name: Deploy
 # API from before a week of work: every report of "it still does not work on
 # dev" was that, and no amount of testing here could have found it.
 #
-# It runs *after* the checks, not beside them. It used to start on the same
-# push that started them, so a commit that failed lint, types or a single test
-# was deployed anyway — the two workflows raced, and the deploy usually won.
-# `workflow_run` makes the checks a precondition rather than a companion, and
-# the deploy takes the exact commit they passed on.
+# It is *called* by the checks workflow rather than triggered beside it, so a
+# deploy cannot begin until they have passed. It was briefly hung off
+# `workflow_run` instead, which waits correctly but runs against the *default
+# branch's* ref whatever branch was pushed — and an environment restricted to
+# `dev` can never match a run whose ref is `main`, so dev deploys would have
+# been refused by their own protection rule. Being called keeps the run on the
+# branch it is about, which is what those rules are written against.
 #
 # The two credentials carry two different jobs on purpose, each able to do only
 # its own:
@@ -35,24 +37,19 @@ name: Deploy
 # every project that person can reach, now and in future. Nothing here needs
 # that, so nothing here is given it.
 #
-# Two tightenings are worth taking when they become available: project-scoped
-# roles (Team plan) confine the CI account to one project, and scoped personal
-# access tokens narrow a token to Edge Functions alone. Neither exists on this
-# organisation's plan today, so the separation between dev and production is
-# kept on the GitHub side: each environment holds its own pair of secrets, and
-# Production's are restricted to the branch that deploys it.
+# Each environment holds its own pair, and each is restricted to the one branch
+# that deploys it: development to dev, production to main.
 on:
-  workflow_run:
-    workflows: ["Pull request"]
-    types: [completed]
-    branches: [main, dev]
+  # The ordinary path: the checks workflow calls this once they have passed.
+  workflow_call:
+  # And by hand, to redeploy what is already on a branch.
   workflow_dispatch:
 
 # One deploy at a time per branch, and never cancelled half way: a migration
 # interrupted between two statements is the one thing here that cannot be
 # retried out of.
 concurrency:
-  group: deploy-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  group: deploy-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -69,34 +66,14 @@ jobs:
   plan:
     name: What changed
     runs-on: ubuntu-latest
-    # A deploy needs three things to be true: the checks passed, they passed on
-    # a *branch* rather than on somebody's pull request, and this is the run
-    # that pushing that branch started.
-    #
-    # That last clause is what stops the same commit deploying twice. A merge
-    # is a push, so merging to dev or main lands here the same way a direct
-    # push does — but while a dev → main pull request is open, pushing dev also
-    # updates that pull request, and the checks run a second time on the very
-    # same commit. Both runs say `dev`, both go green, and without this the
-    # second one deploys everything all over again.
-    if: >-
-      github.event_name == 'workflow_dispatch'
-      || (github.event.workflow_run.conclusion == 'success'
-          && github.event.workflow_run.event == 'push')
     outputs:
-      sha: ${{ steps.target.outputs.sha }}
-      branch: ${{ steps.target.outputs.branch }}
       environment: ${{ steps.target.outputs.environment }}
       schema: ${{ steps.changed.outputs.schema }}
       function: ${{ steps.changed.outputs.function }}
     steps:
       - id: target
         run: |
-          sha="${{ github.event.workflow_run.head_sha || github.sha }}"
-          branch="${{ github.event.workflow_run.head_branch || github.ref_name }}"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          if [ "$branch" = "main" ]; then
+          if [ "${{ github.ref_name }}" = "main" ]; then
             echo "environment=production" >> "$GITHUB_OUTPUT"
           else
             echo "environment=development" >> "$GITHUB_OUTPUT"
@@ -104,8 +81,10 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.target.outputs.sha }}
           # Two commits, so the push can be compared with what came before it.
+          # On a merge commit HEAD^ is the first parent, which makes the
+          # comparison "everything this merge brought in" rather than "what the
+          # last commit on the branch happened to touch".
           fetch-depth: 2
 
       # Deploying what did not change costs a function version and a cold start
@@ -154,8 +133,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -181,8 +158,6 @@ jobs:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.sha }}
       - name: Check for the connection string
         id: credentials
         run: |
@@ -222,12 +197,10 @@ jobs:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: >-
         ${{ vars.SUPABASE_PROJECT_REF
-            || (needs.plan.outputs.branch == 'main' && 'kbybnveitlxkffqptvqm'
-                                                    || 'rhwkoodeeqyuwfymxwqa') }}
+            || (github.ref_name == 'main' && 'kbybnveitlxkffqptvqm'
+                                          || 'rhwkoodeeqyuwfymxwqa') }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.sha }}
       - name: Check for the token
         id: credentials
         run: |

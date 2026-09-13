@@ -11,6 +11,8 @@ import type {
   SubscriptionDto,
   SubscriptionState,
 } from "@/lib/api/types.ts";
+import { graceDaysLeft } from "@/lib/billing-alert.ts";
+import { fillParts } from "@/lib/i18n/fill.ts";
 import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
@@ -546,7 +548,13 @@ export const BusinessPanel = ({
 
       {panel === "billing" && billing !== null && (
         <>
-          {billing.state === "IN_GRACE" && <Warning>{copy.billingOverdue}</Warning>}
+          {billing.state === "IN_GRACE" && (
+            <Warning>
+              {fillParts(copy.billingOverdue, {
+                days: String(graceDaysLeft(billing.subscription.paidThrough, business.timeZone)),
+              }).map((part) => part.text)}
+            </Warning>
+          )}
           <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <Row label={copy.plan} value={billing.subscription.plan} />
             <Row label={copy.amount} value={formatPrice(billing.subscription.amountMinor, language, "—")} />

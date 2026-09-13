@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import type { BusinessDto, ResourceDto } from "@/lib/api/types.ts";
+import { graceDaysLeft } from "@/lib/billing-alert.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
@@ -21,6 +22,7 @@ import { CalendarDay } from "@/components/owner/calendar-day.tsx";
 import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
 import { Button, Card, Empty, Note, Sheet, Spinner } from "@/components/ui.tsx";
+import { fillParts } from "@/lib/i18n/fill.ts";
 
 const TABS = ["day", "schedule", "business", "customers"] as const;
 type Tab = (typeof TABS)[number];
@@ -67,7 +69,7 @@ function ManageApp() {
   }, [loadBusinesses]);
 
   const loadResources = useCallback(async () => {
-    if (token === null || business === null) return;
+    if (token === null || business === null || !business.active) return;
     const all = await api.listResources(token, business.id);
     // A WORKER is on some of the calendars, not all of them, and every screen
     // here is fed from this one list — so the narrowing belongs here rather
@@ -82,6 +84,31 @@ function ManageApp() {
   useEffect(() => {
     void loadResources();
   }, [loadResources]);
+
+  /** Days left in the Grace Period, shown once per app open. Billing is the
+   * OWNER's alone (ADR 0016) — the same rule the billing panel applies. */
+  const [graceDays, setGraceDays] = useState<number | null>(null);
+
+  const loadGraceAlert = useCallback(async () => {
+    if (token === null || business === null || !business.active) return setGraceDays(null);
+    if ((business.role ?? "OWNER") !== "OWNER") return setGraceDays(null);
+    try {
+      const billing = await api.subscription(token, business.id);
+      setGraceDays(
+        billing.state === "IN_GRACE"
+          ? graceDaysLeft(billing.subscription.paidThrough, business.timeZone)
+          : null,
+      );
+    } catch {
+      // A reminder is a courtesy, not a gate — a failed read shows nothing
+      // rather than breaking the app the owner came here to use.
+      setGraceDays(null);
+    }
+  }, [token, business]);
+
+  useEffect(() => {
+    void loadGraceAlert();
+  }, [loadGraceAlert]);
 
   if (loading || (token !== null && businesses === null)) return <Spinner />;
 
@@ -111,6 +138,22 @@ function ManageApp() {
             action={<Button onClick={() => router.push("/onboarding")}>{copy.manage}</Button>}
           />
         </main>
+      </>
+    );
+  }
+
+  if (!business.active) {
+    return (
+      <>
+        <AppHeader languageLabel={copy.langSwitch} title={business.name} />
+        <main style={{ flex: 1, padding: 24 }} />
+        <Sheet open onClose={() => router.push("/")} labelledBy="inactive-title">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 id="inactive-title" style={{ fontSize: 19 }}>{copy.businessInactiveTitle}</h2>
+            <p style={{ margin: 0 }}>{copy.businessInactiveBody}</p>
+            <Button onClick={() => router.push("/")}>{copy.asCustomer}</Button>
+          </div>
+        </Sheet>
       </>
     );
   }
@@ -198,6 +241,18 @@ function ManageApp() {
             : []),
         ]}
       />
+
+      <Sheet open={graceDays !== null} onClose={() => setGraceDays(null)} labelledBy="grace-alert-title">
+        {graceDays !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 id="grace-alert-title" style={{ fontSize: 19 }}>{copy.graceAlertTitle}</h2>
+            <p style={{ margin: 0 }}>
+              {fillParts(copy.billingOverdue, { days: String(graceDays) }).map((part) => part.text)}
+            </p>
+            <Button onClick={() => setGraceDays(null)}>{copy.graceAlertClose}</Button>
+          </div>
+        )}
+      </Sheet>
 
       <Sheet open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

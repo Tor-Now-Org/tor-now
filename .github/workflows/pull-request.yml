@@ -15,9 +15,13 @@ on:
   push:
     branches: [main, dev]
 
+# A superseded pull-request run is worth cancelling — nobody needs the checks
+# for a commit that has already been replaced. A push run is not: it ends in a
+# deploy, and a migration interrupted between two statements is the one thing
+# here that cannot be retried out of.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -261,3 +265,22 @@ jobs:
       - uses: github/codeql-action/analyze@v3
         with:
           category: "/language:javascript-typescript"
+
+  # What passing the checks is *for*.
+  #
+  # A job rather than a workflow of its own listening for these to finish:
+  # `workflow_run` would wait just as correctly, but it runs against the
+  # default branch's ref whatever branch was pushed, and an environment
+  # restricted to `dev` cannot match a run whose ref is `main` — dev would have
+  # been refused by its own protection rule. Called from here, the deploy runs
+  # on the branch it is about.
+  #
+  # Only on a push, which includes a merge. A pull request's own run is for
+  # telling the author whether it is safe to merge; it is the merge that
+  # deploys.
+  deploy:
+    name: Deploy
+    needs: [typecheck, lint, ruff, unit, e2e, security, codeql]
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

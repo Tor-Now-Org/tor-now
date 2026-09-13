@@ -175,7 +175,17 @@ function CustomerAppInner() {
       <main className="scroll" style={{ flex: 1, minHeight: 0 }}>
         {routeBusinessId !== null ? (
           showingBusiness ? (
-            <BookingFlow business={business} onFinished={() => leaveBusiness("mine")} />
+            business.active ? (
+              <BookingFlow business={business} onFinished={() => leaveBusiness("mine")} />
+            ) : (
+              <Sheet open onClose={() => leaveBusiness("search")} labelledBy="business-inactive-title">
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <h2 id="business-inactive-title" style={{ fontSize: 19 }}>{copy.businessInactiveTitle}</h2>
+                  <p style={{ margin: 0 }}>{copy.businessInactiveBody}</p>
+                  <Button onClick={() => leaveBusiness("search")}>{copy.back}</Button>
+                </div>
+              </Sheet>
+            )
           ) : (
             <Spinner />
           )

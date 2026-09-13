@@ -209,7 +209,11 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {shownBusinesses.map((summary) => (
-                    <tr key={summary.business.id} className="tap" style={{ cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+                    <tr key={summary.business.id} className="tap" style={{
+                      cursor: "pointer",
+                      borderBottom: "1px solid var(--line)",
+                      ...(businessStatus(summary) === "overdue" ? { boxShadow: "inset 0 0 0 1px var(--critical)" } : {}),
+                    }}
                       onClick={() => {
                         setOpenBusiness(summary);
                         setEdits({
@@ -287,8 +291,8 @@ export default function AdminPage() {
                 stats={stats}
                 language={language}
                 copy={{
-                  mrr: copy.mrr,
-                  mrrHint: copy.mrrHint,
+                  totalUsers: copy.totalUsers,
+                  totalUsersHint: copy.totalUsersHint,
                   businessStatus: copy.businessStatus,
                   active: copy.active,
                   overdue: copy.overdue,
@@ -334,8 +338,6 @@ export default function AdminPage() {
 
             {systemPanel === "admins" && (
               <>
-                <Note>{copy.adminsNote}</Note>
-                <Note>{copy.seededNote}</Note>
                 {administrators.map((candidate) => (
                   <Card key={candidate.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{ flex: 1 }}>{candidate.name}</span>
@@ -373,6 +375,10 @@ export default function AdminPage() {
             {systemPanel === "audit" && (
               <>
                 <Note>{copy.auditNote}</Note>
+                {/* The log's worth is that it cannot be edited, and saying so
+                    is part of the control rather than decoration — an
+                    administrator reading it needs to know nobody tidied it.
+                    Lost when the system tab was split into panels. */}
                 <Note>{copy.auditAppendOnly}</Note>
                 {audit.map((entry) => (
                   <Card key={entry.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>

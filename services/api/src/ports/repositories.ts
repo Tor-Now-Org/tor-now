@@ -103,6 +103,8 @@ export type UserRepository = {
   list(page: Page, query: string | null): Promise<readonly User[]>;
   /** Platform-wide signups by month, for the administrator's statistics tab. */
   monthlySignups(from: Instant, to: Instant): Promise<readonly MonthCount[]>;
+  /** Platform-wide total, for the administrator's statistics tab. */
+  count(): Promise<number>;
 };
 
 export type BusinessSearchResult = {

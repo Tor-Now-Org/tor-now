@@ -123,6 +123,11 @@ export const userRepository = (tx: Transaction): UserRepository => ({
       count: Number(row["count"]),
     }));
   },
+
+  async count() {
+    const rows = await tx<Row[]>`select count(*)::int as count from app_user where deleted_at is null`;
+    return Number(rows[0]?.["count"] ?? 0);
+  },
 });
 
 export const businessRepository = (tx: Transaction): BusinessRepository => ({

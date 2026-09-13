@@ -173,6 +173,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       async monthlySignups(from, to) {
         return monthlySignupCounts(store.users.map((user) => user.createdAt), from, to);
       },
+      async count() {
+        return store.users.filter((user) => user.deletedAt === null).length;
+      },
     },
 
     businesses: {

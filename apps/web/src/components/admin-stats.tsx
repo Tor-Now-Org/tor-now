@@ -2,13 +2,13 @@
 
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { PlatformStatsDto } from "@/lib/api/types.ts";
-import { formatLocalDate, formatPrice } from "@/lib/format.ts";
+import { formatLocalDate } from "@/lib/format.ts";
 import type { Language } from "@/lib/i18n/index.tsx";
 import { Card, Note } from "@/components/ui.tsx";
 
 type AdminStatsCopy = {
-  mrr: string;
-  mrrHint: string;
+  totalUsers: string;
+  totalUsersHint: string;
   businessStatus: string;
   active: string;
   overdue: string;
@@ -327,11 +327,9 @@ export const AdminStats = ({
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <Card style={{ flex: "1 1 140px", display: "flex", flexDirection: "column", gap: 4 }}>
           <span className="hint" style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            {copy.mrr} <InfoTip text={copy.mrrHint} />
+            {copy.totalUsers} <InfoTip text={copy.totalUsersHint} />
           </span>
-          <span style={{ fontSize: 22, fontWeight: 600 }}>
-            {formatPrice(stats.monthlyRecurringRevenueMinor, language, "—")}
-          </span>
+          <span style={{ fontSize: 22, fontWeight: 600 }}>{stats.totalUsers}</span>
         </Card>
         <Card style={{ flex: "1 1 140px", display: "flex", flexDirection: "column", gap: 4 }}>
           <span className="hint" style={{ display: "flex", alignItems: "center", gap: 5 }}>
