@@ -6,6 +6,8 @@ import {
   theNextStart,
   anInstantAt,
   call,
+  pickAnAddress,
+  stubAddressSearch,
   ready,
   movedIntoThePast,
   signInDirectly,
@@ -59,6 +61,7 @@ const showOwnerDay = async (page: Page, startAt: string): Promise<void> => {
 test.describe("opening a business", () => {
   test("the wizard takes five steps and puts the business in search", async ({ page }) => {
     const phone = uniquePhone();
+    await stubAddressSearch(page);
     await signInDirectly(page, phone, "בעלים חדש");
     const name = `עסק חדש ${Date.now()}`;
 
@@ -69,7 +72,9 @@ test.describe("opening a business", () => {
     await expect(page.getByText("פרטי העסק")).toBeVisible();
     await page.getByLabel("שם העסק").fill(name);
     await page.getByLabel("טלפון").fill(asTyped(phone));
-    await page.getByLabel("כתובת").fill("הרצל 1");
+    // The address is a place on the map now, so it is picked rather than
+    // typed: the wizard will not continue without the pin.
+    await pickAnAddress(page, "הרצל 1");
     await page.getByRole("button", { name: "המשך" }).click();
 
     // 2 — photos, which nothing requires
@@ -2231,6 +2236,7 @@ test.describe("photos", () => {
 
   test("a cover chosen in the wizard is on the business page afterwards", async ({ page }) => {
     const phone = uniquePhone();
+    await stubAddressSearch(page, "הרצל 2, תל אביב יפו, ישראל");
     await signInDirectly(page, phone, "בעלים עם תמונות");
     const name = `עסק מצולם ${Date.now()}`;
 
@@ -2239,7 +2245,7 @@ test.describe("photos", () => {
 
     await page.getByLabel("שם העסק").fill(name);
     await page.getByLabel("טלפון").fill(asTyped(phone));
-    await page.getByLabel("כתובת").fill("הרצל 2");
+    await pickAnAddress(page, "הרצל 2");
     await page.getByRole("button", { name: "המשך" }).click();
 
     // The cover, and one of the three optional ones.

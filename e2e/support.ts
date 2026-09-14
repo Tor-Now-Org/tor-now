@@ -182,6 +182,12 @@ export const aBusinessWithOpenHours = async (options: {
       phone: options.ownerPhone,
       description: null,
       address: "רחוב הבדיקה 1",
+      // Registration takes the address as a place on the map, not only as
+      // words: the onboarding screen picks it, so the fixture has to say where
+      // it is too. Somewhere in Tel Aviv, because a business has to be
+      // somewhere and nothing here depends on where.
+      latitude: 32.0853,
+      longitude: 34.7818,
       resourceNames: ["יומן א"],
       services: [
         {
@@ -374,6 +380,41 @@ export const theStartShownAs = async (
 };
 
 /** Waits for the app shell to have finished its first data load. */
+/**
+ * Answer the address lookup without leaving the machine.
+ *
+ * The onboarding wizard geocodes what is typed through Nominatim, which is a
+ * live call to somebody else's server: slow, rate-limited, and a reason for the
+ * suite to fail that has nothing to do with this code. Stubbed, the wizard is
+ * exercised exactly as written — it still has to search, render the suggestion
+ * and take the coordinates off the one that is picked.
+ */
+export const stubAddressSearch = async (
+  page: Page,
+  displayName = "הרצל 1, תל אביב יפו, ישראל",
+): Promise<void> => {
+  await page.route(/nominatim\.openstreetmap\.org\/search/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          display_name: displayName,
+          lat: "32.0853",
+          lon: "34.7818",
+          address: { road: "הרצל", house_number: "1", city: "תל אביב יפו" },
+        },
+      ]),
+    });
+  });
+};
+
+/** Type an address and take the suggestion, which is what carries the pin. */
+export const pickAnAddress = async (page: Page, typed = "הרצל 1"): Promise<void> => {
+  await page.getByLabel("כתובת").fill(typed);
+  await page.getByRole("option").first().click({ timeout: 15_000 });
+};
+
 export const ready = async (page: Page): Promise<void> => {
   await expect(page.locator(".app-shell")).toBeVisible();
   await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 20_000 });
