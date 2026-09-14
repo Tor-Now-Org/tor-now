@@ -116,6 +116,8 @@ export const BookCustomerSheet = ({
     resources.findIndex((one) => one.id === wantedResource),
   );
   const namedResource = resources[laneIndex]?.name ?? "";
+  /** Whether the calendar is still a question, as against a fact to be told. */
+  const choosable = resources.length > 1 && resourceId === null;
 
   /**
    * The hours, for this service on this calendar on this day.
@@ -232,12 +234,26 @@ export const BookCustomerSheet = ({
           {/* Which day, said out loud. Three of the four ways in choose the day
               somewhere else — a square, an aim, a stretch — and by the time the
               sheet is open that choice is off screen. */}
-          <span className="hint">
+          <span
+            className="hint"
+            style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+          >
             {formatLocalDate(date, language, {
               weekday: "long",
               day: "numeric",
               month: "long",
             })}
+            {/* Whose diary, said here when it is not a question. It still has
+                to be said — with two chairs it is the thing most worth being
+                sure of — but a labelled box of its own was a row of the sheet
+                spent on a fact with no decision in it. */}
+            {!choosable && namedResource !== "" && (
+              <>
+                <span aria-hidden="true">·</span>
+                <Mark name={namedResource} index={laneIndex} size={14} />
+                <span>{namedResource}</span>
+              </>
+            )}
           </span>
         </div>
 
@@ -252,39 +268,21 @@ export const BookCustomerSheet = ({
           busy={busy}
         />
 
-        {/* Which calendar, always — including when a tapped lane already
-            decided it. An appointment belongs to one person's diary, and in a
-            shop with several chairs "whose?" is the question most worth being
-            sure of before the button is pressed. It used to be shown only when
-            it was still a choice, which is exactly when nobody needed telling. */}
-        <span className="label">{copy.whichCalendar}</span>
-        {resources.length > 1 && resourceId === null ? (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {resources.map((one) => (
-              <Chip
-                key={one.id}
-                selected={wantedResource === one.id}
-                onClick={() => setChosenResource(one.id)}
-              >
-                {one.name}
-              </Chip>
-            ))}
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 11px",
-              borderRadius: 11,
-              background: "var(--sunken)",
-              border: "1px solid var(--line)",
-            }}
-          >
-            <Mark name={namedResource} index={laneIndex} />
-            <b style={{ fontSize: 13.5, fontWeight: 500 }}>{namedResource}</b>
-          </div>
+        {choosable && (
+          <>
+            <span className="label">{copy.whichCalendar}</span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {resources.map((one) => (
+                <Chip
+                  key={one.id}
+                  selected={wantedResource === one.id}
+                  onClick={() => setChosenResource(one.id)}
+                >
+                  {one.name}
+                </Chip>
+              ))}
+            </div>
+          </>
         )}
 
         {services !== null && services.length > 1 && (

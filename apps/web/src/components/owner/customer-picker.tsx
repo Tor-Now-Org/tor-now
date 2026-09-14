@@ -184,12 +184,26 @@ export const CustomerPicker = ({
           body={copy.newCustomerWayOut}
         />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {matches.map((customer) => (
+        // One list in one frame, hairline-separated, rather than a stack of
+        // floating cards. A card says "this is a thing on its own"; these are
+        // candidates being scanned, and six of them said it six times over
+        // most of the sheet. Capped in height so a long list never pushes the
+        // hours off the screen — narrowing it is what the search is for.
+        <div
+          style={{
+            border: "1px solid var(--line)",
+            borderRadius: 12,
+            overflow: "hidden",
+            maxHeight: 216,
+            overflowY: "auto",
+            background: "var(--raised)",
+          }}
+        >
+          {matches.map((customer, at) => (
             <button
               key={customer.id}
               className="tap"
-              style={{ textAlign: "start" }}
+              style={{ width: "100%", textAlign: "start" }}
               disabled={customer.blocked}
               onClick={() =>
                 onChoose({ id: customer.id, name: customer.name, phone: customer.phone })
@@ -199,79 +213,45 @@ export const CustomerPicker = ({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 11,
-                  padding: "10px 12px",
-                  border: "1px solid var(--line)",
-                  borderRadius: 13,
-                  background: "var(--raised)",
-                  opacity: customer.blocked ? 0.55 : 1,
+                  gap: 10,
+                  padding: "9px 12px",
+                  borderTop: at === 0 ? "none" : "1px solid var(--line)",
+                  opacity: customer.blocked ? 0.5 : 1,
                 }}
               >
-                {/* The same initial-in-a-circle the appointment sheet and the
-                    customer record use, so a person looks like a person
-                    wherever they are shown. */}
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 34,
-                    height: 34,
-                    flexShrink: 0,
-                    borderRadius: 12,
-                    display: "grid",
-                    placeItems: "center",
-                    background: customer.blocked
-                      ? "var(--critical-soft)"
-                      : "var(--accent-soft)",
-                    color: customer.blocked
-                      ? "var(--critical)"
-                      : "var(--accent-strong)",
-                    fontFamily: "Rubik, sans-serif",
-                    fontSize: 15,
-                    fontWeight: 600,
-                  }}
-                >
-                  {customer.name.trim().charAt(0) || "?"}
-                </span>
                 <span
                   style={{
                     flex: 1,
                     minWidth: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 1,
+                    fontSize: 14,
+                    fontWeight: 500,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
-                  <span
-                    style={{
-                      fontWeight: 500,
-                      fontSize: 14.5,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {customer.name}
-                  </span>
-                  <span className="hint tab" dir="ltr" style={{ textAlign: "start" }}>
-                    {shownPhone(customer.phone)}
-                  </span>
+                  {customer.name}
                 </span>
-                {customer.blocked ? (
-                  <Tag text={copy.blockedCustomer} tone="critical" />
-                ) : (
-                  <span aria-hidden="true" style={{ color: "var(--faint)", fontSize: 17 }}>
-                    ‹
-                  </span>
-                )}
+                {customer.blocked && <Tag text={copy.blockedCustomer} tone="critical" />}
+                {/* The number earns its place — two customers share a name
+                    often enough that it is the thing telling them apart — but
+                    it is the quieter half of the row, not a second line. */}
+                <span
+                  className="tab"
+                  dir="ltr"
+                  style={{ fontSize: 12, color: "var(--faint)", flexShrink: 0 }}
+                >
+                  {shownPhone(customer.phone)}
+                </span>
               </span>
             </button>
           ))}
-          {/* Said only when it is doing something, so a short list does not
-              carry a sentence explaining that it is short. */}
-          {more > 0 && (
-            <span className="hint">{copy.andMoreCustomers.replace("{count}", String(more))}</span>
-          )}
         </div>
+      )}
+      {more > 0 && (
+        <span className="hint">
+          {copy.andMoreCustomers.replace("{count}", String(more))}
+        </span>
       )}
 
       {/* Always offered, not only when the search comes back empty: the person

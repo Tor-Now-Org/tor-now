@@ -5069,7 +5069,7 @@ test.describe("booking a customer in", () => {
 
   test("the sheet always says which calendar it is booking", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
-      name: `איזה יומן ${Date.now()}`,
+      name: `שתי כורסאות ${Date.now()}`,
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
@@ -5099,11 +5099,13 @@ test.describe("booking a customer in", () => {
     // Tapping a lane already decided which calendar, which is exactly when the
     // screen used to stop saying so — and with two chairs, whose diary this
     // goes in is the thing most worth being sure of before pressing anything.
+    // The name, not a label above it: when the lane already decided, a
+    // labelled box of its own is a row of the sheet spent on a fact with no
+    // decision in it, so the calendar is named beside the day instead.
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("איזה יומן", { exact: false })).toBeVisible({
+    await expect(sheet.getByText("יומן א", { exact: true })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(sheet.getByText("יומן א", { exact: true })).toBeVisible();
   });
 
   test("from the clients page: her record hands her to the calendar", async ({ page }) => {
