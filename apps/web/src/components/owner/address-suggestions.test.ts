@@ -161,6 +161,25 @@ describe("turning a Nominatim response into suggestions", () => {
   it("is empty for an empty response", () => {
     expect(toSuggestions([], "en", "")).toEqual([]);
   });
+
+  it("collapses results that format to the same label, keeping the first", () => {
+    // Same street, three disconnected OSM way segments — the real shape of
+    // "יוספטל 56, בת ים" (a street with no mapped house numbers).
+    const segment = (lat: string, lon: string) => ({
+      display_name: "יוספטל, בת ים, ישראל",
+      lat,
+      lon,
+      name: "יוספטל",
+      address: { road: "יוספטל", city: "בת ים" },
+    });
+    expect(
+      toSuggestions(
+        [segment("32.01", "34.75"), segment("32.02", "34.76"), segment("32.03", "34.77")],
+        "he",
+        "יוספטל 56",
+      ),
+    ).toEqual([{ displayName: "יוספטל 56, בת ים", latitude: 32.01, longitude: 34.75 }]);
+  });
 });
 
 describe("moving the active suggestion with the arrow keys", () => {

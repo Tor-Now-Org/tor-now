@@ -93,20 +93,29 @@ export const shortAddress = (
   return parts.length > 0 ? parts.join(", ") : firstTwoParts(result.display_name);
 };
 
-/** Nominatim's `lat`/`lon` travel as strings; a non-numeric one is dropped. */
+/**
+ * Nominatim's `lat`/`lon` travel as strings; a non-numeric one is dropped.
+ *
+ * Israeli streets are often mapped as several disconnected OSM way segments
+ * sharing one name, with house numbers rarely present — so a single street
+ * routinely comes back as multiple results that all format to the same
+ * label. Keep the first (Nominatim's own relevance order) of each label.
+ */
 export const toSuggestions = (
   results: readonly NominatimResult[],
   language: "he" | "en",
   query: string,
 ): readonly Suggestion[] => {
   const typedHouseNumber = extractHouseNumber(query);
+  const seen = new Set<string>();
   return results
     .map((result) => ({
       displayName: shortAddress(result, language, typedHouseNumber),
       latitude: Number(result.lat),
       longitude: Number(result.lon),
     }))
-    .filter((suggestion) => Number.isFinite(suggestion.latitude) && Number.isFinite(suggestion.longitude));
+    .filter((suggestion) => Number.isFinite(suggestion.latitude) && Number.isFinite(suggestion.longitude))
+    .filter((suggestion) => (seen.has(suggestion.displayName) ? false : (seen.add(suggestion.displayName), true)));
 };
 
 /** Wraps in both directions, so the last suggestion follows the first. */
