@@ -4,6 +4,9 @@
  * through the list. Pure, and in its own file for it — see week.ts.
  */
 
+import { parsePoint, webMercatorToWgs84 } from "./mercator.ts";
+import type { GovMapAutocompleteResponse } from "./govmap-client.ts";
+
 export type Suggestion = {
   readonly displayName: string;
   readonly latitude: number;
@@ -115,6 +118,24 @@ export const toSuggestions = (
       longitude: Number(result.lon),
     }))
     .filter((suggestion) => Number.isFinite(suggestion.latitude) && Number.isFinite(suggestion.longitude))
+    .filter((suggestion) => (seen.has(suggestion.displayName) ? false : (seen.add(suggestion.displayName), true)));
+};
+
+/**
+ * Turns a raw GovMap autocomplete response into suggestions. `originalText`
+ * is the full Hebrew address (e.g. "יוספטל 56 בת ים"); `text` is a
+ * transliterated fallback for the rare match that lacks it. `shape` is a
+ * WKT point in Web Mercator, parsed and converted to lat/lon.
+ */
+export const toSuggestionsFromGovMap = (response: GovMapAutocompleteResponse): readonly Suggestion[] => {
+  const seen = new Set<string>();
+  return response.results
+    .map((match) => {
+      const point = parsePoint(match.shape);
+      if (point === null) return null;
+      return { displayName: match.originalText ?? match.text, ...webMercatorToWgs84(point.x, point.y) };
+    })
+    .filter((suggestion): suggestion is Suggestion => suggestion !== null)
     .filter((suggestion) => (seen.has(suggestion.displayName) ? false : (seen.add(suggestion.displayName), true)));
 };
 

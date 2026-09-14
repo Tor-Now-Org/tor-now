@@ -6,15 +6,23 @@ import {
   isSearchable,
   moveIndex,
   toSuggestions,
+  toSuggestionsFromGovMap,
   type NominatimResult,
   type Suggestion,
 } from "./address-suggestions.ts";
+import { geocodeAddress } from "./govmap-client.ts";
 
 /**
- * An address, chosen from OpenStreetMap Nominatim rather than typed. The pin
- * on the map is what a business is found by, so its coordinates come from
- * here rather than anywhere the owner could later drag — free text alone
- * cannot produce them.
+ * An address, chosen from a search rather than typed. The pin on the map is
+ * what a business is found by, so its coordinates come from here rather than
+ * anywhere the owner could later drag — free text alone cannot produce them.
+ *
+ * GovMap (Israel's official address registry, which resolves house numbers
+ * OSM mostly doesn't have) is tried first for Hebrew searches, falling
+ * through to Nominatim on any failure. GovMap's endpoint only matches Hebrew
+ * `searchText` — an English query reliably comes back empty rather than
+ * erroring, so English searches go straight to Nominatim instead of paying
+ * for a GovMap round trip that can't succeed.
  */
 
 const DEBOUNCE_MS = 300;
@@ -58,11 +66,17 @@ export const AddressAutocomplete = ({
       return;
     }
     const controller = new AbortController();
-    const timer = setTimeout(() => {
+    const nominatimFallback = () =>
       fetch(buildNominatimUrl(query, language), { signal: controller.signal })
         .then((response) => (response.ok ? (response.json() as Promise<NominatimResult[]>) : []))
+        .then((results) => toSuggestions(results, language, query));
+    const timer = setTimeout(() => {
+      (language === "he"
+        ? geocodeAddress(query).then(toSuggestionsFromGovMap).catch(nominatimFallback)
+        : nominatimFallback()
+      )
         .then((results) => {
-          setSuggestions(toSuggestions(results, language, query));
+          setSuggestions(results);
           setOpen(true);
           setActiveIndex(-1);
         })

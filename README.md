@@ -52,6 +52,14 @@ npm run check        # typecheck all three projects, then the unit tests
 `NEXT_PUBLIC_API_URL` points the web app at an API; with nothing set it uses the
 deployed one above.
 
+The onboarding address field searches GovMap (Israel's official address
+registry — house-number-accurate, unlike OSM/Nominatim's patchy Israeli
+coverage) for Hebrew queries, via `apps/web/src/components/owner/govmap-client.ts`.
+No API key: it calls an undocumented public endpoint (found via a third-party
+write-up, confirmed to need no auth), so it could change or start
+rate-limiting without notice — any failure, and English queries (which the
+endpoint doesn't match), fall back to Nominatim. No env var to set.
+
 `npm install` also points git at [`.githooks`](./.githooks), which runs types,
 lint, the unit suite and a bundle-freshness check before a push — about thirty
 seconds, against the five minutes CI takes to tell you the same thing, and on a

@@ -6,6 +6,7 @@ import {
   moveIndex,
   shortAddress,
   toSuggestions,
+  toSuggestionsFromGovMap,
 } from "./address-suggestions.ts";
 
 describe("whether a query is worth searching", () => {
@@ -179,6 +180,46 @@ describe("turning a Nominatim response into suggestions", () => {
         "יוספטל 56",
       ),
     ).toEqual([{ displayName: "יוספטל 56, בת ים", latitude: 32.01, longitude: 34.75 }]);
+  });
+});
+
+describe("turning a GovMap autocomplete response into suggestions", () => {
+  // A real response for "יוספטל 56 בת ים" — X/Y confirmed to decode (via
+  // webMercatorToWgs84) to the Bat Yam address this string names.
+  const yosftal56 = {
+    text: "יוספטל 56 בת ים",
+    originalText: "יוספטל גיורא 56 בת ים",
+    type: "address",
+    shape: "POINT(3867913.6847861563 3765498.362882002)",
+  };
+
+  it("prefers originalText (the full Hebrew address) over the transliterated text", () => {
+    const [suggestion] = toSuggestionsFromGovMap({ results: [yosftal56] });
+    expect(suggestion?.displayName).toBe("יוספטל גיורא 56 בת ים");
+    expect(suggestion?.latitude).toBeCloseTo(32.02, 1);
+    expect(suggestion?.longitude).toBeCloseTo(34.75, 1);
+  });
+
+  it("falls back to text when a match has no originalText", () => {
+    const { originalText: _originalText, ...withoutOriginalText } = yosftal56;
+    const [suggestion] = toSuggestionsFromGovMap({ results: [withoutOriginalText] });
+    expect(suggestion?.displayName).toBe("יוספטל 56 בת ים");
+  });
+
+  it("drops a match whose shape isn't a parseable point", () => {
+    expect(toSuggestionsFromGovMap({ results: [{ ...yosftal56, shape: "not a point" }] })).toEqual([]);
+  });
+
+  it("collapses matches with the same label, keeping the first", () => {
+    expect(
+      toSuggestionsFromGovMap({
+        results: [yosftal56, { ...yosftal56, shape: "POINT(3867914 3765499)" }],
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("is empty when GovMap has no matches", () => {
+    expect(toSuggestionsFromGovMap({ results: [] })).toEqual([]);
   });
 });
 
