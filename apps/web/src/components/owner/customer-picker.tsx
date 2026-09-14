@@ -5,7 +5,7 @@ import type { CustomerDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { checkLocalPhone, fromE164, localDigits, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "@/components/phone-field.tsx";
-import { Button, Field, Note } from "../ui.tsx";
+import { Button, Empty, Field, Note, Spinner, Tag } from "../ui.tsx";
 
 export type ChosenCustomer = {
   readonly id: string;
@@ -15,6 +15,15 @@ export type ChosenCustomer = {
 
 /** Digits only, so "050-555-6677", "0505556677" and "5556677" all find her. */
 const digitsOf = (value: string): string => value.replace(/\D/g, "");
+
+/** Enough rows to recognise somebody in; the search is how a long list narrows. */
+const SHOWN_AT_ONCE = 6;
+
+/** A number as its owner would read it out, not as E.164 stores it. */
+const shownPhone = (e164: string): string => {
+  const local = fromE164(e164);
+  return local === "" ? e164 : `0${localDigits(local)}`;
+};
 
 /**
  * Whether a customer is who the typed words are about.
@@ -78,10 +87,14 @@ export const CustomerPicker = ({
     [customers],
   );
 
-  const matches = useMemo(
-    () => known.filter((customer) => customerMatches(customer, query)).slice(0, 6),
+  const found = useMemo(
+    () => known.filter((customer) => customerMatches(customer, query)),
     [known, query],
   );
+  // Enough to recognise somebody in, not enough to scroll. Narrowing is what
+  // the search box is for.
+  const matches = found.slice(0, SHOWN_AT_ONCE);
+  const more = found.length - matches.length;
 
   if (chosen !== null) {
     return (
@@ -164,50 +177,107 @@ export const CustomerPicker = ({
       />
 
       {loading ? (
-        <Note>{copy.loadingWord}</Note>
+        <Spinner />
+      ) : matches.length === 0 ? (
+        <Empty
+          title={query.trim() === "" ? copy.noCustomersYet : copy.noCustomerFound}
+          body={copy.newCustomerWayOut}
+        />
       ) : (
-        matches.map((customer) => (
-          <button
-            key={customer.id}
-            className="tap"
-            style={{ textAlign: "start" }}
-            disabled={customer.blocked}
-            onClick={() =>
-              onChoose({ id: customer.id, name: customer.name, phone: customer.phone })
-            }
-          >
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "9px 11px",
-                border: "1px solid var(--line)",
-                borderRadius: 12,
-                opacity: customer.blocked ? 0.5 : 1,
-              }}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {matches.map((customer) => (
+            <button
+              key={customer.id}
+              className="tap"
+              style={{ textAlign: "start" }}
+              disabled={customer.blocked}
+              onClick={() =>
+                onChoose({ id: customer.id, name: customer.name, phone: customer.phone })
+              }
             >
-              <span style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                <b style={{ fontSize: 13.5, fontWeight: 500 }}>{customer.name}</b>
-                <span className="hint tab" dir="ltr" style={{ textAlign: "start" }}>
-                  {fromE164(customer.phone) === ""
-                    ? customer.phone
-                    : `0${localDigits(fromE164(customer.phone))}`}
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 11,
+                  padding: "10px 12px",
+                  border: "1px solid var(--line)",
+                  borderRadius: 13,
+                  background: "var(--raised)",
+                  opacity: customer.blocked ? 0.55 : 1,
+                }}
+              >
+                {/* The same initial-in-a-circle the appointment sheet and the
+                    customer record use, so a person looks like a person
+                    wherever they are shown. */}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 34,
+                    height: 34,
+                    flexShrink: 0,
+                    borderRadius: 12,
+                    display: "grid",
+                    placeItems: "center",
+                    background: customer.blocked
+                      ? "var(--critical-soft)"
+                      : "var(--accent-soft)",
+                    color: customer.blocked
+                      ? "var(--critical)"
+                      : "var(--accent-strong)",
+                    fontFamily: "Rubik, sans-serif",
+                    fontSize: 15,
+                    fontWeight: 600,
+                  }}
+                >
+                  {customer.name.trim().charAt(0) || "?"}
                 </span>
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontWeight: 500,
+                      fontSize: 14.5,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {customer.name}
+                  </span>
+                  <span className="hint tab" dir="ltr" style={{ textAlign: "start" }}>
+                    {shownPhone(customer.phone)}
+                  </span>
+                </span>
+                {customer.blocked ? (
+                  <Tag text={copy.blockedCustomer} tone="critical" />
+                ) : (
+                  <span aria-hidden="true" style={{ color: "var(--faint)", fontSize: 17 }}>
+                    ‹
+                  </span>
+                )}
               </span>
-              {customer.blocked && <span className="hint">{copy.blockedCustomer}</span>}
-            </span>
-          </button>
-        ))
+            </button>
+          ))}
+          {/* Said only when it is doing something, so a short list does not
+              carry a sentence explaining that it is short. */}
+          {more > 0 && (
+            <span className="hint">{copy.andMoreCustomers.replace("{count}", String(more))}</span>
+          )}
+        </div>
       )}
 
       {/* Always offered, not only when the search comes back empty: the person
           taking the call knows perfectly well whether they have spoken to this
           customer before, and making them prove it by searching first is a
           step for the screen's benefit rather than theirs. */}
-      {!loading && matches.length === 0 && query.trim() !== "" && (
-        <Note>{copy.noCustomerFound}</Note>
-      )}
       <Button
         intent="quiet"
         onClick={() => {

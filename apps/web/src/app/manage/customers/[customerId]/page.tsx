@@ -217,6 +217,23 @@ function CustomerPage({ customerId }: { customerId: string }) {
           labels={{ call: copy.callCustomer, whatsapp: copy.whatsappCustomer }}
         />
 
+        {/* "While I have you" — said on the telephone, with this page open.
+            Booking needs a day, and days are chosen on the calendar, so this
+            hands the customer back to it rather than growing a second way to
+            choose one. A blocked customer cannot be booked, and the button
+            that says so by being absent is kinder than the refusal. */}
+        {record.blocked !== true && (
+          <Button
+            onClick={() =>
+              router.push(
+                `/manage?business=${businessId}&book=${encodeURIComponent(record.user.id)}`,
+              )
+            }
+          >
+            {copy.addAppointmentTitle}
+          </Button>
+        )}
+
         <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 11 }}>
           <Count label={copy.since} value={earliest === undefined ? "—" : dateOnly(earliest.startAt)} />
           <Count label={copy.total} value={record.appointments.length} />

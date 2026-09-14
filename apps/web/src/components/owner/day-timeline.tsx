@@ -4,7 +4,8 @@ import { useState } from "react";
 import type { BusinessDayDto } from "@/lib/api/types.ts";
 import { timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { colourOf, laneColourOf } from "./event-colour.ts";
+import { colourOf } from "./event-colour.ts";
+import { Mark } from "./lane-mark.tsx";
 import {
   BOX_MINIMUM,
   FOLD_HEIGHT,
@@ -486,23 +487,4 @@ const ItemBand = ({
 };
 
 /** Whose it is: the same initial, in the same colour, everywhere. */
-const Mark = ({ name, index }: { name: string; index: number }) => (
-  <span
-    aria-hidden="true"
-    style={{
-      width: 18,
-      height: 18,
-      borderRadius: 999,
-      flexShrink: 0,
-      display: "grid",
-      placeItems: "center",
-      fontSize: 9.5,
-      fontWeight: 600,
-      fontFamily: "Rubik, sans-serif",
-      background: laneColourOf(index),
-      color: "var(--on-accent)",
-    }}
-  >
-    {name.slice(0, 1)}
-  </span>
-);
+

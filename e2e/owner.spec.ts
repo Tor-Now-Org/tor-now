@@ -3139,6 +3139,22 @@ test.describe("a day the shop keeps its own hours", () => {
  * Every decision used to take a bar of its own, laid over the squares — so a
  * week with several of them buried the days it was describing.
  */
+/**
+ * Four consecutive days inside one week of the grid.
+ *
+ * The month draws a week to a row, Sunday first, so a run beginning on a
+ * Sunday is the only one guaranteed not to be split by the grid itself.
+ */
+const fourDaysFromTheNextSunday = (): string[] => {
+  for (let ahead = 2; ahead < 16; ahead += 1) {
+    const date = aDayFromNow(ahead);
+    if (new Date(`${date}T00:00:00Z`).getUTCDay() === 0) {
+      return [0, 1, 2, 3].map((on) => aDayFromNow(ahead + on));
+    }
+  }
+  throw new Error("No Sunday within a fortnight, which cannot happen");
+};
+
 test.describe("a month with a lot decided about it", () => {
   const blockOn = async (
     shop: { business: { id: string }; owner: { token: string } },
@@ -3205,7 +3221,13 @@ test.describe("a month with a lot decided about it", () => {
 
     // Four consecutive days, decided one at a time. To a reader that is one
     // fact — this chair is away — and four bars would say it four times.
-    const days = [2, 3, 4, 5].map((ahead) => aDayFromNow(ahead));
+    //
+    // Starting on a Sunday, so the run sits inside one row of the grid. A band
+    // that crosses a week boundary is drawn as one bar per row, correctly, and
+    // taking whatever four days followed today meant this test passed or
+    // failed depending on the day it was run — which it did, silently, until a
+    // run straddled a Saturday.
+    const days = fourDaysFromTheNextSunday();
     for (const [at, date] of days.entries()) {
       await blockOn(shop, shop.resource.id, date, `סיבה ${at}`);
     }
@@ -5043,6 +5065,77 @@ test.describe("booking a customer in", () => {
     await page.getByRole("button", { name: "10:00", exact: true }).click();
     await page.getByRole("button", { name: "קביעה ל־10:00" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+  });
+
+  test("the sheet always says which calendar it is booking", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `איזה יומן ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const second = await call<{ id: string; name: string }>(
+      `/businesses/${shop.business.id}/resources`,
+      { method: "POST", token: shop.owner.token, body: { name: "שימי" } },
+    );
+    await call(`/businesses/${shop.business.id}/resources/${second.id}/working-hours`, {
+      method: "PUT",
+      token: shop.owner.token,
+      body: {
+        week: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+          dayOfWeek,
+          start: "09:00",
+          end: "17:00",
+        })),
+      },
+    });
+    const day = aDayFromNow(11);
+
+    await openCalendarAs(page, shop);
+    await page.getByRole("button", { name: day }).click();
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "תור ללקוח" }).click();
+
+    // Tapping a lane already decided which calendar, which is exactly when the
+    // screen used to stop saying so — and with two chairs, whose diary this
+    // goes in is the thing most worth being sure of before pressing anything.
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("איזה יומן", { exact: false })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(sheet.getByText("יומן א", { exact: true })).toBeVisible();
+  });
+
+  test("from the clients page: her record hands her to the calendar", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `מדף הלקוחות ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aKnownCustomer(shop, { givenName: "תמר", familyName: "בן דוד" }, 34);
+    const later = aDayFromNow(12);
+
+    await openCalendarAs(page, shop);
+
+    // The long way round, which is the way an owner actually gets there.
+    await page.getByRole("button", { name: "לקוחות" }).click();
+    await page.getByText("תמר בן דוד").first().click();
+    await expect(page.getByRole("heading", { name: "תמר בן דוד" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "תור ללקוח" }).click();
+
+    // Back on the calendar, with her along and only a day left to choose.
+    await expect(page.getByText(/בחירת יום לתור · תמר/)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: later }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("תמר בן דוד")).toBeVisible({ timeout: 15_000 });
+
+    // And the address is clean again, so a reload is not a second booking.
+    await expect(page).toHaveURL(/\/manage(\?|$)/);
+    expect(page.url()).not.toContain("book=");
   });
 
   test("somebody who never booked here is written down and booked", async ({ page }) => {

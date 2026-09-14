@@ -19,6 +19,7 @@ import { CalendarScope } from "./calendar-scope.tsx";
 import { ClosedDay } from "./closed-day.tsx";
 import { Month } from "./month.tsx";
 import { ActiveFilters, FilterControls, FindControls } from "./day-filter-bar.tsx";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BookCustomerSheet } from "./book-customer.tsx";
 import type { ChosenCustomer } from "./customer-picker.tsx";
 import { NOTHING, anyFilter, keptBy, withinReach, type Facets, type Reach } from "./day-filter.ts";
@@ -129,6 +130,8 @@ export const CalendarDay = ({
   const [selected, setSelected] = useState<CalendarAppointmentDto | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const params = useSearchParams();
+  const router = useRouter();
 
   /**
    * What is being looked for, and what came back.
@@ -187,6 +190,47 @@ export const CalendarDay = ({
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Arriving here to book somebody, from their own page.
+   *
+   * The customers list is a different screen and a day is chosen on this one,
+   * so the customer travels in the address and is met here. Only their id
+   * travels — the name is looked up, because a name in a URL is a name in
+   * somebody's browser history.
+   *
+   * The parameter is taken off the address as soon as it is read, so that
+   * reloading the page, or coming back to it later, does not start a booking
+   * nobody asked for.
+   */
+  useEffect(() => {
+    const wanted = params.get("book");
+    if (wanted === null || resource === null) return;
+    let current = true;
+    api
+      .listCustomers(token, business.id)
+      .then((people) => {
+        if (!current) return;
+        const found = people.find((one) => one.id === wanted);
+        if (found === undefined) return;
+        setAimedCustomer({ id: found.id, name: found.name, phone: found.phone });
+        setAim("appointment");
+        setAimedAt([]);
+      })
+      .catch(() => {
+        // Nothing worth an error on a calendar: without the customer this is
+        // simply the calendar, which is where they already are.
+      })
+      .finally(() => {
+        if (!current) return;
+        const rest = new URLSearchParams(params.toString());
+        rest.delete("book");
+        router.replace(`/manage${rest.size === 0 ? "" : `?${rest.toString()}`}`);
+      });
+    return () => {
+      current = false;
+    };
+  }, [params, router, token, business.id, resource]);
 
   useEffect(() => {
     const customer = facets.customer;

@@ -9,6 +9,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { Button, Chip, Critical, Note, Sheet, Spinner, Warning } from "../ui.tsx";
 import { CustomerPicker, type ChosenCustomer } from "./customer-picker.tsx";
+import { Mark } from "./lane-mark.tsx";
 import { minutesOf, type Span } from "./day-model.ts";
 
 /**
@@ -110,6 +111,11 @@ export const BookCustomerSheet = ({
   }, [open, token, business.id, errorText]);
 
   const wantedResource = chosenResource ?? resources[0]?.id ?? null;
+  const laneIndex = Math.max(
+    0,
+    resources.findIndex((one) => one.id === wantedResource),
+  );
+  const namedResource = resources[laneIndex]?.name ?? "";
 
   /**
    * The hours, for this service on this calendar on this day.
@@ -246,23 +252,39 @@ export const BookCustomerSheet = ({
           busy={busy}
         />
 
-        {/* The calendar only when it was not implied. A tapped stretch lives in
-            a lane, so it already said which. */}
-        {resourceId === null && resources.length > 1 && (
-          <>
-            <span className="label">{copy.whichCalendar}</span>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {resources.map((one) => (
-                <Chip
-                  key={one.id}
-                  selected={wantedResource === one.id}
-                  onClick={() => setChosenResource(one.id)}
-                >
-                  {one.name}
-                </Chip>
-              ))}
-            </div>
-          </>
+        {/* Which calendar, always — including when a tapped lane already
+            decided it. An appointment belongs to one person's diary, and in a
+            shop with several chairs "whose?" is the question most worth being
+            sure of before the button is pressed. It used to be shown only when
+            it was still a choice, which is exactly when nobody needed telling. */}
+        <span className="label">{copy.whichCalendar}</span>
+        {resources.length > 1 && resourceId === null ? (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {resources.map((one) => (
+              <Chip
+                key={one.id}
+                selected={wantedResource === one.id}
+                onClick={() => setChosenResource(one.id)}
+              >
+                {one.name}
+              </Chip>
+            ))}
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 11px",
+              borderRadius: 11,
+              background: "var(--sunken)",
+              border: "1px solid var(--line)",
+            }}
+          >
+            <Mark name={namedResource} index={laneIndex} />
+            <b style={{ fontSize: 13.5, fontWeight: 500 }}>{namedResource}</b>
+          </div>
         )}
 
         {services !== null && services.length > 1 && (
