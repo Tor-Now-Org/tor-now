@@ -283,4 +283,9 @@ jobs:
     needs: [typecheck, lint, ruff, unit, e2e, security, codeql]
     if: github.event_name == 'push'
     uses: ./.github/workflows/deploy.yml
+    permissions:
+      contents: read
+      # The called workflow asks what the last green run was; a called
+      # workflow's permissions come from the caller, so they are named here too.
+      actions: read
     secrets: inherit

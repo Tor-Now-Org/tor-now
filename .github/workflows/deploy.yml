@@ -54,6 +54,9 @@ concurrency:
 
 permissions:
   contents: read
+  # To ask what the last green run on this branch was, which is the same
+  # question as "what is already deployed" — see the plan job.
+  actions: read
 
 env:
   NODE_VERSION: "20"
@@ -81,17 +84,29 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          # Two commits, so the push can be compared with what came before it.
-          # On a merge commit HEAD^ is the first parent, which makes the
-          # comparison "everything this merge brought in" rather than "what the
-          # last commit on the branch happened to touch".
-          fetch-depth: 2
+          # The whole history, because what this compares against is not
+          # necessarily the previous commit — see below.
+          fetch-depth: 0
 
       # Deploying what did not change costs a function version and a cold start
       # for nothing. A hand-run deploy always goes ahead: somebody asking for
       # one by name is usually asking precisely because the last one is in
       # doubt.
+      #
+      # What it compares against is the last commit on this branch whose checks
+      # went green, not the previous commit. Those are usually the same and
+      # occasionally not, and the difference is a bug that already happened: an
+      # API change went red on its own commit, the next commit fixed the tests
+      # without touching the API, and comparing with the parent said the bundle
+      # was unchanged — so the change nobody had deployed yet was skipped, and
+      # dev went on running the old function while its code said otherwise.
+      #
+      # A green run means everything up to it is deployed, so everything since
+      # it is what is not. If there is no such run, or its commit is not in this
+      # history, nothing is known to be deployed and both go.
       - id: changed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "::notice::Asked for by hand; deploying both regardless of the diff."
@@ -99,15 +114,19 @@ jobs:
             echo "function=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # No parent to compare against — the first commit on a branch — means
-          # nothing is known to be unchanged.
-          if ! git rev-parse --verify --quiet HEAD^ >/dev/null; then
-            echo "::notice::No parent commit to compare; deploying both."
+
+          base="$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/pull-request.yml/runs?branch=${{ github.ref_name }}&status=success&event=push&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)"
+
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "::notice::No green run to compare against; deploying both."
             echo "schema=true" >> "$GITHUB_OUTPUT"
             echo "function=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          changed() { ! git diff --quiet HEAD^ HEAD -- "$1"; }
+          echo "::notice::Comparing against $base, the last commit whose checks passed."
+          changed() { ! git diff --quiet "$base" HEAD -- "$1"; }
           if changed supabase/migrations; then
             echo "schema=true" >> "$GITHUB_OUTPUT"
           else
