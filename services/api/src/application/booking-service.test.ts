@@ -165,6 +165,8 @@ describe("booking", () => {
       phone: "+972500000009",
       description: null,
       address: "רחוב הרצל 9",
+      latitude: 32.0853,
+      longitude: 34.7818,
       resourceNames: ["מירי"],
       services: [
         { name: "עיסוי", durationMinutes: 30, priceMinor: 20000, bufferMinutes: null },

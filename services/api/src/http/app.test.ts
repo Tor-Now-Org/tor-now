@@ -17,6 +17,8 @@ const A_BUSINESS = {
   phone: "+972500000001",
   description: null,
   address: "רחוב הרצל 1",
+  latitude: 32.0853,
+  longitude: 34.7818,
   resourceNames: ["רן"],
   services: [
     { name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null },

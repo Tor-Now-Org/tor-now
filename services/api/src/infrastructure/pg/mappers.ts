@@ -47,6 +47,8 @@ export const nullableText = (value: unknown): string | null =>
   value === null || value === undefined ? null : text(value);
 const int = (value: unknown): number => Number(value);
 const bool = (value: unknown): boolean => Boolean(value);
+const nullableNumber = (value: unknown): number | null =>
+  value === null || value === undefined ? null : Number(value);
 
 /**
  * The column is checked to 0..3 by the schema, so a value outside it means the
@@ -89,6 +91,8 @@ export const toBusiness = (row: Row): Business => ({
   timeZone: timeZone(text(row["time_zone"])),
   description: nullableText(row["description"]),
   address: nullableText(row["address"]),
+  latitude: nullableNumber(row["latitude"]),
+  longitude: nullableNumber(row["longitude"]),
   instagram: nullableText(row["instagram"]),
   whatsapp: nullableText(row["whatsapp"]),
   active: bool(row["active"]),

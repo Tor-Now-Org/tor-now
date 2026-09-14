@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import { useCopy } from "@/lib/i18n/index.tsx";
+import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
 import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
+import { AddressAutocomplete } from "@/components/owner/address-autocomplete.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
 import {
   blocking,
@@ -28,6 +30,12 @@ import { weekIsUsable } from "@/components/owner/usual-week.ts";
 import { Button, Card, Critical, Field, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import type { BusinessDto } from "@/lib/api/types.ts";
+
+// Leaflet reaches for `window`, so the map can only render on the client.
+const LocationPicker = dynamic(
+  () => import("@/components/owner/location-picker.tsx").then((mod) => mod.LocationPicker),
+  { ssr: false },
+);
 
 /**
  * ADR 0011: a Business is discoverable the moment it registers — there is no
@@ -60,6 +68,7 @@ type DraftService = {
 
 export default function OnboardingPage() {
   const copy = useCopy("onboarding");
+  const { language } = useLanguage();
   // Signing in is one flow with one set of words, wherever it is reached from.
   const signInCopy = useCopy("signIn");
   // The account drawer is the same dialog everywhere, so it reuses its copy too.
@@ -82,6 +91,8 @@ export default function OnboardingPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState(user !== null ? fromE164(user.phone) : "");
   const [address, setAddress] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<readonly ChosenPhoto[]>([]);
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
@@ -142,7 +153,7 @@ export default function OnboardingPage() {
           checkLocalPhone(phone),
           checkText(address, TEXT_RULES.address),
           checkText(description, TEXT_RULES.description),
-        )
+        ) && latitude !== null && longitude !== null
       : // Photos are optional, so this step never blocks.
         step === "photos"
         ? true
@@ -165,6 +176,7 @@ export default function OnboardingPage() {
             hours.some((day) => day.open) && weekIsUsable(hours);
 
   const finish = async () => {
+    if (latitude === null || longitude === null) return;
     setBusy(true);
     setError(null);
     try {
@@ -172,6 +184,8 @@ export default function OnboardingPage() {
         name: name.trim(),
         phone: toE164(phone),
         address: address.trim(),
+        latitude,
+        longitude,
         description: description.trim() === "" ? null : description.trim(),
         resourceNames: resources.map((r) => r.trim()).filter((r) => r.length > 0),
         services: services
@@ -304,15 +318,30 @@ export default function OnboardingPage() {
                 onBlur={() => leave("phone")}
                 onChange={setPhone}
               />
-              <Field
+              <AddressAutocomplete
                 id="biz-address"
                 label={copy.address}
+                hint={copy.addressHint}
                 required
                 value={address}
-                problem={problem.text(address, TEXT_RULES.address, touched.has("address"))}
-                onBlur={() => leave("address")}
-                onChange={(e) => setAddress(e.target.value)}
+                language={language}
+                onSelect={(pickedAddress, lat, lng) => {
+                  setAddress(pickedAddress);
+                  setLatitude(lat);
+                  setLongitude(lng);
+                }}
+                onClear={() => {
+                  setAddress("");
+                  setLatitude(null);
+                  setLongitude(null);
+                }}
               />
+              {latitude !== null && longitude !== null && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span className="label">{copy.locationLabel}</span>
+                  <LocationPicker latitude={latitude} longitude={longitude} />
+                </div>
+              )}
               {/* Optional, and said to be: a business that has nothing to add
                   should not feel it has left something blank. */}
               <Field

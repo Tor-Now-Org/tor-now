@@ -47,6 +47,8 @@ export const businessOut = (business: Business) => ({
   timeZone: business.timeZone,
   description: business.description,
   address: business.address,
+  latitude: business.latitude,
+  longitude: business.longitude,
   instagram: business.instagram,
   whatsapp: business.whatsapp,
   active: business.active,

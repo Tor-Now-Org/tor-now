@@ -73,6 +73,8 @@ export const describeRepositoryContract = (
         timeZone: "Asia/Jerusalem",
         description: null,
         address: null,
+        latitude: null,
+        longitude: null,
       });
       await repositories.memberships.create(owner.id, business.id, "OWNER");
       const resource = await repositories.resources.create({
@@ -824,8 +826,15 @@ export const describeRepositoryContract = (
           await repositories.businesses.update(context.business.id, {
             name: "שם חדש",
             address: "הרצל 1",
+            latitude: 32.0853,
+            longitude: 34.7818,
           }),
-        ).toMatchObject({ name: "שם חדש", address: "הרצל 1" });
+        ).toMatchObject({
+          name: "שם חדש",
+          address: "הרצל 1",
+          latitude: 32.0853,
+          longitude: 34.7818,
+        });
 
         expect(
           await repositories.resources.update(context.resource.id, { name: "כיסא שני" }),

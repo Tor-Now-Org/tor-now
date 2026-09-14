@@ -211,6 +211,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           timeZone: timeZone(input.timeZone),
           description: input.description,
           address: input.address,
+          latitude: input.latitude,
+          longitude: input.longitude,
           instagram: null,
           whatsapp: null,
           active: true,

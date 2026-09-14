@@ -145,6 +145,8 @@ export const registerBusinessSchema = z.object({
   timeZone: z.string().min(1).optional(),
   description: text(TEXT_RULES.description).nullable().default(null),
   address: text(TEXT_RULES.address),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
   resourceNames: z.array(text(TEXT_RULES.resourceName)).min(1),
   services: z
     .array(
@@ -165,6 +167,8 @@ export const updateBusinessSchema = z.object({
   timeZone: z.string().min(1).optional(),
   description: text(TEXT_RULES.description).nullable().optional(),
   address: text(TEXT_RULES.address).nullable().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
   instagram: instagramSchema.nullable().optional(),
   whatsapp: phoneSchema.nullable().optional(),
   defaultBufferMinutes: z.number().int().min(0).max(240).optional(),

@@ -24,6 +24,9 @@ export type Business = {
   readonly timeZone: TimeZone;
   readonly description: string | null;
   readonly address: string | null;
+  /** The pin the owner dropped on the map. Null until they place one. */
+  readonly latitude: number | null;
+  readonly longitude: number | null;
   /** Instagram handle, bare: no @ and no URL. Null when the business has none. */
   readonly instagram: string | null;
   /**

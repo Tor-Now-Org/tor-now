@@ -325,6 +325,8 @@ export const api = {
       phone: string;
       description: string | null;
       address: string;
+      latitude: number;
+      longitude: number;
       resourceNames: string[];
       services: {
         name: string;

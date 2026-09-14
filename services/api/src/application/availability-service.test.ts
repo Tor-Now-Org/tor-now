@@ -123,6 +123,8 @@ describe("availability", () => {
       phone: "+972500000007",
       description: null,
       address: "רחוב אחר 2",
+      latitude: 32.0853,
+      longitude: 34.7818,
       resourceNames: ["א"],
       services: [{ name: "ש", durationMinutes: 30, priceMinor: 0, bufferMinutes: null }],
       workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],

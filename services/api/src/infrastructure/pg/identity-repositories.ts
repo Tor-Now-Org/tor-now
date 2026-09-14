@@ -164,9 +164,9 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
 
   async create(business) {
     const rows = await tx<Row[]>`
-      insert into business (name, phone, time_zone, description, address)
+      insert into business (name, phone, time_zone, description, address, latitude, longitude)
       values (${business.name}, ${business.phone}, ${business.timeZone},
-              ${business.description}, ${business.address})
+              ${business.description}, ${business.address}, ${business.latitude}, ${business.longitude})
       returning *`;
     return one(rows, toBusiness, "Business");
   },
@@ -179,6 +179,8 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
         time_zone = coalesce(${changes.timeZone ?? null}, time_zone),
         description = ${changes.description === undefined ? tx`description` : changes.description},
         address = ${changes.address === undefined ? tx`address` : changes.address},
+        latitude = ${changes.latitude === undefined ? tx`latitude` : changes.latitude},
+        longitude = ${changes.longitude === undefined ? tx`longitude` : changes.longitude},
         instagram = ${changes.instagram === undefined ? tx`instagram` : changes.instagram},
         whatsapp = ${changes.whatsapp === undefined ? tx`whatsapp` : changes.whatsapp},
         default_buffer_minutes = coalesce(${changes.defaultBufferMinutes ?? null}, default_buffer_minutes),

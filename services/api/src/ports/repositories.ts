@@ -122,6 +122,8 @@ export type BusinessRepository = {
     timeZone: string;
     description: string | null;
     address: string | null;
+    latitude: number | null;
+    longitude: number | null;
   }): Promise<Business>;
   update(
     id: BusinessId,

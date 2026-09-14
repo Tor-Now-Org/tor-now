@@ -22,6 +22,8 @@ export const aBusiness = (overrides: Partial<Business> = {}): Business => ({
   timeZone: JERUSALEM,
   description: null,
   address: null,
+  latitude: null,
+  longitude: null,
   instagram: null,
   whatsapp: null,
   active: true,
