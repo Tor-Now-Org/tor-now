@@ -306,6 +306,54 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("adds a customer by phone, and never rewrites a role already held", async () => {
+      await withRepositories(async (repositories, actAs) => {
+        const context = await aBookableBusiness(repositories, "02009");
+        await actAs(context.owner.id);
+
+        // A number nobody holds: the User is created, the relationship with it.
+        const added = await repositories.memberships.addCustomer(context.business.id, {
+          phone: "+972500002229",
+          givenName: "אביגיל",
+          familyName: "נוי",
+        });
+        expect(added.user.phone).toBe("+972500002229");
+        expect(added.membership).toMatchObject({
+          userId: added.user.id,
+          role: "CUSTOMER",
+          invitedGivenName: "אביגיל",
+        });
+
+        // Again, with the same number: the same person and the same row.
+        const again = await repositories.memberships.addCustomer(context.business.id, {
+          phone: "+972500002229",
+          givenName: "אביגיל",
+          familyName: "נוי",
+        });
+        expect(again.user.id).toBe(added.user.id);
+        expect(again.membership.id).toBe(added.membership.id);
+
+        // And the reason this is not `invite`: booking a colleague a haircut
+        // must not take away their calendar. The invitation path rewrites the
+        // role on purpose; this one must not, and only a real database can
+        // show which of the two the SQL actually does.
+        const colleague = await repositories.memberships.invite(context.business.id, {
+          phone: "+972500002230",
+          givenName: "שימי",
+          familyName: null,
+          role: "WORKER",
+          invitedGivenName: "שימי",
+          invitedFamilyName: null,
+        });
+        const asCustomer = await repositories.memberships.addCustomer(
+          context.business.id,
+          { phone: "+972500002230", givenName: "שימי", familyName: null },
+        );
+        expect(asCustomer.membership.id).toBe(colleague.membership.id);
+        expect(asCustomer.membership.role).toBe("WORKER");
+      });
+    });
+
     it("invites a not-yet-registered phone, then re-invites to update the role", async () => {
       await withRepositories(async (repositories, actAs) => {
         const context = await aBookableBusiness(repositories, "02008");

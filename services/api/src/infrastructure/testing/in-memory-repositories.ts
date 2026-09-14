@@ -416,6 +416,45 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           (assignment) => assignment.membershipId !== id,
         );
       },
+      async addCustomer(businessId, input) {
+        let user = store.users.find((existing) => existing.phone === input.phone);
+        if (user === undefined) {
+          user = {
+            id: asId(nextId("user")),
+            phone: input.phone,
+            givenName: input.givenName,
+            familyName: input.familyName,
+            birthDate: null,
+            deletedAt: null,
+            anonymisedAt: null,
+            isAdministrator: false,
+            createdAt: now(),
+          };
+          store.users = [...store.users, user];
+        }
+
+        // Only ever adds. Whatever membership is already there is what they
+        // keep — a colleague booked a haircut stays a colleague.
+        const existing = store.memberships.find(
+          (membership) =>
+            membership.userId === user.id && membership.businessId === businessId,
+        );
+        if (existing !== undefined) return { user, membership: existing };
+
+        const membership: Membership = {
+          id: asId(nextId("membership")),
+          userId: user.id,
+          businessId,
+          role: "CUSTOMER",
+          createdAt: now(),
+          blockedAt: null,
+          invitedGivenName: input.givenName,
+          invitedFamilyName: input.familyName,
+        };
+        store.memberships = [...store.memberships, membership];
+        return { user, membership };
+      },
+
       async invite(businessId, input) {
         let user = store.users.find((existing) => existing.phone === input.phone);
         if (user === undefined) {

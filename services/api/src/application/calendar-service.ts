@@ -758,6 +758,41 @@ export const calendarService = ({
     });
   },
 
+  /**
+   * Somebody the Business can book in, found by their number or created as one.
+   *
+   * A Business taking a booking over the telephone knows a number and a name,
+   * and nothing else. If that number has signed in before, this is their
+   * existing account and the only thing added is the relationship — never the
+   * role, so a colleague who rings up for a haircut does not get demoted to
+   * CUSTOMER by being booked one. If it has not, the User is created here
+   * exactly as an invitation creates one: the row is real from this moment and
+   * waiting when they first sign in.
+   *
+   * Staff rather than management, because a WORKER filling their own diary has
+   * to be able to write down who the appointment is for.
+   */
+  async addCustomer(
+    actor: Actor,
+    businessId: BusinessId,
+    input: { phone: string; givenName: string; familyName: string | null },
+  ): Promise<Customer> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      await requireStaff(repositories, actor, businessId);
+
+      const existing = await repositories.users.findByPhone(input.phone);
+      if (existing?.deletedAt != null) {
+        throw validationFailed("That number belongs to a closed account");
+      }
+
+      // One call, whether or not the number is known: finding the User,
+      // creating one, and adding the relationship are a single step in the
+      // database, because a not-yet-registered person cannot be inserted
+      // through app_user's RLS from here (ADR 0016).
+      return repositories.memberships.addCustomer(businessId, input);
+    });
+  },
+
   /** The Business's customers: Users seen through a Membership with that role. */
   async customers(actor: Actor, businessId: BusinessId) {
     return unitOfWork.run(actor, async ({ repositories }) => {

@@ -20,7 +20,7 @@ import { useAnySheetOpen } from "../sheet-presence.ts";
  * feel like a minefield.
  */
 
-export type Aim = "block" | "special";
+export type Aim = "block" | "special" | "appointment";
 
 export const AddButton = ({
   hidden,
@@ -93,7 +93,7 @@ export const AddButton = ({
             icon="📅"
             title={copy.addAppointmentTitle}
             hint={copy.addAppointmentHint}
-            disabled
+            onClick={() => choose("appointment")}
           />
         </div>
       </Sheet>

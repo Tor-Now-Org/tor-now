@@ -34,7 +34,7 @@ import type {
 } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { loadContext } from "./availability-service.ts";
-import { requireOwnership, requireUser } from "./authorization.ts";
+import { requireOwnership, requireResourceAccess, requireUser } from "./authorization.ts";
 
 export type BookingRequestInput = {
   readonly businessId: BusinessId;
@@ -54,6 +54,21 @@ export type BookingRequestInput = {
    * been asked.
    */
   readonly bookingOverAnother?: boolean;
+  /**
+   * Somebody booking on a customer's behalf: who the appointment is for.
+   *
+   * Absent means the caller is booking for themselves, which is every booking
+   * a customer makes and was for a long time the only kind there was — the
+   * customer was simply whoever was holding the token. A Business taking a
+   * booking over the telephone could not be expressed at all.
+   *
+   * Present, it is the staff of that Business acting: the caller needs access
+   * to the calendar being booked, which is the same permission as reading it,
+   * so a WORKER can fill their own diary and not a colleague's. Everything
+   * after that is the ordinary booking — the same rules, the same questions,
+   * and the customer is notified exactly as if they had booked it themselves.
+   */
+  readonly forCustomerId?: UserId;
 };
 
 /**
@@ -96,11 +111,26 @@ export const bookingService = (dependencies: {
      * recoverable SLOT_TAKEN and the interface re-renders availability in place.
      */
     async book(actor: Actor, input: BookingRequestInput): Promise<Appointment> {
-      const customerId = requireUser(actor);
+      // Booking for somebody else is the Business doing it; booking for
+      // yourself needs nothing but being signed in. `requireUser` still runs in
+      // both cases, because an anonymous caller may not book at all.
+      const actingUserId = requireUser(actor);
+      const customerId = input.forCustomerId ?? actingUserId;
       const startAt = parseInstant(input.startAt);
 
       return unitOfWork.run(actor, async (session) => {
         const { repositories } = session;
+        if (input.forCustomerId !== undefined) {
+          // The calendar being booked is the thing being given away, so the
+          // permission is the one that governs that calendar: a WORKER fills
+          // their own diary, a MANAGER or OWNER any of them.
+          await requireResourceAccess(
+            repositories,
+            actor,
+            input.businessId,
+            input.resourceId,
+          );
+        }
         const context = await loadContext(repositories, input);
         const { schedule, dayStart, dayEnd } = await scheduleForDay(
           repositories,
@@ -130,7 +160,15 @@ export const bookingService = (dependencies: {
           context.business.id,
         );
         if (isBlocked(membership)) {
-          throw forbidden("This business is not accepting bookings from you");
+          // Said two ways, because two different people read it. To the
+          // customer it is about them; to the owner who blocked them it is
+          // about somebody else, and "not accepting bookings from you" would
+          // be nonsense on their own screen.
+          throw forbidden(
+            input.forCustomerId === undefined
+              ? "This business is not accepting bookings from you"
+              : "This customer is blocked at this business",
+          );
         }
 
         // A second appointment for the same Service on the same day is unusual

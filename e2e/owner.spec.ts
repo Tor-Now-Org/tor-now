@@ -1991,7 +1991,9 @@ test.describe("finding one appointment", () => {
     // things an owner does with a number. Not a field labelled with the
     // customers list's search placeholder, which is what it used to be.
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("אורית שגב")).toBeVisible();
+    // Exactly: "book another for her" also carries her name now, and this
+    // assertion is about the card that says who she is.
+    await expect(sheet.getByText("אורית שגב", { exact: true })).toBeVisible();
     await expect(sheet.getByText("חיפוש לפי שם או טלפון")).toHaveCount(0);
     // Both ways to reach them, as marks rather than words.
     await expect(sheet.getByRole("link", { name: /חיוג/ })).toBeVisible();
@@ -4810,5 +4812,258 @@ test.describe("acting on something the search found", () => {
     // And back out again.
     await page.getByRole("button", { name: "הכול", exact: true }).click();
     await expect(hers).toHaveCount(2, { timeout: 15_000 });
+  });
+});
+
+/**
+ * The Business booking somebody in, which for a long time it could not do:
+ * every route booked as whoever held the token.
+ */
+test.describe("booking a customer in", () => {
+  const openCalendarAs = async (
+    page: Page,
+    shop: { business: { id: string }; owner: { token: string } },
+  ) => {
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+  };
+
+  const aKnownCustomer = async (
+    shop: { business: { id: string }; service: { id: string }; resource: { id: string } },
+    name: { givenName: string; familyName: string },
+    daysAhead: number,
+  ) => {
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name },
+    });
+    // Booking once is what makes her a customer of this business, which is
+    // what puts her in the picker.
+    const day = aDayFromNow(daysAhead);
+    const [available] = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+        `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+    );
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: available?.slots[0]?.startAt ?? "",
+        customerNote: null,
+      },
+    });
+    return { phone };
+  };
+
+  test("from a free stretch: the hours are offered, and the tapped one leads", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `קביעה מהיומן ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aKnownCustomer(shop, { givenName: "תמר", familyName: "בן דוד" }, 30);
+    const day = aDayFromNow(4);
+
+    await openCalendarAs(page, shop);
+    await page.getByRole("button", { name: day }).click();
+
+    // A whole empty day is folded, so the first tap opens the fold and the
+    // second is the stretch itself.
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: "תור ללקוח" }).click();
+
+    // Who: the business's own customers, by name.
+    await page.getByPlaceholder("חיפוש לפי שם או טלפון").fill("תמר");
+    await page.getByRole("button").filter({ hasText: "תמר בן דוד" }).first().click();
+
+    // Which hour: real availability, not a range to subdivide. 09:00 is the
+    // first hour inside the stretch that was tapped, so it leads.
+    await expect(page.getByRole("button", { name: "קביעה ל־09:00" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "קביעה ל־09:00" }).click();
+
+    // And it is on the day, under her name, without a reload.
+    await expect(page.getByText("תמר בן דוד").first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("another hour in the day can be taken instead of the suggested one", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `שעה אחרת ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aKnownCustomer(shop, { givenName: "תמר", familyName: "בן דוד" }, 31);
+    const day = aDayFromNow(5);
+
+    await openCalendarAs(page, shop);
+    await page.getByRole("button", { name: day }).click();
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "תור ללקוח" }).click();
+    await page.getByPlaceholder("חיפוש לפי שם או טלפון").fill("תמר");
+    await page.getByRole("button").filter({ hasText: "תמר בן דוד" }).first().click();
+
+    // "Actually, make it half three." The stretch suggested 09:00; the rest of
+    // the day has to be reachable without starting again.
+    await expect(page.getByRole("button", { name: "15:30", exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "15:30", exact: true }).click();
+    await page.getByRole("button", { name: "קביעה ל־15:30" }).click();
+
+    await expect(page.getByText("תמר בן דוד").first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("from the +: one day is chosen, then the same sheet", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `קביעה מה+ ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aKnownCustomer(shop, { givenName: "תמר", familyName: "בן דוד" }, 32);
+    const day = aDayFromNow(7);
+
+    await openCalendarAs(page, shop);
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("button", { name: /תור ללקוח/ }).click();
+
+    // A blockage takes a run of days; an appointment takes one, and the banner
+    // says so rather than letting somebody build a selection it cannot use.
+    await expect(page.getByText("בחירת יום לתור")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: day }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    await page.getByPlaceholder("חיפוש לפי שם או טלפון").fill("תמר");
+    await page.getByRole("button").filter({ hasText: "תמר בן דוד" }).first().click();
+
+    // Nothing was tapped, so no hour leads — every one the day can take is
+    // offered and one has to be chosen.
+    await page.getByRole("button", { name: "11:00", exact: true }).click({ timeout: 15_000 });
+    await page.getByRole("button", { name: "קביעה ל־11:00" }).click();
+    await expect(page.getByText("תמר בן דוד").first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("a second tap moves the day rather than building a range", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `יום יחיד ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const first = aDayFromNow(8);
+    const second = aDayFromNow(9);
+
+    await openCalendarAs(page, shop);
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("button", { name: /תור ללקוח/ }).click();
+
+    await page.getByRole("button", { name: first }).click();
+    await page.getByRole("button", { name: second }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    // The second day is the one it lands on — not a two-day range, which an
+    // appointment cannot be. The sheet says which day it is booking, so there
+    // is something to check that against.
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: "תור ללקוח" })).toBeVisible({
+      timeout: 15_000,
+    });
+    const asWords = new Intl.DateTimeFormat("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      day: "numeric",
+      month: "long",
+    }).format(new Date(`${second}T09:00:00Z`));
+    await expect(sheet.getByText(asWords, { exact: false })).toBeVisible();
+  });
+
+  test("from her record: she is carried into choosing a day, and pre-filled", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `מהלקוחה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aKnownCustomer(shop, { givenName: "תמר", familyName: "בן דוד" }, 33);
+    const later = aDayFromNow(10);
+
+    await openCalendarAs(page, shop);
+
+    // Reached the way an owner reaches her: by searching, because they know
+    // the name and not the date.
+    await openTheSearch(page);
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("תמר");
+    await page
+      .getByRole("button")
+      .filter({ hasText: "תמר בן דוד" })
+      .filter({ hasText: "תספורת" })
+      .first()
+      .click({ timeout: 15_000 });
+
+    // "While I have you — can I book the next one?"
+    await page.getByRole("button", { name: /קביעת תור לתמר/ }).click();
+
+    // The same day-choosing the + uses, except it says who it is for.
+    await expect(page.getByText(/בחירת יום לתור · תמר/)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: later }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    // And she is already in the sheet — no searching for somebody the screen
+    // was looking at a moment ago.
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("תמר בן דוד")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByPlaceholder("חיפוש לפי שם או טלפון")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "10:00", exact: true }).click();
+    await page.getByRole("button", { name: "קביעה ל־10:00" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+  });
+
+  test("somebody who never booked here is written down and booked", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `לקוח חדש ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    const day = aDayFromNow(6);
+
+    await openCalendarAs(page, shop);
+    await page.getByRole("button", { name: day }).click();
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "תור ללקוח" }).click();
+
+    // Nobody to find, because nobody has ever booked here. The way out is to
+    // write them down — which is the ordinary case for a shop taking a call.
+    await page.getByRole("button", { name: /לקוח חדש/ }).click();
+    await page.getByLabel("שם הלקוח").fill("אביגיל");
+    await page.getByLabel(/טלפון/).fill(uniquePhone().replace("+972", ""));
+    await page.getByRole("button", { name: "שמירה" }).click();
+
+    await expect(page.getByRole("button", { name: /^קביעה ל־/ })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: /^קביעה ל־/ }).click();
+    await expect(page.getByText("אביגיל").first()).toBeVisible({ timeout: 15_000 });
   });
 });

@@ -36,6 +36,7 @@ export const DayActionSheet = ({
   past,
   onClose,
   onChanged,
+  onBook,
 }: {
   picked: Picked | null;
   token: string;
@@ -45,6 +46,14 @@ export const DayActionSheet = ({
   past: boolean;
   onClose: () => void;
   onChanged: () => void;
+  /**
+   * Start booking somebody into this stretch.
+   *
+   * Handed up rather than opening a sheet from inside a sheet: the booking
+   * sheet belongs to the screen, which is also what knows how to ask everything
+   * again once an appointment exists.
+   */
+  onBook: (span: { start: number; end: number }, resourceId: string) => void;
 }) => {
   const copy = useCopy("owner");
   const errorText = useErrorText();
@@ -115,6 +124,9 @@ export const DayActionSheet = ({
     >
       {picked !== null && picked.kind === "free" && (
         <FreeActions
+          onBook={() =>
+            onBook({ start: picked.start, end: picked.end }, picked.resourceId)
+          }
           picked={picked}
           words={words}
           copy={copy}
@@ -196,6 +208,7 @@ const FreeActions = ({
   error,
   past,
   onBlock,
+  onBook,
 }: {
   picked: Extract<Picked, { kind: "free" }>;
   words: Parameters<typeof spokenLength>[1];
@@ -204,6 +217,7 @@ const FreeActions = ({
   error: string | null;
   past: boolean;
   onBlock: (span: { start: number; end: number }, note: string) => void;
+  onBook: () => void;
 }) => {
   /**
    * Which part of the free stretch this is about.
@@ -328,15 +342,13 @@ const FreeActions = ({
       <Button busy={busy} disabled={past || !usable} onClick={() => onBlock(chosen, note)}>
         {copy.blockThese.replace("{hours}", `${from}–${until}`)}
       </Button>
-      {/* Booking somebody in from here is the obvious third thing to want, and
-          it is the one thing the API cannot yet do: every route books as the
-          caller, so there is no way to book on a customer's behalf. Shown and
-          disabled rather than hidden — the gap is the answer to "why can I not
-          do this here", and hiding it just makes the screen look finished. */}
-      <Button intent="quiet" disabled title={copy.notYet}>
+      {/* The obvious third thing to want, and for a long time the one thing the
+          API could not do — every route booked as the caller. It leads rather
+          than follows the blockage now: somebody who taps a gap in their day is
+          far more often filling it than shutting it. */}
+      <Button intent="quiet" disabled={past} onClick={onBook}>
         {copy.addAppointmentTitle}
       </Button>
-      <span className="hint">{copy.bookForCustomerSoon}</span>
     </div>
   );
 };

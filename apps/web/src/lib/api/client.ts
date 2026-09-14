@@ -276,6 +276,14 @@ export const api = {
       resourceId: string;
       startAt: string;
       customerNote: string | null;
+      /**
+       * Who it is for, when the business is booking somebody in rather than
+       * somebody booking themselves. Absent means the caller.
+       */
+      forCustomerId?: string;
+      /** Answers to the two questions booking may stop to ask. */
+      bookingAnotherOfTheSame?: boolean;
+      bookingOverAnother?: boolean;
     },
   ) =>
     request<AppointmentDto>("/appointments", {
@@ -640,6 +648,18 @@ export const api = {
 
   listCustomers: (token: string, businessId: string) =>
     request<CustomerDto[]>(`/businesses/${businessId}/customers`, { token }),
+
+  /** Somebody the business can book in, found by their number or created as one. */
+  addCustomer: (
+    token: string,
+    businessId: string,
+    input: { phone: string; givenName: string; familyName: string | null },
+  ) =>
+    request<CustomerDto>(`/businesses/${businessId}/customers`, {
+      method: "POST",
+      body: input,
+      token,
+    }),
 
   setCustomerBlocked: (
     token: string,

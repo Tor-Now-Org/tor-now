@@ -38,6 +38,7 @@ export const AppointmentSheet = ({
   appointment,
   onClose,
   onChanged,
+  onBookAnother,
 }: {
   token: string;
   business: BusinessDto;
@@ -45,6 +46,11 @@ export const AppointmentSheet = ({
   appointment: CalendarAppointmentDto | null;
   onClose: () => void;
   onChanged: () => void | Promise<void>;
+  /**
+   * Book this customer something else. Handed up, because choosing the day
+   * happens on the calendar behind this sheet rather than inside it.
+   */
+  onBookAnother?: (customer: { id: string; name: string; phone: string }) => void;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -157,6 +163,25 @@ export const AppointmentSheet = ({
               labels={{ call: copy.callCustomer, whatsapp: copy.whatsappCustomer }}
             />
           </Card>
+
+          {/* "While I have you — can I book the next one?" is the sentence this
+              is for, and it is said while the owner is already looking at her.
+              Booking from here carries her into the same day-choosing the +
+              uses, so there is no second way of booking, only a second way in. */}
+          {onBookAnother !== undefined && (
+            <Button
+              intent="quiet"
+              onClick={() =>
+                onBookAnother({
+                  id: appointment.customerId,
+                  name: appointment.customerName,
+                  phone: appointment.customerPhone,
+                })
+              }
+            >
+              {copy.bookAnotherFor.replace("{name}", appointment.customerName)}
+            </Button>
+          )}
 
           {/* What the customer wrote when they booked. Shown right under who
               they are, because it is usually about this appointment

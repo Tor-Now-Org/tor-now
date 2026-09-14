@@ -19,6 +19,8 @@ import { CalendarScope } from "./calendar-scope.tsx";
 import { ClosedDay } from "./closed-day.tsx";
 import { Month } from "./month.tsx";
 import { ActiveFilters, FilterControls, FindControls } from "./day-filter-bar.tsx";
+import { BookCustomerSheet } from "./book-customer.tsx";
+import type { ChosenCustomer } from "./customer-picker.tsx";
 import { NOTHING, anyFilter, keptBy, withinReach, type Facets, type Reach } from "./day-filter.ts";
 import {
   answerTo,
@@ -93,8 +95,30 @@ export const CalendarDay = ({
   const [freshness, setFreshness] = useState(0);
   /** Bumped when the day changes something the month draws, so it reloads. */
   const [monthKey, setMonthKey] = useState(0);
+  /**
+   * The booking being written, and what the way in already answered.
+   *
+   * Null means no booking is in progress. The day is always known by the time
+   * this is set — every way in supplies one — while the calendar, the stretch
+   * and the customer are each filled by some ways in and not others.
+   */
+  const [booking, setBooking] = useState<{
+    date: string;
+    resourceId: string | null;
+    suggest: { start: number; end: number } | null;
+    customer: ChosenCustomer | null;
+  } | null>(null);
   /** What the + started, and the days it is waiting to be aimed at. */
   const [aim, setAim] = useState<Aim | null>(null);
+  /**
+   * Somebody carried into the aim.
+   *
+   * Booking that starts from a customer's record already knows who, and only
+   * needs a day — so it enters the same aim the + does, with her along for the
+   * ride. That is what keeps "when can she come in?" from needing a flow of
+   * its own.
+   */
+  const [aimedCustomer, setAimedCustomer] = useState<ChosenCustomer | null>(null);
   const [aimedAt, setAimedAt] = useState<readonly string[]>([]);
   /**
    * Everything the named customer has, fetched by their number rather than read
@@ -463,12 +487,43 @@ export const CalendarDay = ({
         choosing={
           aim === null
             ? null
-            : { title: aim === "block" ? copy.aimBlock : copy.aimSpecial }
+            : aim === "appointment"
+              ? {
+                  title:
+                    aimedCustomer === null
+                      ? copy.aimAppointment
+                      : copy.aimAppointmentFor.replace("{name}", aimedCustomer.name),
+                  // One day, because that is what an appointment happens on.
+                  single: true,
+                }
+              : { title: aim === "block" ? copy.aimBlock : copy.aimSpecial }
         }
-        onChosen={setAimedAt}
+        onChosen={(dates) => {
+          // An appointment has nothing further to decide about the days, so
+          // aiming it goes straight to the sheet rather than through the step
+          // that asks a blockage for its hours.
+          if (aim === "appointment") {
+            const chosen = dates[0];
+            if (chosen === undefined) return;
+            setAim(null);
+            setAimedAt([]);
+            setBooking({
+              date: chosen,
+              // Nothing was tapped, so neither the calendar nor an hour is
+              // implied — the sheet asks for both.
+              resourceId: showEveryone ? null : (resource?.id ?? null),
+              suggest: null,
+              customer: aimedCustomer,
+            });
+            setAimedCustomer(null);
+            return;
+          }
+          setAimedAt(dates);
+        }}
         onCancelChoosing={() => {
           setAim(null);
           setAimedAt([]);
+          setAimedCustomer(null);
         }}
         onChanged={() => void load()}
         firstOfMonth={firstOfMonth}
@@ -545,6 +600,12 @@ export const CalendarDay = ({
           setPicked(null);
           void refreshEverything();
         }}
+        onBook={(span, resourceId) => {
+          // The stretch sheet steps aside for the booking sheet rather than
+          // stacking on top of it.
+          setPicked(null);
+          setBooking({ date, resourceId, suggest: span, customer: null });
+        }}
       />
       </>
       )}
@@ -578,12 +639,42 @@ export const CalendarDay = ({
         }}
       />
 
+      <BookCustomerSheet
+        open={booking !== null}
+        token={token}
+        business={business}
+        resources={resources}
+        date={booking?.date ?? date}
+        resourceId={booking?.resourceId ?? null}
+        suggest={booking?.suggest ?? null}
+        customer={booking?.customer ?? null}
+        onClose={() => setBooking(null)}
+        onBooked={() => {
+          setBooking(null);
+          void refreshEverything();
+        }}
+      />
+
       <AppointmentSheet
         token={token}
         business={business}
         appointment={selected}
         onClose={() => setSelected(null)}
         onChanged={refreshEverything}
+        onBookAnother={(customer) => {
+          // Into the same aim the + uses, with her along for the ride: the
+          // only thing still missing is a day.
+          //
+          // The search has to be handed back first. While it has words in it
+          // the screen is answering "where is she", and the month — which is
+          // what a day is chosen on — is not on screen at all. Choosing a day
+          // is a different question, so it gets the calendar back.
+          setSelected(null);
+          showTheWholeDay();
+          setAimedCustomer(customer);
+          setAim("appointment");
+          setAimedAt([]);
+        }}
       />
     </div>
   );

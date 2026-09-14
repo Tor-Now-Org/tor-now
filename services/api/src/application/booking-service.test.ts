@@ -679,3 +679,151 @@ describe("rescheduling", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
+
+/**
+ * The Business booking somebody in, rather than the customer booking themselves.
+ *
+ * Every route used to book as whoever held the token, so a shop taking a
+ * booking over the telephone could not be expressed at all. The rules do not
+ * change — the same notice, the same clashes, the same questions — only who the
+ * appointment turns out to be for, and who is allowed to say so.
+ */
+describe("booking on a customer's behalf", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  it("books the customer in, not the member of staff doing it", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    const appointment = await test.services.booking.book(shop.owner.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+      forCustomerId: customer.user.id,
+    });
+
+    expect(appointment.customerId).toBe(customer.user.id);
+    expect(appointment.customerId).not.toBe(shop.owner.user.id);
+    expect(appointment.status).toBe("CONFIRMED");
+
+    // And it makes her a customer, exactly as booking it herself would have.
+    const membership = test.store.memberships.find(
+      (candidate) =>
+        candidate.userId === customer.user.id && candidate.businessId === shop.business.id,
+    );
+    expect(membership?.role).toBe("CUSTOMER");
+  });
+
+  it("tells the customer, who did not press the button", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+
+    await test.services.booking.book(shop.owner.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+      forCustomerId: customer.user.id,
+    });
+
+    // The confirmation matters more here than when they booked it themselves:
+    // this is the first they hear of it. It goes to her number, not to the
+    // owner's, which is the whole point.
+    const sent = test.store.outbox.filter(
+      (queued) => queued.message.recipientPhone === "+972500000002",
+    );
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.message.template).toBe("BOOKING_CONFIRMED");
+    expect(
+      test.store.outbox.some(
+        (queued) => queued.message.recipientPhone === "+972500000001",
+      ),
+    ).toBe(false);
+  });
+
+  it("refuses somebody who does not work there", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+    const stranger = await signIn(test, "+972500000003", "זר");
+
+    await expect(
+      test.services.booking.book(stranger.actor, {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: TUESDAY_AT("09:00"),
+        customerNote: null,
+        forCustomerId: customer.user.id,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("still asks before a second one of the same service that day", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+    const request = {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+      forCustomerId: customer.user.id,
+    };
+    await test.services.booking.book(shop.owner.actor, request);
+
+    // The owner is owed the same question the customer would have been asked —
+    // they are the one who can see it is a mistake.
+    await expect(
+      test.services.booking.book(shop.owner.actor, {
+        ...request,
+        startAt: TUESDAY_AT("11:00"),
+      }),
+    ).rejects.toMatchObject({ code: "ALREADY_BOOKED_THAT_DAY" });
+
+    const second = await test.services.booking.book(shop.owner.actor, {
+      ...request,
+      startAt: TUESDAY_AT("11:00"),
+      bookingAnotherOfTheSame: true,
+    });
+    expect(second.status).toBe("CONFIRMED");
+  });
+
+  it("says the blocked customer is blocked, not that the owner is", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+    await test.services.booking.book(shop.owner.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+      forCustomerId: customer.user.id,
+    });
+    await test.services.calendar.setCustomerBlocked(
+      shop.owner.actor,
+      shop.business.id,
+      customer.user.id,
+      true,
+    );
+
+    // "not accepting bookings from you" is nonsense on the screen of the
+    // person who did the blocking.
+    await expect(
+      test.services.booking.book(shop.owner.actor, {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: TUESDAY_AT("13:00"),
+        customerNote: null,
+        forCustomerId: customer.user.id,
+      }),
+    ).rejects.toMatchObject({ message: "This customer is blocked at this business" });
+  });
+});

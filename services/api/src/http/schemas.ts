@@ -110,6 +110,20 @@ export const bookingSchema = z.object({
    * one "yes" should not stand in for the other.
    */
   bookingOverAnother: z.boolean().default(false),
+  /**
+   * Who the appointment is for, when somebody is booking on their behalf.
+   *
+   * Absent means the caller. Present, it is the Business booking a customer in
+   * — over the telephone, or at the desk — and the caller must have access to
+   * the calendar being filled.
+   */
+  forCustomerId: uuidSchema.optional(),
+});
+
+export const addCustomerSchema = z.object({
+  phone: phoneSchema,
+  givenName: z.string().trim().min(1).max(60),
+  familyName: z.string().trim().max(60).nullable().default(null),
 });
 
 export const rescheduleSchema = z.object({ startAt: instantSchema });

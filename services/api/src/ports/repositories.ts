@@ -183,6 +183,20 @@ export type MembershipRepository = {
    * Membership at this Business — atomically, bypassing app_user's RLS gap
    * for a not-yet-registered invitee (ADR 0016).
    */
+  /**
+   * Finds or creates the User by phone, then makes sure they hold a Membership
+   * at this Business — adding a CUSTOMER one if there is none, and leaving any
+   * existing one exactly as it is.
+   *
+   * Separate from `invite` because the permission differs: handing somebody a
+   * role is management's, while writing down who an appointment is for is
+   * anybody's who works here. It also must not rewrite a role, which `invite`
+   * does on purpose.
+   */
+  addCustomer(
+    businessId: BusinessId,
+    input: { phone: string; givenName: string; familyName: string | null },
+  ): Promise<{ user: User; membership: Membership }>;
   invite(
     businessId: BusinessId,
     input: {

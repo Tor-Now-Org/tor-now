@@ -106,7 +106,17 @@ export const Month = ({
    * the actions arrive with an action already chosen from the + — which is also
    * what makes "these days" a sensible question to ask.
    */
-  choosing: { readonly title: string } | null;
+  choosing: {
+    readonly title: string;
+    /**
+     * One day rather than a run of them.
+     *
+     * A blockage or a closure covers days; an appointment happens on one. A
+     * second tap moves the choice rather than building a range, so nobody can
+     * assemble a selection the next step cannot use.
+     */
+    readonly single?: boolean;
+  } | null;
   onChosen: (dates: readonly string[]) => void;
   onCancelChoosing: () => void;
   /**
@@ -255,7 +265,7 @@ export const Month = ({
                         onPickDay(date);
                         return;
                       }
-                      if (from === null || to !== null) {
+                      if (choosing.single === true || from === null || to !== null) {
                         setFrom(date);
                         setTo(null);
                         return;
@@ -324,12 +334,21 @@ export const Month = ({
                       month: "long",
                     })}`}
               </span>
-              <span className="tab" style={{ fontSize: 12.5, color: "var(--accent-strong)" }}>
-                {chosen.length} {copy.daysWord}
-              </span>
+              {choosing.single !== true && (
+                <span
+                  className="tab"
+                  style={{ fontSize: 12.5, color: "var(--accent-strong)" }}
+                >
+                  {chosen.length} {copy.daysWord}
+                </span>
+              )}
             </div>
           )}
-          {from !== null && to === null && <span className="hint">{copy.orTapAnother}</span>}
+          {choosing.single === true ? (
+            <span className="hint">{copy.oneDayOnly}</span>
+          ) : (
+            from !== null && to === null && <span className="hint">{copy.orTapAnother}</span>
+          )}
 
           <Button disabled={from === null} onClick={() => onChosen(chosen)}>
             {copy.continueWord}

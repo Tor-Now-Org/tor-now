@@ -311,6 +311,23 @@ export const membershipRepository = (tx: Transaction): MembershipRepository => (
     await tx`delete from membership where id = ${id}`;
   },
 
+  async addCustomer(businessId, input) {
+    const rpcRows = await tx<{ out_user_id: string; out_membership_id: string }[]>`
+      select * from app.add_customer_to_business(
+        ${businessId}, ${input.phone}, ${input.givenName}, ${input.familyName}
+      )`;
+    const { out_user_id: user_id, out_membership_id: membership_id } = rpcRows[0]!;
+
+    const userRows = await tx<Row[]>`select * from app_user where id = ${user_id}`;
+    const membershipRows = await tx<Row[]>`
+      select * from membership where id = ${membership_id}`;
+
+    return {
+      user: one(userRows, toUser, "User"),
+      membership: one(membershipRows, toMembership, "Membership"),
+    };
+  },
+
   async invite(businessId, input) {
     const rpcRows = await tx<{ out_user_id: string; out_membership_id: string }[]>`
       select * from app.invite_user_to_business(

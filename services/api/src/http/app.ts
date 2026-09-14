@@ -215,6 +215,7 @@ export const createApp = (services: Services) => {
       customerNote: body.customerNote,
       bookingAnotherOfTheSame: body.bookingAnotherOfTheSame,
       bookingOverAnother: body.bookingOverAnother,
+      forCustomerId: body.forCustomerId as never,
     });
     return context.json(wire.appointmentOut(appointment), 201);
   });
@@ -801,6 +802,19 @@ const ownerRoutes = (services: Services) => {
       idParam(context, "businessId"),
     );
     return context.json(customers.map(wire.customerOut));
+  });
+
+  // Somebody the Business knows of, whether or not they have ever signed in.
+  // A phone number nobody holds becomes a User here, the same way an
+  // invitation creates one — see `addCustomer`.
+  owner.post("/:businessId/customers", async (context) => {
+    const body = await parseBody(context, schema.addCustomerSchema);
+    const customer = await services.calendar.addCustomer(
+      actorOf(context),
+      idParam(context, "businessId"),
+      body,
+    );
+    return context.json(wire.customerOut(customer), 201);
   });
 
   owner.patch("/:businessId/customers/:customerId/blocked", async (context) => {
