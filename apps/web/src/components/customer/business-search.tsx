@@ -54,9 +54,9 @@ const writeFavoritesOnly = (favoritesOnly: boolean): void => {
 };
 
 const HeartIcon = ({ filled, size = 20 }: { filled: boolean; size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
     <path
-      d="M12 20.2s-7.6-4.6-10.1-9.3C.4 7.5 2.4 3.6 6.1 3.6c2 0 3.7 1.1 4.6 2.7.9-1.6 2.6-2.7 4.6-2.7 3.7 0 5.7 3.9 4.2 7.3-2.5 4.7-10.1 9.3-10.1 9.3Z"
+      d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
       fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth="1.8"
