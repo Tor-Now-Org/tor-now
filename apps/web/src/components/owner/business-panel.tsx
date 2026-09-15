@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { api } from "@/lib/api/client.ts";
+import { AddressAutocomplete } from "./address-autocomplete.tsx";
 import { isApiError } from "@/lib/api/errors.ts";
 import type {
   BusinessDto,
@@ -66,6 +68,12 @@ const PencilMark = () => (
 const blankToNull = (value: string | null | undefined): string | null =>
   value === null || value === undefined || value.trim() === "" ? null : value.trim();
 import { Button, Card, Critical, Field, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
+
+// Leaflet reaches for `window`, so the map can only render on the client.
+const LocationPicker = dynamic(
+  () => import("./location-picker.tsx").then((mod) => mod.LocationPicker),
+  { ssr: false },
+);
 
 type Panel = "services" | "resources" | "photos" | "settings" | "team" | "billing";
 
@@ -432,9 +440,27 @@ export const BusinessPanel = ({
             <PhoneField id="s-phone" label={copy.fPhone} hint={copy.fPhoneHint}
               value={fromE164(settings.phone)}
               onChange={(local) => { setSettings({ ...settings, phone: toE164(local) }); setSaved(false); }} />
-            <Field id="s-address" label={copy.fAddress} hint={copy.fAddressHint} value={settings.address ?? ""}
-              problem={problem.text(settings.address ?? "", TEXT_RULES.address)}
-              onChange={(e) => { setSettings({ ...settings, address: e.target.value }); setSaved(false); }} />
+            <AddressAutocomplete
+              id="s-address"
+              label={copy.fAddress}
+              hint={copy.fAddressHint}
+              value={settings.address ?? ""}
+              language={language}
+              onSelect={(pickedAddress, lat, lng) => {
+                setSettings({ ...settings, address: pickedAddress, latitude: lat, longitude: lng });
+                setSaved(false);
+              }}
+              onClear={() => {
+                setSettings({ ...settings, address: "", latitude: null, longitude: null });
+                setSaved(false);
+              }}
+            />
+            {settings.latitude != null && settings.longitude != null && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <span className="label">{copy.locationLabel}</span>
+                <LocationPicker latitude={settings.latitude} longitude={settings.longitude} />
+              </div>
+            )}
             <Field id="s-desc" label={copy.fDescription} hint={copy.fDescriptionHint} value={settings.description ?? ""}
               problem={problem.text(settings.description ?? "", TEXT_RULES.description)}
               onChange={(e) => { setSettings({ ...settings, description: e.target.value }); setSaved(false); }} />
@@ -505,6 +531,8 @@ export const BusinessPanel = ({
                   name: settings.name,
                   phone: settings.phone,
                   address: settings.address === "" ? null : settings.address,
+                  latitude: settings.latitude ?? null,
+                  longitude: settings.longitude ?? null,
                   description: settings.description === "" ? null : settings.description,
                   instagram: blankToNull(settings.instagram),
                   whatsapp: blankToNull(settings.whatsapp),
