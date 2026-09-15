@@ -200,11 +200,9 @@ export const BusinessSearch = ({
           <br />
           {copy.headline2}
         </h1>
-        {idle && (
-          <p style={{ margin: 0, textAlign: "center", fontSize: 14.5, lineHeight: 1.6, color: "var(--muted)" }}>
-            {copy.subhead}
-          </p>
-        )}
+        <p style={{ margin: 0, textAlign: "center", fontSize: 14.5, lineHeight: 1.6, color: "var(--muted)" }}>
+          {copy.subhead}
+        </p>
       </div>
 
       <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 16px", minHeight: 56 }}>
