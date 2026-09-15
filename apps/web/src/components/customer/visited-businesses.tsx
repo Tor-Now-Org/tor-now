@@ -1,14 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { categoryLabel } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type { MyAppointmentDto } from "@/lib/api/types.ts";
-import { useCopy } from "@/lib/i18n/index.tsx";
+import type { BusinessDto, MyAppointmentDto } from "@/lib/api/types.ts";
+import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { outcomeOfDto } from "../owner/appointment-sheet.tsx";
 import { Card, Critical, Empty, Spinner } from "../ui.tsx";
+import { HeartIcon, readFavorites, tagStyle, writeFavorites } from "./business-search.tsx";
+import { AllCategoriesIcon, CategoryIcon } from "./category-icons.tsx";
 
 /** One business per row, most recently visited first — visits that were cancelled don't count. */
 const visitedBusinesses = (appointments: MyAppointmentDto[]) => {
@@ -16,18 +19,19 @@ const visitedBusinesses = (appointments: MyAppointmentDto[]) => {
     .filter((appointment) => outcomeOfDto(appointment) === "FINISHED")
     .sort((a, b) => Date.parse(b.endAt) - Date.parse(a.endAt));
 
-  const seen = new Set<string>();
-  const businesses: { businessId: string; businessName: string; lastVisitAt: string }[] = [];
+  const byBusiness = new Map<string, { businessId: string; businessName: string; lastVisitAt: string; visits: number }>();
   for (const appointment of finished) {
-    if (seen.has(appointment.businessId)) continue;
-    seen.add(appointment.businessId);
-    businesses.push({
-      businessId: appointment.businessId,
-      businessName: appointment.businessName,
-      lastVisitAt: appointment.endAt,
-    });
+    const known = byBusiness.get(appointment.businessId);
+    if (known !== undefined) known.visits += 1;
+    else
+      byBusiness.set(appointment.businessId, {
+        businessId: appointment.businessId,
+        businessName: appointment.businessName,
+        lastVisitAt: appointment.endAt,
+        visits: 1,
+      });
   }
-  return businesses;
+  return [...byBusiness.values()];
 };
 
 export const VisitedBusinesses = ({
@@ -36,11 +40,14 @@ export const VisitedBusinesses = ({
   onOpenBusiness: (businessId: string) => void;
 }) => {
   const copy = useCopy("customer");
+  const { language } = useLanguage();
   const { token } = useSession();
   const errorText = useErrorText();
 
   const [appointments, setAppointments] = useState<MyAppointmentDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<Map<string, BusinessDto>>(new Map());
+  const [favorites, setFavorites] = useState<Set<string>>(() => readFavorites());
 
   const load = useCallback(async () => {
     if (token === null) return;
@@ -55,35 +62,135 @@ export const VisitedBusinesses = ({
     void load();
   }, [load]);
 
-  if (appointments === null) return <Spinner />;
+  const businesses = appointments === null ? [] : visitedBusinesses(appointments);
+  const businessIds = businesses.map((business) => business.businessId).join(",");
 
-  const businesses = visitedBusinesses(appointments);
+  // ponytail: one profile request per business, same as favorites in search; a batch endpoint if the list grows long.
+  useEffect(() => {
+    if (businessIds === "") return;
+    let cancelled = false;
+    void Promise.all(
+      businessIds.split(",").map((businessId) =>
+        api.businessProfile(businessId).then(
+          (profile) => profile.business,
+          () => null, // Gone or unreachable: the card just keeps the name.
+        ),
+      ),
+    ).then((found) => {
+      if (!cancelled) setProfiles(new Map(found.filter((b): b is BusinessDto => b !== null).map((b) => [b.id, b])));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [businessIds]);
+
+  const toggleFavorite = (businessId: string) => {
+    setFavorites((current) => {
+      const next = new Set(current);
+      if (next.has(businessId)) next.delete(businessId);
+      else next.add(businessId);
+      writeFavorites(next);
+      return next;
+    });
+  };
+
+  if (appointments === null && error === null) return <Spinner />;
+
+  const dateFormat = new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   return (
-    <div style={{ padding: "22px 18px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-      <h1 style={{ fontSize: 22 }}>{copy.visitedBusinesses}</h1>
+    <div style={{ padding: "28px 18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
+      <h1 style={{ fontSize: 26, lineHeight: 1.2, textAlign: "center", paddingTop: 14 }}>{copy.visitedBusinesses}</h1>
 
       {error !== null && <Critical>{error}</Critical>}
 
-      {businesses.length === 0 && (
+      {appointments !== null && businesses.length === 0 && (
         <Empty title={copy.noVisited} body={copy.noVisitedBody} />
       )}
 
       {businesses.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {businesses.map((business) => (
-            <button
-              key={business.businessId}
-              onClick={() => onOpenBusiness(business.businessId)}
-              style={{ textAlign: "start", width: "100%" }}
-            >
-              <Card style={{ width: "100%", display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 16.5 }}>
-                  {business.businessName}
-                </span>
-              </Card>
-            </button>
-          ))}
+          {businesses.map(({ businessId, businessName, lastVisitAt, visits }) => {
+            const business = profiles.get(businessId);
+            const isFavorite = favorites.has(businessId);
+
+            return (
+              <div key={businessId} style={{ position: "relative" }}>
+                <button onClick={() => onOpenBusiness(businessId)} style={{ textAlign: "start", width: "100%" }}>
+                  <Card style={{ width: "100%", display: "flex", gap: 12, alignItems: "flex-start", paddingInlineEnd: 48 }}>
+                    <span
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 12,
+                        display: "grid",
+                        placeItems: "center",
+                        flexShrink: 0,
+                        background: "var(--sunken)",
+                        color: "var(--muted)",
+                      }}
+                    >
+                      {business?.category != null ? <CategoryIcon category={business.category} /> : <AllCategoriesIcon />}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+                      <span style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 16.5 }}>
+                        {business?.name ?? businessName}
+                      </span>
+                      {business?.address != null && <span className="hint">{business.address}</span>}
+                      <span className="hint">{copy.lastVisit.replace("{date}", dateFormat.format(new Date(lastVisitAt)))}</span>
+                      <span style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                        {business?.category != null && (
+                          <span style={{ ...tagStyle, background: "var(--sunken)", color: "var(--muted)" }}>
+                            {categoryLabel(business.category, language)}
+                          </span>
+                        )}
+                        {visits > 1 && (
+                          <span style={{ ...tagStyle, background: "var(--accent-soft)", color: "var(--accent-strong)" }}>
+                            {copy.visitCount.replace("{count}", String(visits))}
+                          </span>
+                        )}
+                        {business?.openNow !== undefined && (
+                          <span
+                            style={{
+                              ...tagStyle,
+                              background: business.openNow ? "var(--positive-soft)" : "var(--sunken)",
+                              color: business.openNow ? "var(--positive)" : "var(--faint)",
+                            }}
+                          >
+                            {business.openNow ? copy.openNow : copy.closedNow}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                  </Card>
+                </button>
+                <button
+                  onClick={() => toggleFavorite(businessId)}
+                  aria-pressed={isFavorite}
+                  aria-label={isFavorite ? copy.removeFavorite : copy.addFavorite}
+                  style={{
+                    position: "absolute",
+                    insetBlockStart: 8,
+                    insetInlineEnd: 8,
+                    width: 34,
+                    height: 34,
+                    display: "grid",
+                    placeItems: "center",
+                    borderRadius: 999,
+                    color: isFavorite ? "var(--critical)" : "var(--faint)",
+                    background: isFavorite ? "var(--critical-soft)" : "transparent",
+                    transition: "background .13s ease, color .13s ease",
+                  }}
+                >
+                  <HeartIcon filled={isFavorite} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

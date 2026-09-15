@@ -45,7 +45,7 @@ const STRIP_CATEGORIES: readonly BusinessCategory[] = [
 const FAVORITES_STORAGE_KEY = "tor-now.favorite-businesses";
 
 /** Never persisted server-side — the point is a device-local shortlist. */
-const readFavorites = (): Set<string> => {
+export const readFavorites = (): Set<string> => {
   try {
     const raw = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
     return new Set(raw === null ? [] : (JSON.parse(raw) as string[]));
@@ -54,7 +54,7 @@ const readFavorites = (): Set<string> => {
   }
 };
 
-const writeFavorites = (favorites: Set<string>): void => {
+export const writeFavorites = (favorites: Set<string>): void => {
   try {
     window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...favorites]));
   } catch {
@@ -80,7 +80,7 @@ const writeFavoritesOnly = (favoritesOnly: boolean): void => {
   }
 };
 
-const HeartIcon = ({ filled, size = 20 }: { filled: boolean; size?: number }) => (
+export const HeartIcon = ({ filled, size = 20 }: { filled: boolean; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
     <path
       d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
@@ -92,7 +92,7 @@ const HeartIcon = ({ filled, size = 20 }: { filled: boolean; size?: number }) =>
   </svg>
 );
 
-const tagStyle = {
+export const tagStyle = {
   fontSize: 11.5,
   fontWeight: 600,
   padding: "3px 9px",
