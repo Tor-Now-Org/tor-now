@@ -61,7 +61,9 @@ export const AddressAutocomplete = ({
       justSelected.current = false;
       return;
     }
-    if (!isSearchable(query)) {
+    // The confirmed address (e.g. one loaded with the settings) is already
+    // chosen — searching for it would pop the list open on page load.
+    if (query === value || !isSearchable(query)) {
       setSuggestions([]);
       return;
     }
@@ -89,7 +91,7 @@ export const AddressAutocomplete = ({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, language]);
+  }, [query, value, language]);
 
   const pick = (suggestion: Suggestion) => {
     justSelected.current = true;
