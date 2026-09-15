@@ -287,6 +287,12 @@ export const BookingFlow = ({
     value === null || value === undefined || value.trim() === "" ? null : value;
   const instagram = said(business.instagram);
   const whatsapp = said(business.whatsapp);
+  /** Same pin the owner placed on the map at onboarding, so a customer opens
+      exactly where it points rather than wherever a text address geocodes to. */
+  const mapsHref =
+    business.latitude != null && business.longitude != null
+      ? `https://www.google.com/maps/search/?api=1&query=${business.latitude},${business.longitude}`
+      : null;
 
   if (stage === "done") {
     return (
@@ -374,6 +380,19 @@ export const BookingFlow = ({
         </a>
 
         <span style={{ display: "flex", gap: 9 }}>
+            {mapsHref !== null && (
+              <a
+                href={mapsHref}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={copy.openInMaps}
+                title={copy.openInMaps}
+                style={MARK}
+                className="chip tap"
+              >
+                <MapPinMark />
+              </a>
+            )}
             {whatsapp !== null && (
               <a
                 href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}
@@ -696,6 +715,19 @@ const MARK = Object.freeze({
   border: "1px solid var(--line)",
   background: "var(--raised)",
 });
+
+/** A plain map pin, styled like the phone icon rather than a brand mark. */
+const MapPinMark = () => (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M12 21s-7-6.19-7-11.2C5 5.94 8.13 3 12 3s7 2.94 7 6.8C19 14.81 12 21 12 21Z"
+      stroke="var(--muted)"
+      strokeWidth="1.7"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="9.8" r="2.3" stroke="var(--muted)" strokeWidth="1.7" />
+  </svg>
+);
 
 /**
  * Instagram's own mark, for the same reason as WhatsApp's.
