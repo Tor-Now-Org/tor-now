@@ -32,7 +32,7 @@ import {
 import { DayTimeline, type Picked } from "./day-timeline.tsx";
 import { DayActionSheet } from "./day-actions.tsx";
 import { AddButton, FinishAim, type Aim } from "./day-add.tsx";
-import { Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
+import { Button, Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
 import { shiftMonth } from "./month-model.ts";
 
 /**
@@ -425,10 +425,17 @@ export const CalendarDay = ({
               facets.customer === null
                 ? (wholeDay?.calendars ?? []).flatMap((one) => one.appointments)
                 : (theirs ?? []);
+            // The reach is anchored to whatever the pool is about. With no
+            // customer named the pool is the day being read, so "the day" is
+            // that day — the chips are not even shown. With one named, the
+            // pool is her whole diary and the chips say "today" and "this
+            // week", so they have to mean today: reading them against
+            // whichever square happened to be open made "today" mean the
+            // fourth of October, and the answer looked like a broken filter.
             const kept = withinReach(
               keptBy(pool, facets, Date.now()),
               facets.customer === null ? "DAY" : reach,
-              date,
+              facets.customer === null ? date : todayIn(business.timeZone),
               business.timeZone,
             ).sort((left, right) => left.startAt.localeCompare(right.startAt));
             return (
@@ -445,7 +452,27 @@ export const CalendarDay = ({
                 {facets.customer !== null && theirs === null ? (
                   <Spinner />
                 ) : kept.length === 0 ? (
-                  <Empty title={copy.noMatches} body={copy.findAppointmentHint} />
+                  // Say which question came back empty. Somebody searches for
+                  // a customer precisely because her appointment is weeks out,
+                  // so "today" and "this week" are empty in the ordinary case —
+                  // and a bare "nothing found" reads as the filter being
+                  // broken rather than as the answer.
+                  facets.customer !== null && reach !== "ALL" ? (
+                    <Empty
+                      title={reach === "DAY" ? copy.noneOfHersToday : copy.noneOfHersThisWeek}
+                      body={copy.widenToAll}
+                      action={
+                        // Its own words rather than the chip's: this is an
+                        // action, and a button that reads as a filter value
+                        // sitting under an empty list is a puzzle.
+                        <Button intent="quiet" onClick={() => setReach("ALL")}>
+                          {copy.showAllOfHers}
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <Empty title={copy.noMatches} body={copy.findAppointmentHint} />
+                  )
                 ) : (
                   kept.map((appointment) => (
                     <button

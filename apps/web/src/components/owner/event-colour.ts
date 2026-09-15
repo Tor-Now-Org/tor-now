@@ -67,7 +67,7 @@ export const colourOf = (name: string, offered: readonly string[] = []): EventCo
 };
 
 /** How many calendars can be told apart by colour before the set repeats. */
-export const LANE_COLOURS = 4;
+export const LANE_COLOURS = 6;
 
 /**
  * A calendar's own colour, which answers a different question from a service's.

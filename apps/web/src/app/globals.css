@@ -48,8 +48,15 @@
   /* Whose calendar it is, which is a different question from what is on it.
      Deeper and quieter than the event hues on purpose: a lane's mark should
      read as an identity beside the thing it marks, never as another service. */
-  --lane-1:oklch(34% 0.070 262); --lane-2:oklch(38% 0.085 152);
-  --lane-3:oklch(41% 0.105 40);  --lane-4:oklch(36% 0.070 318);
+  /* One per calendar, and the question they answer is "whose". Separated on
+     all three axes at once — hue about sixty degrees apart, and lightness and
+     chroma varied with it — because four colours at one lightness with barely
+     any chroma were four dark smudges, and the violet pair especially was two
+     names for the same smudge. Kept under 50% lightness: every one of these
+     carries white text at nine pixels. */
+  --lane-1:oklch(42% 0.150 264); --lane-2:oklch(47% 0.120 152);
+  --lane-3:oklch(44% 0.170 28);  --lane-4:oklch(38% 0.140 310);
+  --lane-5:oklch(46% 0.100 205); --lane-6:oklch(43% 0.115 75);
 
   /* The two things that are not appointments. A blockage is somebody's own
      time; a closure is the shop's, and reads heavier because it is the shop's

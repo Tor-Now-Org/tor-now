@@ -4837,11 +4837,12 @@ test.describe("acting on something the search found", () => {
     // never about today.
     await expect(hers).toHaveCount(2, { timeout: 15_000 });
 
-    // Narrowed to the day the screen is on, she has nothing — both of hers are
-    // weeks out. That is an answer, not a failure.
+    // Narrowed to today, she has nothing — both of hers are weeks out. That is
+    // an answer, and the screen gives it in those words rather than the
+    // generic "nothing found", which read as the filter being broken.
     await page.getByRole("button", { name: "היום", exact: true }).click();
     await expect(hers).toHaveCount(0, { timeout: 15_000 });
-    await expect(page.getByText("לא נמצא תור מתאים")).toBeVisible();
+    await expect(page.getByText("אין לה תור היום")).toBeVisible();
 
     // And back out again.
     await page.getByRole("button", { name: "הכול", exact: true }).click();
@@ -5108,6 +5109,95 @@ test.describe("booking a customer in", () => {
     await sheet.getByRole("button", { name: "חזרה" }).click();
     await expect(sheet.getByRole("button", { name: "תור ללקוח" })).toBeVisible();
     await expect(sheet.getByRole("button", { name: "כל הטווח" })).toHaveCount(0);
+  });
+
+  /**
+   * How far a named customer's list looks.
+   *
+   * The chips say "today" and "this week", and somebody searches for a customer
+   * precisely because her next appointment is not today — so these are empty in
+   * the ordinary case, and the screen has to say which question came back empty
+   * rather than "nothing found", which reads as the filter being broken.
+   */
+  test("her week holds what is in it, and her day says when it holds nothing", async ({
+    page,
+  }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `טווח לקוחה ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    // One within the week, one a long way out — which is the shape of a real
+    // customer's diary, and the reason "this week" is a useful question.
+    await aKnownCustomer(shop, { givenName: "תמר", familyName: "בן דוד" }, 2);
+    await aKnownCustomer(shop, { givenName: "תמר", familyName: "בן דוד" }, 40);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await openTheSearch(page);
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("תמר");
+    // Two customers of that name, so the first is the one being asked about.
+    await page
+      .getByRole("button", { name: /לקוח\s+תמר בן דוד/ })
+      .first()
+      .click({ timeout: 15_000 });
+
+    const rows = page
+      .getByRole("button")
+      .filter({ hasText: "תמר בן דוד" })
+      .filter({ hasText: "תספורת" });
+
+    // Naming her opens at everything, because that is where her next one is.
+    await expect(rows).toHaveCount(1, { timeout: 15_000 });
+
+    // Her week holds the one two days out.
+    await page.getByRole("button", { name: "השבוע", exact: true }).click();
+    await expect(rows).toHaveCount(1, { timeout: 15_000 });
+
+    // Her day holds nothing — and says so in those words, with the way out.
+    await page.getByRole("button", { name: "היום", exact: true }).click();
+    await expect(page.getByText("אין לה תור היום")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("לא נמצא תור מתאים")).toHaveCount(0);
+
+    // The way out works, and is one tap.
+    await page.getByRole("button", { name: "הצגת כל התורים" }).click();
+    await expect(rows).toHaveCount(1, { timeout: 15_000 });
+  });
+
+  test("today means today, whatever day the calendar is showing", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({
+      name: `היום זה היום ${Date.now()}`,
+      ownerPhone,
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await aKnownCustomer(shop, { givenName: "תמר", familyName: "בן דוד" }, 3);
+    const elsewhere = aDayFromNow(3);
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    // Read a day that is not today — the day her appointment is on, in fact.
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: elsewhere }).click();
+
+    await openTheSearch(page);
+    await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("תמר");
+    await page
+      .getByRole("button", { name: /לקוח\s+תמר בן דוד/ })
+      .first()
+      .click({ timeout: 15_000 });
+
+    // "היום" has to mean today. It used to mean whichever day was open, so
+    // standing on the day of her appointment made "today" find it — which
+    // looked like it working, and was the same bug as it finding nothing on
+    // every other day.
+    await page.getByRole("button", { name: "היום", exact: true }).click();
+    await expect(page.getByText("אין לה תור היום")).toBeVisible({ timeout: 15_000 });
   });
 
   test("the sheet always says which calendar it is booking", async ({ page }) => {

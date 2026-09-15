@@ -64,7 +64,7 @@ describe("the colour a service keeps", () => {
     // A lane mark sits beside the appointments it marks; drawn from the same
     // palette it reads as one more service rather than as whose calendar it is.
     const lanes = Array.from({ length: LANE_COLOURS }, (_unused, at) => laneColourOf(at));
-    lanes.forEach((lane) => expect(lane).toMatch(/^var\(--lane-[1-4]\)$/));
+    lanes.forEach((lane) => expect(lane).toMatch(/^var\(--lane-[1-6]\)$/));
     expect(new Set(lanes).size).toBe(LANE_COLOURS);
   });
 
