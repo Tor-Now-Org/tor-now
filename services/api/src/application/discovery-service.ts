@@ -1,12 +1,14 @@
 import {
   containsPoint,
   END_OF_DAY,
+  inferCategories,
   instantToZoned,
   MIDNIGHT,
   notFound,
   openIntervalsOn,
   zonedToInstant,
   type Business,
+  type BusinessCategory,
   type BusinessId,
   type BusinessPhoto,
   type Clock,
@@ -23,8 +25,8 @@ import { availabilityFor, type DaySlots } from "./availability-service.ts";
 
 /**
  * ADR 0011: search is the platform's front door. A Business is discoverable the
- * moment it registers, and carries no type field — categorisation was dropped
- * rather than introduced as free text.
+ * moment it registers. ADR 0017 gave it a Category from a closed list, which a
+ * search can filter by, or infer from what was typed.
  */
 
 export type BusinessProfile = {
@@ -91,15 +93,33 @@ export const discoveryService = ({
   clock: Clock;
   strategy?: SlotGenerationStrategy;
 }) => ({
-  /** Below the minimum length, trigram ranking is noise; say nothing instead. */
-  async search(actor: Actor, query: string): Promise<readonly SearchResult[]> {
+  /**
+   * Below the minimum length, trigram ranking is noise, so the text is dropped —
+   * and with no Category either there is no question to answer.
+   */
+  async search(
+    actor: Actor,
+    query: string,
+    options: {
+      category?: BusinessCategory | undefined;
+      near?: { latitude: number; longitude: number } | undefined;
+    } = {},
+  ): Promise<readonly SearchResult[]> {
     const trimmed = query.trim();
-    if (trimmed.length < SEARCH.minimumQueryLength) return [];
+    const text = trimmed.length < SEARCH.minimumQueryLength ? "" : trimmed;
+    const category = options.category ?? null;
+    if (text === "" && category === null) return [];
 
     return unitOfWork.run(actor, async ({ repositories }) => {
-      const results = await repositories.businesses.search(trimmed);
+      const results = await repositories.businesses.search({
+        text,
+        category,
+        inferred: text === "" ? [] : inferCategories(text),
+        near: options.near ?? null,
+      });
       const businesses = results
-        .filter((result) => result.score >= SEARCH.similarityThreshold)
+        // A browse has nothing to be similar to; everything in the Category counts.
+        .filter((result) => text === "" || result.score >= SEARCH.similarityThreshold)
         .map((result) => result.business);
 
       const now = clock.now();

@@ -19,6 +19,7 @@ const A_BUSINESS = {
   address: "רחוב הרצל 1",
   latitude: 32.0853,
   longitude: 34.7818,
+  category: "barbershop",
   resourceNames: ["רן"],
   services: [
     { name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null },

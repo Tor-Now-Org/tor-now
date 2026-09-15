@@ -64,6 +64,26 @@ test.describe("finding and booking", () => {
     await expect(page).toHaveURL(/\/business\/[0-9a-f-]{36}$/);
   });
 
+  test("narrows a search to a category picked from the dropdown, shown on the strip", async ({ page }) => {
+    const name = `מספרת קטגוריה ${Date.now()}`;
+    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+
+    await page.goto("/");
+    await ready(page);
+    // ADR 0017: the strip is there before anything is typed, with nothing chosen.
+    const strip = page.getByRole("group", { name: "סוגי עסקים" });
+    await expect(strip.getByRole("button", { name: "הכול" })).toHaveAttribute("aria-pressed", "true");
+
+    // The placeholder changes once a category is chosen; the accessible name does not.
+    const search = page.getByRole("combobox", { name: "מספרה, קליניקה, מאמן אישי…" });
+    await search.fill("ספר");
+    await page.getByRole("option", { name: /^מספרה \/ ספר/ }).click();
+    await expect(strip.getByRole("button", { name: "מספרה / ספר" })).toHaveAttribute("aria-pressed", "true");
+
+    await search.fill(name);
+    await expect(page.getByText(name).first()).toBeVisible({ timeout: 15_000 });
+  });
+
   test("a business opens straight from its own address", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `מספרה בקישור ${Date.now()}`,

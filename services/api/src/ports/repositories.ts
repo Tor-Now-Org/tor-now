@@ -32,6 +32,7 @@ import type {
   UserId,
   WorkingHours,
   WorkingHoursId,
+  BusinessCategory,
 } from "@tor-now/domain";
 
 /**
@@ -112,10 +113,21 @@ export type BusinessSearchResult = {
   readonly score: number;
 };
 
+/** ADR 0017: what a search asks for. Empty `text` with a `category` is a browse. */
+export type BusinessSearchCriteria = {
+  readonly text: string;
+  /** Chosen by the customer: a hard filter. */
+  readonly category: BusinessCategory | null;
+  /** Inferred from `text`: a ranking boost that also admits a non-matching name. */
+  readonly inferred: readonly BusinessCategory[];
+  /** Orders equal scores nearest first — which, for a browse, is all of them. */
+  readonly near: { readonly latitude: number; readonly longitude: number } | null;
+};
+
 export type BusinessRepository = {
   findById(id: BusinessId): Promise<Business | null>;
-  /** ADR 0011: trigram similarity with a boost for prefix matches. */
-  search(query: string): Promise<readonly BusinessSearchResult[]>;
+  /** ADR 0011: trigram similarity with a boost for prefix matches; ADR 0017: and Category. */
+  search(criteria: BusinessSearchCriteria): Promise<readonly BusinessSearchResult[]>;
   create(business: {
     name: string;
     phone: string;
@@ -124,6 +136,7 @@ export type BusinessRepository = {
     address: string | null;
     latitude: number | null;
     longitude: number | null;
+    category: BusinessCategory | null;
   }): Promise<Business>;
   update(
     id: BusinessId,

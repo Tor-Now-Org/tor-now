@@ -4,7 +4,7 @@ Date: 2026-08-24
 
 ## Status
 
-Accepted
+Accepted. The "no type field" decision is superseded by ADR 0017.
 
 ## Context
 

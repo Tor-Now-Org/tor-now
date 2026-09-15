@@ -75,6 +75,7 @@ export const describeRepositoryContract = (
         address: null,
         latitude: null,
         longitude: null,
+        category: null,
       });
       await repositories.memberships.create(owner.id, business.id, "OWNER");
       const resource = await repositories.resources.create({
@@ -876,12 +877,14 @@ export const describeRepositoryContract = (
             address: "הרצל 1",
             latitude: 32.0853,
             longitude: 34.7818,
+            category: "barbershop",
           }),
         ).toMatchObject({
           name: "שם חדש",
           address: "הרצל 1",
           latitude: 32.0853,
           longitude: 34.7818,
+          category: "barbershop",
         });
 
         expect(
@@ -1768,17 +1771,72 @@ export const describeRepositoryContract = (
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "06001");
         expect(
-          (await repositories.businesses.search(context.business.name)).map(
+          (await repositories.businesses.search({ text: context.business.name, category: null, inferred: [], near: null })).map(
             (result) => result.business.id,
           ),
         ).toContain(context.business.id);
 
         await repositories.businesses.setActive(context.business.id, false);
         expect(
-          (await repositories.businesses.search(context.business.name)).map(
+          (await repositories.businesses.search({ text: context.business.name, category: null, inferred: [], near: null })).map(
             (result) => result.business.id,
           ),
         ).not.toContain(context.business.id);
+      });
+    });
+
+    it("browses a category nearest first, and finds a business through an inferred one", async () => {
+      await withRepositories(async (repositories) => {
+        const near = await aBookableBusiness(repositories, "06002");
+        const far = await aBookableBusiness(repositories, "06003");
+        const nails = await aBookableBusiness(repositories, "06004");
+        await repositories.businesses.update(near.business.id, {
+          category: "barbershop",
+          latitude: 32.08,
+          longitude: 34.78,
+        });
+        await repositories.businesses.update(far.business.id, {
+          category: "barbershop",
+          latitude: 32.79,
+          longitude: 34.99,
+        });
+        await repositories.businesses.update(nails.business.id, { category: "nail_salon" });
+        const ids = (results: readonly { business: { id: string } }[]) =>
+          results.map((result) => result.business.id);
+
+        const browse = ids(
+          await repositories.businesses.search({
+            text: "",
+            category: "barbershop",
+            inferred: [],
+            near: { latitude: 32.07, longitude: 34.77 },
+          }),
+        );
+        expect(browse).toContain(near.business.id);
+        expect(browse).not.toContain(nails.business.id);
+        expect(browse.indexOf(near.business.id)).toBeLessThan(browse.indexOf(far.business.id));
+
+        // "ספר" is nowhere in "עסק 06002"; the Category is what finds it.
+        const inferred = ids(
+          await repositories.businesses.search({
+            text: "ספר",
+            category: null,
+            inferred: ["barbershop"],
+            near: null,
+          }),
+        );
+        expect(inferred).toContain(near.business.id);
+        expect(inferred).not.toContain(nails.business.id);
+
+        const filtered = ids(
+          await repositories.businesses.search({
+            text: near.business.name,
+            category: "nail_salon",
+            inferred: [],
+            near: null,
+          }),
+        );
+        expect(filtered).not.toContain(near.business.id);
       });
     });
 

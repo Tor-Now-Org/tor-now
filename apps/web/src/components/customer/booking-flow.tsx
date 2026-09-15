@@ -15,6 +15,7 @@ import { distanceKm, distanceLabel } from "@/lib/distance.ts";
 import { formatLocalDate, formatPrice, timeIn, todayIn } from "@/lib/format.ts";
 import { fillParts } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { categoryLabel } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useSession } from "@/lib/session.tsx";
 import { DateStrip } from "../date-strip.tsx";
@@ -333,6 +334,21 @@ export const BookingFlow = ({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <h1 style={{ fontSize: 22 }}>{business.name}</h1>
+        {business.category != null && (
+          <span
+            style={{
+              alignSelf: "start",
+              fontSize: 11.5,
+              fontWeight: 600,
+              padding: "3px 9px",
+              borderRadius: 999,
+              background: "var(--sunken)",
+              color: "var(--muted)",
+            }}
+          >
+            {categoryLabel(business.category, language)}
+          </span>
+        )}
         {business.address !== null && <span className="hint">{business.address}</span>}
         {distance !== null && (
           <span

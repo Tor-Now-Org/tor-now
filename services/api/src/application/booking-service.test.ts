@@ -167,6 +167,7 @@ describe("booking", () => {
       address: "רחוב הרצל 9",
       latitude: 32.0853,
       longitude: 34.7818,
+      category: "barbershop",
       resourceNames: ["מירי"],
       services: [
         { name: "עיסוי", durationMinutes: 30, priceMinor: 20000, bufferMinutes: null },

@@ -186,22 +186,33 @@ export const inMemoryRepositories = (store: Store): Repositories => {
        * Trigram ranking is the database's; in memory a substring match with the
        * same prefix boost preserves the ordering the callers depend on.
        */
-      async search(query) {
+      async search({ text, category, inferred, near }) {
+        const needle = text.toLowerCase();
         return store.businesses
-          .filter(
-            (business) =>
-              business.active &&
-              business.name.toLowerCase().includes(query.toLowerCase()),
+          .filter((business) => business.active && (category === null || business.category === category))
+          .flatMap((business) => {
+            const name = business.name.toLowerCase();
+            const byName = needle !== "" && name.includes(needle);
+            const byCategory = business.category !== null && inferred.includes(business.category);
+            if (needle !== "" && !byName && !byCategory) return [];
+            const score =
+              (byName ? 0.5 + (name.startsWith(needle) ? SEARCH.prefixBoost : 0) : 0) +
+              (byCategory ? SEARCH.categoryBoost : 0);
+            const distance =
+              near === null || business.latitude === null || business.longitude === null
+                ? Infinity
+                : (business.latitude - near.latitude) ** 2 +
+                  ((business.longitude - near.longitude) * Math.cos((near.latitude * Math.PI) / 180)) ** 2;
+            return [{ business, score, distance }];
+          })
+          .sort(
+            (left, right) =>
+              right.score - left.score ||
+              left.distance - right.distance ||
+              left.business.name.localeCompare(right.business.name),
           )
-          .map((business) => ({
-            business,
-            score:
-              (business.name.toLowerCase().startsWith(query.toLowerCase())
-                ? SEARCH.prefixBoost
-                : 0) + 0.5,
-          }))
-          .sort((left, right) => right.score - left.score)
-          .slice(0, SEARCH.maxResults);
+          .slice(0, SEARCH.maxResults)
+          .map(({ business, score }) => ({ business, score }));
       },
       async create(input) {
         const business: Business = {
@@ -213,6 +224,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           address: input.address,
           latitude: input.latitude,
           longitude: input.longitude,
+          category: input.category,
           instagram: null,
           whatsapp: null,
           active: true,

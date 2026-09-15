@@ -11,6 +11,12 @@ services, resources, and the customers who book with it. Active on registration
 and discoverable in search until an administrator deactivates it.
 _Avoid_: Organization, tenant, shop, vendor
 
+**Category**:
+What kind of place a Business is, chosen from a closed list (ADR 0017). Exactly one
+per Business; `other` covers what the list did not foresee. Customers filter
+search by it, and search infers one from typed words.
+_Avoid_: Type, kind, vertical, business type
+
 **Resource**:
 A single bookable calendar belonging to a Business. Every Business has at least
 one. Working hours, breaks, blocks, overrides and appointments all belong to a

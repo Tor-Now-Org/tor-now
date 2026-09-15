@@ -6,6 +6,7 @@ import {
   theNextStart,
   anInstantAt,
   call,
+  pickACategory,
   pickAnAddress,
   stubAddressSearch,
   ready,
@@ -75,6 +76,8 @@ test.describe("opening a business", () => {
     // The address is a place on the map now, so it is picked rather than
     // typed: the wizard will not continue without the pin.
     await pickAnAddress(page, "הרצל 1");
+    // ADR 0017: and a Category, without which the wizard will not continue.
+    await pickACategory(page);
     await page.getByRole("button", { name: "המשך" }).click();
 
     // 2 — photos, which nothing requires
@@ -2252,6 +2255,7 @@ test.describe("photos", () => {
     await page.getByLabel("שם העסק").fill(name);
     await page.getByLabel("טלפון").fill(asTyped(phone));
     await pickAnAddress(page, "הרצל 2");
+    await pickACategory(page);
     await page.getByRole("button", { name: "המשך" }).click();
 
     // The cover, and one of the three optional ones.

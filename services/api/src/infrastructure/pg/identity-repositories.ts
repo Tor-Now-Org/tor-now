@@ -142,19 +142,37 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
    * beginning outranks a merely similar middle. Character-based, so it behaves
    * the same in Hebrew and English.
    */
-  async search(query): Promise<readonly BusinessSearchResult[]> {
+  async search({ text, category, inferred, near }): Promise<readonly BusinessSearchResult[]> {
     // pg_trgm lives in `extensions`, not `public` — an extension does not
     // belong in the schema PostgREST exposes — so its function and operator are
     // schema-qualified rather than left to the connection's search_path.
+    //
+    // ADR 0017: the inferred Categories travel as one comma-joined string, so an
+    // empty list is '' rather than an untyped empty array.
+    const inferredList = inferred.join(",");
+    const latitude = near?.latitude ?? null;
+    const longitude = near?.longitude ?? null;
     const rows = await tx<Row[]>`
       select *,
-             extensions.similarity(name, ${query})
-               + case when name ilike ${query + "%"} then ${SEARCH.prefixBoost}::real else 0 end
+             case when ${text} = '' then 0 else
+               extensions.similarity(name, ${text})
+                 + case when name ilike ${text + "%"} then ${SEARCH.prefixBoost}::real else 0 end
+             end
+             + case when category = any(string_to_array(${inferredList}::text, ','))
+                    then ${SEARCH.categoryBoost}::real else 0 end
              as score
       from business
       where active
-        and (name operator(extensions.%) ${query} or name ilike ${"%" + query + "%"})
-      order by score desc, name asc
+        and (${category}::text is null or category = ${category}::text)
+        and (${text} = ''
+             or name operator(extensions.%) ${text}
+             or name ilike ${"%" + text + "%"}
+             or category = any(string_to_array(${inferredList}::text, ',')))
+      order by score desc,
+               -- ponytail: flat-earth distance, used only to order; fine across Israel, PostGIS if the map goes wide.
+               power(latitude - ${latitude}::float8, 2)
+                 + power((longitude - ${longitude}::float8) * cos(radians(${latitude}::float8)), 2) nulls last,
+               name asc
       limit ${SEARCH.maxResults}`;
     return rows.map((row) => ({
       business: toBusiness(row),
@@ -164,9 +182,10 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
 
   async create(business) {
     const rows = await tx<Row[]>`
-      insert into business (name, phone, time_zone, description, address, latitude, longitude)
+      insert into business (name, phone, time_zone, description, address, latitude, longitude, category)
       values (${business.name}, ${business.phone}, ${business.timeZone},
-              ${business.description}, ${business.address}, ${business.latitude}, ${business.longitude})
+              ${business.description}, ${business.address}, ${business.latitude}, ${business.longitude},
+              ${business.category})
       returning *`;
     return one(rows, toBusiness, "Business");
   },
@@ -181,6 +200,7 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
         address = ${changes.address === undefined ? tx`address` : changes.address},
         latitude = ${changes.latitude === undefined ? tx`latitude` : changes.latitude},
         longitude = ${changes.longitude === undefined ? tx`longitude` : changes.longitude},
+        category = ${changes.category === undefined ? tx`category` : changes.category},
         instagram = ${changes.instagram === undefined ? tx`instagram` : changes.instagram},
         whatsapp = ${changes.whatsapp === undefined ? tx`whatsapp` : changes.whatsapp},
         default_buffer_minutes = coalesce(${changes.defaultBufferMinutes ?? null}, default_buffer_minutes),

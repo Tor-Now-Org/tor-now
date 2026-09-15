@@ -245,9 +245,22 @@ export const api = {
     request<BusinessDto[]>("/me/businesses", { token }),
 
   // ADR 0011: the front door.
-  search: (query: string, signal?: AbortSignal) =>
+  /** ADR 0017: text, a Category, or both; `near` orders a browse nearest first. */
+  search: (
+    params: {
+      q: string;
+      category?: string | null;
+      near?: { latitude: number; longitude: number } | null;
+    },
+    signal?: AbortSignal,
+  ) =>
     request<BusinessDto[]>("/businesses/search", {
-      query: { q: query },
+      query: {
+        q: params.q,
+        category: params.category ?? undefined,
+        lat: params.near?.latitude,
+        lng: params.near?.longitude,
+      },
       ...(signal === undefined ? {} : { signal }),
     }),
 
@@ -335,6 +348,7 @@ export const api = {
       address: string;
       latitude: number;
       longitude: number;
+      category: string;
       resourceNames: string[];
       services: {
         name: string;

@@ -188,6 +188,7 @@ export const aBusinessWithOpenHours = async (options: {
       // somewhere and nothing here depends on where.
       latitude: 32.0853,
       longitude: 34.7818,
+      category: "barbershop",
       resourceNames: ["יומן א"],
       services: [
         {
@@ -413,6 +414,12 @@ export const stubAddressSearch = async (
 export const pickAnAddress = async (page: Page, typed = "הרצל 1"): Promise<void> => {
   await page.getByLabel("כתובת").fill(typed);
   await page.getByRole("option").first().click({ timeout: 15_000 });
+};
+
+/** A Category is picked from the list, like the address: typing alone chooses nothing. */
+export const pickACategory = async (page: Page, typed = "ספר"): Promise<void> => {
+  await page.getByLabel("קטגוריה").fill(typed);
+  await page.getByRole("option", { name: /מספרה/ }).first().click();
 };
 
 export const ready = async (page: Page): Promise<void> => {

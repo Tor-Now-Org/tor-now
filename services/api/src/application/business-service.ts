@@ -31,6 +31,7 @@ import {
   type Patch,
   type User,
   type WorkingHours,
+  type BusinessCategory,
 } from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
 import { notificationFor } from "./notifications.ts";
@@ -72,6 +73,7 @@ export type RegistrationInput = {
   readonly address: string;
   readonly latitude: number;
   readonly longitude: number;
+  readonly category: BusinessCategory;
   readonly resourceNames: readonly string[];
   readonly services: readonly {
     name: string;
@@ -293,6 +295,7 @@ export const businessService = ({
         address: input.address,
         latitude: input.latitude,
         longitude: input.longitude,
+        category: input.category,
       });
 
       await repositories.memberships.create(userId, business.id, "OWNER");
@@ -344,6 +347,7 @@ export const businessService = ({
       timeZone: string;
       description: string | null;
       address: string | null;
+      category: BusinessCategory;
       instagram: string | null;
       whatsapp: string | null;
       defaultBufferMinutes: number;

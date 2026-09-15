@@ -146,8 +146,11 @@ export const createApp = (services: Services) => {
   // Discovery and availability (ADR 0011, ADR 0012)
   // ---------------------------------------------------------------------------
   app.get("/businesses/search", async (context) => {
-    const { q } = parseQuery(context, schema.searchSchema);
-    const results = await services.discovery.search(actorOf(context), q);
+    const { q, category, lat, lng } = parseQuery(context, schema.searchSchema);
+    const results = await services.discovery.search(actorOf(context), q, {
+      category,
+      near: lat === undefined || lng === undefined ? undefined : { latitude: lat, longitude: lng },
+    });
     return context.json(
       results.map((result) => ({ ...wire.businessOut(result.business), openNow: result.openNow })),
     );

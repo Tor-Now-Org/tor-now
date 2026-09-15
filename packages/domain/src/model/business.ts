@@ -1,4 +1,5 @@
 import type { Instant } from "../time/instant.ts";
+import type { BusinessCategory } from "./business-category.ts";
 import type { LocalTime } from "../time/local-time.ts";
 import type { TimeZone } from "../time/zone.ts";
 import type { BusinessId, BusinessPhotoId, ResourceId, ServiceId } from "./ids.ts";
@@ -27,6 +28,8 @@ export type Business = {
   /** The pin the owner dropped on the map. Null until they place one. */
   readonly latitude: number | null;
   readonly longitude: number | null;
+  /** ADR 0017. Null only for a business registered before Categories existed. */
+  readonly category: BusinessCategory | null;
   /** Instagram handle, bare: no @ and no URL. Null when the business has none. */
   readonly instagram: string | null;
   /**

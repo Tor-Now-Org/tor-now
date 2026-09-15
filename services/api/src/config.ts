@@ -27,6 +27,8 @@ export const SEARCH = Object.freeze({
   minimumQueryLength: 2,
   similarityThreshold: 0.2,
   prefixBoost: 0.35,
+  /** ADR 0017: enough on its own to clear the threshold, so a Category match is never dropped. */
+  categoryBoost: 0.5,
   maxResults: 20,
 });
 

@@ -9,9 +9,10 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
-import { TEXT_RULES } from "@tor-now/domain";
+import { TEXT_RULES, type BusinessCategory } from "@tor-now/domain";
 import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
 import { AddressAutocomplete } from "@/components/owner/address-autocomplete.tsx";
+import { CategoryAutocomplete } from "@/components/category-autocomplete.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
 import {
   blocking,
@@ -89,6 +90,7 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState<Step>("details");
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<BusinessCategory | null>(null);
   const [phone, setPhone] = useState(user !== null ? fromE164(user.phone) : "");
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
@@ -153,7 +155,7 @@ export default function OnboardingPage() {
           checkLocalPhone(phone),
           checkText(address, TEXT_RULES.address),
           checkText(description, TEXT_RULES.description),
-        ) && latitude !== null && longitude !== null
+        ) && latitude !== null && longitude !== null && category !== null
       : // Photos are optional, so this step never blocks.
         step === "photos"
         ? true
@@ -176,7 +178,7 @@ export default function OnboardingPage() {
             hours.some((day) => day.open) && weekIsUsable(hours);
 
   const finish = async () => {
-    if (latitude === null || longitude === null) return;
+    if (latitude === null || longitude === null || category === null) return;
     setBusy(true);
     setError(null);
     try {
@@ -186,6 +188,7 @@ export default function OnboardingPage() {
         address: address.trim(),
         latitude,
         longitude,
+        category,
         description: description.trim() === "" ? null : description.trim(),
         resourceNames: resources.map((r) => r.trim()).filter((r) => r.length > 0),
         services: services
@@ -308,6 +311,18 @@ export default function OnboardingPage() {
                 problem={problem.text(name, TEXT_RULES.businessName, touched.has("name"))}
                 onBlur={() => leave("name")}
                 onChange={(e) => setName(e.target.value)}
+              />
+              {/* ADR 0017: chosen from the list, like the address — required,
+                  because browsing by Category only works if everyone has one. */}
+              <CategoryAutocomplete
+                id="biz-category"
+                label={copy.category}
+                hint={copy.categoryHint}
+                placeholder={copy.categoryPlaceholder}
+                required
+                value={category}
+                language={language}
+                onChange={setCategory}
               />
               <PhoneField
                 id="biz-phone"

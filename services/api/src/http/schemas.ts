@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   bareHandle,
+  BUSINESS_CATEGORIES,
   INSTAGRAM_PATTERN,
   PHONE_PATTERN,
   TEXT_RULES,
@@ -82,6 +83,10 @@ export const updateProfileSchema = z.object({
 
 export const searchSchema = z.object({
   q: z.string().trim().default(""),
+  category: z.enum(BUSINESS_CATEGORIES).optional(),
+  // The customer's position, when they shared it: orders a browse nearest first.
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
 });
 
 export const availabilitySchema = z.object({
@@ -161,6 +166,7 @@ export const registerBusinessSchema = z.object({
   address: text(TEXT_RULES.address),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
+  category: z.enum(BUSINESS_CATEGORIES),
   resourceNames: z.array(text(TEXT_RULES.resourceName)).min(1),
   services: z
     .array(
@@ -183,6 +189,8 @@ export const updateBusinessSchema = z.object({
   address: text(TEXT_RULES.address).nullable().optional(),
   latitude: z.number().min(-90).max(90).nullable().optional(),
   longitude: z.number().min(-180).max(180).nullable().optional(),
+  // ADR 0017: changeable, never clearable — a business that has one keeps one.
+  category: z.enum(BUSINESS_CATEGORIES).optional(),
   instagram: instagramSchema.nullable().optional(),
   whatsapp: phoneSchema.nullable().optional(),
   defaultBufferMinutes: z.number().int().min(0).max(240).optional(),

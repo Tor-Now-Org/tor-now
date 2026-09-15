@@ -1,3 +1,5 @@
+import type { BusinessCategory } from "@tor-now/domain";
+
 /**
  * The wire shapes, mirroring services/api/src/http/wire.ts. Kept as a hand
  * written mirror rather than generated: the API is the contract, and a change
@@ -13,6 +15,8 @@ export type BusinessDto = {
   address: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  /** ADR 0017. Absent from an older API, null for a business that has not chosen one. */
+  category?: BusinessCategory | null;
   /**
    * Instagram handle, bare: no @ and no URL. Optional in the type as well as
    * in the data — an API deployed before these existed sends neither key, and
