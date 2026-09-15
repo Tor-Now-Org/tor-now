@@ -32,7 +32,7 @@ export const LocationPicker = ({
   const position: [number, number] = [latitude, longitude];
 
   return (
-    <div style={{ height: 200, borderRadius: 12, overflow: "hidden" }}>
+    <div style={{ height: 200, borderRadius: 12, overflow: "hidden", position: "relative", zIndex: 0 }}>
       <MapContainer
         key={`${latitude},${longitude}`}
         center={position}
