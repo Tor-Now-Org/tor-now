@@ -1,3 +1,4 @@
+import { parseInstant } from "@tor-now/domain";
 import { beforeEach, describe, expect, it } from "vitest";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
@@ -160,7 +161,27 @@ describe("discovery", () => {
     const test = harness();
     const shop = await anEstablishedBusiness(test);
     const found = await test.services.discovery.search({ kind: "ANONYMOUS" }, "מספרת");
-    expect(found.map((business) => business.id)).toContain(shop.business.id);
+    expect(found.map((result) => result.business.id)).toContain(shop.business.id);
+  });
+
+  it("marks a business open when the moment falls inside a Resource's working hours", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    test.travelTo(parseInstant(TUESDAY_AT("10:00")));
+
+    const [found] = await test.services.discovery.search({ kind: "ANONYMOUS" }, "מספרת");
+    expect(found?.business.id).toBe(shop.business.id);
+    expect(found?.openNow).toBe(true);
+  });
+
+  it("marks a business closed once the moment falls outside every Resource's hours", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    test.travelTo(parseInstant(TUESDAY_AT("20:00")));
+
+    const [found] = await test.services.discovery.search({ kind: "ANONYMOUS" }, "מספרת");
+    expect(found?.business.id).toBe(shop.business.id);
+    expect(found?.openNow).toBe(false);
   });
 
   it("drops a deactivated business out of search but keeps its profile reachable", async () => {

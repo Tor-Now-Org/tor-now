@@ -1,7 +1,10 @@
 import {
+  containsPoint,
   END_OF_DAY,
+  instantToZoned,
   MIDNIGHT,
   notFound,
+  openIntervalsOn,
   zonedToInstant,
   type Business,
   type BusinessId,
@@ -14,6 +17,7 @@ import {
   type TimeZone,
 } from "@tor-now/domain";
 import { SEARCH } from "../config.ts";
+import type { Repositories } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { availabilityFor, type DaySlots } from "./availability-service.ts";
 
@@ -48,6 +52,36 @@ const dayBoundsIn = (date: LocalDate, zone: TimeZone) => ({
   end: zonedToInstant(date, END_OF_DAY, zone),
 });
 
+export type SearchResult = { readonly business: Business; readonly openNow: boolean };
+
+/**
+ * Open, for this purpose, means "some active Resource has it": ADR 0002 has no
+ * business-wide hours, only per-Resource ones, and a customer deciding whether
+ * to walk in cares whether anyone at all can see them right now.
+ */
+const isOpenNow = async (
+  repositories: Repositories,
+  business: Business,
+  now: ReturnType<Clock["now"]>,
+): Promise<boolean> => {
+  const resources = await repositories.resources.listForBusiness(business.id);
+  const zoned = instantToZoned(now, business.timeZone);
+
+  const openPerResource = await Promise.all(
+    resources
+      .filter((resource) => resource.active)
+      .map(async (resource) => {
+        const [hours, override] = await Promise.all([
+          repositories.workingHours.listForResource(resource.id),
+          repositories.dateOverrides.findByDate(resource.id, zoned.date),
+        ]);
+        const open = openIntervalsOn(zoned.date, hours, override === null ? [] : [override]);
+        return open.some((range) => containsPoint(range, zoned.time));
+      }),
+  );
+  return openPerResource.some(Boolean);
+};
+
 export const discoveryService = ({
   unitOfWork,
   clock,
@@ -58,15 +92,23 @@ export const discoveryService = ({
   strategy?: SlotGenerationStrategy;
 }) => ({
   /** Below the minimum length, trigram ranking is noise; say nothing instead. */
-  async search(actor: Actor, query: string): Promise<readonly Business[]> {
+  async search(actor: Actor, query: string): Promise<readonly SearchResult[]> {
     const trimmed = query.trim();
     if (trimmed.length < SEARCH.minimumQueryLength) return [];
 
     return unitOfWork.run(actor, async ({ repositories }) => {
       const results = await repositories.businesses.search(trimmed);
-      return results
+      const businesses = results
         .filter((result) => result.score >= SEARCH.similarityThreshold)
         .map((result) => result.business);
+
+      const now = clock.now();
+      return Promise.all(
+        businesses.map(async (business) => ({
+          business,
+          openNow: await isOpenNow(repositories, business, now),
+        })),
+      );
     });
   },
 

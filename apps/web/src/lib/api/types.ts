@@ -35,6 +35,12 @@ export type BusinessDto = {
   role?: "OWNER" | "MANAGER" | "WORKER" | "CUSTOMER";
   /** The calendars a WORKER is on. Empty for an OWNER or MANAGER, who reach all of them. */
   resourceIds?: string[];
+  /**
+   * Whether some active Resource is open right now, in the Business's own
+   * timezone. Search results only — every other endpoint that returns a
+   * BusinessDto has no use for it and never sends it.
+   */
+  openNow?: boolean;
 };
 
 export type ServiceDto = {

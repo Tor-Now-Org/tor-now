@@ -147,8 +147,10 @@ export const createApp = (services: Services) => {
   // ---------------------------------------------------------------------------
   app.get("/businesses/search", async (context) => {
     const { q } = parseQuery(context, schema.searchSchema);
-    const businesses = await services.discovery.search(actorOf(context), q);
-    return context.json(businesses.map(wire.businessOut));
+    const results = await services.discovery.search(actorOf(context), q);
+    return context.json(
+      results.map((result) => ({ ...wire.businessOut(result.business), openNow: result.openNow })),
+    );
   });
 
   app.get("/businesses/:businessId", async (context) => {

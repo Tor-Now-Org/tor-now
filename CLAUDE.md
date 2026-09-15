@@ -18,11 +18,14 @@ Multi-tenant appointment booking. npm workspaces, no monorepo tooling.
   deploy. Run `npm run build:api` after touching `services/api/src` or CI fails.
 - Read the relevant `docs/adr/` file before changing behaviour it decided.
   `CONTEXT.md` is the glossary — use its words, avoid the listed synonyms.
+- Run `npm run lint` before claiming a feature done — the pre-push policy
+  enforces it, so a lint error caught late just means redoing the push.
 
 ## Commands
 
 ```bash
 npm run check      # typecheck + unit tests — run before claiming done
+npm run lint       # eslint — run before claiming done
 npm run test:db    # + repository contract against a throwaway Postgres
 npm run test:e2e   # 40 journeys, phone + desktop
 npm run build:api  # regenerate the committed Edge Function bundle
