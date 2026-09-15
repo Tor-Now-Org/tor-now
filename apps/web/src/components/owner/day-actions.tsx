@@ -235,6 +235,17 @@ const FreeActions = ({
    * afterwards, which beats a month of squares all reading "blocked".
    */
   const [note, setNote] = useState("");
+  /**
+   * What tapping a gap is for.
+   *
+   * Overwhelmingly it is filling it — somebody is on the telephone — and the
+   * sheet used to open on the machinery for the other thing: two time fields,
+   * four length chips and a note, all for a blockage nobody had asked for, with
+   * booking underneath it all. So the two are offered plainly and the hours
+   * appear once blocking is what this is about, which is the only time they
+   * are a question.
+   */
+  const [blocking, setBlocking] = useState(false);
 
   // A different stretch was tapped: start again from the whole of it.
   const [about, setAbout] = useState(`${picked.start}-${picked.end}`);
@@ -243,6 +254,7 @@ const FreeActions = ({
     setFrom(clockOf(picked.start));
     setUntil(clockOf(picked.end));
     setNote("");
+    setBlocking(false);
   }
 
   const whole = picked.end - picked.start;
@@ -270,6 +282,20 @@ const FreeActions = ({
 
       {past ? (
         <Note>{copy.alreadyPassed}</Note>
+      ) : !blocking ? (
+        <>
+          {/* Booking leads. It is what a gap is for, and it was underneath the
+              whole of the blockage form. */}
+          <Button onClick={onBook}>{copy.addAppointmentTitle}</Button>
+          <Button intent="quiet" onClick={() => setBlocking(true)}>
+            {copy.addBlockTitle}
+          </Button>
+          {tooShort && (
+            <Note>
+              {copy.tooShortToBook.replace("{minutes}", String(SHORTEST_SERVICE_MINUTES))}
+            </Note>
+          )}
+        </>
       ) : (
         <>
           {/* Only worth asking when there is a choice to make: a twenty-minute
@@ -329,26 +355,21 @@ const FreeActions = ({
           />
 
           {!usable && <Note>{copy.rangeInvalid}</Note>}
-          {tooShort && (
-            <Note>
-              {copy.tooShortToBook.replace("{minutes}", String(SHORTEST_SERVICE_MINUTES))}
-            </Note>
-          )}
+
+          {error !== null && <Critical>{error}</Critical>}
+
+          <Button busy={busy} disabled={!usable} onClick={() => onBlock(chosen, note)}>
+            {copy.blockThese.replace("{hours}", `${from}–${until}`)}
+          </Button>
+          <Button intent="quiet" disabled={busy} onClick={() => setBlocking(false)}>
+            {copy.back}
+          </Button>
         </>
       )}
 
-      {error !== null && <Critical>{error}</Critical>}
-
-      <Button busy={busy} disabled={past || !usable} onClick={() => onBlock(chosen, note)}>
-        {copy.blockThese.replace("{hours}", `${from}–${until}`)}
-      </Button>
-      {/* The obvious third thing to want, and for a long time the one thing the
-          API could not do — every route booked as the caller. It leads rather
-          than follows the blockage now: somebody who taps a gap in their day is
-          far more often filling it than shutting it. */}
-      <Button intent="quiet" disabled={past} onClick={onBook}>
-        {copy.addAppointmentTitle}
-      </Button>
+      {/* A failure from before the form was opened, which is where the reader
+          is looking. */}
+      {!blocking && error !== null && <Critical>{error}</Critical>}
     </div>
   );
 };
