@@ -85,11 +85,10 @@ export const BusinessSearch = ({
   const [loadingFavorites, setLoadingFavorites] = useState(false);
   const abort = useRef<AbortController | null>(null);
 
-  // Favoriting doesn't come from a search: without a query there is no result
-  // list to filter, so browsing favorites fetches those specific businesses.
+  // Favorites mode fetches those specific businesses once; typing then filters
+  // them in memory instead of hitting the server search.
   useEffect(() => {
-    const browsingFavorites = favoritesOnly && query.trim().length < MINIMUM_QUERY_LENGTH;
-    if (!browsingFavorites || favorites.size === 0) {
+    if (!favoritesOnly || favorites.size === 0) {
       setFavoriteBusinesses([]);
       return;
     }
@@ -111,7 +110,7 @@ export const BusinessSearch = ({
     return () => {
       cancelled = true;
     };
-  }, [favoritesOnly, favorites, query]);
+  }, [favoritesOnly, favorites]);
 
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
@@ -137,7 +136,9 @@ export const BusinessSearch = ({
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (trimmed.length < MINIMUM_QUERY_LENGTH) {
+    if (favoritesOnly || trimmed.length < MINIMUM_QUERY_LENGTH) {
+      abort.current?.abort();
+      setSearching(false);
       setResults(null);
       return;
     }
@@ -160,11 +161,17 @@ export const BusinessSearch = ({
     }, DEBOUNCE_MILLISECONDS);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, favoritesOnly]);
 
   const idle = results === null && query.trim().length < MINIMUM_QUERY_LENGTH;
 
-  const baseList = idle && favoritesOnly ? favoriteBusinesses : (results ?? []);
+  // ponytail: plain substring match, not the server's trigram tolerance — fine for a short shortlist.
+  const needle = query.trim().toLowerCase();
+  const baseList = favoritesOnly
+    ? favoriteBusinesses.filter((b) =>
+        `${b.name} ${b.address ?? ""}`.toLowerCase().includes(needle),
+      )
+    : (results ?? []);
   const withDistance = baseList.map((business) => ({
     business,
     distanceKm:
@@ -234,14 +241,16 @@ export const BusinessSearch = ({
         </div>
       )}
 
-      {query.trim().length === 1 && (
+      {!favoritesOnly && query.trim().length === 1 && (
         <p style={{ margin: 0, textAlign: "center", fontSize: 13, color: "var(--faint)" }}>
           {copy.typeMore}
         </p>
       )}
 
-      {favoritesOnly && !loadingFavorites && visible.length === 0 && (idle || baseList.length > 0) && (
-        <Empty title={copy.noFavoritesTitle} body={copy.noFavoritesBody} />
+      {favoritesOnly && !loadingFavorites && visible.length === 0 && (
+        needle === "" || favoriteBusinesses.length === 0
+          ? <Empty title={copy.noFavoritesTitle} body={copy.noFavoritesBody} />
+          : <Empty title={copy.noResults} body={copy.noResultsBody} />
       )}
 
       {!idle && results !== null && results.length === 0 && !searching && (
