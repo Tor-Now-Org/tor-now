@@ -4842,7 +4842,7 @@ test.describe("acting on something the search found", () => {
     // generic "nothing found", which read as the filter being broken.
     await page.getByRole("button", { name: "היום", exact: true }).click();
     await expect(hers).toHaveCount(0, { timeout: 15_000 });
-    await expect(page.getByText("אין לה תור היום")).toBeVisible();
+    await expect(page.getByText("אין לו תור היום")).toBeVisible();
 
     // And back out again.
     await page.getByRole("button", { name: "הכול", exact: true }).click();
@@ -5159,7 +5159,7 @@ test.describe("booking a customer in", () => {
 
     // Her day holds nothing — and says so in those words, with the way out.
     await page.getByRole("button", { name: "היום", exact: true }).click();
-    await expect(page.getByText("אין לה תור היום")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("אין לו תור היום")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("לא נמצא תור מתאים")).toHaveCount(0);
 
     // The way out works, and is one tap.
@@ -5197,7 +5197,7 @@ test.describe("booking a customer in", () => {
     // looked like it working, and was the same bug as it finding nothing on
     // every other day.
     await page.getByRole("button", { name: "היום", exact: true }).click();
-    await expect(page.getByText("אין לה תור היום")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("אין לו תור היום")).toBeVisible({ timeout: 15_000 });
   });
 
   test("the sheet always says which calendar it is booking", async ({ page }) => {
