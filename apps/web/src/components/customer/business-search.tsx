@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import type { BusinessDto } from "@/lib/api/types.ts";
+import { distanceKm, distanceLabel as formatDistance, type GeoPoint } from "@/lib/distance.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { Card, Chip, Empty } from "../ui.tsx";
 
@@ -50,20 +51,6 @@ const writeFavoritesOnly = (favoritesOnly: boolean): void => {
   } catch {
     // Without storage, the choice just doesn't survive a reload.
   }
-};
-
-type GeoPoint = { latitude: number; longitude: number };
-
-const EARTH_RADIUS_KM = 6371;
-
-const distanceKm = (a: GeoPoint, b: GeoPoint): number => {
-  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
-  const dLng = ((b.longitude - a.longitude) * Math.PI) / 180;
-  const lat1 = (a.latitude * Math.PI) / 180;
-  const lat2 = (b.latitude * Math.PI) / 180;
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 };
 
 const HeartIcon = ({ filled, size = 20 }: { filled: boolean; size?: number }) => (
@@ -265,12 +252,7 @@ export const BusinessSearch = ({
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {visible.map(({ business, distanceKm: dist }) => {
             const isFavorite = favorites.has(business.id);
-            const distanceLabel =
-              dist === null
-                ? null
-                : dist < 1
-                  ? copy.distanceMeters.replace("{value}", String(Math.round(dist * 1000)))
-                  : copy.distanceKm.replace("{value}", dist.toFixed(1));
+            const distanceLabel = dist === null ? null : formatDistance(dist, copy);
 
             return (
               <div key={business.id} style={{ position: "relative" }}>

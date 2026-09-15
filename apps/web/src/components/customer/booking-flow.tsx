@@ -11,6 +11,7 @@ import type {
   ServiceDto,
   SlotDto,
 } from "@/lib/api/types.ts";
+import { distanceKm, distanceLabel } from "@/lib/distance.ts";
 import { formatLocalDate, formatPrice, timeIn, todayIn } from "@/lib/format.ts";
 import { fillParts } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
@@ -67,6 +68,19 @@ export const BookingFlow = ({
   const [note, setNote] = useState("");
   /** Briefly true after the address is copied, where there is no share sheet. */
   const [shared, setShared] = useState(false);
+  /** Kilometres from the customer, when both they and the pin are known. */
+  const [distance, setDistance] = useState<number | null>(null);
+  useEffect(() => {
+    const { latitude, longitude } = business;
+    if (latitude == null || longitude == null || !("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => setDistance(distanceKm(position.coords, { latitude, longitude })),
+      () => {
+        // Denied or unavailable: no distance shown.
+      },
+      { timeout: 8000 },
+    );
+  }, [business]);
   /**
    * The question the API came back with, if it came back with one. Two things
    * can be worth stopping over — another of the same service today, and a time
@@ -320,6 +334,22 @@ export const BookingFlow = ({
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <h1 style={{ fontSize: 22 }}>{business.name}</h1>
         {business.address !== null && <span className="hint">{business.address}</span>}
+        {distance !== null && (
+          <span
+            style={{
+              alignSelf: "start",
+              marginTop: 4,
+              fontSize: 11.5,
+              fontWeight: 600,
+              padding: "3px 9px",
+              borderRadius: 999,
+              background: "var(--accent-soft)",
+              color: "var(--accent-strong)",
+            }}
+          >
+            {distanceLabel(distance, copy)}
+          </span>
+        )}
         {/* What the business says about itself, in its own words. Below the
             address because that is the fact a customer scans for first, and
             above the services because it is context for them. */}
