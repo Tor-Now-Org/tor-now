@@ -152,10 +152,11 @@ describe("availability", () => {
 });
 
 describe("discovery", () => {
-  it("says nothing until the query is long enough to rank", async () => {
+  it("browses every business while the query is too short to rank", async () => {
     const test = harness();
-    await anEstablishedBusiness(test);
-    expect(await test.services.discovery.search({ kind: "ANONYMOUS" }, "מ")).toEqual([]);
+    const shop = await anEstablishedBusiness(test);
+    const found = await test.services.discovery.search({ kind: "ANONYMOUS" }, "מ");
+    expect(found.map((result) => result.business.id)).toContain(shop.business.id);
   });
 
   it("finds a business by part of its name", async () => {

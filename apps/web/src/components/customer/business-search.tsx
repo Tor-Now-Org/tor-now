@@ -35,9 +35,24 @@ const STRIP_CATEGORIES: readonly BusinessCategory[] = [
   "barbershop",
   "hair_salon",
   "nail_salon",
+  "massage",
+];
+
+/** The map's chip row scrolls, so it offers more to choose from than the strip. */
+const MAP_CATEGORIES: readonly BusinessCategory[] = [
+  ...STRIP_CATEGORIES,
   "cosmetics",
   "brows_lashes",
-  "massage",
+  "hair_removal",
+  "aesthetic_clinic",
+  "spa",
+  "personal_trainer",
+  "pilates",
+  "yoga",
+  "physiotherapy",
+  "dental_clinic",
+  "pet_grooming",
+  "car_wash",
 ];
 
 const FAVORITES_STORAGE_KEY = "tor-now.favorite-businesses";
@@ -198,7 +213,8 @@ export const BusinessSearch = ({
   const text = trimmed.length < MINIMUM_QUERY_LENGTH ? "" : trimmed;
 
   useEffect(() => {
-    if (favoritesOnly || (text === "" && category === null)) {
+    // The list waits for a query or a Category; the map browses everything nearby.
+    if (favoritesOnly || (text === "" && category === null && !mapOpen)) {
       abort.current?.abort();
       setSearching(false);
       setResults(null);
@@ -224,7 +240,7 @@ export const BusinessSearch = ({
     }, DEBOUNCE_MILLISECONDS);
 
     return () => clearTimeout(timer);
-  }, [text, category, favoritesOnly, userPos]);
+  }, [text, category, favoritesOnly, userPos, mapOpen]);
 
   // ponytail: plain substring match, not the server's trigram tolerance — fine for a short shortlist.
   const needle = trimmed.toLowerCase();
@@ -308,6 +324,8 @@ export const BusinessSearch = ({
       ? STRIP_CATEGORIES
       : // A category picked from "more" takes the last slot, so the strip never grows.
         [category, ...STRIP_CATEGORIES.slice(0, -1)];
+  const mapCategories =
+    category === null || MAP_CATEGORIES.includes(category) ? MAP_CATEGORIES : [category, ...MAP_CATEGORIES];
 
   return (
     <div style={{ padding: "28px 18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -585,7 +603,7 @@ export const BusinessSearch = ({
           query={query}
           onQuery={setQuery}
           category={category}
-          categories={stripCategories}
+          categories={mapCategories}
           onCategory={chooseCategory}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}

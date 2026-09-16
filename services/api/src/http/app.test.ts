@@ -339,6 +339,17 @@ describe("closing the business over HTTP", () => {
     expect(reopened.body).toMatchObject({ removed: 3 });
   });
 
+  it("refuses to clear a business's location, which search needs to show it", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001");
+    const businessId = ((await api.post("/businesses", A_BUSINESS, owner.token)).body as {
+      id: string;
+    }).id;
+
+    const answer = await api.patch(`/businesses/${businessId}`, { latitude: null, longitude: null }, owner.token);
+    expect(answer.status).toBe(400);
+  });
+
   it("refuses a closure that ends before it starts, at the boundary", async () => {
     const api = httpHarness();
     const owner = await signInOverHttp(api, "+972500000001");

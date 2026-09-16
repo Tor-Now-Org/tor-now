@@ -14,9 +14,9 @@ import { AllCategoriesIcon, CategoryIcon } from "./category-icons.tsx";
 import { HeartIcon, tagStyle } from "./business-search.tsx";
 
 /**
- * The search results, drawn where they are. Deliberately never "every business":
- * the map only ever shows what the search in `BusinessSearch` found, and searching
- * in here changes that same search — so closing the map lands on the same list.
+ * The search results, drawn where they are. With no query or Category the map
+ * browses every Business nearby (up to the search's result cap); searching in here
+ * changes that same search — so closing the map lands on the same list.
  */
 
 export type MapEntry = { readonly business: BusinessDto; readonly distanceKm: number | null };
@@ -91,7 +91,7 @@ export const BusinessMap = ({
   const [map, setMap] = useState<L.Map | null>(null);
   const meIcon = useMemo(() => userIcon(copy.youAreHere), [copy.youAreHere]);
 
-  // A business with no coordinates has nowhere to stand; it stays on the list only.
+  // Search never returns a business without coordinates, but Favorites are fetched by id and still can.
   const located: Located[] = entries.flatMap((entry) =>
     entry.business.latitude != null && entry.business.longitude != null
       ? [{ ...entry, position: [entry.business.latitude, entry.business.longitude] as [number, number] }]

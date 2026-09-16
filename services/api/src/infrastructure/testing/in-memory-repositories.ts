@@ -189,7 +189,14 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       async search({ text, category, inferred, near }) {
         const needle = text.toLowerCase();
         return store.businesses
-          .filter((business) => business.active && (category === null || business.category === category))
+          .filter(
+            (business) =>
+              business.active &&
+              (category === null || business.category === category) &&
+              // A location is required to register; one without it is not discoverable.
+              business.latitude !== null &&
+              business.longitude !== null,
+          )
           .flatMap((business) => {
             const name = business.name.toLowerCase();
             const byName = needle !== "" && name.includes(needle);

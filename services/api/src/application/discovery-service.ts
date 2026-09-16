@@ -107,8 +107,8 @@ export const discoveryService = ({
   ): Promise<readonly SearchResult[]> {
     const trimmed = query.trim();
     const text = trimmed.length < SEARCH.minimumQueryLength ? "" : trimmed;
+    // Nothing typed and no Category is the map's browse: every Business, nearest first.
     const category = options.category ?? null;
-    if (text === "" && category === null) return [];
 
     return unitOfWork.run(actor, async ({ repositories }) => {
       const results = await repositories.businesses.search({

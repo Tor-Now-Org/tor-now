@@ -450,7 +450,7 @@ export const BusinessPanel = ({
             <AddressAutocomplete
               id="s-address"
               label={copy.fAddress}
-              hint={copy.fAddressHint}
+              hint={settings.latitude == null || settings.longitude == null ? copy.fLocationMissing : copy.fAddressHint}
               value={settings.address ?? ""}
               language={language}
               onSelect={(pickedAddress, lat, lng) => {
@@ -537,9 +537,10 @@ export const BusinessPanel = ({
                 await api.updateBusiness(token, business.id, {
                   name: settings.name,
                   phone: settings.phone,
-                  address: settings.address === "" ? null : settings.address,
-                  latitude: settings.latitude ?? null,
-                  longitude: settings.longitude ?? null,
+                  // A location is never cleared: the address and its pin go only as a chosen pair.
+                  ...(settings.latitude == null || settings.longitude == null
+                    ? {}
+                    : { address: settings.address, latitude: settings.latitude, longitude: settings.longitude }),
                   // Changeable, never clearable: nothing is sent until one is chosen.
                   ...(settings.category == null ? {} : { category: settings.category }),
                   description: settings.description === "" ? null : settings.description,

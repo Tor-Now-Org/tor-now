@@ -164,6 +164,8 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
       from business
       where active
         and (${category}::text is null or category = ${category}::text)
+        -- A location is required to register; one without it is not discoverable.
+        and latitude is not null and longitude is not null
         and (${text} = ''
              or name operator(extensions.%) ${text}
              or name ilike ${"%" + text + "%"}

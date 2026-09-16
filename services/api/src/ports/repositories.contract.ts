@@ -73,8 +73,9 @@ export const describeRepositoryContract = (
         timeZone: "Asia/Jerusalem",
         description: null,
         address: null,
-        latitude: null,
-        longitude: null,
+        // Registration requires a location, and search skips a Business without one.
+        latitude: 32.0853,
+        longitude: 34.7818,
         category: null,
       });
       await repositories.memberships.create(owner.id, business.id, "OWNER");
@@ -1782,6 +1783,19 @@ export const describeRepositoryContract = (
             (result) => result.business.id,
           ),
         ).not.toContain(context.business.id);
+      });
+    });
+
+    it("leaves a business with no location out of every search", async () => {
+      await withRepositories(async (repositories) => {
+        const nowhere = await aBookableBusiness(repositories, "06005");
+        await repositories.businesses.update(nowhere.business.id, { latitude: null, longitude: null });
+        const ids = async (text: string) =>
+          (await repositories.businesses.search({ text, category: null, inferred: [], near: null })).map(
+            (result) => result.business.id,
+          );
+        expect(await ids("")).not.toContain(nowhere.business.id);
+        expect(await ids(nowhere.business.name)).not.toContain(nowhere.business.id);
       });
     });
 

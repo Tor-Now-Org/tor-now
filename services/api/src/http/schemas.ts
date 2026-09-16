@@ -187,8 +187,9 @@ export const updateBusinessSchema = z.object({
   timeZone: z.string().min(1).optional(),
   description: text(TEXT_RULES.description).nullable().optional(),
   address: text(TEXT_RULES.address).nullable().optional(),
-  latitude: z.number().min(-90).max(90).nullable().optional(),
-  longitude: z.number().min(-180).max(180).nullable().optional(),
+  // Required to register and what search needs to show it: changeable, never clearable.
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   // ADR 0017: changeable, never clearable — a business that has one keeps one.
   category: z.enum(BUSINESS_CATEGORIES).optional(),
   instagram: instagramSchema.nullable().optional(),
