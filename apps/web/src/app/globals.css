@@ -272,6 +272,120 @@ body {
 }
 
 
+/* The search map. Full screen over everything, the chrome floating on it: a
+   search at the top and one business at a time in a sheet at the bottom. At
+   tablet width the two join into a single panel at the inline start. */
+/* Floats over the results, clear of the bottom bar; the dock spans the screen
+   and skips the rail so the pill centres on the content, in either direction. */
+.map-pill-dock {
+  position: fixed; inset-inline: 0; z-index: 10; pointer-events: none;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  padding-inline-start: var(--rail);
+  display: flex; justify-content: center;
+}
+.map-pill {
+  pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--ink); color: var(--paper);
+  border-radius: 999px; padding: 10px 18px;
+  font-family: "Rubik", sans-serif; font-weight: 600; font-size: 14.5px;
+  box-shadow: var(--shadow);
+}
+.map-pill-count {
+  background: var(--brand-cyan); color: var(--brand-navy);
+  border-radius: 999px; padding: 0 8px; font-size: 12.5px;
+}
+.map-view { position: fixed; inset: 0; z-index: 40; background: var(--sunken); }
+.map-panel {
+  position: absolute; inset: 0; z-index: 1100; pointer-events: none;
+  display: flex; flex-direction: column;
+  padding-top: calc(12px + env(safe-area-inset-top));
+}
+.map-panel > * { pointer-events: auto; }
+.map-panel-top { display: flex; flex-direction: column; gap: 10px; padding-inline: 12px; margin-bottom: auto; }
+.map-round {
+  width: 46px; height: 46px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: 14px; background: var(--raised); color: var(--ink); box-shadow: var(--shadow);
+}
+.map-search {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  background: var(--raised); border-radius: 14px; box-shadow: var(--shadow); padding-inline: 14px;
+}
+.map-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font-size: 16px; padding: 12px 0; }
+.map-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: -12px; padding: 2px 12px 6px; }
+.map-chips::-webkit-scrollbar { display: none; }
+.map-sheet {
+  display: flex; flex-direction: column; gap: 14px;
+  background: var(--raised);
+  border-start-start-radius: 22px; border-start-end-radius: 22px;
+  box-shadow: 0 -8px 30px -12px oklch(25% 0.055 258 / .35);
+  padding: 16px 18px calc(18px + env(safe-area-inset-bottom));
+}
+.map-sheet-icon {
+  width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: 13px; background: var(--accent-soft); color: var(--accent-strong);
+}
+.map-sheet-name {
+  font-family: "Rubik", sans-serif; font-weight: 600; font-size: 17px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.map-pin { position: relative; display: block; width: 34px; height: 42px; }
+.map-pin::before {
+  content: ""; position: absolute; inset: 0 0 8px;
+  border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: var(--brand-navy); border: 2px solid #fff;
+  box-shadow: 0 3px 8px oklch(25% 0.055 258 / .35);
+  transition: transform .15s ease, background .15s ease;
+}
+.map-pin > span { position: absolute; inset: 0 0 8px; display: grid; place-items: center; color: #fff; }
+.map-pin.selected::before {
+  background: var(--brand-cyan);
+  transform: rotate(-45deg) scale(1.25);
+  box-shadow: 0 0 0 5px oklch(70% 0.122 209 / .35), 0 3px 8px oklch(25% 0.055 258 / .35);
+}
+.map-pin.selected > span { color: var(--brand-navy); }
+.map-me {
+  position: relative; display: block; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); border: 3px solid #fff;
+  box-shadow: 0 1px 4px oklch(25% 0.055 258 / .4);
+}
+.map-me-ring {
+  position: absolute; inset: -3px; z-index: -1; border-radius: 50%;
+  background: oklch(52% 0.123 245 / .25);
+  animation: map-me-pulse 2s ease-out infinite;
+}
+.map-me-ring + .map-me-ring { animation-delay: 1s; }
+@keyframes map-me-pulse { from { transform: scale(1); opacity: 1; } to { transform: scale(5); opacity: 0; } }
+.map-me-label {
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  white-space: nowrap; pointer-events: none;
+  background: var(--accent); color: #fff; border-radius: 999px; padding: 3px 11px;
+  font-family: "Rubik", sans-serif; font-weight: 600; font-size: 12.5px;
+  box-shadow: var(--shadow);
+  animation: map-me-label 4.5s ease forwards;
+}
+.map-me-label::after {
+  content: ""; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px;
+  background: inherit; transform: translateX(-50%) rotate(45deg);
+}
+@keyframes map-me-label { 85% { opacity: 1; } to { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .map-me-ring { animation: none; opacity: .6; transform: scale(2); } }
+.map-recenter { display: flex; justify-content: flex-end; padding: 0 12px 12px; }
+
+@media (min-width: 720px) {
+  .map-panel {
+    inset-block: 16px auto; inset-inline: 16px auto; width: 360px; max-height: calc(100% - 32px);
+    justify-content: flex-start; padding: 0;
+    background: var(--raised); border-radius: 18px; box-shadow: var(--shadow); overflow-y: auto;
+  }
+  .map-panel-top { padding: 12px; }
+  .map-panel-top .map-round, .map-search { box-shadow: none; background: var(--sunken); }
+  .map-chips { flex-wrap: wrap; overflow: visible; }
+  .map-sheet { border-radius: 0; box-shadow: none; border-top: 1px solid var(--line); padding: 14px; }
+  /* The panel is a side card here, so the button goes back to the map's own corner. */
+  .map-recenter { position: fixed; bottom: 24px; inset-inline-end: 16px; padding: 0; }
+}
+
 /* ---------------------------------------------------------------------------
  * Desktop.
  *
@@ -370,6 +484,9 @@ body {
 
   /* The toast cleared the bottom bar, which is no longer there. */
   .toast { position: absolute; bottom: 26px; }
+
+  /* No bottom bar to clear. */
+  .map-pill-dock { bottom: 56px; }
 }
 
 /* One square of the owner's month grid. Square-ish rather than tall, so a month
@@ -460,4 +577,15 @@ body {
    also look reachable when there is a cursor to put on them. */
 @media (hover: hover) and (pointer: fine) {
   .card button:hover, button.card:hover { border-color: var(--accent); }
+}
+
+/* OpenStreetMap's credit must stay visible; on a phone the sheet covers the bottom corners. */
+@media (max-width: 719px) {
+  .map-view .leaflet-bottom { bottom: auto; top: calc(120px + env(safe-area-inset-top)); }
+}
+
+.business-search-box { min-height: 56px; padding: 0 16px; }
+/* Smaller on a phone; the input keeps 16px text so iOS doesn't zoom on focus. */
+@media (max-width: 719px) {
+  .business-search-box { min-height: 46px; padding: 0 12px; border-radius: 12px; }
 }

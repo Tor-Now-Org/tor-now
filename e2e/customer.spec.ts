@@ -64,6 +64,38 @@ test.describe("finding and booking", () => {
     await expect(page).toHaveURL(/\/business\/[0-9a-f-]{36}$/);
   });
 
+  test("puts the search on a map, and a pin opens the business", async ({ page, context }) => {
+    const name = `מספרת מפה ${Date.now()}`;
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation({ latitude: 32.08, longitude: 34.78 });
+    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+
+    await page.goto("/");
+    await ready(page);
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name);
+    const pill = page.getByRole("button", { name: /^מפה/ });
+    await expect(pill).toBeVisible({ timeout: 15_000 });
+    await pill.click();
+
+    const map = page.getByRole("dialog", { name: "מפה" });
+    // The customer is marked, and named, and can always get back to themselves.
+    await expect(map.getByText("אתם כאן")).toBeVisible();
+    await map.getByRole("button", { name: "חזרה למיקום שלי" }).click();
+    // Every fixture stands at the same coordinates, so the other viewport's pin can
+    // sit on top of this one; the click goes to the pin itself, not the point.
+    await map.getByTitle(name).dispatchEvent("click");
+    await expect(map.getByText(name)).toBeVisible();
+
+    // Clearing the search empties the map rather than showing everything.
+    await map.getByRole("searchbox").fill("");
+    await expect(map.getByTitle(name)).toHaveCount(0);
+    await map.getByRole("searchbox").fill(name);
+
+    await map.getByTitle(name).dispatchEvent("click");
+    await map.getByRole("button", { name: "לקביעת תור" }).click();
+    await expect(page.getByText("בוחרים שירות")).toBeVisible();
+  });
+
   test("narrows a search to a category picked from the dropdown, shown on the strip", async ({ page }) => {
     const name = `מספרת קטגוריה ${Date.now()}`;
     await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });

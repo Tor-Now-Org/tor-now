@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { categoryLabel, matchCategories, OTHER_CATEGORY, type BusinessCategory } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
@@ -10,6 +11,9 @@ import { CategoryAutocomplete } from "../category-autocomplete.tsx";
 import { moveIndex } from "../owner/address-suggestions.ts";
 import { Card, Chip, Empty } from "../ui.tsx";
 import { AllCategoriesIcon, CategoryIcon } from "./category-icons.tsx";
+
+// Leaflet touches `window` on import, so the map loads only in the browser, and only once opened.
+const BusinessMap = dynamic(() => import("./business-map.tsx").then((mod) => mod.BusinessMap), { ssr: false });
 
 /**
  * ADR 0011: trigram matching tolerates a name the customer half-remembers, so
@@ -34,17 +38,14 @@ const STRIP_CATEGORIES: readonly BusinessCategory[] = [
   "cosmetics",
   "brows_lashes",
   "massage",
-  "personal_trainer",
-  "pilates",
-  "dental_clinic",
-  "physiotherapy",
-  "pet_grooming",
-  "private_tutor",
 ];
 
 const FAVORITES_STORAGE_KEY = "tor-now.favorite-businesses";
 
 /** Never persisted server-side — the point is a device-local shortlist. */
+// Search filters sit above results; smaller than the shared .chip default.
+const compactChip = { minHeight: 36, padding: "0 12px", fontSize: 13 };
+
 export const readFavorites = (): Set<string> => {
   try {
     const raw = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
@@ -123,6 +124,7 @@ export const BusinessSearch = ({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [listOpen, setListOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [results, setResults] = useState<BusinessDto[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -304,7 +306,8 @@ export const BusinessSearch = ({
   const stripCategories =
     category === null || STRIP_CATEGORIES.includes(category)
       ? STRIP_CATEGORIES
-      : [category, ...STRIP_CATEGORIES];
+      : // A category picked from "more" takes the last slot, so the strip never grows.
+        [category, ...STRIP_CATEGORIES.slice(0, -1)];
 
   return (
     <div style={{ padding: "28px 18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -320,7 +323,7 @@ export const BusinessSearch = ({
       </div>
 
       <div style={{ position: "relative" }}>
-        <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 16px", minHeight: 56 }}>
+        <div className="card business-search-box" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
             <circle cx="11" cy="11" r="7" stroke="var(--faint)" strokeWidth="2" />
             <path d="m16.5 16.5 4 4" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" />
@@ -375,7 +378,7 @@ export const BusinessSearch = ({
                 : copy.searchWithin.replace("{category}", categoryLabel(category, language))
             }
             aria-label={copy.searchPlaceholder}
-            style={{ flex: 1, minWidth: 0, background: "transparent", border: 0, outline: "none", fontSize: 16, padding: "14px 0" }}
+            style={{ flex: 1, minWidth: 0, background: "transparent", border: 0, outline: "none", fontSize: 16, padding: 0 }}
           />
           {searching && <span className="spinner" />}
         </div>
@@ -494,8 +497,8 @@ export const BusinessSearch = ({
           scrollbarWidth: "none",
         }}
       >
-        <Chip selected={category === null && !pickerOpen} onClick={() => chooseCategory(null)} style={{ gap: 6, flexShrink: 0 }}>
-          <AllCategoriesIcon size={14} />
+        <Chip selected={category === null && !pickerOpen} onClick={() => chooseCategory(null)} style={{ ...compactChip, gap: 6, flexShrink: 0 }}>
+          <AllCategoriesIcon size={13} />
           {copy.allBusinesses}
         </Chip>
         {stripCategories.map((code) => (
@@ -503,13 +506,13 @@ export const BusinessSearch = ({
             key={code}
             selected={category === code}
             onClick={() => chooseCategory(category === code ? null : code)}
-            style={{ gap: 6, flexShrink: 0, whiteSpace: "nowrap" }}
+            style={{ ...compactChip, gap: 6, flexShrink: 0, whiteSpace: "nowrap" }}
           >
-            <CategoryIcon category={code} size={14} />
+            <CategoryIcon category={code} size={13} />
             {categoryLabel(code, language)}
           </Chip>
         ))}
-        <Chip selected={pickerOpen} onClick={() => setPickerOpen(!pickerOpen)} aria-expanded={pickerOpen} style={{ flexShrink: 0 }}>
+        <Chip selected={pickerOpen} onClick={() => setPickerOpen(!pickerOpen)} aria-expanded={pickerOpen} style={{ ...compactChip, flexShrink: 0 }}>
           {copy.moreCategories}
         </Chip>
       </div>
@@ -526,13 +529,14 @@ export const BusinessSearch = ({
       )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Chip selected={openNowOnly} onClick={() => setOpenNowOnly(!openNowOnly)}>
+        <Chip selected={openNowOnly} onClick={() => setOpenNowOnly(!openNowOnly)} style={compactChip}>
           {copy.openNow}
         </Chip>
         <Chip
           selected={favoritesOnly}
           onClick={() => setFavoritesOnly(!favoritesOnly)}
           style={{
+            ...compactChip,
             gap: 6,
             ...(favoritesOnly && {
               background: "var(--critical-soft)",
@@ -543,7 +547,7 @@ export const BusinessSearch = ({
         >
           {copy.favoritesOnly}
           <span style={{ color: favoritesOnly ? "var(--critical)" : "var(--faint)", display: "inline-flex" }}>
-            <HeartIcon filled={favoritesOnly} size={15} />
+            <HeartIcon filled={favoritesOnly} size={13} />
           </span>
         </Chip>
       </div>
@@ -572,8 +576,26 @@ export const BusinessSearch = ({
           : <Empty title={copy.noResults} body={copy.noResultsBody} />
       )}
 
+      {mapOpen && (
+        <BusinessMap
+          entries={visible}
+          hasSearch={favoritesOnly || results !== null || searching}
+          searching={searching || loadingFavorites}
+          userPos={userPos}
+          query={query}
+          onQuery={setQuery}
+          category={category}
+          categories={stripCategories}
+          onCategory={chooseCategory}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+          onOpen={onOpen}
+          onClose={() => setMapOpen(false)}
+        />
+      )}
+
       {visible.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 64 }}>
           <span className="hint" role="status">
             {visible.length === 1 ? copy.resultCountOne : copy.resultCount.replace("{count}", String(visible.length))}
             {userPos !== null && ` · ${copy.nearestFirst}`}
@@ -656,6 +678,16 @@ export const BusinessSearch = ({
           })}
         </div>
       )}
+
+      <div className="map-pill-dock">
+        <button type="button" className="map-pill" onClick={() => setMapOpen(true)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          </svg>
+          {copy.mapButton}
+          {visible.length > 0 && <span className="map-pill-count">{visible.length}</span>}
+        </button>
+      </div>
     </div>
   );
 };
