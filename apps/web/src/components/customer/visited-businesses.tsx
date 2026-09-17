@@ -19,7 +19,10 @@ const visitedBusinesses = (appointments: MyAppointmentDto[]) => {
     .filter((appointment) => outcomeOfDto(appointment) === "FINISHED")
     .sort((a, b) => Date.parse(b.endAt) - Date.parse(a.endAt));
 
-  const byBusiness = new Map<string, { businessId: string; businessName: string; lastVisitAt: string; visits: number }>();
+  const byBusiness = new Map<
+    string,
+    { businessId: string; businessName: string; businessAddress: string | null; lastVisitAt: string; visits: number }
+  >();
   for (const appointment of finished) {
     const known = byBusiness.get(appointment.businessId);
     if (known !== undefined) known.visits += 1;
@@ -27,6 +30,7 @@ const visitedBusinesses = (appointments: MyAppointmentDto[]) => {
       byBusiness.set(appointment.businessId, {
         businessId: appointment.businessId,
         businessName: appointment.businessName,
+        businessAddress: appointment.businessAddress,
         lastVisitAt: appointment.endAt,
         visits: 1,
       });
@@ -114,7 +118,7 @@ export const VisitedBusinesses = ({
 
       {businesses.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {businesses.map(({ businessId, businessName, lastVisitAt, visits }) => {
+          {businesses.map(({ businessId, businessName, businessAddress, lastVisitAt, visits }) => {
             const business = profiles.get(businessId);
             const isFavorite = favorites.has(businessId);
 
@@ -140,7 +144,10 @@ export const VisitedBusinesses = ({
                       <span style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 16.5 }}>
                         {business?.name ?? businessName}
                       </span>
-                      {business?.address != null && <span className="hint">{business.address}</span>}
+                      {/* The appointment already carries the address — waiting for the profile made the line pop in late. */}
+                      {(business?.address ?? businessAddress) != null && (
+                        <span className="hint">{business?.address ?? businessAddress}</span>
+                      )}
                       <span className="hint">{copy.lastVisit.replace("{date}", dateFormat.format(new Date(lastVisitAt)))}</span>
                       <span style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                         {business?.category != null && (
