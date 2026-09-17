@@ -3900,10 +3900,24 @@ test.describe("the calendar, altogether", () => {
     throw new Error("no Saturday ahead");
   };
 
+  /** The soonest day this shop actually works, which is any day but Saturday. */
+  const aWorkingDayAhead = (notThis: string): string => {
+    for (let ahead = 2; ahead < 20; ahead += 1) {
+      const date = aDayFromNow(ahead);
+      if (date !== notThis && new Date(`${date}T00:00:00Z`).getUTCDay() !== 6) return date;
+    }
+    throw new Error("no working day ahead");
+  };
+
   test("tells a day nobody works from a day somebody closed", async ({ page }) => {
     const shop = await aWeekdayBusiness(`מנוחה ${Date.now()}`);
     const rest = aRestDay();
-    const shut = aDayFromNow(new Date(`${rest}T00:00:00Z`).getUTCDay() === 6 ? 2 : 2);
+    // A day the shop does work, so the two squares are telling two different
+    // stories. Taking whatever fell two days ahead meant that on a Thursday it
+    // fell on the rest day itself and the test compared a square with itself —
+    // and the ternary written to avoid exactly that had the same number in
+    // both branches.
+    const shut = aWorkingDayAhead(rest);
     await call(`/businesses/${shop.business.id}/closures`, {
       method: "POST",
       token: shop.owner.token,
@@ -5303,5 +5317,131 @@ test.describe("booking a customer in", () => {
     });
     await page.getByRole("button", { name: /^קביעה ל־/ }).click();
     await expect(page.getByText("אביגיל").first()).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+/**
+ * Recovery time after an appointment.
+ *
+ * The domain has covered this since it was written; what had never been checked
+ * end to end is that it survives the round trip — saved on the service, read
+ * back, and honoured by the availability every screen books from. It is
+ * deliberately invisible to the customer: they see a time offered or not
+ * offered, never the reason.
+ */
+test.describe("the recovery time after an appointment", () => {
+  const clockIn = (instant: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Jerusalem",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(instant));
+
+  const slotsFor = async (
+    businessId: string,
+    serviceId: string,
+    resourceId: string,
+    day: string,
+  ) => {
+    const [found] = await call<{ slots: { startAt: string }[] }[]>(
+      `/businesses/${businessId}/availability?serviceId=${serviceId}` +
+        `&resourceId=${resourceId}&from=${day}&to=${day}`,
+    );
+    return (found?.slots ?? []).map((slot) => clockIn(slot.startAt));
+  };
+
+  test("is taken out of the day, on top of the appointment itself", async () => {
+    const shop = await aBusinessWithOpenHours({
+      name: `התאוששות ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+      durationMinutes: 30,
+    });
+    await call(`/businesses/${shop.business.id}/services/${shop.service.id}`, {
+      method: "PATCH",
+      token: shop.owner.token,
+      body: { bufferMinutes: 15 },
+    });
+
+    const day = aDayFromNow(3);
+    const offered = await slotsFor(shop.business.id, shop.service.id, shop.resource.id, day);
+
+    // Thirty minutes of haircut and fifteen of recovery is a forty-five minute
+    // hole in the day, so that is how far apart the starts are.
+    expect(offered.slice(0, 3)).toEqual(["09:00", "09:45", "10:30"]);
+  });
+
+  test("keeps another service out of it, which has no recovery of its own", async () => {
+    const shop = await aBusinessWithOpenHours({
+      name: `התאוששות בין שירותים ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+      durationMinutes: 30,
+    });
+    await call(`/businesses/${shop.business.id}/services/${shop.service.id}`, {
+      method: "PATCH",
+      token: shop.owner.token,
+      body: { bufferMinutes: 15 },
+    });
+    const plain = await call<{ id: string }>(`/businesses/${shop.business.id}/services`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "פן", durationMinutes: 30, priceMinor: 6000, bufferMinutes: 0 },
+    });
+
+    const day = aDayFromNow(4);
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
+    });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name: { givenName: "דנה", familyName: "כהן" } },
+    });
+    const first = await slotsFor(shop.business.id, shop.service.id, shop.resource.id, day);
+    expect(first[0]).toBe("09:00");
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: `${day}T06:00:00.000Z`,
+        customerNote: null,
+      },
+    });
+
+    // The other service steps by thirty minutes of its own, so its grid would
+    // land on 09:30 — which is inside the first appointment's recovery. The
+    // recovery belongs to the calendar, not to the service that caused it.
+    const after = await slotsFor(shop.business.id, plain.id, shop.resource.id, day);
+    expect(after).not.toContain("09:30");
+    expect(after[0]).toBe("09:45");
+  });
+
+  test("falls back to the business's own, for a service that sets none", async () => {
+    const shop = await aBusinessWithOpenHours({
+      name: `ברירת מחדל ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+      durationMinutes: 30,
+    });
+    await call(`/businesses/${shop.business.id}/services/${shop.service.id}`, {
+      method: "PATCH",
+      token: shop.owner.token,
+      body: { bufferMinutes: null },
+    });
+    await call(`/businesses/${shop.business.id}`, {
+      method: "PATCH",
+      token: shop.owner.token,
+      body: { defaultBufferMinutes: 20 },
+    });
+
+    const day = aDayFromNow(5);
+    const offered = await slotsFor(shop.business.id, shop.service.id, shop.resource.id, day);
+    expect(offered.slice(0, 3)).toEqual(["09:00", "09:50", "10:40"]);
   });
 });
