@@ -6,6 +6,7 @@ import {
   theNextStart,
   anInstantAt,
   call,
+  openTheDayOf,
   pickACategory,
   pickAnAddress,
   stubAddressSearch,
@@ -2679,7 +2680,7 @@ test.describe("reading a day at a glance", () => {
     );
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
 
     const drawn = page.getByRole("button", { name: /דגם\d\d/ });
     await expect(drawn).toHaveCount(3, { timeout: 15_000 });
@@ -3132,7 +3133,7 @@ test.describe("a day the shop keeps its own hours", () => {
     await openCalendar(page, shop, shop.owner.token);
     await page.getByRole("button", { name: "הוספה ליום" }).click();
     await page.getByRole("button", { name: /יום מיוחד לעסק/ }).click();
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
     await page.getByRole("button", { name: "המשך" }).click();
 
     // Whose chair it is, because closing touches every calendar and a list of
@@ -3598,7 +3599,7 @@ test.describe("telling one thing from another on a day", () => {
     );
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
 
     const drawn = page.getByRole("button", { name: /דגם\d/ });
     await expect(drawn).toHaveCount(4, { timeout: 15_000 });
@@ -3803,7 +3804,7 @@ test.describe("a day the shop is closed on", () => {
     );
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
 
     // It used to draw as a quiet day: hours of free time, every stretch of it
     // inviting a booking, and nothing saying the shop was shut.
@@ -3837,7 +3838,7 @@ test.describe("the note on something being made", () => {
     const aim = async (day: string, note: string) => {
       await page.getByRole("button", { name: "הוספה ליום" }).click();
       await page.getByRole("button", { name: /חסימה/ }).first().click();
-      await page.getByRole("button", { name: day }).click();
+      await openTheDayOf(page, day);
       await page.getByRole("button", { name: "המשך" }).click();
       const sheet = page.getByRole("dialog");
       await expect(sheet.getByLabel("הערה (לא חובה)")).toHaveValue("");
@@ -3963,7 +3964,7 @@ test.describe("the calendar, altogether", () => {
     });
 
     await openCalendar(page, shop, shop.owner.token);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
 
     // Standing on the day itself, the words are right there rather than up in
     // the month's band — and so is putting them right.
@@ -3994,7 +3995,7 @@ test.describe("the calendar, altogether", () => {
     await openCalendar(page, shop, shop.owner.token);
     await page.getByRole("button", { name: "הוספה ליום" }).click();
     await page.getByRole("button", { name: /חסימה/ }).first().click();
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
     await page.getByRole("button", { name: "המשך" }).click();
     const sheet = page.getByRole("dialog");
     await sheet.getByRole("button", { name: "כל היום" }).click();
@@ -4218,7 +4219,7 @@ test.describe("the day as long as it really is", () => {
     });
 
     await openCalendarAs(page, shop);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
 
     // The empty day folds into one stretch, and the stretch is labelled with
     // the hours it covers — which is the window, said out loud. It used to read
@@ -4251,7 +4252,7 @@ test.describe("the day as long as it really is", () => {
     });
 
     await openCalendarAs(page, shop);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
 
     // 09:00 to 14:00 is free and folds; the blockage holds the rest. Neither
     // edge of the day has an hour of nothing beyond it.
@@ -4283,7 +4284,7 @@ test.describe("the day as long as it really is", () => {
     });
 
     await openCalendarAs(page, shop);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
 
     await expect(page.getByText("11:00–17:00")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("08:00", { exact: true })).toHaveCount(0);
@@ -4368,7 +4369,7 @@ test.describe("a day nobody works, and why nobody works it", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
 
     await expect(page.getByText("סגור כל היום")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("חופשה")).toBeVisible();
@@ -4933,7 +4934,7 @@ test.describe("booking a customer in", () => {
     const day = aDayFromNow(4);
 
     await openCalendarAs(page, shop);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
 
     // A whole empty day is folded, so the first tap opens the fold and the
     // second is the stretch itself.
@@ -4970,7 +4971,7 @@ test.describe("booking a customer in", () => {
     const day = aDayFromNow(5);
 
     await openCalendarAs(page, shop);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
     await page.getByRole("button", { name: /פנוי/ }).first().click();
     await page.getByRole("button", { name: /פנוי/ }).first().click();
     await page.getByRole("dialog").getByRole("button", { name: "תור ללקוח" }).click();
@@ -5004,7 +5005,7 @@ test.describe("booking a customer in", () => {
     // A blockage takes a run of days; an appointment takes one, and the banner
     // says so rather than letting somebody build a selection it cannot use.
     await expect(page.getByText("בחירת יום לתור")).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
     await page.getByRole("button", { name: "המשך" }).click();
 
     await page.getByPlaceholder("חיפוש לפי שם או טלפון").fill("תמר");
@@ -5078,7 +5079,7 @@ test.describe("booking a customer in", () => {
 
     // The same day-choosing the + uses, except it says who it is for.
     await expect(page.getByText(/בחירת יום לתור · תמר/)).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: later }).click();
+    await openTheDayOf(page, later);
     await page.getByRole("button", { name: "המשך" }).click();
 
     // And she is already in the sheet — no searching for somebody the screen
@@ -5103,7 +5104,7 @@ test.describe("booking a customer in", () => {
     const day = aDayFromNow(13);
 
     await openCalendarAs(page, shop);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
     await page.getByRole("button", { name: /פנוי/ }).first().click();
     await page.getByRole("button", { name: /פנוי/ }).first().click();
 
@@ -5201,7 +5202,7 @@ test.describe("booking a customer in", () => {
 
     // Read a day that is not today — the day her appointment is on, in fact.
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: elsewhere }).click();
+    await openTheDayOf(page, elsewhere);
 
     await openTheSearch(page);
     await page.getByPlaceholder("חיפוש תור לפי שם או טלפון").fill("תמר");
@@ -5242,7 +5243,7 @@ test.describe("booking a customer in", () => {
     const day = aDayFromNow(11);
 
     await openCalendarAs(page, shop);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
     await page.getByRole("button", { name: /פנוי/ }).first().click();
     await page.getByRole("button", { name: /פנוי/ }).first().click();
     await page.getByRole("dialog").getByRole("button", { name: "תור ללקוח" }).click();
@@ -5280,7 +5281,7 @@ test.describe("booking a customer in", () => {
 
     // Back on the calendar, with her along and only a day left to choose.
     await expect(page.getByText(/בחירת יום לתור · תמר/)).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: later }).click();
+    await openTheDayOf(page, later);
     await page.getByRole("button", { name: "המשך" }).click();
 
     const sheet = page.getByRole("dialog");
@@ -5300,7 +5301,7 @@ test.describe("booking a customer in", () => {
     const day = aDayFromNow(6);
 
     await openCalendarAs(page, shop);
-    await page.getByRole("button", { name: day }).click();
+    await openTheDayOf(page, day);
     await page.getByRole("button", { name: /פנוי/ }).first().click();
     await page.getByRole("button", { name: /פנוי/ }).first().click();
     await page.getByRole("dialog").getByRole("button", { name: "תור ללקוח" }).click();

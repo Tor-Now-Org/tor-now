@@ -112,7 +112,13 @@ export const scaleOf = (window: Span, folds: readonly Span[]) => {
         cursor = Math.min(minute, fold.end);
       }
     }
-    return pixels + (minute - cursor) * PIXELS_PER_MINUTE;
+    // Whole pixels. A fold spends its minutes over a fixed height, so every
+    // minute inside one lands on a fraction — and a one-pixel border at half a
+    // pixel is drawn across two rows at half strength each, which is what made
+    // the dashes round a free stretch look like a smudged line rather than a
+    // dashed one. Rounding here rather than at each caller keeps every lane on
+    // the same mapping, which is what holds ten o'clock level across them.
+    return Math.round(pixels + (minute - cursor) * PIXELS_PER_MINUTE);
   };
   return { y, height: y(window.end), folds: ordered };
 };

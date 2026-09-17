@@ -289,7 +289,7 @@ export const DayTimeline = ({
                 height: FOLD_HEIGHT - 3,
                 borderRadius: 10,
                 background: "var(--sunken)",
-                border: "1px dashed var(--line)",
+                border: "1px solid var(--line)",
                 color: "var(--muted)",
                 fontSize: 11,
                 display: "flex",
@@ -354,7 +354,7 @@ const FreeSpace = ({
             width: 15,
             height: 15,
             borderRadius: 999,
-            border: "1px dashed var(--line)",
+            border: "1px solid var(--line)",
             color: "var(--faint)",
             display: "grid",
             placeItems: "center",
@@ -380,10 +380,17 @@ const FreeSpace = ({
         top: place.top + 1,
         height: place.height,
         borderRadius: 8,
-        border: "1px dashed var(--line)",
+        // Solid, and filled. A one-pixel dashed border is drawn by the browser
+        // as a row of square teeth the same size as the gaps between them, and
+        // pressed against the block above it that reads as a cut edge rather
+        // than an outline — at every screen density, which is why it looked
+        // wrong on both. What the box has to say is "nothing here, and you may
+        // put something in it": the quiet fill says the first, the hairline
+        // holds the shape, and neither of them rattles.
+        border: "1px solid var(--line)",
+        background: "var(--sunken)",
         color: "var(--faint)",
         fontSize: place.height < WORDS_MINIMUM ? 9.5 : 10.5,
-        background: "transparent",
       }}
     >
       {place.height < WORDS_MINIMUM ? `${length} ${words.minutes}` : said}

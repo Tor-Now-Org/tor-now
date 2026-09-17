@@ -422,6 +422,23 @@ export const pickACategory = async (page: Page, typed = "ספר"): Promise<void>
   await page.getByRole("option", { name: /מספרה/ }).first().click();
 };
 
+/**
+ * Open a day by its date, turning the month over if it is not this one.
+ *
+ * The grid holds one month, so a day a fortnight out is often not on it — and
+ * whether it is depends on what today happens to be. A test that clicked the
+ * square directly therefore passed or failed by the calendar date, which is a
+ * way of being broken that only shows up later and somewhere else.
+ */
+export const openTheDayOf = async (page: Page, date: string): Promise<void> => {
+  const square = page.getByRole("button", { name: date });
+  for (let turns = 0; turns < 6 && (await square.count()) === 0; turns += 1) {
+    await page.getByRole("button", { name: "החודש הבא" }).click();
+    await page.waitForTimeout(300);
+  }
+  await square.click({ timeout: 15_000 });
+};
+
 export const ready = async (page: Page): Promise<void> => {
   await expect(page.locator(".app-shell")).toBeVisible();
   await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 20_000 });
