@@ -230,6 +230,10 @@ export type AppointmentDto = {
 export type MyAppointmentDto = AppointmentDto & {
   businessName: string;
   resourceName: string;
+  /** Where the business is: as the owner typed it, and as they pinned it. */
+  businessAddress: string | null;
+  businessLatitude: number | null;
+  businessLongitude: number | null;
 };
 
 export type CalendarAppointmentDto = AppointmentDto & {

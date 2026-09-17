@@ -402,6 +402,21 @@ export type AppointmentWithBusiness = {
   readonly resourceName: string;
 };
 
+/**
+ * The same, plus where the business is — its own free-text address and the pin
+ * the owner dropped, so a customer's own list can say how far away it is.
+ *
+ * Its own type rather than three more optional fields on the one above: the
+ * clash check and the reminder name a business, they do not place it, and a
+ * field that one query fills and two leave undefined is a contract nobody can
+ * read off the signature.
+ */
+export type AppointmentWithBusinessPlace = AppointmentWithBusiness & {
+  readonly businessAddress: string | null;
+  readonly businessLatitude: number | null;
+  readonly businessLongitude: number | null;
+};
+
 /** An appointment and everyone a reminder about it needs to name. */
 export type AppointmentToRemind = {
   readonly appointment: Appointment;
@@ -473,7 +488,7 @@ export type AppointmentRepository = {
   listForCustomerWithBusiness(
     customerId: UserId,
     page: Page,
-  ): Promise<readonly AppointmentWithBusiness[]>;
+  ): Promise<readonly AppointmentWithBusinessPlace[]>;
   listForCustomerAtBusiness(
     customerId: UserId,
     businessId: BusinessId,

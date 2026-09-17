@@ -28,7 +28,7 @@ import { PAGINATION } from "../config.ts";
 import { notificationFor } from "./notifications.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
 import type {
-  AppointmentWithBusiness,
+  AppointmentWithBusinessPlace,
   Page,
   Repositories,
 } from "../ports/repositories.ts";
@@ -412,7 +412,7 @@ export const bookingService = (dependencies: {
     async myAppointments(
       actor: Actor,
       page: Page = { limit: PAGINATION.defaultPageSize, offset: 0 },
-    ): Promise<readonly AppointmentWithBusiness[]> {
+    ): Promise<readonly AppointmentWithBusinessPlace[]> {
       const userId = requireUser(actor);
       return unitOfWork.run(actor, ({ repositories }) =>
         repositories.appointments.listForCustomerWithBusiness(userId, page),

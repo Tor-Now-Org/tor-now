@@ -236,19 +236,31 @@ export const businessMonthOut = (month: BusinessMonth) => ({
   })),
 });
 
-/** A customer's own list names the business, e.g. for an "add to calendar" title. */
+/**
+ * A customer's own list names the business — for an "add to calendar" title —
+ * and places it, so the list can show the address and how far off it is.
+ */
 export const appointmentWithBusinessOut = ({
   appointment,
   businessName,
   resourceName,
+  businessAddress,
+  businessLatitude,
+  businessLongitude,
 }: {
   appointment: Appointment;
   businessName: string;
   resourceName: string;
+  businessAddress: string | null;
+  businessLatitude: number | null;
+  businessLongitude: number | null;
 }) => ({
   ...appointmentOut(appointment),
   businessName,
   resourceName,
+  businessAddress,
+  businessLatitude,
+  businessLongitude,
 });
 
 export const userOut = (user: User) => ({

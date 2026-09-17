@@ -927,7 +927,14 @@ export const inMemoryRepositories = (store: Store): Repositories => {
               (candidate) => candidate.id === appointment.resourceId,
             );
             if (resource === undefined) throw notFound("Resource", appointment.resourceId);
-            return { appointment, businessName: business.name, resourceName: resource.name };
+            return {
+              appointment,
+              businessName: business.name,
+              resourceName: resource.name,
+              businessAddress: business.address,
+              businessLatitude: business.latitude,
+              businessLongitude: business.longitude,
+            };
           });
       },
       async listForCustomerAtBusiness(customerId, businessId) {

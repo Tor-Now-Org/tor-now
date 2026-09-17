@@ -71,6 +71,35 @@ export const weekdayIn = (
     new Date(isoInstant),
   );
 
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+
+/**
+ * How far off an appointment is, said the way a person would say it: "in 20
+ * minutes", "in 4 hours", "tomorrow".
+ *
+ * Intl carries the language, so there is no table of units to translate and no
+ * plural rule to get wrong. The unit is chosen by size because "in 240 minutes"
+ * is arithmetic the reader has to do and "in 4 hours" is an answer. `now` is a
+ * parameter rather than a call to the clock, so the function stays pure and
+ * testable — the same reason `dayIn` takes one.
+ */
+export const countdownTo = (
+  isoInstant: string,
+  language: Language,
+  now: Date = new Date(),
+): string => {
+  const relative = new Intl.RelativeTimeFormat(LOCALE[language], { numeric: "auto" });
+  const minutes = Math.round(
+    (new Date(isoInstant).getTime() - now.getTime()) / MS_PER_MINUTE,
+  );
+  if (Math.abs(minutes) < MINUTES_PER_HOUR) return relative.format(minutes, "minute");
+  const hours = Math.round(minutes / MINUTES_PER_HOUR);
+  if (Math.abs(hours) < HOURS_PER_DAY) return relative.format(hours, "hour");
+  return relative.format(Math.round(hours / HOURS_PER_DAY), "day");
+};
+
 /** A calendar date has no instant; formatting it must not shift it by a zone. */
 export const formatLocalDate = (
   localDate: string,

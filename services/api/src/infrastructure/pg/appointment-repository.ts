@@ -2,6 +2,7 @@ import { asId, displayName, DomainError, instant, notFound } from "@tor-now/doma
 import type { AppointmentRepository } from "../../ports/repositories.ts";
 import { errorCodeOf, PG_ERRORS, type Transaction } from "./client.ts";
 import {
+  nullableNumber,
   nullableText,
   text,
   toAppointment,
@@ -125,7 +126,11 @@ export const appointmentRepository = (
     // every other query answered with the snapshot — and an inner join would
     // have dropped the row entirely for a resource that no longer exists.
     const rows = await tx<Row[]>`
-      select a.*, b.name as business_name
+      select a.*,
+             b.name      as business_name,
+             b.address   as business_address,
+             b.latitude  as business_latitude,
+             b.longitude as business_longitude
       from appointment a
       join business b on b.id = a.business_id
       where a.customer_id = ${customerId}
@@ -137,6 +142,11 @@ export const appointmentRepository = (
         appointment,
         businessName: text(row["business_name"]),
         resourceName: appointment.resourceName,
+        // Where it is, for the screen that asks how far: the address as the
+        // owner typed it, and the pin, which may be either and is often both.
+        businessAddress: nullableText(row["business_address"]),
+        businessLatitude: nullableNumber(row["business_latitude"]),
+        businessLongitude: nullableNumber(row["business_longitude"]),
       };
     });
   },
