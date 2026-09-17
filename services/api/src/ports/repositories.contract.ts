@@ -946,7 +946,10 @@ export const describeRepositoryContract = (
         // The customer's own list also places the business, so the screen can
         // say where it is and how far. Given an address here on purpose: the
         // fixture leaves it null, and null proves nothing about a join.
-        await repositories.businesses.update(context.business.id, { address: "הרצל 1" });
+        await repositories.businesses.update(context.business.id, {
+          address: "הרצל 1",
+          category: "barbershop",
+        });
         expect(
           await repositories.appointments.listForCustomerWithBusiness(context.owner.id, {
             limit: 10,
@@ -955,6 +958,7 @@ export const describeRepositoryContract = (
         ).toMatchObject([
           {
             businessName: context.business.name,
+            businessCategory: "barbershop",
             resourceName: context.resource.name,
             businessAddress: "הרצל 1",
             businessLatitude: context.business.latitude,

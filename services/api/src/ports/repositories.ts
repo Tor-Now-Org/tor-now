@@ -412,6 +412,7 @@ export type AppointmentWithBusiness = {
  * read off the signature.
  */
 export type AppointmentWithBusinessPlace = AppointmentWithBusiness & {
+  readonly businessCategory: BusinessCategory | null;
   readonly businessAddress: string | null;
   readonly businessLatitude: number | null;
   readonly businessLongitude: number | null;

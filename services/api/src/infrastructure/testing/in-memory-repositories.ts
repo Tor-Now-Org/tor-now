@@ -678,17 +678,14 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         return hours;
       },
       async replaceForResource(resourceId, businessId, ranges) {
-        const written = ranges.map((range) => {
-          const hours = {
-            id: asId(nextId("working-hours")),
-            resourceId,
-            businessId,
-            dayOfWeek: dayOfWeek(range.dayOfWeek),
-            start: localTime(range.startMinutes),
-            end: localTime(range.endMinutes),
-          } as (typeof store.workingHours)[number];
-          return hours;
-        });
+        const written = ranges.map((range) => ({
+          id: asId<"WorkingHours">(nextId("working-hours")),
+          resourceId,
+          businessId,
+          dayOfWeek: dayOfWeek(range.dayOfWeek),
+          start: localTime(range.startMinutes),
+          end: localTime(range.endMinutes),
+        }));
         store.workingHours = [
           ...store.workingHours.filter((hours) => hours.resourceId !== resourceId),
           ...written,
@@ -930,6 +927,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             return {
               appointment,
               businessName: business.name,
+              businessCategory: business.category,
               resourceName: resource.name,
               businessAddress: business.address,
               businessLatitude: business.latitude,

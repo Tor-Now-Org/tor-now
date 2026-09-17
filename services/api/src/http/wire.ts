@@ -7,6 +7,7 @@ import {
   type Appointment,
   type Block,
   type Business,
+  type BusinessCategory,
   type BusinessPhoto,
   type DateOverride,
   type Payment,
@@ -243,6 +244,7 @@ export const businessMonthOut = (month: BusinessMonth) => ({
 export const appointmentWithBusinessOut = ({
   appointment,
   businessName,
+  businessCategory,
   resourceName,
   businessAddress,
   businessLatitude,
@@ -250,6 +252,7 @@ export const appointmentWithBusinessOut = ({
 }: {
   appointment: Appointment;
   businessName: string;
+  businessCategory: BusinessCategory | null;
   resourceName: string;
   businessAddress: string | null;
   businessLatitude: number | null;
@@ -257,6 +260,7 @@ export const appointmentWithBusinessOut = ({
 }) => ({
   ...appointmentOut(appointment),
   businessName,
+  businessCategory,
   resourceName,
   businessAddress,
   businessLatitude,

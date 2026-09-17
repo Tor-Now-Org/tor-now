@@ -30,7 +30,7 @@ const ENTRIES = [
   ["kids_haircuts", "hair", "תספורות ילדים", "Kids' haircuts", "children,ילדים"],
   ["bridal_salon", "hair", "סלון כלות", "Bridal salon", "bride,wedding,כלה,חתונה"],
 
-  ["nail_salon", "beauty", "מניקור ופדיקור", "Nail salon", "nails,manicure,pedicure,ציפורניים,לק"],
+  ["nail_salon", "beauty", "מניקור ופדיקור", "Nail salon", "nails,manicure,pedicure,ציפורניים,לק,גל,לק גל"],
   ["gel_nails", "beauty", "לק ג׳ל ובניית ציפורניים", "Gel nails & extensions", "gel,acrylic,ג׳ל,בנייה"],
   ["cosmetics", "beauty", "קוסמטיקה", "Cosmetics & facials", "facial,skin care,קוסמטיקאית,טיפול פנים"],
   ["brows_lashes", "beauty", "גבות וריסים", "Brows & lashes", "eyebrows,lashes,lamination,גבות,ריסים"],

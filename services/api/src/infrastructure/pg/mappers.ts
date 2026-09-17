@@ -50,7 +50,7 @@ export const nullableText = (value: unknown): string | null =>
 const int = (value: unknown): number => Number(value);
 const bool = (value: unknown): boolean => Boolean(value);
 /** A code no longer in the list reads as none, rather than failing the whole row. */
-const nullableCategory = (value: unknown): BusinessCategory | null =>
+export const nullableCategory = (value: unknown): BusinessCategory | null =>
   typeof value === "string" && isBusinessCategory(value) ? value : null;
 export const nullableNumber = (value: unknown): number | null =>
   value === null || value === undefined ? null : Number(value);

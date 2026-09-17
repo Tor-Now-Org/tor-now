@@ -2,6 +2,7 @@ import { asId, displayName, DomainError, instant, notFound } from "@tor-now/doma
 import type { AppointmentRepository } from "../../ports/repositories.ts";
 import { errorCodeOf, PG_ERRORS, type Transaction } from "./client.ts";
 import {
+  nullableCategory,
   nullableNumber,
   nullableText,
   text,
@@ -128,6 +129,7 @@ export const appointmentRepository = (
     const rows = await tx<Row[]>`
       select a.*,
              b.name      as business_name,
+             b.category  as business_category,
              b.address   as business_address,
              b.latitude  as business_latitude,
              b.longitude as business_longitude
@@ -141,6 +143,7 @@ export const appointmentRepository = (
       return {
         appointment,
         businessName: text(row["business_name"]),
+        businessCategory: nullableCategory(row["business_category"]),
         resourceName: appointment.resourceName,
         // Where it is, for the screen that asks how far: the address as the
         // owner typed it, and the pin, which may be either and is often both.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { categoryLabel } from "@tor-now/domain";
+import { categoryLabel, type BusinessCategory } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type { BusinessDto, MyAppointmentDto } from "@/lib/api/types.ts";
@@ -21,7 +21,14 @@ const visitedBusinesses = (appointments: MyAppointmentDto[]) => {
 
   const byBusiness = new Map<
     string,
-    { businessId: string; businessName: string; businessAddress: string | null; lastVisitAt: string; visits: number }
+    {
+      businessId: string;
+      businessName: string;
+      businessCategory: BusinessCategory | null;
+      businessAddress: string | null;
+      lastVisitAt: string;
+      visits: number;
+    }
   >();
   for (const appointment of finished) {
     const known = byBusiness.get(appointment.businessId);
@@ -30,6 +37,7 @@ const visitedBusinesses = (appointments: MyAppointmentDto[]) => {
       byBusiness.set(appointment.businessId, {
         businessId: appointment.businessId,
         businessName: appointment.businessName,
+        businessCategory: appointment.businessCategory,
         businessAddress: appointment.businessAddress,
         lastVisitAt: appointment.endAt,
         visits: 1,
@@ -118,8 +126,11 @@ export const VisitedBusinesses = ({
 
       {businesses.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {businesses.map(({ businessId, businessName, businessAddress, lastVisitAt, visits }) => {
+          {businesses.map(({ businessId, businessName, businessCategory, businessAddress, lastVisitAt, visits }) => {
             const business = profiles.get(businessId);
+            // Both come with the appointment, so the card is whole on first paint
+            // rather than growing a line and a tag when the profiles land.
+            const category = business?.category ?? businessCategory;
             const isFavorite = favorites.has(businessId);
 
             return (
@@ -138,21 +149,20 @@ export const VisitedBusinesses = ({
                         color: "var(--muted)",
                       }}
                     >
-                      {business?.category != null ? <CategoryIcon category={business.category} /> : <AllCategoriesIcon />}
+                      {category != null ? <CategoryIcon category={category} /> : <AllCategoriesIcon />}
                     </span>
                     <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                       <span style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 16.5 }}>
                         {business?.name ?? businessName}
                       </span>
-                      {/* The appointment already carries the address — waiting for the profile made the line pop in late. */}
                       {(business?.address ?? businessAddress) != null && (
                         <span className="hint">{business?.address ?? businessAddress}</span>
                       )}
                       <span className="hint">{copy.lastVisit.replace("{date}", dateFormat.format(new Date(lastVisitAt)))}</span>
                       <span style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-                        {business?.category != null && (
+                        {category != null && (
                           <span style={{ ...tagStyle, background: "var(--sunken)", color: "var(--muted)" }}>
-                            {categoryLabel(business.category, language)}
+                            {categoryLabel(category, language)}
                           </span>
                         )}
                         {visits > 1 && (
