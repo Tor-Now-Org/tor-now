@@ -109,7 +109,6 @@ export const Profile = ({ onSignedOut }: { onSignedOut: () => void }) => {
         {/* Locked, but shown the way it was typed: flag and local digits. */}
         <PhoneField id="profile-phone" label={copy.phoneLabel} value={fromE164(user.phone)}
           showProblem={false} readOnly disabled />
-        <Note>{copy.phoneLocked}</Note>
         {error !== null && <Critical>{error}</Critical>}
         {saved && <p className="hint" style={{ margin: 0 }} role="status">{copy.profileSaved}</p>}
         <Button
