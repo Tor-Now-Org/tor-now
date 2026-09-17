@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import type { BusinessDto, ResourceDto } from "@/lib/api/types.ts";
 import { graceDaysLeft } from "@/lib/billing-alert.ts";
+import { staffRole } from "@/lib/roles.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
@@ -259,7 +260,7 @@ function ManageApp() {
           <h2 style={{ fontSize: 19 }}>{copy.usingAs}</h2>
           <Card style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <span style={{ fontWeight: 600 }}>{copy.managingNow}</span>
-            <span className="hint">{business.name}</span>
+            <span className="hint">{`${business.name} - ${copy[`role${staffRole(business)}`]}`}</span>
           </Card>
           {(businesses ?? []).length > 1 &&
             (businesses ?? []).map((candidate) => (

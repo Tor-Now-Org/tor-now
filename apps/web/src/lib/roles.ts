@@ -27,3 +27,9 @@ export const manages = (business: BusinessDto): boolean => {
  * people's appointments to say it.
  */
 export const canCloseBusiness = manages;
+
+/** The staff role to name on screen. A CUSTOMER never reaches the manage app; shown as the least of the staff roles. */
+export const staffRole = (business: BusinessDto): "OWNER" | "MANAGER" | "WORKER" => {
+  const role = roleOf(business);
+  return role === "CUSTOMER" ? "WORKER" : role;
+};
