@@ -6,10 +6,13 @@ import { api } from "@/lib/api/client.ts";
 import type { BusinessDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
+import { staffRole } from "@/lib/roles.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import {
   BottomNav,
+  BuildingIcon,
   CalendarIcon,
+  PeopleIcon,
   ClockIcon,
   SearchIcon,
 } from "@/components/bottom-nav.tsx";
@@ -18,8 +21,8 @@ import { BusinessSearch } from "@/components/customer/business-search.tsx";
 import { MyAppointments } from "@/components/customer/my-appointments.tsx";
 import { Profile } from "@/components/customer/profile.tsx";
 import { VisitedBusinesses } from "@/components/customer/visited-businesses.tsx";
-import { SignOutButton } from "@/components/sign-out.tsx";
-import { Button, Card, Note, Sheet, Spinner } from "@/components/ui.tsx";
+import { AccountDrawer } from "@/components/account-drawer.tsx";
+import { Button, Note, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 
@@ -64,6 +67,9 @@ const businessIdIn = (pathname: string): string | null => {
 
 function CustomerAppInner() {
   const copy = useCopy("customer");
+  // Only for the role each business is held under: the words live in the owner
+  // dictionary, and one set of them beats two that drift apart.
+  const ownerCopy = useCopy("owner");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -221,45 +227,50 @@ function CustomerAppInner() {
       />
 
       {/* One identity, two contexts. The drawer is the only place the two meet. */}
-      <Sheet open={drawerOpen} onClose={() => setDrawerOpen(false)} labelledBy="drawer-title">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <h2 id="drawer-title" style={{ fontSize: 19 }}>{copy.usingAs}</h2>
-
-          <Card style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <span style={{ fontWeight: 600 }}>{copy.asCustomer}</span>
-            <span className="hint">{copy.asCustomerHint}</span>
-          </Card>
-
-          {owned.length > 0 ? (
-            owned.map((mine) => (
-              <Button
-                key={mine.id}
-                onClick={() => router.push(`/manage?business=${mine.id}`)}
-              >
-                {copy.manageIt} · {mine.name}
-              </Button>
-            ))
-          ) : (
+      <AccountDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        {...(user === null ? {} : { userName: user.name })}
+        labels={{ usingAs: copy.usingAs, signOut: copy.signOut }}
+        places={[
+          {
+            key: "customer",
+            title: copy.asCustomer,
+            hint: copy.asCustomerHint,
+            badge: <CalendarIcon />,
+            current: true,
+            onClick: () => setDrawerOpen(false),
+          },
+          ...owned.map((mine) => ({
+            key: mine.id,
+            title: mine.name,
+            hint: `${ownerCopy[`role${staffRole(mine)}`]} · ${copy.manageIt}`,
+            badge: <BuildingIcon />,
+            onClick: () => router.push(`/manage?business=${mine.id}`),
+          })),
+          {
+            key: "profile",
+            title: copy.profile,
+            badge: <PeopleIcon />,
+            onClick: () => {
+              setDrawerOpen(false);
+              leaveBusiness("profile");
+            },
+          },
+        ]}
+        extra={
+          owned.length === 0 ? (
             <>
               <Note>{copy.noBusinessNote}</Note>
-              <Button onClick={() => router.push("/onboarding")}>
-                {copy.openBusiness}
-              </Button>
+              <Button onClick={() => router.push("/onboarding")}>{copy.openBusiness}</Button>
             </>
-          )}
-
-          <Button intent="quiet" onClick={() => { setDrawerOpen(false); leaveBusiness("profile"); }}>
-            {copy.profile}
-          </Button>
-          <SignOutButton
-            label={copy.signOut}
-            onSignedOut={() => {
-              setDrawerOpen(false);
-              leaveBusiness("search");
-            }}
-          />
-        </div>
-      </Sheet>
+          ) : undefined
+        }
+        onSignedOut={() => {
+          setDrawerOpen(false);
+          leaveBusiness("search");
+        }}
+      />
 
       <Sheet open={signInOpen} onClose={() => setSignInOpen(false)}>
         <VerifyPanel

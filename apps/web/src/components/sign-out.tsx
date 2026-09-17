@@ -19,8 +19,11 @@ import { Button } from "./ui.tsx";
 export const SignOutButton = ({
   label,
   onSignedOut,
+  style,
 }: {
   label: string;
+  /** For a drawer that sets it as a link-weight action rather than a full-width button. */
+  style?: React.CSSProperties;
   /** Runs instead of navigating, for a screen that closes its own drawer. */
   onSignedOut?: () => void;
 }) => {
@@ -30,6 +33,7 @@ export const SignOutButton = ({
   return (
     <Button
       intent="quiet"
+      {...(style === undefined ? {} : { style })}
       onClick={() => {
         signOut();
         if (onSignedOut === undefined) router.push("/");

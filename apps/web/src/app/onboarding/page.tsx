@@ -7,13 +7,15 @@ import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
+import { staffRole } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { TEXT_RULES, type BusinessCategory } from "@tor-now/domain";
 import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
 import { AddressAutocomplete } from "@/components/owner/address-autocomplete.tsx";
 import { CategoryAutocomplete } from "@/components/category-autocomplete.tsx";
-import { SignOutButton } from "@/components/sign-out.tsx";
+import { AccountDrawer } from "@/components/account-drawer.tsx";
+import { BuildingIcon, CalendarIcon, PeopleIcon } from "@/components/bottom-nav.tsx";
 import {
   blocking,
   checkText,
@@ -28,7 +30,7 @@ import {
   type DayHours,
 } from "@/components/owner/weekly-hours.tsx";
 import { weekIsUsable } from "@/components/owner/usual-week.ts";
-import { Button, Card, Critical, Field, Sheet, Spinner } from "@/components/ui.tsx";
+import { Button, Card, Critical, Field, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import type { BusinessDto } from "@/lib/api/types.ts";
 
@@ -74,6 +76,7 @@ export default function OnboardingPage() {
   const signInCopy = useCopy("signIn");
   // The account drawer is the same dialog everywhere, so it reuses its copy too.
   const customerCopy = useCopy("customer");
+  const ownerCopy = useCopy("owner");
   const router = useRouter();
   const errorText = useErrorText();
   const { token, user, loading, signIn } = useSession();
@@ -217,33 +220,39 @@ export default function OnboardingPage() {
   };
 
   const accountDrawer = (
-    <Sheet open={drawerOpen} onClose={() => setDrawerOpen(false)} labelledBy="drawer-title">
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <h2 id="drawer-title" style={{ fontSize: 19 }}>{customerCopy.usingAs}</h2>
-
-        <Card style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <span style={{ fontWeight: 600 }}>{customerCopy.asCustomer}</span>
-          <span className="hint">{customerCopy.asCustomerHint}</span>
-        </Card>
-
-        {owned.map((mine) => (
-          <Button key={mine.id} onClick={() => router.push(`/manage?business=${mine.id}`)}>
-            {customerCopy.manageIt} · {mine.name}
-          </Button>
-        ))}
-
-        <Button intent="quiet" onClick={() => router.push("/?screen=profile")}>
-          {customerCopy.profile}
-        </Button>
-        <SignOutButton
-          label={customerCopy.signOut}
-          onSignedOut={() => {
-            setDrawerOpen(false);
-            router.push("/");
-          }}
-        />
-      </div>
-    </Sheet>
+    <AccountDrawer
+      open={drawerOpen}
+      onClose={() => setDrawerOpen(false)}
+      {...(user === null ? {} : { userName: user.name })}
+      labels={{ usingAs: customerCopy.usingAs, signOut: customerCopy.signOut }}
+      places={[
+        {
+          key: "customer",
+          title: customerCopy.asCustomer,
+          hint: customerCopy.asCustomerHint,
+          badge: <CalendarIcon />,
+          current: true,
+          onClick: () => router.push("/"),
+        },
+        ...owned.map((mine) => ({
+          key: mine.id,
+          title: mine.name,
+          hint: `${ownerCopy[`role${staffRole(mine)}`]} · ${customerCopy.manageIt}`,
+          badge: <BuildingIcon />,
+          onClick: () => router.push(`/manage?business=${mine.id}`),
+        })),
+        {
+          key: "profile",
+          title: customerCopy.profile,
+          badge: <PeopleIcon />,
+          onClick: () => router.push("/?screen=profile"),
+        },
+      ]}
+      onSignedOut={() => {
+        setDrawerOpen(false);
+        router.push("/");
+      }}
+    />
   );
 
   if (live !== null) {

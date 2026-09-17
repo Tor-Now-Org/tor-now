@@ -9,8 +9,6 @@ import { staffRole } from "@/lib/roles.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
-import { SignOutButton } from "@/components/sign-out.tsx";
-import { SupportLink } from "@/components/support-link.tsx";
 import {
   BottomNav,
   BuildingIcon,
@@ -22,7 +20,8 @@ import { BusinessPanel } from "@/components/owner/business-panel.tsx";
 import { CalendarDay } from "@/components/owner/calendar-day.tsx";
 import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
-import { Button, Card, Empty, Note, Sheet, Spinner } from "@/components/ui.tsx";
+import { AccountDrawer } from "@/components/account-drawer.tsx";
+import { Button, Empty, Sheet, Spinner } from "@/components/ui.tsx";
 import { fillParts } from "@/lib/i18n/fill.ts";
 
 const TABS = ["day", "schedule", "business", "customers"] as const;
@@ -255,32 +254,32 @@ function ManageApp() {
         )}
       </Sheet>
 
-      <Sheet open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <h2 style={{ fontSize: 19 }}>{copy.usingAs}</h2>
-          <Card style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <span style={{ fontWeight: 600 }}>{copy.managingNow}</span>
-            <span className="hint">{`${business.name} - ${copy[`role${staffRole(business)}`]}`}</span>
-          </Card>
-          {(businesses ?? []).length > 1 &&
-            (businesses ?? []).map((candidate) => (
-              <Button
-                key={candidate.id}
-                intent="quiet"
-                onClick={() => {
-                  setBusiness(candidate);
-                  setDrawerOpen(false);
-                }}
-              >
-                {candidate.name}
-              </Button>
-            ))}
-          <Button onClick={() => router.push("/")}>{copy.asCustomer}</Button>
-          <Note>{copy.oneIdentity}</Note>
-          <SignOutButton label={copy.signOut} />
-          <SupportLink />
-        </div>
-      </Sheet>
+      <AccountDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        {...(user === null ? {} : { userName: user.name })}
+        labels={{ usingAs: copy.usingAs, signOut: copy.signOut }}
+        places={[
+          ...(businesses ?? [business]).map((candidate) => ({
+            key: candidate.id,
+            title: candidate.name,
+            hint: copy[`role${staffRole(candidate)}`],
+            badge: <BuildingIcon />,
+            current: candidate.id === business.id,
+            onClick: () => {
+              setBusiness(candidate);
+              setDrawerOpen(false);
+            },
+          })),
+          {
+            key: "customer",
+            title: copy.asCustomer,
+            hint: copy.asCustomerHint,
+            badge: <CalendarIcon />,
+            onClick: () => router.push("/"),
+          },
+        ]}
+      />
     </>
   );
 }
