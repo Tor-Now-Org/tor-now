@@ -139,7 +139,18 @@ function CustomerAppInner() {
     };
   }, [routeBusinessId, business?.id, router]);
 
-  if (loading) return <Spinner />;
+  // Same reasoning as the owner app: the header stays, so crossing back does
+  // not blank the screen — only the part nobody knows yet waits.
+  if (loading) {
+    return (
+      <>
+        <AppHeader languageLabel={copy.langSwitch} />
+        <main style={{ flex: 1, display: "grid", placeItems: "center" }}>
+          <Spinner />
+        </main>
+      </>
+    );
+  }
 
   const openBusiness = (businessId: string) => router.push(businessPath(businessId));
 

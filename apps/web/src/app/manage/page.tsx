@@ -116,7 +116,23 @@ function ManageApp() {
     void loadGraceAlert();
   }, [loadGraceAlert]);
 
-  if (loading || (token !== null && businesses === null)) return <Spinner />;
+  // The chrome stays while the answer is fetched. Replacing the whole page
+  // with a spinner is what made crossing over look like a reload: the header
+  // and the bar vanished, the screen went white, and the switch you had just
+  // pressed was gone with it. Only the part that is actually unknown waits.
+  if (loading || (token !== null && businesses === null)) {
+    return (
+      <>
+        {/* No title: with one, the mark is replaced by a word and the header
+            jumps on the way in and again on the way out. The mark stays put,
+            and only the body below it is unknown. */}
+        <AppHeader languageLabel={copy.langSwitch} />
+        <main style={{ flex: 1, display: "grid", placeItems: "center" }}>
+          <Spinner />
+        </main>
+      </>
+    );
+  }
 
   if (token === null) {
     return (

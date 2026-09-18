@@ -5583,3 +5583,86 @@ test.describe("the switch between customer and management", () => {
     await expect(drawer.getByText("כלקוח")).toBeVisible();
   });
 });
+
+test.describe("crossing over without reloading", () => {
+  test("keeps the page it is on, rather than fetching a new document", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `בלי רענון ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto("/");
+    await ready(page);
+
+    // A mark that only a fresh document can destroy. If the switch reloads,
+    // this is gone on the other side — which is the difference between a
+    // route change and a refresh, and the only one a person actually feels.
+    await page.evaluate(() => {
+      (window as unknown as { crossingMark?: number }).crossingMark = 1;
+    });
+
+    const switcher = page.getByRole("group", { name: "מעבר בין לקוח לניהול" });
+    await switcher.getByRole("button", { name: "ניהול" }).click();
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { crossingMark?: number }).crossingMark ?? 0,
+      ),
+    ).toBe(1);
+
+    // And back again.
+    await page
+      .getByRole("group", { name: "מעבר בין לקוח לניהול" })
+      .getByRole("button", { name: "לקוח" })
+      .click();
+    await expect(page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…")).toBeVisible({
+      timeout: 15_000,
+    });
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { crossingMark?: number }).crossingMark ?? 0,
+      ),
+    ).toBe(1);
+  });
+
+  test("never leaves the screen without a header", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `כותרת ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto("/");
+    await ready(page);
+
+    // Watch the banner for the whole crossing. It used to be replaced by a
+    // bare spinner — the header and the bar went, the screen went white, and
+    // the switch you had just pressed went with them.
+    await page.evaluate(() => {
+      const w = window as unknown as { headerGone?: boolean };
+      w.headerGone = false;
+      const check = () => {
+        if (document.querySelector("header") === null) w.headerGone = true;
+      };
+      new MutationObserver(check).observe(document.body, { childList: true, subtree: true });
+      check();
+    });
+
+    await page
+      .getByRole("group", { name: "מעבר בין לקוח לניהול" })
+      .getByRole("button", { name: "ניהול" })
+      .click();
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { headerGone?: boolean }).headerGone ?? true,
+      ),
+    ).toBe(false);
+  });
+});

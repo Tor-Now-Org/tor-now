@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { BusinessDto } from "@/lib/api/types.ts";
 import { staffRole } from "@/lib/roles.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
@@ -39,7 +40,24 @@ export const ContextSwitch = ({
   onManage: (business: BusinessDto) => void;
 }) => {
   const copy = useCopy("owner");
+  const router = useRouter();
   const [choosing, setChoosing] = useState(false);
+  /**
+   * The press, while the other side is being fetched.
+   *
+   * Crossing over is a route change, and a route change that is not marked
+   * looks like nothing happened until the new page arrives — so people press
+   * again. React keeps the current screen on the glass through a transition,
+   * which is exactly what makes this feel like a switch rather than a reload;
+   * all it needs from us is to say the press is still in flight.
+   */
+  const [crossing, startCrossing] = useTransition();
+
+  // The code for the other side, fetched before it is wanted. Without it the
+  // first crossing pays for a chunk download while the screen sits still.
+  useEffect(() => {
+    router.prefetch(current === null ? "/manage" : "/");
+  }, [router, current]);
 
   if (businesses.length === 0) return null;
   const several = businesses.length > 1;
@@ -72,19 +90,22 @@ export const ContextSwitch = ({
       >
         <button
           aria-pressed={!managing}
+          aria-busy={crossing && managing}
           onClick={() => {
-            if (managing) onCustomer();
+            if (managing) startCrossing(onCustomer);
           }}
           style={half(!managing)}
         >
+          {crossing && managing ? <Pip /> : null}
           {copy.asCustomerShort}
         </button>
         <button
           aria-pressed={managing}
+          aria-busy={crossing && !managing}
           onClick={() => {
             if (!managing) {
               const first = businesses[0];
-              if (first !== undefined) onManage(first);
+              if (first !== undefined) startCrossing(() => onManage(first));
               return;
             }
             // Already inside: the only thing left to offer is the others.
@@ -92,6 +113,7 @@ export const ContextSwitch = ({
           }}
           style={{ ...half(managing), maxWidth: 148 }}
         >
+          {crossing && !managing ? <Pip /> : null}
           {managing && several && (
             <span
               aria-hidden="true"
@@ -139,7 +161,7 @@ export const ContextSwitch = ({
               current: business.id === current?.id,
               onClick: () => {
                 setChoosing(false);
-                if (business.id !== current?.id) onManage(business);
+                if (business.id !== current?.id) startCrossing(() => onManage(business));
               },
             }))}
           />
@@ -151,7 +173,7 @@ export const ContextSwitch = ({
                 badge: <CalendarIcon />,
                 onClick: () => {
                   setChoosing(false);
-                  onCustomer();
+                  startCrossing(onCustomer);
                 },
               },
             ]}
@@ -161,6 +183,28 @@ export const ContextSwitch = ({
     </>
   );
 };
+
+/**
+ * A press that has not landed yet.
+ *
+ * Small enough to sit inside the half without changing its width — the switch
+ * must not move under the finger that just pressed it.
+ */
+const Pip = () => (
+  <span
+    aria-hidden="true"
+    style={{
+      width: 11,
+      height: 11,
+      flexShrink: 0,
+      borderRadius: 999,
+      border: "2px solid currentColor",
+      borderTopColor: "transparent",
+      animation: "spin .6s linear infinite",
+      opacity: 0.8,
+    }}
+  />
+);
 
 /** Both halves are the same control; only the pressed one is raised. */
 const half = (pressed: boolean) => ({
