@@ -267,6 +267,14 @@ export type UserDto = {
   createdAt: string;
 };
 
+/**
+ * The signed-in person, as only they are told about themselves: whether they
+ * work anywhere, which is what decides the invitation to open a business.
+ */
+export type MeDto = UserDto & {
+  isHasBusinesses: boolean;
+};
+
 export type WorkingHoursDto = {
   id: string;
   resourceId: string;
@@ -399,7 +407,7 @@ export type AuditEntryDto = {
 export type SessionDto = {
   token: string;
   isNewUser: boolean;
-  user: UserDto;
+  user: MeDto;
 };
 
 export type RequestCodeDto = {

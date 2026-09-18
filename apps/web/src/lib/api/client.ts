@@ -22,6 +22,7 @@ import type {
   OverrideDto,
   PaymentDto,
   PlatformStatsDto,
+  MeDto,
   RequestCodeDto,
   ResourceDto,
   ServiceDto,
@@ -186,7 +187,7 @@ export const api = {
       body: { phone, code, name },
     }),
 
-  me: (token: string) => request<UserDto>("/me", { token }),
+  me: (token: string) => request<MeDto>("/me", { token }),
 
   updateProfile: (
     token: string,
@@ -195,7 +196,7 @@ export const api = {
       familyName?: string | null;
       birthDate?: string | null;
     },
-  ) => request<UserDto>("/me", { method: "PATCH", body: changes, token }),
+  ) => request<MeDto>("/me", { method: "PATCH", body: changes, token }),
 
   searchAppointments: (token: string, businessId: string, q: string) =>
     request<CalendarAppointmentDto[]>(`/businesses/${businessId}/appointments`, {

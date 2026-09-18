@@ -41,6 +41,14 @@ const customer = {
     "noBusinessNote": "עדיין אין לכם עסק במערכת. אפשר לפתוח אחד ולהתחיל לקבל תורים — אותה כניסה, בלי חשבון נוסף.",
     "openBusiness": "פתיחת עסק",
     "openBusinessBody": "נגדיר יחד את פרטי העסק, מי נותן את השירות, אילו שירותים ומתי אתם פתוחים. מרגע הסיום העסק מופיע בחיפוש.",
+    "pitchTitle": "גם אתם נותנים שירות?",
+    "pitchBody": "פתחו יומן משלכם ותופיעו בחיפוש הזה — אותה כניסה, בלי חשבון נוסף.",
+    "pitchAction": "לתוכניות והמחירים",
+    "pitchFootnote": "14 יום ניסיון · ללא כרטיס אשראי",
+    "pitchDismiss": "הסתרה",
+    "pitchSameSignIn": "אותה כניסה, בלי חשבון נוסף",
+    "pitchFrom": "מ‑₪{price} לחודש",
+    "poweredBy": "רוצים גם לנהל את העסק שלכם על ידי תור פנוי, לחצו כאן",
     "oneIdentity": "זהות אחת, מספר טלפון אחד. מה שאתם יכולים לעשות נגזר מהקשר שלכם לכל עסק בנפרד — לא מ״סוג משתמש״.",
     "usingAs": "במה אתם משתמשים עכשיו",
     "account": "החשבון שלי",
@@ -204,6 +212,14 @@ const customer = {
     "noBusinessNote": "You have no business on the platform yet. Open one and start taking bookings — the same sign-in, no second account.",
     "openBusiness": "Open a business",
     "openBusinessBody": "We set up the business details, who provides the service, which services and when you are open. The moment you finish it appears in search.",
+    "pitchTitle": "Do you provide a service too?",
+    "pitchBody": "Open a calendar of your own and appear in this search — the same sign-in, no second account.",
+    "pitchAction": "Plans and pricing",
+    "pitchFootnote": "14-day trial · no credit card",
+    "pitchDismiss": "Hide",
+    "pitchSameSignIn": "The same sign-in, no second account",
+    "pitchFrom": "From ₪{price} a month",
+    "poweredBy": "Want to run your business on Tor Panuy too? Tap here",
     "oneIdentity": "One identity, one phone number. What you may do follows from your relationship to each business separately — not from a \"user type\".",
     "usingAs": "What you are using now",
     "account": "Your account",
@@ -1557,6 +1573,67 @@ const support = {
   },
 } as const;
 
+/**
+ * The page a person reads before deciding to open a Business.
+ *
+ * It names a price, which the onboarding wizard never does — everything here
+ * exists to answer "what does this cost me", and nothing else.
+ */
+const pricing = {
+  he: {
+    "langSwitch": "EN",
+    "title": "תוכניות ומחירים",
+    "back": "חזרה",
+    "trialBadge": "14 יום ניסיון, בלי כרטיס אשראי",
+    "headline": "פותחים יומן, ומתחילים לקבל תורים",
+    "lede": "העסק שלכם מופיע בחיפוש, הלקוחות קובעים לבד, והיומן מתמלא בלי שיחות טלפון. הכול מאותה כניסה שכבר יש לכם.",
+    "perMonth": "לחודש",
+    "soloName": "יחיד",
+    "soloHint": "יומן אחד — אתם והלקוחות שלכם",
+    "soloFeature1": "תורים ללא הגבלה",
+    "soloFeature2": "דף עסק שמופיע בחיפוש ובמפה",
+    "soloFeature3": "תזכורות ללקוחות בוואטסאפ",
+    "teamName": "צוות",
+    "teamHint": "יומן לכל אחד ואחת בעסק",
+    "teamBadge": "הבחירה של רוב העסקים",
+    "teamFeature1": "כל מה שיש ביחיד",
+    "teamFeature2": "יומנים מרובים, עם הרשאות לכל אחד",
+    "teamFeature3": "היסטוריית לקוח, ביטולים ואי־הגעות",
+    "start": "פתיחת עסק — 14 יום חינם",
+    "trustCancel": "ביטול בכל רגע, בלי התחייבות",
+    "trustSetup": "ההגדרה לוקחת כחמש דקות, והעסק עולה לחיפוש מיד",
+    "vat": "המחירים כוללים מע״מ",
+    "questions": "יש שאלה?",
+    "talk": "דברו איתנו",
+  },
+  en: {
+    "langSwitch": "עב",
+    "title": "Plans and pricing",
+    "back": "Back",
+    "trialBadge": "14-day trial, no credit card",
+    "headline": "Open a calendar, and start taking appointments",
+    "lede": "Your business appears in search, customers book themselves, and the calendar fills without a single phone call. All from the sign-in you already have.",
+    "perMonth": "per month",
+    "soloName": "Solo",
+    "soloHint": "One calendar — you and your customers",
+    "soloFeature1": "Unlimited appointments",
+    "soloFeature2": "A business page in search and on the map",
+    "soloFeature3": "WhatsApp reminders for your customers",
+    "teamName": "Team",
+    "teamHint": "A calendar for everyone in the business",
+    "teamBadge": "What most businesses choose",
+    "teamFeature1": "Everything in Solo",
+    "teamFeature2": "Several calendars, each with its own permissions",
+    "teamFeature3": "Customer history, cancellations and no shows",
+    "start": "Open a business — 14 days free",
+    "trustCancel": "Cancel any time, no commitment",
+    "trustSetup": "Setup takes about five minutes, and you are in search straight away",
+    "vat": "Prices include VAT",
+    "questions": "A question?",
+    "talk": "Talk to us",
+  },
+} as const;
+
 export const DICTIONARIES = {
   customer,
   signIn,
@@ -1565,6 +1642,7 @@ export const DICTIONARIES = {
   admin,
   erasure,
   support,
+  pricing,
 } as const;
 
 export type Namespace = keyof typeof DICTIONARIES;

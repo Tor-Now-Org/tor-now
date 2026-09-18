@@ -19,6 +19,7 @@ import { categoryLabel } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useSession } from "@/lib/session.tsx";
 import { DateStrip } from "../date-strip.tsx";
+import { LogoMark } from "../logo.tsx";
 import { SlotGrid } from "../slot-grid.tsx";
 import { VerifyPanel } from "../verify-panel.tsx";
 import { BusinessPhotos } from "./business-photos.tsx";
@@ -580,6 +581,26 @@ export const BookingFlow = ({
       </section>
 
       {error !== null && stage === "choosing" && <Critical>{error}</Critical>}
+
+      {/* The page above this line is the demonstration: photos, services, real
+          free time, a booking in one tap. An owner checking a business out —
+          which is how most of them arrive — has finished evaluating the product
+          by the time they read it. Quiet on purpose: it must never compete with
+          the booking it sits under. */}
+      <a
+        href="/pricing"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          paddingBlockStart: 14,
+          borderBlockStart: "1px solid var(--line)",
+          color: "var(--muted)",
+        }}
+      >
+        <LogoMark size={24} />
+        <span style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>{copy.poweredBy}</span>
+      </a>
 
       <Sheet
         open={stage === "confirming" || stage === "verifying"}

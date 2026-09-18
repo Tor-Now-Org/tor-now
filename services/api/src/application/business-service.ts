@@ -427,6 +427,18 @@ export const businessService = ({
     });
   },
 
+  /**
+   * Whether this person works anywhere at all — the same question `listMine`
+   * answers, without loading the businesses to answer it. `/me` asks it on
+   * every page load, and the invitation to open a business hangs on it.
+   */
+  async hasAny(actor: Actor): Promise<boolean> {
+    const userId = requireUser(actor);
+    return unitOfWork.run(actor, async ({ repositories }) =>
+      (await repositories.memberships.listForUser(userId)).some(isStaff),
+    );
+  },
+
   // -------------------------------------------------------------------------
   // The team (ADR 0016)
   // -------------------------------------------------------------------------

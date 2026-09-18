@@ -105,25 +105,39 @@ export const createApp = (services: Services) => {
   app.post("/auth/verify", async (context) => {
     const body = await parseBody(context, schema.verifyCodeSchema);
     const result = await services.auth.verifyCode(body.phone, body.code, body.name);
+    // The same shape `/me` answers with, so a session opened here and a session
+    // restored from a stored token know the same things about the person.
+    const isHasBusinesses = await services.business.hasAny({
+      kind: "USER",
+      userId: result.user.id,
+    });
     return context.json({
       token: result.token,
       isNewUser: result.isNewUser,
-      user: wire.userOut(result.user),
+      user: { ...wire.userOut(result.user), isHasBusinesses },
     });
   });
 
   // ---------------------------------------------------------------------------
   // The signed-in User
   // ---------------------------------------------------------------------------
-  app.get("/me", async (context) =>
-    context.json(wire.userOut(await services.profile.me(actorOf(context)))),
-  );
+  app.get("/me", async (context) => {
+    const actor = actorOf(context);
+    const [user, isHasBusinesses] = await Promise.all([
+      services.profile.me(actor),
+      services.business.hasAny(actor),
+    ]);
+    return context.json({ ...wire.userOut(user), isHasBusinesses });
+  });
 
   app.patch("/me", async (context) => {
     const changes = await parseBody(context, schema.updateProfileSchema);
-    return context.json(
-      wire.userOut(await services.profile.updateProfile(actorOf(context), changes)),
-    );
+    const actor = actorOf(context);
+    const [user, isHasBusinesses] = await Promise.all([
+      services.profile.updateProfile(actor, changes),
+      services.business.hasAny(actor),
+    ]);
+    return context.json({ ...wire.userOut(user), isHasBusinesses });
   });
 
   app.delete("/me", async (context) => {

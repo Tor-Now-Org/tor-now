@@ -11,7 +11,7 @@ import {
 } from "react";
 import { api } from "./api/client.ts";
 import { isApiError } from "./api/errors.ts";
-import type { UserDto } from "./api/types.ts";
+import type { MeDto } from "./api/types.ts";
 
 /**
  * ADR 0009: Supabase Auth's refresh-token lifetime is the only authority on
@@ -24,9 +24,9 @@ const STORAGE_KEY = "tor-now.session";
 
 type SessionState = {
   readonly token: string | null;
-  readonly user: UserDto | null;
+  readonly user: MeDto | null;
   readonly loading: boolean;
-  readonly signIn: (token: string, user: UserDto) => void;
+  readonly signIn: (token: string, user: MeDto) => void;
   readonly signOut: () => void;
   readonly refresh: () => Promise<void>;
 };
@@ -52,7 +52,7 @@ const writeToken = (token: string | null): void => {
 
 export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<UserDto | null>(null);
+  const [user, setUser] = useState<MeDto | null>(null);
   const [loading, setLoading] = useState(true);
 
   const signOut = useCallback(() => {
@@ -61,7 +61,7 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   }, []);
 
-  const signIn = useCallback((nextToken: string, nextUser: UserDto) => {
+  const signIn = useCallback((nextToken: string, nextUser: MeDto) => {
     writeToken(nextToken);
     setToken(nextToken);
     setUser(nextUser);

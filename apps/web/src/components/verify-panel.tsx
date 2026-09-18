@@ -6,7 +6,7 @@ import { api } from "@/lib/api/client.ts";
 import { blocking, checkText, useFieldProblem } from "@/lib/use-field-problem.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import { checkLocalPhone, toE164 } from "@/lib/phone.ts";
-import type { UserDto } from "@/lib/api/types.ts";
+import type { MeDto } from "@/lib/api/types.ts";
 import { PhoneField } from "./phone-field.tsx";
 import { Button, Critical, Field, Note } from "./ui.tsx";
 
@@ -54,7 +54,7 @@ export const VerifyPanel = ({
   errorText,
 }: {
   labels: VerifyLabels;
-  onVerified: (token: string, user: UserDto) => void;
+  onVerified: (token: string, user: MeDto) => void;
   errorText: (code: string) => string;
 }) => {
   const [phone, setPhone] = useState("");
@@ -63,7 +63,7 @@ export const VerifyPanel = ({
   const [familyName, setFamilyName] = useState("");
   const [stage, setStage] = useState<"phone" | "code" | "name">("phone");
   /** Held between verifying and naming; the session is real from here on. */
-  const [session, setSession] = useState<{ token: string; user: UserDto } | null>(null);
+  const [session, setSession] = useState<{ token: string; user: MeDto } | null>(null);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

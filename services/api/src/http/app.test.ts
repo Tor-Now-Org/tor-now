@@ -93,6 +93,18 @@ describe("who may call what", () => {
     expect(body).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
   });
 
+  it("tells the signed-in person whether they staff anywhere", async () => {
+    const person = await signInOverHttp(api, "+972500000001");
+    expect((await api.get("/me", person.token)).body).toMatchObject({
+      isHasBusinesses: false,
+    });
+
+    await api.post("/businesses", A_BUSINESS, person.token);
+    expect((await api.get("/me", person.token)).body).toMatchObject({
+      isHasBusinesses: true,
+    });
+  });
+
   it("ignores a token it did not issue", async () => {
     const { status } = await api.get("/me", "not-a-real-token");
     expect(status).toBe(401);

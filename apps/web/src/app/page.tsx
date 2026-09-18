@@ -22,7 +22,8 @@ import { MyAppointments } from "@/components/customer/my-appointments.tsx";
 import { Profile } from "@/components/customer/profile.tsx";
 import { VisitedBusinesses } from "@/components/customer/visited-businesses.tsx";
 import { AccountDrawer } from "@/components/account-drawer.tsx";
-import { Button, Note, Sheet, Spinner } from "@/components/ui.tsx";
+import { DismissableOwnerPitch, OwnerPitch } from "@/components/owner-pitch.tsx";
+import { Button, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 
@@ -85,15 +86,27 @@ function CustomerAppInner() {
   const [signInOpen, setSignInOpen] = useState(false);
   /** Where the person was heading when sign-in interrupted them, if anywhere. */
   const [signInIntent, setSignInIntent] = useState<Screen | null>(null);
-  const [owned, setOwned] = useState<BusinessDto[]>([]);
+  /** The businesses this person works at, for the drawer's list of places. */
+  const [owned, setOwned] = useState<BusinessDto[] | null>(null);
 
   useEffect(() => {
     if (token === null) {
       setOwned([]);
       return;
     }
-    api.myBusinesses(token).then(setOwned).catch(() => setOwned([]));
+    api
+      .myBusinesses(token)
+      .then(setOwned)
+      // The drawer simply lists no places; the invitation does not hang on this.
+      .catch(() => undefined);
   }, [token]);
+
+  /**
+   * Nothing to own yet — the one question the invitation asks, answered by
+   * `/me` alongside the person themself, so it needs no second request and
+   * never flickers in and out while one is in flight.
+   */
+  const ownsNothing = !loading && (user === null || !user.isHasBusinesses);
 
   /**
    * The path is what says which business is open, so a link and a tap arrive
@@ -198,14 +211,24 @@ function CustomerAppInner() {
         ) : (
           <>
             {screen === "search" && (
-              <BusinessSearch
-                onOpen={(picked) => {
-                  // The business is already in hand, so the effect behind the
-                  // route sees it as loaded and asks for nothing more.
-                  setBusiness(picked);
-                  openBusiness(picked.id);
-                }}
-              />
+              <>
+                <BusinessSearch
+                  onOpen={(picked) => {
+                    // The business is already in hand, so the effect behind the
+                    // route sees it as loaded and asks for nothing more.
+                    setBusiness(picked);
+                    openBusiness(picked.id);
+                  }}
+                />
+                {/* Under the results, where "I could be listed here" is the
+                    thought the screen already provoked. Offered only to
+                    somebody who holds no business, and closeable for good. */}
+                {ownsNothing && (
+                  <div style={{ padding: "0 18px 24px" }}>
+                    <DismissableOwnerPitch />
+                  </div>
+                )}
+              </>
             )}
             {screen === "mine" && <MyAppointments onOpenBusiness={openBusiness} />}
             {screen === "visited" && <VisitedBusinesses onOpenBusiness={openBusiness} />}
@@ -241,7 +264,7 @@ function CustomerAppInner() {
             current: true,
             onClick: () => setDrawerOpen(false),
           },
-          ...owned.map((mine) => ({
+          ...(owned ?? []).map((mine) => ({
             key: mine.id,
             title: mine.name,
             hint: `${ownerCopy[`role${staffRole(mine)}`]} · ${copy.manageIt}`,
@@ -258,14 +281,7 @@ function CustomerAppInner() {
             },
           },
         ]}
-        extra={
-          owned.length === 0 ? (
-            <>
-              <Note>{copy.noBusinessNote}</Note>
-              <Button onClick={() => router.push("/onboarding")}>{copy.openBusiness}</Button>
-            </>
-          ) : undefined
-        }
+        extra={ownsNothing ? <OwnerPitch /> : undefined}
         onSignedOut={() => {
           setDrawerOpen(false);
           leaveBusiness("search");

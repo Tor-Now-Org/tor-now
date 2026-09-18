@@ -236,6 +236,12 @@ body {
 }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
+/* For something that can only be drawn once an answer arrives: it fades in
+   instead of appearing mid-scroll as if the page had glitched. */
+.fade-in { animation: fade-in .22s ease both; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(5px); } }
+@media (prefers-reduced-motion: reduce) { .fade-in { animation: none; } }
+
 .sheet-backdrop {
   position: absolute; inset: 0; z-index: 20;
   background: oklch(25% 0.055 258 / 0.35);
