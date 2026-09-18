@@ -203,7 +203,7 @@ export default function SupportPage() {
 
         <footer
           style={{
-            marginTop: 6,
+            marginTop: "auto",
             paddingTop: 16,
             borderTop: "1px solid var(--line)",
             display: "flex",

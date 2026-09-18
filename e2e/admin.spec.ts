@@ -67,9 +67,8 @@ test.describe("who may reach the panel", () => {
     await expect(
       page.getByRole("heading", { name: "הנהלת הפלטפורמה" }),
     ).toBeVisible();
-    // No business list, and the allowlist rule is stated rather than hidden.
+    // No business list.
     await expect(page.getByRole("button", { name: "עסקים" })).toHaveCount(0);
-    await expect(page.getByText(/דגל ההרשאה לבדו לא מספיק/)).toBeVisible();
   });
 
   test("with no session at all it offers a way in and nothing else", async ({ page }) => {

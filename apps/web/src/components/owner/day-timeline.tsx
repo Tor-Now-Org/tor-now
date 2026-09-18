@@ -221,6 +221,9 @@ export const DayTimeline = ({
                 }}
               >
                 {hours
+                  // The card's own border already draws the first and last
+                  // hour; an hour line there doubles it.
+                  .filter((minute) => minute !== window.start && minute !== window.end)
                   .filter((minute) => !swallowedBy(folds, minute))
                   .map((minute) => (
                     <span
@@ -284,9 +287,13 @@ export const DayTimeline = ({
               onClick={() => setOpened([...opened, fold.start])}
               style={{
                 position: "absolute",
-                insetInline: 0,
-                top: scale.y(fold.start),
-                height: FOLD_HEIGHT - 3,
+                // Inset like every other band, so the pill sits inside the
+                // lane card rather than painting over its border.
+                insetInline: 3,
+                top: scale.y(fold.start) + 1,
+                // The fold's whole slot, less the card's two border rows, so
+                // no strip of card is left showing under it.
+                height: FOLD_HEIGHT - 2,
                 borderRadius: 10,
                 background: "var(--sunken)",
                 border: "1px solid var(--line)",

@@ -136,7 +136,6 @@ export default function AdminPage() {
         <main style={{ flex: 1, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
           <Empty
             title={copy.platformAdmin}
-            body={copy.allowlistNote}
             action={<Button onClick={() => router.push("/signin")}>{copy.platformAdmin}</Button>}
           />
         </main>
@@ -355,8 +354,6 @@ export default function AdminPage() {
 
             {systemPanel === "allowlist" && (
               <>
-                {/* ADR 0010's second, independent condition. */}
-                <Note>{copy.allowlistNote}</Note>
                 <Warning>{copy.allowlistWarn}</Warning>
                 {allowlist.map((entry) => (
                   <Card key={entry.phone} style={{ display: "flex", alignItems: "center", gap: 10 }}>
