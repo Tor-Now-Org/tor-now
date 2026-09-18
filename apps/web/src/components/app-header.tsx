@@ -17,6 +17,7 @@ export const AppHeader = ({
   showBackLabel = true,
   title,
   languageLabel,
+  switcher,
   trailing,
 }: {
   onBack?: () => void;
@@ -26,6 +27,14 @@ export const AppHeader = ({
   showBackLabel?: boolean;
   title?: string;
   languageLabel: string;
+  /**
+   * The context switch, drawn beside the mark rather than at the end.
+   *
+   * It sits at the start because it answers "where am I" — which is what the
+   * mark answers too, and the two read as one statement. The language button
+   * and the account circle are settings, and settings live at the other end.
+   */
+  switcher?: ReactNode;
   trailing?: ReactNode;
 }) => {
   const { toggleLanguage, direction } = useLanguage();
@@ -94,6 +103,8 @@ export const AppHeader = ({
           {title}
         </h1>
       )}
+
+      {switcher}
 
       <span
         style={{

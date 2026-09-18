@@ -88,6 +88,61 @@ const CheckMark = () => (
   </span>
 );
 
+/**
+ * The places, drawn.
+ *
+ * Its own component because the drawer is no longer the only list of them: the
+ * header's switch offers the same businesses, and a person should not have to
+ * learn two ways of reading the same row — the same badge, the same role, the
+ * same mark on the one you are in.
+ */
+export const PlaceList = ({ places }: { places: readonly AccountPlace[] }) => (
+  <>
+    {places.map((place) => (
+      <button
+        key={place.key}
+        aria-current={place.current === true}
+        onClick={place.onClick}
+        style={{
+          ...ROW,
+          ...(place.current === true
+            ? { border: "2px solid var(--accent)", background: "var(--accent-soft)" }
+            : {}),
+        }}
+      >
+        <span
+          style={{
+            ...BADGE,
+            background: place.current === true ? "var(--accent-strong)" : "var(--sunken)",
+            color: place.current === true ? "var(--on-accent)" : "var(--accent-strong)",
+          }}
+        >
+          {place.badge}
+        </span>
+        <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontWeight: 600, fontSize: 15 }}>{place.title}</span>
+          {place.hint !== undefined && (
+            <span
+              style={{
+                alignSelf: "flex-start",
+                fontSize: 11.5,
+                fontWeight: 500,
+                padding: "1px 7px",
+                borderRadius: 999,
+                background: place.current === true ? "var(--raised)" : "var(--sunken)",
+                color: place.current === true ? "var(--accent-strong)" : "var(--muted)",
+              }}
+            >
+              {place.hint}
+            </span>
+          )}
+        </span>
+        {place.current === true && <CheckMark />}
+      </button>
+    ))}
+  </>
+);
+
 export const AccountDrawer = ({
   open,
   onClose,
@@ -130,48 +185,7 @@ export const AccountDrawer = ({
 
       {extra}
 
-      {places.map((place) => (
-        <button
-          key={place.key}
-          aria-current={place.current === true}
-          onClick={place.onClick}
-          style={{
-            ...ROW,
-            ...(place.current === true
-              ? { border: "2px solid var(--accent)", background: "var(--accent-soft)" }
-              : {}),
-          }}
-        >
-          <span
-            style={{
-              ...BADGE,
-              background: place.current === true ? "var(--accent-strong)" : "var(--sunken)",
-              color: place.current === true ? "var(--on-accent)" : "var(--accent-strong)",
-            }}
-          >
-            {place.badge}
-          </span>
-          <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontWeight: 600, fontSize: 15 }}>{place.title}</span>
-            {place.hint !== undefined && (
-              <span
-                style={{
-                  alignSelf: "flex-start",
-                  fontSize: 11.5,
-                  fontWeight: 500,
-                  padding: "1px 7px",
-                  borderRadius: 999,
-                  background: place.current === true ? "var(--raised)" : "var(--sunken)",
-                  color: place.current === true ? "var(--accent-strong)" : "var(--muted)",
-                }}
-              >
-                {place.hint}
-              </span>
-            )}
-          </span>
-          {place.current === true && <CheckMark />}
-        </button>
-      ))}
+      <PlaceList places={places} />
 
       {/* One of the places you can go, drawn like the others: the list asks
           where to continue, and a person is one of the answers. */}

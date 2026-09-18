@@ -21,6 +21,8 @@ import { CalendarDay } from "@/components/owner/calendar-day.tsx";
 import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
 import { AccountDrawer } from "@/components/account-drawer.tsx";
+import { ContextSwitch } from "@/components/context-switch.tsx";
+import { businessToManage, lastManaged, rememberManaged } from "@/lib/last-managed.ts";
 import { Button, Empty, Sheet, Spinner } from "@/components/ui.tsx";
 import { fillParts } from "@/lib/i18n/fill.ts";
 
@@ -60,8 +62,12 @@ function ManageApp() {
     if (token === null) return;
     const mine = await api.myBusinesses(token);
     setBusinesses(mine);
-    const chosen = mine.find((candidate) => candidate.id === requested) ?? mine[0] ?? null;
+    // The address wins while it names something; otherwise the one they were
+    // last in, so a bare /manage lands where they left off rather than on
+    // whichever business happens to sort first.
+    const chosen = businessToManage(mine, requested ?? lastManaged());
     setBusiness(chosen);
+    if (chosen !== null) rememberManaged(chosen.id);
   }, [token, requested]);
 
   useEffect(() => {
@@ -169,12 +175,26 @@ function ManageApp() {
     <>
       <AppHeader
         languageLabel={copy.langSwitch}
-        title={business.name}
-        // The chevron is the way back to the customer app; the drawer offers the
-        // same trip, but only after you think to open it.
+        // The switch names the business once there is more than one, so a
+        // title would say it twice; with one it is the only thing that does.
+        {...((businesses ?? []).length > 1 ? {} : { title: business.name })}
+        // The chevron stays. The switch is the way back now, but a header with
+        // no way out at all is a worse trade than one control too many — and
+        // the chevron is what somebody arriving from a link will reach for.
         onBack={() => router.push("/")}
         backLabel={copy.asCustomer}
         showBackLabel={false}
+        switcher={
+          <ContextSwitch
+            businesses={businesses ?? [business]}
+            current={business}
+            onCustomer={() => router.push("/")}
+            onManage={(candidate) => {
+              rememberManaged(candidate.id);
+              setBusiness(candidate);
+            }}
+          />
+        }
         trailing={
           user !== null ? (
             <AccountButton
@@ -267,6 +287,7 @@ function ManageApp() {
             badge: <BuildingIcon />,
             current: candidate.id === business.id,
             onClick: () => {
+              rememberManaged(candidate.id);
               setBusiness(candidate);
               setDrawerOpen(false);
             },

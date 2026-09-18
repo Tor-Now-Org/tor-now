@@ -5454,3 +5454,132 @@ test.describe("the recovery time after an appointment", () => {
     expect(offered.slice(0, 3)).toEqual(["09:00", "09:50", "10:40"]);
   });
 });
+
+/**
+ * Crossing between the customer app and a business.
+ *
+ * One identity, two contexts, one control — in the same corner both ways. The
+ * account drawer stays what it was: the list of everywhere you can be, with the
+ * roles on it. The switch is the shortcut, not a replacement for it.
+ */
+test.describe("the switch between customer and management", () => {
+  const signedInAt = async (page: Page, shop: { owner: { token: string } }) => {
+    await page.addInitScript(
+      ([key, token]) => window.localStorage.setItem(key as string, token as string),
+      ["tor-now.session", shop.owner.token],
+    );
+  };
+
+  test("one tap in, one tap back, and the same control both ways", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `מעבר ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await signedInAt(page, shop);
+    await page.goto("/");
+    await ready(page);
+
+    const switcher = page.getByRole("group", { name: "מעבר בין לקוח לניהול" });
+    await expect(switcher).toBeVisible({ timeout: 15_000 });
+    // The mark keeps its place beside it — the switch is an addition to the
+    // header, not a replacement for what was there.
+    await expect(page.getByRole("banner").getByText("תור")).toBeVisible();
+
+    await switcher.getByRole("button", { name: "ניהול" }).click();
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    // Back through the same control, in the same corner.
+    await page
+      .getByRole("group", { name: "מעבר בין לקוח לניהול" })
+      .getByRole("button", { name: "לקוח" })
+      .click();
+    await expect(page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…")).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("is not drawn for somebody who staffs nothing", async ({ page }) => {
+    const phone = uniquePhone();
+    await signInDirectly(page, phone, "לקוחה בלבד");
+    await page.goto("/");
+    await ready(page);
+
+    // Most people are only customers, and a switch with one side is furniture.
+    await expect(page.getByRole("group", { name: "מעבר בין לקוח לניהול" })).toHaveCount(0);
+  });
+
+  test("opens the business it was last in, without asking", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const first = await aBusinessWithOpenHours({ name: `ראשון ${Date.now()}`, ownerPhone });
+    const second = await aBusinessWithOpenHours({ name: `שני ${Date.now()}`, ownerPhone });
+
+    await signedInAt(page, first);
+    await page.goto(`/manage?business=${second.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    // With several, the switch carries the shop rather than the word — a
+    // button whose destination you cannot see is one you must press to learn.
+    const switcher = page.getByRole("group", { name: "מעבר בין לקוח לניהול" });
+    await expect(switcher.getByText(second.business.name)).toBeVisible();
+
+    await switcher.getByRole("button", { name: "לקוח" }).click();
+    await expect(page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // And back in: the second one, because that is where they were. Not a
+    // question, and not the one that happens to sort first.
+    await page
+      .getByRole("group", { name: "מעבר בין לקוח לניהול" })
+      .getByRole("button", { name: "ניהול" })
+      .click();
+    await expect(
+      page.getByRole("group", { name: "מעבר בין לקוח לניהול" }).getByText(second.business.name),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("changing shop is a question for the inside, and keeps the roles on it", async ({
+    page,
+  }) => {
+    const ownerPhone = uniquePhone();
+    const first = await aBusinessWithOpenHours({ name: `אלף ${Date.now()}`, ownerPhone });
+    const second = await aBusinessWithOpenHours({ name: `בית ${Date.now()}`, ownerPhone });
+
+    await signedInAt(page, first);
+    await page.goto(`/manage?business=${first.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    const switcher = page.getByRole("group", { name: "מעבר בין לקוח לניהול" });
+    await switcher.getByText(first.business.name).click();
+
+    // The drawer's own rows, so the role is on them exactly as it is there.
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: "איזה עסק" })).toBeVisible();
+    await expect(sheet.getByText("בעלים").first()).toBeVisible();
+    await sheet.getByText(second.business.name).click();
+
+    await expect(
+      page.getByRole("group", { name: "מעבר בין לקוח לניהול" }).getByText(second.business.name),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("the account drawer is untouched, roles and all", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `מגירה ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await signedInAt(page, shop);
+    await page.goto("/");
+    await ready(page);
+
+    // The switch is the shortcut; the drawer is still the list of everywhere
+    // you can be, with the business badge and the role on each.
+    await page.getByRole("button", { name: "החשבון שלי" }).click();
+    const drawer = page.getByRole("dialog");
+    await expect(drawer.getByText(shop.business.name)).toBeVisible({ timeout: 15_000 });
+    await expect(drawer.getByText(/בעלים/).first()).toBeVisible();
+    await expect(drawer.getByText("כלקוח")).toBeVisible();
+  });
+});

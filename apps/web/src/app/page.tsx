@@ -22,6 +22,8 @@ import { MyAppointments } from "@/components/customer/my-appointments.tsx";
 import { Profile } from "@/components/customer/profile.tsx";
 import { VisitedBusinesses } from "@/components/customer/visited-businesses.tsx";
 import { AccountDrawer } from "@/components/account-drawer.tsx";
+import { ContextSwitch } from "@/components/context-switch.tsx";
+import { businessToManage, lastManaged, rememberManaged } from "@/lib/last-managed.ts";
 import { DismissableOwnerPitch, OwnerPitch } from "@/components/owner-pitch.tsx";
 import { Button, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
@@ -169,6 +171,20 @@ function CustomerAppInner() {
               backLabel: copy.back,
             }
           : {})}
+        // One tap into the diary they were last in. Absent for somebody who
+        // staffs nothing, which is almost everybody.
+        switcher={
+          <ContextSwitch
+            businesses={owned ?? []}
+            current={null}
+            onCustomer={() => undefined}
+            onManage={(mine) => {
+              const wanted = businessToManage(owned ?? [], lastManaged()) ?? mine;
+              rememberManaged(wanted.id);
+              router.push(`/manage?business=${wanted.id}`);
+            }}
+          />
+        }
         trailing={
           user !== null ? (
             <AccountButton
@@ -275,7 +291,12 @@ function CustomerAppInner() {
             title: mine.name,
             hint: `${ownerCopy[`role${staffRole(mine)}`]} · ${copy.manageIt}`,
             badge: <BuildingIcon />,
-            onClick: () => router.push(`/manage?business=${mine.id}`),
+            onClick: () => {
+              // However somebody crosses over, the switch should open where
+              // they last were.
+              rememberManaged(mine.id);
+              router.push(`/manage?business=${mine.id}`);
+            },
           })),
           {
             key: "profile",
