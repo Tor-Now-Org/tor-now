@@ -613,7 +613,7 @@ export const BusinessSearch = ({
       )}
 
       {visible.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 64 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: favoritesOnly ? 0 : 64 }}>
           <span className="hint" role="status">
             {visible.length === 1 ? copy.resultCountOne : copy.resultCount.replace("{count}", String(visible.length))}
             {userPos !== null && ` · ${copy.nearestFirst}`}

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { ready, signInDirectly, uniquePhone } from "./support.ts";
 
 /**
  * Support.
@@ -43,9 +44,12 @@ test.describe("support", () => {
     await expect(page.getByRole("button", { name: /שליחה|לשלוח/ })).toHaveCount(0);
   });
 
-  test("rides in the header of the screen somebody is stuck on", async ({ page }) => {
+  test("is one of the places the account drawer offers", async ({ page }) => {
+    await signInDirectly(page, uniquePhone(), "יעל אבידן");
     await page.goto("/");
+    await ready(page);
 
+    await page.getByRole("button", { name: "החשבון שלי" }).click();
     await page.getByRole("link", { name: "תמיכה" }).click();
     await expect(page.getByRole("heading", { name: "תמיכה" })).toBeVisible();
 
@@ -55,8 +59,9 @@ test.describe("support", () => {
 
   test("is reachable from the screen somebody cannot get past", async ({ page }) => {
     // Somebody who never receives a code is stuck here with no session, so the
-    // header mark is the only way to a person — and the way back must return
-    // them to the sign-in they abandoned, not to the front door.
+    // drawer's row is out of reach — the link on this screen is the only way
+    // to a person, and the way back must return them to the sign-in they
+    // abandoned, not to the front door.
     await page.goto("/signin");
 
     await page.getByRole("link", { name: "תמיכה" }).click();

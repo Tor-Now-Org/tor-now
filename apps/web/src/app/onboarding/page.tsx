@@ -224,7 +224,7 @@ export default function OnboardingPage() {
       open={drawerOpen}
       onClose={() => setDrawerOpen(false)}
       {...(user === null ? {} : { userName: user.name })}
-      labels={{ usingAs: customerCopy.usingAs, signOut: customerCopy.signOut }}
+      labels={{ account: customerCopy.account, signOut: customerCopy.signOut }}
       places={[
         {
           key: "customer",

@@ -258,7 +258,7 @@ function ManageApp() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         {...(user === null ? {} : { userName: user.name })}
-        labels={{ usingAs: copy.usingAs, signOut: copy.signOut }}
+        labels={{ account: copy.account, signOut: copy.signOut }}
         places={[
           ...(businesses ?? [business]).map((candidate) => ({
             key: candidate.id,

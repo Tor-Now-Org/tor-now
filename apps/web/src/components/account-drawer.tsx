@@ -1,9 +1,12 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
 
 import { Sheet } from "./ui.tsx";
 import { SignOutButton } from "./sign-out.tsx";
+import { SUPPORT_PATH, SupportMark } from "./support-link.tsx";
+import { useCopy } from "@/lib/i18n/index.tsx";
 
 /**
  * One identity, two contexts — and one drawer for both.
@@ -98,23 +101,34 @@ export const AccountDrawer = ({
   onClose: () => void;
   /** Absent before the session loads, when the drawer cannot be opened anyway. */
   userName?: string;
-  labels: { usingAs: string; signOut: string };
+  labels: { account: string; signOut: string };
   places: AccountPlace[];
-  /** Anything the app adds under the places — opening a business, say. */
+  /** Anything the app adds — opening a business, say. Drawn at the top of
+   *  the list, where a business of your own would otherwise be. */
   extra?: ReactNode;
   onSignedOut?: () => void;
-}) => (
+}) => {
+  // The one word the drawer reads for itself: support is a single destination
+  // with a single name, so both apps would pass the same string.
+  const support = useCopy("support");
+
+  return (
   <Sheet open={open} onClose={onClose} labelledBy="drawer-title">
     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
       {userName !== undefined && (
         <span style={{ fontSize: 19, fontWeight: 700 }}>{userName}</span>
       )}
+      {/* What the drawer is, rather than a sentence about the list under it:
+          it names the dialog for a screen reader, and it stays true now that
+          the list holds support as well as the places you can be. */}
       <h2
         id="drawer-title"
         style={{ fontSize: 15, fontWeight: 500, color: "var(--muted)", marginBlockEnd: 2 }}
       >
-        {labels.usingAs}
+        {labels.account}
       </h2>
+
+      {extra}
 
       {places.map((place) => (
         <button
@@ -159,14 +173,19 @@ export const AccountDrawer = ({
         </button>
       ))}
 
-      {extra}
+      {/* One of the places you can go, drawn like the others: the list asks
+          where to continue, and a person is one of the answers. */}
+      <Link href={SUPPORT_PATH} style={ROW}>
+        <span style={{ ...BADGE, background: "var(--sunken)", color: "var(--accent-strong)" }}>
+          <SupportMark />
+        </span>
+        <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>{support.supportLink}</span>
+      </Link>
 
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          // Help lives in the header on every screen, so the drawer does not
-          // carry it too.
           justifyContent: "flex-start",
           borderBlockStart: "1px solid var(--line)",
           marginBlockStart: 8,
@@ -189,4 +208,5 @@ export const AccountDrawer = ({
       </div>
     </div>
   </Sheet>
-);
+  );
+};

@@ -254,16 +254,22 @@ function CustomerAppInner() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         {...(user === null ? {} : { userName: user.name })}
-        labels={{ usingAs: copy.usingAs, signOut: copy.signOut }}
+        labels={{ account: copy.account, signOut: copy.signOut }}
         places={[
-          {
-            key: "customer",
-            title: copy.asCustomer,
-            hint: copy.asCustomerHint,
-            badge: <CalendarIcon />,
-            current: true,
-            onClick: () => setDrawerOpen(false),
-          },
+          // With no business there is nothing to switch between, and a list
+          // whose only context is the one you are in answers no question.
+          ...(ownsNothing
+            ? []
+            : [
+                {
+                  key: "customer",
+                  title: copy.asCustomer,
+                  hint: copy.asCustomerHint,
+                  badge: <CalendarIcon />,
+                  current: true,
+                  onClick: () => setDrawerOpen(false),
+                },
+              ]),
           ...(owned ?? []).map((mine) => ({
             key: mine.id,
             title: mine.name,

@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "./logo.tsx";
-import { HelpButton } from "./support-link.tsx";
 import { useLanguage } from "@/lib/i18n/index.tsx";
 
 /**
@@ -104,9 +103,6 @@ export const AppHeader = ({
           gap: 8,
         }}
       >
-        {/* Ahead of the language switch and the account: the least-used of the
-            three sits furthest from the thumb's easiest corner. */}
-        <HelpButton />
         <button
           onClick={toggleLanguage}
           style={{

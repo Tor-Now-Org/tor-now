@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 import { useCopy } from "@/lib/i18n/index.tsx";
 
@@ -41,47 +40,18 @@ export const SupportLink = () => {
 /**
  * The same destination, as a mark rather than a word.
  *
- * The links in the drawers are only found by somebody already looking, which
- * is the wrong way round: the moment help is wanted is the moment the person
- * is stuck on the screen in front of them. So it rides in the header on every
- * screen, in the corner where the language switch and the account already are.
- *
- * It hides on support itself — a control that goes where you already are is
- * noise — and it is drawn as quietly as the language switch, because it is a
- * way out of trouble, not somewhere the product wants people to go.
+ * Only the glyph: it is worn by the drawer's support row, which supplies its
+ * own box and its own name. It stays here so the mark and the path it stands
+ * for cannot drift apart.
  */
-export const HelpButton = () => {
-  const copy = useCopy("support");
-  const pathname = usePathname();
-
-  if (pathname === SUPPORT_PATH) return null;
-
-  return (
-    <Link
-      href={SUPPORT_PATH}
-      aria-label={copy.title}
-      title={copy.title}
-      style={{
-        display: "grid",
-        placeItems: "center",
-        width: 40,
-        height: 40,
-        flexShrink: 0,
-        borderRadius: 999,
-        border: "1px solid var(--line)",
-        background: "var(--raised)",
-        color: "var(--muted)",
-      }}
-    >
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path
-          d="M9.2 9.1a2.9 2.9 0 1 1 3.6 2.82c-.6.16-.98.72-.98 1.34v.74"
-          stroke="currentColor"
-          strokeWidth="1.9"
-          strokeLinecap="round"
-        />
-        <circle cx="11.85" cy="17.1" r="1.15" fill="currentColor" />
-      </svg>
-    </Link>
-  );
-};
+export const SupportMark = () => (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M9.2 9.1a2.9 2.9 0 1 1 3.6 2.82c-.6.16-.98.72-.98 1.34v.74"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    />
+    <circle cx="11.85" cy="17.1" r="1.15" fill="currentColor" />
+  </svg>
+);

@@ -50,7 +50,6 @@ export const OwnerPitch = () => {
       style={{
         ...GROUND,
         gap: 11,
-        marginBlockStart: 6,
         padding: 14,
         // The mark's own cyan, as a floor under the accent: it marks this out
         // as the one row in the drawer that is an offer rather than a place.

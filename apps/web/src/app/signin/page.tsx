@@ -8,6 +8,7 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppHeader } from "@/components/app-header.tsx";
 import { Logo } from "@/components/logo.tsx";
 import { Button } from "@/components/ui.tsx";
+import { SupportLink } from "@/components/support-link.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 
 /**
@@ -63,6 +64,9 @@ export default function SignInPage() {
               }}
             />
 
+            {/* The drawer's support row is behind a sign-in, and the person
+                who most needs help is the one who could not get a code. */}
+            <SupportLink />
           </div>
         )}
       </main>
