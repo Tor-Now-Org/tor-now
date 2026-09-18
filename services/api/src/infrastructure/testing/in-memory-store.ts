@@ -8,6 +8,7 @@ import type {
   MembershipResource,
   Payment,
   Resource,
+  Review,
   Service,
   Subscription,
   User,
@@ -34,6 +35,8 @@ export type Store = {
   users: User[];
   businesses: Business[];
   businessPhotos: BusinessPhoto[];
+  /** The author's name is read from `users` on the way out, as the database joins it. */
+  reviews: Omit<Review, "authorName">[];
   memberships: Membership[];
   membershipResources: MembershipResource[];
   resources: Resource[];
@@ -63,6 +66,7 @@ export const emptyStore = (): Store => ({
   users: [],
   businesses: [],
   businessPhotos: [],
+  reviews: [],
   memberships: [],
   membershipResources: [],
   resources: [],

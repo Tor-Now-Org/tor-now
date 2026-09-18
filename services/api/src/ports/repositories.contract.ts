@@ -1780,6 +1780,51 @@ export const describeRepositoryContract = (
       });
     });
 
+    // --- Reviews --------------------------------------------------------
+
+    it("keeps one review per customer per business, edited in place", async () => {
+      await withRepositories(async (repositories) => {
+        const mine = await aBookableBusiness(repositories, "3201");
+        const theirs = await aBookableBusiness(repositories, "3202");
+        const customer = await repositories.users.create({
+          phone: "+972500003203",
+          givenName: "דנה",
+          familyName: "לוי",
+          birthDate: null,
+        });
+        const review = { businessId: mine.business.id, customerId: customer.id };
+
+        expect(await repositories.reviews.findFor(review.businessId, review.customerId)).toBeNull();
+        const first = await repositories.reviews.put({
+          ...review,
+          stars: 3,
+          comment: "בסדר",
+          anonymous: false,
+        });
+        const edited = await repositories.reviews.put({
+          ...review,
+          stars: 5,
+          comment: "מעולה",
+          anonymous: false,
+        });
+
+        expect(edited).toMatchObject({ id: first.id, stars: 5, comment: "מעולה", authorName: "דנה" });
+        expect(await repositories.reviews.listForBusiness(mine.business.id)).toMatchObject([
+          { id: first.id, stars: 5, customerId: customer.id },
+        ]);
+        expect(await repositories.reviews.listForBusiness(theirs.business.id)).toEqual([]);
+
+        // Anonymous hides who wrote it from the public list, not from the row.
+        await repositories.reviews.put({ ...review, stars: 2, comment: "", anonymous: true });
+        expect(await repositories.reviews.listForBusiness(mine.business.id)).toMatchObject([
+          { id: first.id, anonymous: true, authorName: null, customerId: null },
+        ]);
+        expect(
+          await repositories.reviews.findFor(review.businessId, review.customerId),
+        ).toMatchObject({ id: first.id, anonymous: true, customerId: customer.id });
+      });
+    });
+
     // --- Discovery: ADR 0011 --------------------------------------------
 
     it("finds an active business by part of its name and skips inactive ones", async () => {

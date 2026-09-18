@@ -12,6 +12,7 @@ import {
   type DateOverride,
   type Payment,
   type Resource,
+  type Review,
   type Service,
   type Subscription,
   type Customer,
@@ -81,6 +82,20 @@ export const businessPhotoOut = (photo: BusinessPhoto, urlFor: (path: string) =>
   url: urlFor(photo.storagePath),
   contentType: photo.contentType,
   byteSize: photo.byteSize,
+});
+
+/**
+ * Who wrote it goes out as a given name only, and not at all for an anonymous
+ * review; the author's id stays inside either way.
+ */
+export const reviewOut = (review: Review) => ({
+  id: review.id,
+  stars: review.stars,
+  comment: review.comment,
+  anonymous: review.anonymous,
+  authorName: review.anonymous ? null : review.authorName,
+  createdAt: formatInstant(review.createdAt),
+  updatedAt: formatInstant(review.updatedAt),
 });
 
 export const serviceOut = (service: Service) => ({

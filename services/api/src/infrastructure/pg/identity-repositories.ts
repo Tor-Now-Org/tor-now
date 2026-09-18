@@ -13,6 +13,7 @@ import type {
   MembershipRepository,
   MembershipResourceRepository,
   Page,
+  ReviewRepository,
   UserRepository,
 } from "../../ports/repositories.ts";
 import type { Transaction } from "./client.ts";
@@ -22,6 +23,7 @@ import {
   toLocalDate,
   toMembership,
   toMembershipResource,
+  toReview,
   toUser,
   type Row,
 } from "./mappers.ts";
@@ -472,3 +474,42 @@ export const businessPhotoRepository = (
     await tx`delete from business_photo where id = ${id}`;
   },
 });
+
+/**
+ * The public list reads through app.business_reviews, which names the author:
+ * RLS on app_user would otherwise hide the name from anybody but the author
+ * and the owner. The author's own review is read from the table, since the
+ * function withholds who wrote an anonymous one.
+ */
+export const reviewRepository = (tx: Transaction): ReviewRepository => {
+  const findFor: ReviewRepository["findFor"] = async (businessId, customerId) => {
+    const rows = await tx<Row[]>`
+      select r.*, case when r.anonymous then null else u.given_name end as author_name
+      from review r
+      left join app_user u on u.id = r.customer_id
+      where r.business_id = ${businessId} and r.customer_id = ${customerId}`;
+    const row = rows[0];
+    return row === undefined ? null : toReview(row);
+  };
+
+  return {
+    async listForBusiness(businessId) {
+      const rows = await tx<Row[]>`select * from app.business_reviews(${businessId})`;
+      return rows.map(toReview);
+    },
+
+    findFor,
+
+    async put({ businessId, customerId, stars, comment, anonymous }) {
+      await tx`
+        insert into review (business_id, customer_id, stars, comment, anonymous)
+        values (${businessId}, ${customerId}, ${stars}, ${comment}, ${anonymous})
+        on conflict (business_id, customer_id) do update
+          set stars = excluded.stars, comment = excluded.comment,
+              anonymous = excluded.anonymous, updated_at = now()`;
+      const written = await findFor(businessId, customerId);
+      if (written === null) throw notFound("Review");
+      return written;
+    },
+  };
+};

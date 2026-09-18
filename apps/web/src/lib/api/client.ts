@@ -11,6 +11,8 @@ import type {
   BusinessDto,
   BusinessPhotoDto,
   BusinessProfileDto,
+  BusinessReviewsDto,
+  ReviewDto,
   BusinessSummaryDto,
   MonthDayDto,
   CalendarAppointmentDto,
@@ -272,6 +274,20 @@ export const api = {
   businessProfile: (businessId: string, range?: { from: string; to: string }) =>
     request<BusinessProfileDto>(`/businesses/${businessId}`, {
       ...(range === undefined ? {} : { query: range }),
+    }),
+
+  reviews: (token: string | null, businessId: string) =>
+    request<BusinessReviewsDto>(`/businesses/${businessId}/reviews`, { token }),
+
+  writeReview: (
+    token: string,
+    businessId: string,
+    review: { stars: number; comment: string; anonymous: boolean },
+  ) =>
+    request<ReviewDto>(`/businesses/${businessId}/reviews/mine`, {
+      method: "PUT",
+      body: review,
+      token,
     }),
 
   availability: (

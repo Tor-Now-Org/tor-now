@@ -297,6 +297,10 @@ export const theNextStart = async (shop: {
   return startAt;
 };
 
+/** The calendar day an instant falls on in the business's timezone. */
+export const localDayOf = (instant: string): string =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: BUSINESS_TIMEZONE }).format(new Date(instant));
+
 /**
  * A calendar day in the business's timezone, which is what the availability
  * window is expressed in — not the machine's, which may be somewhere else.

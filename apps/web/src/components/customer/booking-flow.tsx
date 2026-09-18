@@ -23,6 +23,7 @@ import { LogoMark } from "../logo.tsx";
 import { SlotGrid } from "../slot-grid.tsx";
 import { VerifyPanel } from "../verify-panel.tsx";
 import { BusinessPhotos } from "./business-photos.tsx";
+import { ReviewPrompt, ReviewSummary, useBusinessReviews } from "./business-reviews.tsx";
 import { Button, Card, Critical, MultilineField, Sheet, Spinner, Warning } from "../ui.tsx";
 
 /** How much of the calendar the strip offers at once. */
@@ -57,6 +58,7 @@ export const BookingFlow = ({
   const { language } = useLanguage();
   const errorText = useErrorText();
   const { token, signIn } = useSession();
+  const reviews = useBusinessReviews(business.id);
 
   const [profile, setProfile] = useState<BusinessProfileDto | null>(null);
   const [service, setService] = useState<ServiceDto | null>(null);
@@ -351,6 +353,15 @@ export const BookingFlow = ({
           </span>
         )}
         {business.address !== null && <span className="hint">{business.address}</span>}
+        {reviews.average !== null && reviews.held !== null && (
+          <a href="#reviews" className="hint" style={{ alignSelf: "start", color: "var(--muted)" }}>
+            <span style={{ color: "var(--caution)" }} aria-hidden="true">★</span>{" "}
+            {reviews.average.toFixed(1)} ·{" "}
+            {fillParts(copy.reviewsTotal, { count: String(reviews.held.reviews.length) })
+              .map((part) => part.text)
+              .join("")}
+          </a>
+        )}
         {distance !== null && (
           <span
             style={{
@@ -376,6 +387,8 @@ export const BookingFlow = ({
           </p>
         )}
       </div>
+
+      <ReviewPrompt businessName={business.name} reviews={reviews} />
 
       {/* The ways to a person, on the screen where the questions a form cannot
           answer come up — "do you take card", "my child is coming too". Above
@@ -581,6 +594,8 @@ export const BookingFlow = ({
       </section>
 
       {error !== null && stage === "choosing" && <Critical>{error}</Critical>}
+
+      <ReviewSummary reviews={reviews} />
 
       {/* The page above this line is the demonstration: photos, services, real
           free time, a booking in one tap. An owner checking a business out —

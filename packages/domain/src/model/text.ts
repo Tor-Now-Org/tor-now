@@ -39,6 +39,7 @@ export const TEXT_RULES = Object.freeze({
   code: { min: 4, max: 8 },
   /** What Instagram itself allows in a handle, minus the leading @. */
   instagramHandle: { min: 1, max: 30 },
+  reviewComment: { min: 0, max: 1000 },
 }) satisfies Readonly<Record<string, TextRule>>;
 
 /**

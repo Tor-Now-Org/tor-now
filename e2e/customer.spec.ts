@@ -86,9 +86,10 @@ test.describe("finding and booking", () => {
     await map.getByTitle(name).dispatchEvent("click");
     await expect(map.getByText(name)).toBeVisible();
 
-    // Clearing the search empties the map rather than showing everything.
+    // Clearing the search goes back to browsing what is nearby, which may well
+    // include this pin — so what it must do is close the business that was open.
     await map.getByRole("searchbox").fill("");
-    await expect(map.getByTitle(name)).toHaveCount(0);
+    await expect(map.getByText(name)).toHaveCount(0);
     await map.getByRole("searchbox").fill(name);
 
     await map.getByTitle(name).dispatchEvent("click");

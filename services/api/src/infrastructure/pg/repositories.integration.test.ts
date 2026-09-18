@@ -8,6 +8,7 @@ import {
   administratorAllowlistRepository,
   businessPhotoRepository,
   businessRepository,
+  reviewRepository,
   membershipRepository,
   membershipResourceRepository,
   userRepository,
@@ -102,6 +103,7 @@ if (databaseUrl === undefined || databaseUrl === "") {
         users: recording("users", userRepository(transaction)),
         businesses: recording("businesses", businessRepository(transaction)),
         businessPhotos: recording("businessPhotos", businessPhotoRepository(transaction)),
+        reviews: recording("reviews", reviewRepository(transaction)),
         memberships: recording("memberships", membershipRepository(transaction)),
         membershipResources: recording(
           "membershipResources",

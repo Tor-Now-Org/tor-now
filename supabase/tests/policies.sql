@@ -176,5 +176,64 @@ begin
     raise exception 'POLICY BROKEN: a worker renamed the business';
   end if;
 
+  -- --- reviews ---------------------------------------------------------------
+  -- The probe's appointment is still to come, so reviewing waits until one has
+  -- ended: refused now, allowed once a past one exists.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_customer)::text, true);
+  set local role authenticated;
+  v_failed := false;
+  begin
+    insert into review (business_id, customer_id, stars) values (v_biz, v_customer, 5);
+  exception when insufficient_privilege or others then v_failed := true;
+  end;
+  reset role;
+  if not v_failed then
+    raise exception 'POLICY BROKEN: a customer reviewed before their appointment ended';
+  end if;
+  insert into appointment (business_id, resource_id, service_id, customer_id,
+      start_at, end_at, occupied_until, service_name, resource_name,
+      price_minor, duration_minutes, buffer_minutes)
+    values (v_biz, v_res, v_svc, v_customer, now() - interval '2 hours', now() - interval '90 minutes',
+            now() - interval '80 minutes', 'probe cut', 'probe chair', 8000, 30, 10);
+
+  -- A customer who has been writes one, and edits it in place; anybody may
+  -- read it with the author's given name.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_customer)::text, true);
+  set local role authenticated;
+  insert into review (business_id, customer_id, stars, comment) values (v_biz, v_customer, 4, 'probe');
+  insert into review (business_id, customer_id, stars, comment) values (v_biz, v_customer, 5, 'edited')
+    on conflict (business_id, customer_id) do update set stars = excluded.stars, comment = excluded.comment;
+  reset role;
+  set local role anon;
+  select count(*) into v_seen from app.business_reviews(v_biz)
+    where stars = 5 and author_name = 'לקוחה';
+  reset role;
+  if v_seen <> 1 then
+    raise exception 'POLICY BROKEN: a customer review was not written, edited, or readable';
+  end if;
+
+  -- Anonymous hides the author from everybody reading, and keeps it in the row.
+  update review set anonymous = true where business_id = v_biz and customer_id = v_customer;
+  set local role anon;
+  select count(*) into v_seen from app.business_reviews(v_biz)
+    where author_name is null and customer_id is null;
+  reset role;
+  if v_seen <> 1 then
+    raise exception 'POLICY BROKEN: an anonymous review named its author';
+  end if;
+
+  -- Somebody with no confirmed appointment here cannot write one.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_stranger)::text, true);
+  set local role authenticated;
+  v_failed := false;
+  begin
+    insert into review (business_id, customer_id, stars) values (v_biz, v_stranger, 1);
+  exception when insufficient_privilege or others then v_failed := true;
+  end;
+  reset role;
+  if not v_failed then
+    raise exception 'POLICY BROKEN: a stranger reviewed a business they never booked';
+  end if;
+
   raise exception 'ALL_POLICIES_HELD';
 end $$;

@@ -10,6 +10,7 @@ import type {
   MembershipResourceRepository,
   Repositories,
   ResourceRepository,
+  ReviewRepository,
   ServiceRepository,
   UserRepository,
   WorkingHoursRepository,
@@ -357,6 +358,26 @@ export const auditedBusinessPhotos = (
   },
 });
 
+export const auditedReviews = (
+  inner: ReviewRepository,
+  context: Context,
+): ReviewRepository => ({
+  ...inner,
+  async put(review) {
+    const before = await inner.findFor(review.businessId, review.customerId);
+    const after = await inner.put(review);
+    await record(
+      context,
+      before === null ? AUDIT_ACTIONS.reviewSubmitted : AUDIT_ACTIONS.reviewEdited,
+      "Review",
+      after.id,
+      before,
+      after,
+    );
+    return after;
+  },
+});
+
 export const auditedUsers = (
   inner: UserRepository,
   context: Context,
@@ -415,6 +436,7 @@ export const withAuditing = (
   users: auditedUsers(repositories.users, context),
   businesses: auditedBusinesses(repositories.businesses, context),
   businessPhotos: auditedBusinessPhotos(repositories.businessPhotos, context),
+  reviews: auditedReviews(repositories.reviews, context),
   memberships: auditedMemberships(repositories.memberships, context),
   membershipResources: auditedMembershipResources(repositories.membershipResources, context),
   resources: auditedResources(repositories.resources, context),

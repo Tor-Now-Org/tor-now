@@ -195,6 +195,27 @@ export const createApp = (services: Services) => {
     });
   });
 
+  app.get("/businesses/:businessId/reviews", async (context) => {
+    const held = await services.reviews.forBusiness(
+      actorOf(context),
+      idParam(context, "businessId"),
+    );
+    return context.json({
+      reviews: held.reviews.map(wire.reviewOut),
+      mine: held.mine === null ? null : wire.reviewOut(held.mine),
+      mayReview: held.mayReview,
+    });
+  });
+
+  app.put("/businesses/:businessId/reviews/mine", async (context) => {
+    const body = await parseBody(context, schema.reviewSchema);
+    return context.json(
+      wire.reviewOut(
+        await services.reviews.write(actorOf(context), idParam(context, "businessId"), body),
+      ),
+    );
+  });
+
   /**
    * The bytes, for the deployment that has no Storage behind it and serves its
    * own. With Storage the URLs point at the bucket's CDN and nothing reaches

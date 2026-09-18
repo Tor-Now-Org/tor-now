@@ -3,6 +3,7 @@ import {
   aBusinessWithOpenHours,
   asTyped,
   aDayFromNow,
+  localDayOf,
   theNextStart,
   anInstantAt,
   call,
@@ -1045,7 +1046,14 @@ test.describe("finding things in a day", () => {
     // about today.
     await expect(page.getByText("2 תורים")).toBeVisible();
     await page.getByRole("button", { name: "היום" }).click();
-    await expect(page.getByText("1 תורים")).toBeVisible();
+    // With a customer named, "today" means today, not the day on screen — and
+    // the next free start is tomorrow once today's hours are over, so what
+    // "today" holds depends on when the suite runs.
+    if (localDayOf(soon) === aDayFromNow(0)) {
+      await expect(page.getByText("1 תורים")).toBeVisible();
+    } else {
+      await expect(page.getByText("אין לו תור היום")).toBeVisible();
+    }
     await page.getByRole("button", { name: "הכול" }).click();
     await expect(page.getByText("2 תורים")).toBeVisible();
 

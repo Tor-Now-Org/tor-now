@@ -16,6 +16,7 @@ import {
   type Payment,
   type Resource,
   type PhotoSlot,
+  type Review,
   type Service,
   type Subscription,
   type User,
@@ -118,6 +119,18 @@ export const toBusinessPhoto = (row: Row): BusinessPhoto => ({
   storagePath: text(row["storage_path"]),
   contentType: text(row["content_type"]),
   byteSize: int(row["byte_size"]),
+});
+
+export const toReview = (row: Row): Review => ({
+  id: asId(text(row["id"])),
+  businessId: asId(text(row["business_id"])),
+  customerId: row["customer_id"] == null ? null : asId(text(row["customer_id"])),
+  stars: int(row["stars"]),
+  comment: text(row["comment"]),
+  anonymous: bool(row["anonymous"]),
+  authorName: nullableText(row["author_name"]),
+  createdAt: toInstant(row["created_at"]),
+  updatedAt: toInstant(row["updated_at"]),
 });
 
 export const toMembership = (row: Row): Membership => ({

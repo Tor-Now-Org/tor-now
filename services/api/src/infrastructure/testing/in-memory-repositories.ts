@@ -11,6 +11,7 @@ import {
   type Appointment,
   type Business,
   type BusinessPhoto,
+  type Review,
   type Instant,
   type LocalDate,
   type TimeZone,
@@ -336,6 +337,59 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
       },
     },
+
+    reviews: (() => {
+      // As app.business_reviews: soft-deleted authors are hidden, erased ones
+      // are not, and an anonymous review loses its author on the way out.
+      const named = (
+        review: Omit<Review, "authorName">,
+      ): Review | null => {
+        const author = store.users.find((user) => user.id === review.customerId);
+        if (author === undefined) return null;
+        if (author.deletedAt !== null && author.anonymisedAt === null) return null;
+        return { ...review, authorName: review.anonymous ? null : author.givenName };
+      };
+      const held = (businessId: string, customerId: string) =>
+        store.reviews.find(
+          (review) => review.businessId === businessId && review.customerId === customerId,
+        );
+      const findFor = async (businessId: string, customerId: string) => {
+        const review = held(businessId, customerId);
+        return review === undefined ? null : named(review);
+      };
+      return {
+        async listForBusiness(businessId) {
+          return store.reviews
+            .filter((review) => review.businessId === businessId)
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .map(named)
+            .filter((review): review is Review => review !== null)
+            .map((review) => (review.anonymous ? { ...review, customerId: null } : review));
+        },
+        findFor,
+        async put(input) {
+          const existing = held(input.businessId, input.customerId);
+          if (existing === undefined) {
+            store.reviews.push({
+              id: asId(store.nextId("review")),
+              ...input,
+              createdAt: now(),
+              updatedAt: now(),
+            });
+          } else {
+            Object.assign(existing, {
+              stars: input.stars,
+              comment: input.comment,
+              anonymous: input.anonymous,
+              updatedAt: now(),
+            });
+          }
+          const written = await findFor(input.businessId, input.customerId);
+          if (written === null) throw notFound("Review");
+          return written;
+        },
+      };
+    })(),
 
     memberships: {
       async findById(id) {

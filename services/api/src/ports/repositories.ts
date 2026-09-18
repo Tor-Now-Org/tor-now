@@ -33,6 +33,7 @@ import type {
   WorkingHours,
   WorkingHoursId,
   BusinessCategory,
+  Review,
 } from "@tor-now/domain";
 
 /**
@@ -164,6 +165,24 @@ export type BusinessPhotoRepository = {
     byteSize: number;
   }): Promise<BusinessPhoto>;
   delete(id: BusinessPhotoId): Promise<void>;
+};
+
+export type ReviewRepository = {
+  /** Newest first, each with its author's given name unless it is anonymous. */
+  listForBusiness(businessId: BusinessId): Promise<readonly Review[]>;
+  /** The customer's own, author included even when anonymous. */
+  findFor(businessId: BusinessId, customerId: UserId): Promise<Review | null>;
+  /**
+   * The customer's one review of this Business: written the first time, edited
+   * every time after. The unique pair makes a second one impossible.
+   */
+  put(review: {
+    businessId: BusinessId;
+    customerId: UserId;
+    stars: number;
+    comment: string;
+    anonymous: boolean;
+  }): Promise<Review>;
 };
 
 export type MembershipRepository = {
@@ -634,6 +653,7 @@ export type Repositories = {
   readonly users: UserRepository;
   readonly businesses: BusinessRepository;
   readonly businessPhotos: BusinessPhotoRepository;
+  readonly reviews: ReviewRepository;
   readonly memberships: MembershipRepository;
   readonly membershipResources: MembershipResourceRepository;
   readonly resources: ResourceRepository;

@@ -43,6 +43,8 @@ export const AUDIT_ACTIONS = {
   blockDeleted: "BLOCK_DELETED",
   businessPhotoChanged: "BUSINESS_PHOTO_CHANGED",
   businessPhotoRemoved: "BUSINESS_PHOTO_REMOVED",
+  reviewSubmitted: "REVIEW_SUBMITTED",
+  reviewEdited: "REVIEW_EDITED",
   userUpdated: "USER_UPDATED",
   userDeleted: "USER_DELETED",
   userRestored: "USER_RESTORED",

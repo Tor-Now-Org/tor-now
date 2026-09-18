@@ -243,6 +243,25 @@ export type CalendarAppointmentDto = AppointmentDto & {
 };
 
 /** One picture of a business. Slot 0 is the cover; 1-3 are the rest. */
+export type ReviewDto = {
+  id: string;
+  stars: number;
+  comment: string;
+  anonymous: boolean;
+  /** Null when anonymous. */
+  authorName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BusinessReviewsDto = {
+  reviews: ReviewDto[];
+  /** The caller's own, when signed in and written. */
+  mine: ReviewDto | null;
+  /** A confirmed appointment here is what allows writing one. */
+  mayReview: boolean;
+};
+
 export type BusinessPhotoDto = {
   id: string;
   slot: 0 | 1 | 2 | 3;

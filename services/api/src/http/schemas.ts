@@ -4,6 +4,7 @@ import {
   BUSINESS_CATEGORIES,
   INSTAGRAM_PATTERN,
   PHONE_PATTERN,
+  REVIEW_STARS,
   TEXT_RULES,
   type TextRule,
 } from "@tor-now/domain";
@@ -132,6 +133,12 @@ export const addCustomerSchema = z.object({
 });
 
 export const rescheduleSchema = z.object({ startAt: instantSchema });
+
+export const reviewSchema = z.object({
+  stars: z.number().int().min(REVIEW_STARS.min).max(REVIEW_STARS.max),
+  comment: text(TEXT_RULES.reviewComment).default(""),
+  anonymous: z.boolean().default(false),
+});
 
 export const customerNoteSchema = z.object({
   customerNote: z.string().trim().max(500).nullable(),

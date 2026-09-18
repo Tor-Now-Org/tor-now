@@ -8,6 +8,7 @@ import { businessService } from "./application/business-service.ts";
 import { calendarService } from "./application/calendar-service.ts";
 import { closureService } from "./application/closure-service.ts";
 import { discoveryService } from "./application/discovery-service.ts";
+import { reviewService } from "./application/review-service.ts";
 import { outboxWorker } from "./application/outbox-worker.ts";
 import { reminderService } from "./application/reminder-service.ts";
 import { pruneAuditLog } from "./application/retention-service.ts";
@@ -109,6 +110,7 @@ export const compose = (
 
     profile: profileService({ unitOfWork }),
     discovery: discoveryService({ unitOfWork, clock, strategy: greedyWalk }),
+    reviews: reviewService({ unitOfWork, clock }),
     availability,
     booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
     business: businessService({ unitOfWork, clock, photos }),
