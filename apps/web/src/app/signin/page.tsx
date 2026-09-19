@@ -38,7 +38,7 @@ export default function SignInPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 60 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", textAlign: "center", paddingTop: 20 }}>
-              <Logo size={86} />
+              <Logo size={66} />
               <p style={{ margin: 0, color: "var(--muted)", fontSize: 14.5 }}>{copy.tagline}</p>
             </div>
 

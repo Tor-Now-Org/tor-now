@@ -76,7 +76,7 @@ const LocationPicker = dynamic(
   { ssr: false },
 );
 
-type Panel = "services" | "resources" | "photos" | "settings" | "team" | "billing";
+export type Panel = "services" | "resources" | "photos" | "settings" | "team" | "billing";
 
 const MINOR_UNITS_PER_MAJOR = 100;
 
@@ -88,6 +88,8 @@ export const BusinessPanel = ({
   token,
   business,
   resources,
+  panel: requestedPanel,
+  onPanel,
   onEditCalendar,
   onChanged,
   onTeamChanged,
@@ -95,6 +97,9 @@ export const BusinessPanel = ({
   token: string;
   business: BusinessDto;
   resources: readonly ResourceDto[];
+  /** Held by the page, so switching business keeps the owner on the same sub-tab. */
+  panel: Panel;
+  onPanel: (panel: Panel) => void;
   /** Takes the owner to this calendar's own schedule, which is where it is edited. */
   onEditCalendar: (resourceId: string) => void;
   /** What changed, so the screen reloads that and not the rest. */
@@ -106,7 +111,6 @@ export const BusinessPanel = ({
   const { language } = useLanguage();
   const errorText = useErrorText();
 
-  const [panel, setPanel] = useState<Panel>("services");
   const [services, setServices] = useState<ServiceDto[] | null>(null);
   const [billing, setBilling] = useState<{
     subscription: SubscriptionDto;
@@ -140,6 +144,9 @@ export const BusinessPanel = ({
   // Billing is the OWNER's alone (ADR 0016) — absent role means an API
   // deployed before roles existed, where anybody staffing was an OWNER.
   const isOwner = (business.role ?? "OWNER") === "OWNER";
+  // Billing, carried over from a business they own into one they only manage,
+  // would be a sub-tab with no chip and nothing under it.
+  const panel: Panel = requestedPanel === "billing" && !isOwner ? "services" : requestedPanel;
 
   const load = useCallback(async () => {
     try {
@@ -205,7 +212,7 @@ export const BusinessPanel = ({
           <button
             key={candidate}
             className="chip"
-            onClick={() => setPanel(candidate)}
+            onClick={() => onPanel(candidate)}
             aria-pressed={panel === candidate}
             style={{
               background: panel === candidate ? "var(--accent-soft)" : "transparent",

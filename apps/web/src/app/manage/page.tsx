@@ -16,7 +16,7 @@ import {
   ClockIcon,
   PeopleIcon,
 } from "@/components/bottom-nav.tsx";
-import { BusinessPanel } from "@/components/owner/business-panel.tsx";
+import { BusinessPanel, type Panel } from "@/components/owner/business-panel.tsx";
 import { CalendarDay } from "@/components/owner/calendar-day.tsx";
 import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
@@ -34,6 +34,8 @@ import { fillParts } from "@/lib/i18n/fill.ts";
 
 const TABS = ["day", "schedule", "business", "customers"] as const;
 type Tab = (typeof TABS)[number];
+/** One empty list, so screens keyed on `resources` don't refetch on every render. */
+const NONE: ResourceDto[] = [];
 
 /**
  * The owner application. The same person, the same sign-in — only the context
@@ -66,7 +68,15 @@ function ManageApp() {
     const known = knownBusinesses();
     return known === null ? null : businessToManage(known, requested ?? lastManaged());
   });
-  const [resources, setResources] = useState<ResourceDto[]>([]);
+  // Kept with the business they belong to: after a switch the old list would
+  // otherwise stay on screen, clickable, until the new one arrived.
+  const [loadedResources, setLoadedResources] = useState<{
+    businessId: string;
+    list: ResourceDto[];
+  } | null>(null);
+  const resources =
+    business !== null && loadedResources?.businessId === business.id ? loadedResources.list : NONE;
+  const [panel, setPanel] = useState<Panel>("services");
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const loadBusinesses = useCallback(async () => {
@@ -92,21 +102,33 @@ function ManageApp() {
     void loadBusinesses();
   }, [loadBusinesses]);
 
-  const loadResources = useCallback(async () => {
-    if (token === null || business === null || !business.active) return;
-    const all = await api.listResources(token, business.id);
-    // A WORKER is on some of the calendars, not all of them, and every screen
-    // here is fed from this one list — so the narrowing belongs here rather
-    // than in each of them (ADR 0016).
-    setResources(
-      business.role === "WORKER"
-        ? all.filter((resource) => (business.resourceIds ?? []).includes(resource.id))
-        : all,
-    );
-  }, [token, business]);
+  const loadResources = useCallback(
+    async (isStale: () => boolean = () => false) => {
+      if (token === null || business === null || !business.active) return;
+      const all = await api.listResources(token, business.id);
+      // Switched away while this was in flight: the answer is for a business
+      // no longer on screen, and may land after the one that is.
+      if (isStale()) return;
+      // A WORKER is on some of the calendars, not all of them, and every screen
+      // here is fed from this one list — so the narrowing belongs here rather
+      // than in each of them (ADR 0016).
+      setLoadedResources({
+        businessId: business.id,
+        list:
+          business.role === "WORKER"
+            ? all.filter((resource) => (business.resourceIds ?? []).includes(resource.id))
+            : all,
+      });
+    },
+    [token, business],
+  );
 
   useEffect(() => {
-    void loadResources();
+    let stale = false;
+    void loadResources(() => stale);
+    return () => {
+      stale = true;
+    };
   }, [loadResources]);
 
   /** Days left in the Grace Period, shown once per app open. Billing is the
@@ -245,9 +267,14 @@ function ManageApp() {
         )}
         {shown === "business" && (
           <BusinessPanel
+            // Its form is seeded from the business once; a switch must start a
+            // fresh one, or saving writes the old business's details onto the new.
+            key={business.id}
             token={token}
             business={business}
             resources={resources}
+            panel={panel}
+            onPanel={setPanel}
             // Editing a calendar means its schedule, so the tab changes with it.
             onEditCalendar={(resourceId) => {
               setEditingCalendar(resourceId);
