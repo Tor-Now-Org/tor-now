@@ -178,6 +178,35 @@ const bring = async (page: Page, subject: Locator, toY: number): Promise<void> =
 };
 
 /**
+ * Wait until the map has a map on it.
+ *
+ * The pins arrive from our own API and the ground they sit on comes from
+ * OpenStreetMap, and only the first of those is fast. Waiting for a pin and
+ * then photographing gave a screen of markers floating on blank grey — a map
+ * with no map, which is a worse picture than no map at all, and one that fails
+ * silently because every element the test asked about was present.
+ *
+ * Leaflet marks each tile `leaflet-tile-loaded` as it paints, so the question
+ * "has the ground arrived" has a real answer. Enough of them to cover the
+ * frame, not merely one.
+ */
+const TILES_TO_COVER_THE_FRAME = 6;
+
+const waitForTheGround = async (page: Page): Promise<void> => {
+  const painted = page.locator("img.leaflet-tile-loaded");
+  await expect
+    .poll(() => painted.count(), {
+      timeout: 30_000,
+      message:
+        "the map never drew its tiles — openstreetmap.org may be unreachable " +
+        "or throttling this address, and a map of nothing is not worth shipping",
+    })
+    .toBeGreaterThanOrEqual(TILES_TO_COVER_THE_FRAME);
+  // Painted is not the same as settled: the last few fade in.
+  await page.waitForTimeout(700);
+};
+
+/**
  * Show every chair at once.
  *
  * Which calendar the day is showing is one chip on the toolbar; the list it
@@ -200,9 +229,17 @@ const fakePhone = (n: number) => `+9725000000${String(n).padStart(2, "0")}`;
  * distances in a believable order rather than every shop at the same point.
  */
 const HERE = { latitude: 32.0796, longitude: 34.7737 };
-const along = (metres: number) => ({
-  latitude: HERE.latitude + metres / 111_000,
-  longitude: HERE.longitude + metres / 94_000,
+/**
+ * A shop's place, as metres from where the customer is standing.
+ *
+ * Two numbers rather than one. A single distance can only put everything on
+ * one diagonal, and eleven pins strung along a line through the middle of the
+ * map is the one arrangement no real street produces — it reads as a fixture
+ * the moment you look at it.
+ */
+const at = (north: number, east: number) => ({
+  latitude: HERE.latitude + north / 111_000,
+  longitude: HERE.longitude + east / 94_000,
 });
 
 type Shop = {
@@ -217,7 +254,7 @@ const openA = async (shop: {
   phone: string;
   category: string;
   address: string;
-  metres: number;
+  at: { north: number; east: number };
   description: string;
   resourceNames: string[];
   services: { name: string; durationMinutes: number; priceMinor: number }[];
@@ -232,7 +269,7 @@ const openA = async (shop: {
       phone: shop.phone,
       description: shop.description,
       address: shop.address,
-      ...along(shop.metres),
+      ...at(shop.at.north, shop.at.east),
       category: shop.category,
       resourceNames: shop.resourceNames,
       services: shop.services.map((service) => ({ ...service, bufferMinutes: null })),
@@ -395,7 +432,7 @@ test.describe("@shots the front door's photographs", () => {
       phone: fakePhone(1),
       category: "barbershop",
       address: "דיזנגוף 142, תל אביב",
-      metres: 140,
+      at: { north: 140, east: 90 },
       description: "מספרה שכונתית עם שתי עמדות. אפשר גם בלי לתאם מראש, אבל עדיף עם.",
       resourceNames: ["רן", "שימי"],
       services: [
@@ -416,7 +453,7 @@ test.describe("@shots the front door's photographs", () => {
       phone: fakePhone(2),
       category: "hair_salon",
       address: "דיזנגוף 168, תל אביב",
-      metres: 320,
+      at: { north: 330, east: -120 },
       description: "צבע, פן ותסרוקות ערב. ליה ותמר, שתי כיסאות, קפה על חשבון הבית.",
       resourceNames: ["ליה", "תמר"],
       services: [
@@ -433,7 +470,7 @@ test.describe("@shots the front door's photographs", () => {
       phone: fakePhone(3),
       category: "nail_salon",
       address: "דיזנגוף 121, תל אביב",
-      metres: 520,
+      at: { north: -180, east: 240 },
       description: "לק ג׳ל, בנייה ומניקור. בתיאום מראש בלבד.",
       resourceNames: ["מיטל"],
       services: [
@@ -451,7 +488,7 @@ test.describe("@shots the front door's photographs", () => {
       phone: fakePhone(4),
       category: "cosmetics",
       address: "דיזנגוף 195, תל אביב",
-      metres: 700,
+      at: { north: 520, east: 180 },
       description: "טיפולי פנים, פילינג והסרת שיער.",
       resourceNames: ["נועה"],
       services: [{ name: "טיפול פנים", durationMinutes: 60, priceMinor: 32000 }],
@@ -462,7 +499,7 @@ test.describe("@shots the front door's photographs", () => {
       phone: fakePhone(5),
       category: "massage",
       address: "בן גוריון 24, תל אביב",
-      metres: 950,
+      at: { north: -350, east: -260 },
       description: "עיסוי רקמות עמוק, שוודי ורפואי.",
       resourceNames: ["שקד"],
       services: [{ name: "עיסוי שוודי", durationMinutes: 60, priceMinor: 30000 }],
@@ -471,24 +508,29 @@ test.describe("@shots the front door's photographs", () => {
     // More of the same trade, so filtering to one produces a list rather than a
     // single card with the rest of the screen empty. A filter that narrows six
     // businesses to one is not a filter anybody can see working.
-    const alsoHair: [string, string, string, number, string, number][] = [
-      ["מספרת אבי", "barbershop", "דיזנגוף 96, תל אביב", 430, "תספורת גבר", 7000],
-      ["ברבר שופ בן יהודה", "barbershop", "בן יהודה 174, תל אביב", 610, "תספורת גבר", 9000],
-      ["מספרת הצפון", "barbershop", "ארלוזורוב 33, תל אביב", 880, "תספורת גבר", 7500],
-      ["סטודיו רותם", "hair_salon", "פרישמן 42, תל אביב", 260, "צבע ופן", 26000],
-      ["שיער של תמי", "hair_salon", "גורדון 18, תל אביב", 540, "פן", 11000],
+    // Hours differ from shop to shop, which is both true of a street and the
+    // reason the list is worth reading: a column of results all saying the same
+    // thing about whether they are open is a column with nothing in it. It also
+    // keeps the pictures alive when the captures are taken late — one shop
+    // shutting at eight and another at eleven is a street either way.
+    const alsoHair: [string, string, string, [number, number], string, number, string][] = [
+      ["מספרת אבי", "barbershop", "דיזנגוף 96, תל אביב", [-240, 330], "תספורת גבר", 7000, "10:00-22:00"],
+      ["ברבר שופ בן יהודה", "barbershop", "בן יהודה 174, תל אביב", [420, -520], "תספורת גבר", 9000, "09:00-23:00"],
+      ["מספרת הצפון", "barbershop", "ארלוזורוב 33, תל אביב", [820, 260], "תספורת גבר", 7500, "09:00-19:00"],
+      ["סטודיו רותם", "hair_salon", "פרישמן 42, תל אביב", [-120, -300], "צבע ופן", 26000, "09:00-20:00"],
+      ["שיער של תמי", "hair_salon", "גורדון 18, תל אביב", [250, 470], "פן", 11000, "10:00-23:00"],
     ];
-    for (const [name, category, address, metres, service, priceMinor] of alsoHair) {
+    for (const [name, category, address, where, service, priceMinor, open] of alsoHair) {
       await openA({
         name,
         phone: fakePhone(40 + alsoHair.findIndex(([other]) => other === name)),
         category,
         address,
-        metres,
+        at: { north: where[0], east: where[1] },
         description: "",
         resourceNames: ["יומן"],
         services: [{ name: service, durationMinutes: 30, priceMinor }],
-        hours: { start: "09:00", end: "20:00" },
+        hours: { start: open.slice(0, 5), end: open.slice(6) },
       });
     }
 
@@ -497,7 +539,7 @@ test.describe("@shots the front door's photographs", () => {
       phone: fakePhone(6),
       category: "pilates",
       address: "ארלוזורוב 11, תל אביב",
-      metres: 1200,
+      at: { north: 700, east: -420 },
       description: "פילאטיס מכשירים, קבוצות קטנות ואימון אישי.",
       resourceNames: ["אורית"],
       services: [{ name: "אימון אישי", durationMinutes: 50, priceMinor: 20000 }],
@@ -612,6 +654,7 @@ test.describe("@shots the front door's photographs", () => {
     await page.getByRole("button", { name: /^מפה/ }).click();
     const map = page.getByRole("dialog", { name: "מפה" });
     await expect(map.getByTitle("סטודיו ליה")).toBeVisible({ timeout: 15_000 });
+    await waitForTheGround(page);
     await photograph(page, "c2-map", map.getByTitle("סטודיו ליה"));
 
     await map.getByTitle("סטודיו ליה").dispatchEvent("click");
