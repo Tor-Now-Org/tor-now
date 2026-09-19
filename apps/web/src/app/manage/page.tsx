@@ -79,6 +79,25 @@ function ManageApp() {
   const [panel, setPanel] = useState<Panel>("services");
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  /**
+   * Move to another business, address and all.
+   *
+   * Setting the state alone was not enough, and the way it failed was quiet:
+   * the address still named the business you came from, so the next reload of
+   * the list — which anything that changes the team asks for — read the
+   * address, decided you were somewhere else, and put you back. Adding a
+   * worker to the second of two businesses looked like it had done nothing,
+   * because by the time the list came back it was the first one's list.
+   */
+  const chooseBusiness = useCallback(
+    (candidate: BusinessDto) => {
+      rememberManaged(candidate.id);
+      setBusiness(candidate);
+      router.replace(`/manage?business=${candidate.id}`);
+    },
+    [router],
+  );
+
   const loadBusinesses = useCallback(async () => {
     if (token === null) return;
     const mine = await api.myBusinesses(token);
@@ -236,10 +255,7 @@ function ManageApp() {
             businesses={businesses ?? [business]}
             current={business}
             onCustomer={() => router.push("/")}
-            onManage={(candidate) => {
-              rememberManaged(candidate.id);
-              setBusiness(candidate);
-            }}
+            onManage={chooseBusiness}
           />
         }
         trailing={
@@ -339,8 +355,7 @@ function ManageApp() {
             badge: <BuildingIcon />,
             current: candidate.id === business.id,
             onClick: () => {
-              rememberManaged(candidate.id);
-              setBusiness(candidate);
+              chooseBusiness(candidate);
               setDrawerOpen(false);
             },
           })),

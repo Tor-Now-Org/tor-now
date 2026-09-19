@@ -80,12 +80,16 @@ export const Field = ({
   ...rest
 }: InputHTMLAttributes<HTMLInputElement> & {
   label: string;
-  hint?: string;
+  // Explicitly `| undefined` so a wrapper may pass these straight through:
+  // under exactOptionalPropertyTypes an absent prop and one that is undefined
+  // are different types, and every wrapper would otherwise have to spread each
+  // of them conditionally.
+  hint?: string | undefined;
   /** Already in the reader's language; see lib/i18n/field-problems.ts. */
-  problem?: string | null;
-  required?: boolean;
+  problem?: string | null | undefined;
+  required?: boolean | undefined;
   /** Fixed content shown at the input's start, e.g. a country flag. */
-  startAdornment?: ReactNode;
+  startAdornment?: ReactNode | undefined;
 }) => {
   const wrong = problem !== undefined && problem !== null;
   const describedBy = wrong ? `${id ?? ""}-problem` : undefined;

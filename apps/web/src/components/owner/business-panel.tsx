@@ -69,6 +69,7 @@ const PencilMark = () => (
 const blankToNull = (value: string | null | undefined): string | null =>
   value === null || value === undefined || value.trim() === "" ? null : value.trim();
 import { Button, Card, Critical, Field, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
+import { NumberField } from "../number-field.tsx";
 
 // Leaflet reaches for `window`, so the map can only render on the client.
 const LocationPicker = dynamic(
@@ -518,19 +519,19 @@ export const BusinessPanel = ({
 
           <span className="label">{copy.bookingRules}</span>
           <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <Field id="s-buffer" label={`${copy.fBuffer} (${copy.unitMinutes})`} hint={copy.fBufferHint} type="number"
-              value={settings.defaultBufferMinutes}
-              onChange={(e) => { setSettings({ ...settings, defaultBufferMinutes: Number(e.target.value) }); setSaved(false); }} />
-            <Field id="s-cancel" label={`${copy.fCancel} (${copy.unitHours})`} hint={copy.fCancelHint} type="number"
-              value={settings.cancellationWindowHours}
-              onChange={(e) => { setSettings({ ...settings, cancellationWindowHours: Number(e.target.value) }); setSaved(false); }} />
+            <NumberField id="s-buffer" label={`${copy.fBuffer} (${copy.unitMinutes})`} hint={copy.fBufferHint}
+              value={settings.defaultBufferMinutes} fallback={0}
+              onValue={(v) => { setSettings({ ...settings, defaultBufferMinutes: v ?? 0 }); setSaved(false); }} />
+            <NumberField id="s-cancel" label={`${copy.fCancel} (${copy.unitHours})`} hint={copy.fCancelHint}
+              value={settings.cancellationWindowHours} fallback={0}
+              onValue={(v) => { setSettings({ ...settings, cancellationWindowHours: v ?? 0 }); setSaved(false); }} />
             {/* ADR 0012's two ends of the booking window. */}
-            <Field id="s-notice" label={`${copy.fNotice} (${copy.unitMinutes})`} hint={copy.fNoticeHint} type="number"
-              value={settings.minimumNoticeMinutes}
-              onChange={(e) => { setSettings({ ...settings, minimumNoticeMinutes: Number(e.target.value) }); setSaved(false); }} />
-            <Field id="s-horizon" label={`${copy.fHorizon} (${copy.unitDays})`} hint={copy.fHorizonHint} type="number"
-              value={settings.bookingHorizonDays}
-              onChange={(e) => { setSettings({ ...settings, bookingHorizonDays: Number(e.target.value) }); setSaved(false); }} />
+            <NumberField id="s-notice" label={`${copy.fNotice} (${copy.unitMinutes})`} hint={copy.fNoticeHint}
+              value={settings.minimumNoticeMinutes} fallback={0}
+              onValue={(v) => { setSettings({ ...settings, minimumNoticeMinutes: v ?? 0 }); setSaved(false); }} />
+            <NumberField id="s-horizon" label={`${copy.fHorizon} (${copy.unitDays})`} hint={copy.fHorizonHint}
+              value={settings.bookingHorizonDays} fallback={1}
+              onValue={(v) => { setSettings({ ...settings, bookingHorizonDays: v ?? 1 }); setSaved(false); }} />
           </Card>
 
           {/* Changing these takes effect for new availability only; ADR 0012
@@ -627,18 +628,17 @@ export const BusinessPanel = ({
             <Field id="svc-name" label={copy.serviceName} placeholder={copy.serviceNamePlaceholder}
               problem={problem.text(editing?.name ?? "", TEXT_RULES.serviceName)}
               value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-            <Field id="svc-duration" label={copy.durationMinutes} hint={copy.durationHint} type="number"
-              value={editing.durationMinutes ?? 30}
-              onChange={(e) => setEditing({ ...editing, durationMinutes: Number(e.target.value) })} />
-            <Field id="svc-price" label={copy.price} placeholder={copy.pricePlaceholder} hint={copy.priceHint} type="number"
-              value={(editing.priceMinor ?? 0) / MINOR_UNITS_PER_MAJOR}
-              onChange={(e) => setEditing({ ...editing, priceMinor: Math.round(Number(e.target.value) * MINOR_UNITS_PER_MAJOR) })} />
-            <Field id="svc-buffer" label={copy.buffer} hint={copy.bufferHint} type="number"
-              value={editing.bufferMinutes ?? ""}
+            <NumberField id="svc-duration" label={copy.durationMinutes} hint={copy.durationHint}
+              value={editing.durationMinutes ?? 30} fallback={30} min={1}
+              onValue={(v) => setEditing({ ...editing, durationMinutes: v ?? 30 })} />
+            <NumberField id="svc-price" label={copy.price} placeholder={copy.pricePlaceholder} hint={copy.priceHint}
+              value={(editing.priceMinor ?? 0) / MINOR_UNITS_PER_MAJOR} fallback={0}
+              onValue={(v) => setEditing({ ...editing, priceMinor: Math.round((v ?? 0) * MINOR_UNITS_PER_MAJOR) })} />
+            {/* Empty means "whatever the business says", so it stays empty. */}
+            <NumberField id="svc-buffer" label={copy.buffer} hint={copy.bufferHint}
+              value={editing.bufferMinutes ?? null} fallback={null}
               placeholder={copy.defaultBuffer}
-              onChange={(e) =>
-                setEditing({ ...editing, bufferMinutes: e.target.value === "" ? null : Number(e.target.value) })
-              } />
+              onValue={(v) => setEditing({ ...editing, bufferMinutes: v })} />
             <Button
               busy={busy}
               onClick={() =>

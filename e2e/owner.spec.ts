@@ -5,6 +5,7 @@ import {
   aDayFromNow,
   localDayOf,
   theNextStart,
+  aFreeStretch,
   anInstantAt,
   call,
   openTheDayOf,
@@ -693,7 +694,7 @@ test.describe("the month", () => {
 
     // The timeline below is the day that was tapped, on the same screen — and
     // the calendar offers nothing else, because nothing was asked for.
-    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+    await expect(aFreeStretch(page).first()).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.getByRole("button", { name: "המשך" })).toHaveCount(0);
@@ -718,7 +719,7 @@ test.describe("the day timeline", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await page.getByRole("button", { name: date }).click();
-    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+    await expect(aFreeStretch(page).first()).toBeVisible({
       timeout: 15_000,
     });
   };
@@ -735,8 +736,8 @@ test.describe("the day timeline", () => {
     // A whole empty day is folded, so the first tap opens the fold; the second
     // is the stretch itself. The emptiest part of the screen is the part an
     // owner wants to fill, and both taps lead there.
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await aFreeStretch(page).first().click();
+    await aFreeStretch(page).first().click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await expect(sheet.getByText(shop.resource.name)).toBeVisible();
@@ -772,8 +773,8 @@ test.describe("the day timeline", () => {
     const date = aDayFromNow(1);
     await openTheDay(page, shop, date);
 
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await aFreeStretch(page).first().click();
+    await aFreeStretch(page).first().click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
 
@@ -861,12 +862,12 @@ test.describe("the day timeline", () => {
     await openTheDay(page, shop, date);
 
     // Eleven empty hours are one band rather than a scroll.
-    const fold = page.getByRole("button", { name: /פנוי/ }).first();
+    const fold = aFreeStretch(page).first();
     await expect(fold).toBeVisible();
     await fold.click();
 
     // Opened, the same stretch is there to be acted on rather than hidden.
-    await expect(page.getByRole("dialog").or(page.getByRole("button", { name: /פנוי/ }).first()))
+    await expect(page.getByRole("dialog").or(aFreeStretch(page).first()))
       .toBeVisible();
   });
 });
@@ -967,7 +968,7 @@ test.describe("finding things in a day", () => {
 
     // And the whole day is one tap back.
     await page.getByRole("button", { name: "ניקוי" }).first().click();
-    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+    await expect(aFreeStretch(page).first()).toBeVisible({
       timeout: 15_000,
     });
   });
@@ -1058,7 +1059,7 @@ test.describe("finding things in a day", () => {
     await expect(page.getByText("2 תורים")).toBeVisible();
 
     await page.getByRole("button", { name: "ניקוי" }).first().click();
-    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+    await expect(aFreeStretch(page).first()).toBeVisible({
       timeout: 15_000,
     });
   });
@@ -1092,7 +1093,7 @@ test.describe("finding things in a day", () => {
 
     // Cleared, the day comes back.
     await page.getByRole("button", { name: "ניקוי" }).first().click();
-    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+    await expect(aFreeStretch(page).first()).toBeVisible({
       timeout: 15_000,
     });
   });
@@ -3818,11 +3819,11 @@ test.describe("a day the shop is closed on", () => {
     // inviting a booking, and nothing saying the shop was shut.
     await expect(page.getByText("סגור כל היום").first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("יום כיפור")).toBeVisible();
-    await expect(page.getByRole("button", { name: /פנוי/ })).toHaveCount(0);
+    await expect(aFreeStretch(page)).toHaveCount(0);
 
     // And the way back out is right there.
     await page.getByRole("button", { name: "ביטול הסגירה" }).click();
-    await expect(page.getByRole("button", { name: /פנוי/ }).first()).toBeVisible({
+    await expect(aFreeStretch(page).first()).toBeVisible({
       timeout: 15_000,
     });
   });
@@ -4946,8 +4947,8 @@ test.describe("booking a customer in", () => {
 
     // A whole empty day is folded, so the first tap opens the fold and the
     // second is the stretch itself.
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await aFreeStretch(page).first().click();
+    await aFreeStretch(page).first().click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await sheet.getByRole("button", { name: "תור ללקוח" }).click();
@@ -4980,8 +4981,8 @@ test.describe("booking a customer in", () => {
 
     await openCalendarAs(page, shop);
     await openTheDayOf(page, day);
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await aFreeStretch(page).first().click();
+    await aFreeStretch(page).first().click();
     await page.getByRole("dialog").getByRole("button", { name: "תור ללקוח" }).click();
     await page.getByPlaceholder("חיפוש לפי שם או טלפון").fill("תמר");
     await page.getByRole("button").filter({ hasText: "תמר בן דוד" }).first().click();
@@ -5113,8 +5114,8 @@ test.describe("booking a customer in", () => {
 
     await openCalendarAs(page, shop);
     await openTheDayOf(page, day);
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await aFreeStretch(page).first().click();
+    await aFreeStretch(page).first().click();
 
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
@@ -5252,8 +5253,8 @@ test.describe("booking a customer in", () => {
 
     await openCalendarAs(page, shop);
     await openTheDayOf(page, day);
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await aFreeStretch(page).first().click();
+    await aFreeStretch(page).first().click();
     await page.getByRole("dialog").getByRole("button", { name: "תור ללקוח" }).click();
 
     // Tapping a lane already decided which calendar, which is exactly when the
@@ -5310,8 +5311,8 @@ test.describe("booking a customer in", () => {
 
     await openCalendarAs(page, shop);
     await openTheDayOf(page, day);
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
-    await page.getByRole("button", { name: /פנוי/ }).first().click();
+    await aFreeStretch(page).first().click();
+    await aFreeStretch(page).first().click();
     await page.getByRole("dialog").getByRole("button", { name: "תור ללקוח" }).click();
 
     // Nobody to find, because nobody has ever booked here. The way out is to
@@ -5664,5 +5665,116 @@ test.describe("crossing over without reloading", () => {
         () => (window as unknown as { headerGone?: boolean }).headerGone ?? true,
       ),
     ).toBe(false);
+  });
+});
+
+test.describe("adding somebody to a business you are not the only owner of", () => {
+  const openTeam = async (page: Page, businessId: string, token: string) => {
+    await page.addInitScript(
+      ([k, v]) => window.localStorage.setItem(k as string, v as string),
+      ["tor-now.session", token],
+    );
+    await page.goto(`/manage?business=${businessId}`);
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "צוות", exact: true }).click();
+  };
+
+  test("a worker added to the second business stays in the second business", async ({
+    page,
+  }) => {
+    const ownerPhone = uniquePhone();
+    const first = await aBusinessWithOpenHours({ name: `אלף ${Date.now()}`, ownerPhone });
+    const second = await aBusinessWithOpenHours({ name: `בית ${Date.now()}`, ownerPhone });
+
+    // Reached the way somebody with two actually reaches it: land on one, and
+    // cross to the other with the switch.
+    await openTeam(page, first.business.id, first.owner.token);
+    await page
+      .getByRole("group", { name: "מעבר בין לקוח לניהול" })
+      .getByText(first.business.name)
+      .click();
+    await page.getByRole("dialog").getByText(second.business.name).click();
+    await expect(page.getByRole("button", { name: "צוות", exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "צוות", exact: true }).click();
+
+    await page.getByRole("button", { name: "הוספה" }).first().click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByLabel(/טלפון/).fill(uniquePhone().replace("+972", ""));
+    await sheet.getByLabel(/שם פרטי/).fill("שימי");
+    await sheet.getByText("עובד ביומן").click();
+    await sheet.getByRole("button", { name: /^יומן/ }).first().click();
+    await sheet.getByRole("button", { name: "הוספה" }).click();
+
+    // The invitation always went through; what came back was the *other*
+    // business's team, because reloading the list read the address — which
+    // still named the business the switch had been left behind on.
+    await expect(page.getByText("שימי")).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(new RegExp(second.business.id));
+    await expect(
+      page.getByRole("group", { name: "מעבר בין לקוח לניהול" }).getByText(second.business.name),
+    ).toBeVisible();
+  });
+
+  test("asks for the number first, and scolds nobody on the way in", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `טופס ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await openTeam(page, shop.business.id, shop.owner.token);
+    await page.getByRole("button", { name: "הוספה" }).first().click();
+
+    const sheet = page.getByRole("dialog");
+    // The number is the identity and decides whether the name is asked for at
+    // all, so it is where the sheet opens.
+    await expect(sheet.getByLabel(/טלפון/)).toBeFocused();
+
+    // And nothing is wrong yet. Every field said "שדה חובה" the moment the
+    // sheet opened, which reads as a form that has already failed.
+    await expect(sheet.getByText("שדה חובה")).toHaveCount(0);
+
+    // Leaving one empty is a different matter.
+    await sheet.getByLabel(/שם פרטי/).click();
+    await sheet.getByLabel(/שם משפחה/).click();
+    await expect(sheet.getByText("שדה חובה").first()).toBeVisible();
+  });
+});
+
+test.describe("typing a number into a number", () => {
+  test("replaces the nought rather than growing beside it", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `מספרים ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+    });
+    await page.addInitScript(
+      ([k, v]) => window.localStorage.setItem(k as string, v as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "הוספת שירות" }).click();
+
+    const sheet = page.getByRole("dialog");
+    const price = sheet.getByLabel(/מחיר/);
+    // A price that starts at nought: tapping it and typing eighty used to give
+    // eighty *after* the nought, and the only way out was to select the box by
+    // hand first.
+    await price.click();
+    await price.pressSequentially("80");
+    await expect(price).toHaveValue("80");
+
+    const duration = sheet.getByLabel(/משך/);
+    await duration.click();
+    await duration.pressSequentially("45");
+    await expect(duration).toHaveValue("45");
+
+    // And a box can be emptied without a nought jumping back into it.
+    await price.click();
+    await page.keyboard.press("Backspace");
+    await page.keyboard.press("Backspace");
+    await expect(price).toHaveValue("");
   });
 });

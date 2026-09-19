@@ -443,6 +443,21 @@ export const openTheDayOf = async (page: Page, date: string): Promise<void> => {
   await square.click({ timeout: 15_000 });
 };
 
+/**
+ * A stretch of free time on the day timeline.
+ *
+ * Matched on the word *and the separator after it*, which is what a stretch
+ * has and the mark does not: the product is called תור פנוי, its mark is a
+ * button in the header, and a loose /פנוי/ finds that first. Every journey
+ * that taps a gap was one header change away from tapping the logo instead —
+ * which is what happened the day the owner header dropped its title.
+ *
+ * Not the times, either: a fold says "09:00–17:00 · פנוי · 8 שעות" and the
+ * stretch it opens into says only "פנוי · 8 שעות".
+ */
+export const aFreeStretch = (page: Page) =>
+  page.getByRole("button").filter({ hasText: /פנוי\s*·/ });
+
 export const ready = async (page: Page): Promise<void> => {
   await expect(page.locator(".app-shell")).toBeVisible();
   await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 20_000 });

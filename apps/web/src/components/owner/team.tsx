@@ -65,6 +65,14 @@ export const Team = ({
   const { user } = useSession();
   const errorText = useErrorText();
   const problem = useFieldProblem();
+  /**
+   * Which fields have been left, so a form does not scold somebody for not
+   * having filled it in yet. An empty box is only wrong once it has been
+   * visited and abandoned; on the way in it is simply empty, and "שדה חובה"
+   * under every field of a sheet that just opened reads as a form already
+   * failing.
+   */
+  const [left, setLeft] = useState<Record<string, boolean>>({});
 
   const [members, setMembers] = useState<TeamMemberDto[] | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -194,7 +202,15 @@ export const Team = ({
           ))
       )}
 
-      <Button intent="quiet" onClick={() => setDraft(EMPTY)}>
+      <Button
+        intent="quiet"
+        onClick={() => {
+          // A new sheet has nothing behind it: whatever was left half-filled
+          // last time is not this person's fault.
+          setLeft({});
+          setDraft(EMPTY);
+        }}
+      >
         {copy.invite}
       </Button>
 
@@ -213,8 +229,14 @@ export const Team = ({
                     id="team-phone"
                     label={copy.memberPhone}
                     value={draft.phone}
+                    // The number is the identity here, and it is what decides
+                    // whether the name below is even asked for — so it is where
+                    // the sheet opens.
+                    autoFocus
+                    showProblem={left["phone"] === true}
                     onChange={(phone) => setDraft({ ...draft, phone, locked: false })}
                     onBlur={() => {
+                      setLeft((was) => ({ ...was, phone: true }));
                       if (checkLocalPhone(draft.phone) !== null) return;
                       const phone = draft.phone;
                       setLooking(true);
@@ -245,7 +267,12 @@ export const Team = ({
                   autoComplete="given-name"
                   value={draft.givenName}
                   disabled={draft.locked}
-                  problem={problem.text(draft.givenName, TEXT_RULES.personName)}
+                  problem={problem.text(
+                    draft.givenName,
+                    TEXT_RULES.personName,
+                    left["givenName"] === true,
+                  )}
+                  onBlur={() => setLeft((was) => ({ ...was, givenName: true }))}
                   onChange={(event) => setDraft({ ...draft, givenName: event.target.value })}
                 />
                 <Field
