@@ -31,20 +31,52 @@ test.describe("the welcome page", () => {
     ).toBeGreaterThan(100);
   });
 
+  /**
+   * Eight captions, eight different pictures.
+   *
+   * The first cut of this page shipped with two steps pointing at the same
+   * file: the capture that was meant to produce the second had a click that
+   * quietly missed, so "choose a service" and "pick an hour" were one
+   * screenshot shown twice. The capture suite now proves the files differ;
+   * this proves the page still points at all of them.
+   */
+  test("shows a different screen for every step it describes", async ({ page }) => {
+    await page.goto("/welcome");
+    await ready(page);
+
+    const shown: string[] = [];
+    for (const tour of ["#how", "#owners"]) {
+      const steps = page.locator(`${tour} .lp-step`);
+      const count = await steps.count();
+      expect(count, `${tour} has no steps`).toBeGreaterThan(0);
+      for (let at = 0; at < count; at += 1) {
+        await steps.nth(at).click();
+        // Each step names its own picture, so read it back after choosing.
+        shown.push(
+          (await page.locator(`${tour} .lp-phone img`).getAttribute("src")) ?? "",
+        );
+      }
+    }
+
+    expect(shown).toHaveLength(8);
+    expect(new Set(shown).size, `two steps share a screen: ${shown.join(", ")}`)
+      .toBe(shown.length);
+  });
+
   test("both tours move when a step is chosen", async ({ page }) => {
     await page.goto("/welcome");
     await ready(page);
 
     const customer = page.locator("#how .lp-step");
-    await expect(customer).toHaveCount(3);
-    await customer.nth(2).click();
-    await expect(customer.nth(2)).toHaveAttribute("aria-current", "true");
-    await expect(page.locator("#how .lp-phone img")).toHaveAttribute("src", /c3-booking/);
+    await expect(customer).toHaveCount(4);
+    await customer.nth(3).click();
+    await expect(customer.nth(3)).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#how .lp-phone img")).toHaveAttribute("src", /c4-mine/);
 
     const owner = page.locator("#owners .lp-step");
     await expect(owner).toHaveCount(4);
     await owner.nth(3).click();
-    await expect(page.locator("#owners .lp-phone img")).toHaveAttribute("src", /o4-team/);
+    await expect(page.locator("#owners .lp-phone img")).toHaveAttribute("src", /o4-panel/);
   });
 
   test("turns into English, and back", async ({ page }) => {

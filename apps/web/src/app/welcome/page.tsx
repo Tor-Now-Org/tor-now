@@ -21,16 +21,29 @@ import { SUPPORT, whatsappLink } from "@/lib/support.ts";
  * one route change away, whenever somebody wants to make it.
  */
 
-const CUSTOMER_STEPS = ["c1", "c2", "c3"] as const;
+const CUSTOMER_STEPS = ["c1", "c2", "c3", "c4"] as const;
 const OWNER_STEPS = ["o1", "o2", "o3", "o4"] as const;
+
+/**
+ * What the hero cycles.
+ *
+ * Not simply the first few of the tour: two steps of one journey can be the
+ * same screen scrolled, which reads as a slideshow that is broken rather than
+ * as a product with range. These three share nothing — a map, a grid of hours,
+ * a list of appointments — so the hero shows what the thing can do in the three
+ * seconds somebody gives it.
+ */
+const HERO_STEPS = ["c1", "c3", "c4"] as const;
+
 const SHOT = {
-  c1: "/landing/c1-search.jpg",
+  c1: "/landing/c1-map.jpg",
   c2: "/landing/c2-business.jpg",
-  c3: "/landing/c3-booking.jpg",
+  c3: "/landing/c3-times.jpg",
+  c4: "/landing/c4-mine.jpg",
   o1: "/landing/o1-month.jpg",
   o2: "/landing/o2-day.jpg",
-  o3: "/landing/o3-panel.jpg",
-  o4: "/landing/o4-team.jpg",
+  o3: "/landing/o3-booking.jpg",
+  o4: "/landing/o4-panel.jpg",
 } as const;
 
 /** How long a step holds before the tour moves itself along. */
@@ -46,7 +59,7 @@ export default function Welcome() {
 
   useEffect(() => {
     const timer = window.setInterval(
-      () => setHero((at) => (at + 1) % CUSTOMER_STEPS.length),
+      () => setHero((at) => (at + 1) % HERO_STEPS.length),
       HERO_MS,
     );
     return () => window.clearInterval(timer);
@@ -101,9 +114,9 @@ export default function Welcome() {
 
           <div className="lp-stage">
             <div className="lp-glowring" />
-            <Screen src={SHOT[CUSTOMER_STEPS[hero] ?? "c1"]} alt={copy.hTitle} />
+            <Screen src={SHOT[HERO_STEPS[hero] ?? "c1"]} alt={copy.hTitle} eager />
             <div className="lp-dots">
-              {CUSTOMER_STEPS.map((step, at) => (
+              {HERO_STEPS.map((step, at) => (
                 <button
                   key={step}
                   className={at === hero ? "on" : undefined}
@@ -125,8 +138,8 @@ export default function Welcome() {
           onPick={setCustomerAt}
           steps={CUSTOMER_STEPS.map((step, i) => ({
             key: step,
-            title: [copy.c1t, copy.c2t, copy.c3t][i] ?? "",
-            body: [copy.c1b, copy.c2b, copy.c3b][i] ?? "",
+            title: [copy.c1t, copy.c2t, copy.c3t, copy.c4t][i] ?? "",
+            body: [copy.c1b, copy.c2b, copy.c3b, copy.c4b][i] ?? "",
             src: SHOT[step],
           }))}
         />
@@ -248,11 +261,23 @@ export default function Welcome() {
 }
 
 /** One screen of the product, in the shell every screen here wears. */
-const Screen = ({ src, alt }: { src: string; alt: string }) => (
+const Screen = ({ src, alt, eager = false }: { src: string; alt: string; eager?: boolean }) => (
   <div className="lp-phone">
-    {/* Not next/image: these are fixed-width screenshots of a phone, and the
-        loader's srcset would buy nothing a single well-sized JPEG does not. */}
-    <img src={src} alt={alt} width={360} height={738} />
+    {/* Not next/image: these are the 390x844 artboard at twice over, shown at
+        one size on every viewport, so the loader's srcset would buy nothing a
+        single well-sized JPEG does not.
+
+        Eager only in the hero. The rest are three screens down the page, and
+        making somebody wait for pictures they have not scrolled to is how a
+        page about saving people time opens slowly. */}
+    <img
+      src={src}
+      alt={alt}
+      width={390}
+      height={844}
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+    />
   </div>
 );
 
