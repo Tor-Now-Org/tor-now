@@ -1,5 +1,7 @@
 "use client";
 
+import type { BusinessDto } from "@/lib/api/types.ts";
+
 /**
  * The business somebody was last managing, on this device.
  *
@@ -32,6 +34,22 @@ export const rememberManaged = (businessId: string): void => {
   } catch {
     // See above: forgetting is survivable, so it is not worth an error.
   }
+};
+
+/**
+ * The businesses as last fetched, held in memory for the life of the tab.
+ *
+ * Crossing over is a route change, and a route change is a fresh mount: without
+ * this the new side starts knowing nothing, draws its header without the switch
+ * while it asks again, and the switch you just pressed blinks out and back.
+ * With it the header is whole on the first frame, and only the content refreshes.
+ */
+let known: BusinessDto[] | null = null;
+
+export const knownBusinesses = (): BusinessDto[] | null => known;
+
+export const rememberBusinesses = (businesses: BusinessDto[] | null): void => {
+  known = businesses;
 };
 
 /**

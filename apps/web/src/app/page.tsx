@@ -23,7 +23,13 @@ import { Profile } from "@/components/customer/profile.tsx";
 import { VisitedBusinesses } from "@/components/customer/visited-businesses.tsx";
 import { AccountDrawer } from "@/components/account-drawer.tsx";
 import { ContextSwitch } from "@/components/context-switch.tsx";
-import { businessToManage, lastManaged, rememberManaged } from "@/lib/last-managed.ts";
+import {
+  businessToManage,
+  knownBusinesses,
+  lastManaged,
+  rememberBusinesses,
+  rememberManaged,
+} from "@/lib/last-managed.ts";
 import { DismissableOwnerPitch, OwnerPitch } from "@/components/owner-pitch.tsx";
 import { Button, Sheet, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
@@ -89,16 +95,20 @@ function CustomerAppInner() {
   /** Where the person was heading when sign-in interrupted them, if anywhere. */
   const [signInIntent, setSignInIntent] = useState<Screen | null>(null);
   /** The businesses this person works at, for the drawer's list of places. */
-  const [owned, setOwned] = useState<BusinessDto[] | null>(null);
+  const [owned, setOwned] = useState<BusinessDto[] | null>(knownBusinesses);
 
   useEffect(() => {
     if (token === null) {
+      rememberBusinesses(null);
       setOwned([]);
       return;
     }
     api
       .myBusinesses(token)
-      .then(setOwned)
+      .then((mine) => {
+        rememberBusinesses(mine);
+        setOwned(mine);
+      })
       // The drawer simply lists no places; the invitation does not hang on this.
       .catch(() => undefined);
   }, [token]);

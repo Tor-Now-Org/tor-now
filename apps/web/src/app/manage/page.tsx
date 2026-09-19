@@ -22,7 +22,13 @@ import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
 import { AccountDrawer } from "@/components/account-drawer.tsx";
 import { ContextSwitch } from "@/components/context-switch.tsx";
-import { businessToManage, lastManaged, rememberManaged } from "@/lib/last-managed.ts";
+import {
+  businessToManage,
+  knownBusinesses,
+  lastManaged,
+  rememberBusinesses,
+  rememberManaged,
+} from "@/lib/last-managed.ts";
 import { Button, Empty, Sheet, Spinner } from "@/components/ui.tsx";
 import { fillParts } from "@/lib/i18n/fill.ts";
 
@@ -51,22 +57,34 @@ function ManageApp() {
   const [tab, setTab] = useState<Tab>(() =>
     TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "day",
   );
-  const [businesses, setBusinesses] = useState<BusinessDto[] | null>(null);
-  const [business, setBusiness] = useState<BusinessDto | null>(null);
+  const requested = params.get("business");
+
+  // Start from what the other side already fetched, so the chrome is whole on
+  // arrival; the fetch below refreshes it.
+  const [businesses, setBusinesses] = useState<BusinessDto[] | null>(knownBusinesses);
+  const [business, setBusiness] = useState<BusinessDto | null>(() => {
+    const known = knownBusinesses();
+    return known === null ? null : businessToManage(known, requested ?? lastManaged());
+  });
   const [resources, setResources] = useState<ResourceDto[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const requested = params.get("business");
 
   const loadBusinesses = useCallback(async () => {
     if (token === null) return;
     const mine = await api.myBusinesses(token);
+    rememberBusinesses(mine);
     setBusinesses(mine);
     // The address wins while it names something; otherwise the one they were
     // last in, so a bare /manage lands where they left off rather than on
     // whichever business happens to sort first.
     const chosen = businessToManage(mine, requested ?? lastManaged());
-    setBusiness(chosen);
+    // An unchanged business keeps its object: the effects below are keyed on
+    // it, and a fresh copy of the same thing would fetch everything again.
+    setBusiness((prev) =>
+      prev !== null && chosen !== null && JSON.stringify(prev) === JSON.stringify(chosen)
+        ? prev
+        : chosen,
+    );
     if (chosen !== null) rememberManaged(chosen.id);
   }, [token, requested]);
 
@@ -191,15 +209,7 @@ function ManageApp() {
     <>
       <AppHeader
         languageLabel={copy.langSwitch}
-        // The switch names the business once there is more than one, so a
-        // title would say it twice; with one it is the only thing that does.
-        {...((businesses ?? []).length > 1 ? {} : { title: business.name })}
-        // The chevron stays. The switch is the way back now, but a header with
-        // no way out at all is a worse trade than one control too many — and
-        // the chevron is what somebody arriving from a link will reach for.
-        onBack={() => router.push("/")}
-        backLabel={copy.asCustomer}
-        showBackLabel={false}
+        // The mark, as on the home screen: the switch beside it is the way back.
         switcher={
           <ContextSwitch
             businesses={businesses ?? [business]}

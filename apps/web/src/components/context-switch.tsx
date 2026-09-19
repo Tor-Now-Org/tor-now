@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { BusinessDto } from "@/lib/api/types.ts";
 import { staffRole } from "@/lib/roles.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
-import { BuildingIcon, CalendarIcon } from "./bottom-nav.tsx";
+import { BuildingIcon } from "./bottom-nav.tsx";
 import { PlaceList } from "./account-drawer.tsx";
 import { Sheet } from "./ui.tsx";
 
@@ -114,25 +114,6 @@ export const ContextSwitch = ({
           style={{ ...half(managing), maxWidth: 148 }}
         >
           {crossing && !managing ? <Pip /> : null}
-          {managing && several && (
-            <span
-              aria-hidden="true"
-              style={{
-                width: 18,
-                height: 18,
-                flexShrink: 0,
-                borderRadius: 999,
-                display: "grid",
-                placeItems: "center",
-                fontSize: 9.5,
-                fontWeight: 600,
-                background: "var(--accent)",
-                color: "var(--on-accent)",
-              }}
-            >
-              {current.name.trim().charAt(0) || "?"}
-            </span>
-          )}
           <span
             style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           >
@@ -164,19 +145,6 @@ export const ContextSwitch = ({
                 if (business.id !== current?.id) startCrossing(() => onManage(business));
               },
             }))}
-          />
-          <PlaceList
-            places={[
-              {
-                key: "customer",
-                title: copy.asCustomer,
-                badge: <CalendarIcon />,
-                onClick: () => {
-                  setChoosing(false);
-                  startCrossing(onCustomer);
-                },
-              },
-            ]}
           />
         </div>
       </Sheet>
