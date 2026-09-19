@@ -24,6 +24,34 @@ test.describe("support", () => {
     await expect(page.getByText("נכנסים לתור ולוחצים ביטול", { exact: false })).toBeVisible();
   });
 
+  test("splits the answers by who is asking", async ({ page }) => {
+    // Signed out, nobody is known to own a business, so the customer's side
+    // opens first; the owner's questions are one tab away.
+    await page.goto("/support");
+
+    const business = page.getByRole("tab", { name: "יש לי עסק" });
+    await expect(page.getByRole("tab", { name: "אני לקוח/ה" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("button", { name: "לקוח לא הגיע לתור" })).toHaveCount(0);
+
+    await business.click();
+    await expect(business).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("button", { name: "לקוח לא הגיע לתור" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "איך מבטלים תור?" })).toHaveCount(0);
+  });
+
+  test("scrolls to every question on a short screen rather than clipping them", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 480 });
+    await page.goto("/support");
+    await page.getByRole("tab", { name: "יש לי עסק" }).click();
+
+    // The list keeps its full height and the page scrolls. A card squeezed by
+    // the column clips its own content, which no viewport check sees.
+    const clipped = await page
+      .getByRole("tabpanel")
+      .evaluate((card) => card.scrollHeight - card.clientHeight);
+    expect(clipped).toBeLessThanOrEqual(1);
+  });
+
   test("offers WhatsApp and email, each ready to open", async ({ page }) => {
     await page.goto("/support");
 
@@ -31,7 +59,8 @@ test.describe("support", () => {
     const whatsapp = page.getByRole("link", { name: /וואטסאפ/ });
     await expect(whatsapp).toHaveAttribute("href", /^https:\/\/wa\.me\/\d+$/);
 
-    const email = page.getByRole("link", { name: /אימייל/ });
+    // The address is its own label: somebody can read it off the screen too.
+    const email = page.getByRole("link", { name: /@/ });
     await expect(email).toHaveAttribute("href", /^mailto:.+@.+/);
   });
 

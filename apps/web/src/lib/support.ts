@@ -14,7 +14,7 @@
  */
 export const SUPPORT = Object.freeze({
   whatsapp: process.env["NEXT_PUBLIC_SUPPORT_WHATSAPP"] ?? "+972500000000",
-  email: process.env["NEXT_PUBLIC_SUPPORT_EMAIL"] ?? "help@torpanuy.co.il",
+  email: process.env["NEXT_PUBLIC_SUPPORT_EMAIL"] ?? "tor.panuy@gmail.com",
 });
 
 /** wa.me wants the number without its plus or its spaces. */
