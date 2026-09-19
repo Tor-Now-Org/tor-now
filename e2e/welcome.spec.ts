@@ -97,6 +97,39 @@ test.describe("the welcome page", () => {
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   });
 
+  /**
+   * The screens turn with the page.
+   *
+   * A page that says "Try it now" above a column of Hebrew screenshots is a
+   * page admitting its English is a veneer over a product that only works in
+   * one language. Both sets are recorded by the capture suite; what this holds
+   * is that the page actually reaches for the right one, and that the files are
+   * there to reach for.
+   */
+  test("shows English screens once it is speaking English", async ({ page }) => {
+    await page.goto("/welcome");
+    await ready(page);
+
+    const shown = async () =>
+      page.locator(".lp-phone img, .lp-phone video").evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("src") ?? ""),
+      );
+    for (const src of await shown()) expect(src).toMatch(/^\/landing\/he\//);
+
+    await page.getByRole("button", { name: "EN" }).click();
+    await expect(page.getByRole("link", { name: "Try it now" })).toBeVisible();
+    const english = await shown();
+    expect(english.length).toBeGreaterThan(0);
+    for (const src of english) expect(src).toMatch(/^\/landing\/en\//);
+
+    // And they are files rather than a hopeful path: a screen that 404s leaves
+    // the phone on the page empty, which the language toggle would not reveal.
+    for (const src of english) {
+      const answer = await page.request.get(src);
+      expect(answer.status(), `${src} is not there`).toBe(200);
+    }
+  });
+
   test("quotes the price the rest of the product quotes", async ({ page }) => {
     await page.goto("/welcome");
     await ready(page);

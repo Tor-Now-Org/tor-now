@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/logo.tsx";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import type { Language } from "@/lib/i18n/dictionaries.ts";
 import { SOLO_PRICE } from "@/lib/plans.ts";
 import { SUPPORT, whatsappLink } from "@/lib/support.ts";
 
@@ -43,21 +44,26 @@ const HERO_STEPS = ["c1", "c2", "c5"] as const;
  * first cut of this page ended up showing a half-scrolled screen with its top
  * sliced off. Those are short silent films of the real thing being used.
  *
- * The films are recorded by the same suite that takes the stills — see
- * e2e/landing-shots.spec.ts — so both stay true to the product together.
+ * Per language, because the screens are in a language. A page that turns into
+ * English around a column of Hebrew screenshots is a page admitting the
+ * translation is a veneer; both sets are recorded by the same suite, against a
+ * street of shops seeded in that language — see e2e/landing-shots.spec.ts.
  */
-const SHOT = {
-  c1: { film: "/landing/c1-search.mp4", poster: "/landing/c1-search-poster.jpg" },
-  c2: { still: "/landing/c2-map.jpg" },
-  c3: { still: "/landing/c3-business.jpg" },
-  c4: { film: "/landing/c4-book.mp4", poster: "/landing/c4-book-poster.jpg" },
-  c5: { still: "/landing/c5-mine.jpg" },
-  o1: { still: "/landing/o1-month.jpg" },
-  o2: { still: "/landing/o2-day.jpg" },
-  o3: { film: "/landing/o3-booking.mp4", poster: "/landing/o3-booking-poster.jpg" },
-  o4: { still: "/landing/o4-customers.jpg" },
-  o5: { still: "/landing/o5-panel.jpg" },
-} as const;
+const screens = (language: Language) => {
+  const of = (name: string) => `/landing/${language}/${name}`;
+  return {
+    c1: { film: of("c1-search.mp4"), poster: of("c1-search-poster.jpg") },
+    c2: { still: of("c2-map.jpg") },
+    c3: { still: of("c3-business.jpg") },
+    c4: { film: of("c4-book.mp4"), poster: of("c4-book-poster.jpg") },
+    c5: { still: of("c5-mine.jpg") },
+    o1: { still: of("o1-month.jpg") },
+    o2: { still: of("o2-day.jpg") },
+    o3: { film: of("o3-booking.mp4"), poster: of("o3-booking-poster.jpg") },
+    o4: { still: of("o4-customers.jpg") },
+    o5: { still: of("o5-panel.jpg") },
+  } as const satisfies Record<string, Shot>;
+};
 
 type Shot = { still: string } | { film: string; poster: string };
 
@@ -70,6 +76,7 @@ const HERO_MS = 3600;
 export default function Welcome() {
   const copy = useCopy("landing");
   const { language, toggleLanguage } = useLanguage();
+  const SHOT = screens(language);
   const [hero, setHero] = useState(0);
   const [customerAt, setCustomerAt] = useState(0);
   const [ownerAt, setOwnerAt] = useState(0);
@@ -243,16 +250,17 @@ export default function Welcome() {
           <span className="lp-kicker">{copy.kContact}</span>
           <h2 className="lp-h2">{copy.ctTitle}</h2>
           <p className="lp-sub">{copy.ctSub}</p>
-          {/* The numbers are configuration (ADR 0005) — the same ones support
-              already answers on, rather than a second set written here. */}
+          {/* Configuration (ADR 0005) — the same details support already
+              answers on, rather than a second set written here.
+
+              WhatsApp and not also a telephone: there is one number, and
+              offering it twice put the same digits on the page under two
+              headings, the second of which invited people to ring a line that
+              is answered in writing. */}
           <div className="lp-ways">
             <a className="lp-way" href={whatsappLink()} target="_blank" rel="noopener">
               <span className="lp-ico" aria-hidden="true">💬</span>
               <span><b>{copy.ctWhatsapp}</b><span dir="ltr">{SUPPORT.whatsapp}</span></span>
-            </a>
-            <a className="lp-way" href={`tel:${SUPPORT.whatsapp}`}>
-              <span className="lp-ico" aria-hidden="true">📞</span>
-              <span><b>{copy.ctPhone}</b><span dir="ltr">{SUPPORT.whatsapp}</span></span>
             </a>
             <a className="lp-way" href={`mailto:${SUPPORT.email}`}>
               <span className="lp-ico" aria-hidden="true">✉️</span>
