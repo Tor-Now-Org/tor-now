@@ -144,7 +144,7 @@ function ManageApp() {
         {/* No title: with one, the mark is replaced by a word and the header
             jumps on the way in and again on the way out. The mark stays put,
             and only the body below it is unknown. */}
-        <AppHeader languageLabel={copy.langSwitch} />
+        <AppHeader />
         <main style={{ flex: 1, display: "grid", placeItems: "center" }}>
           <Spinner />
         </main>
@@ -155,7 +155,7 @@ function ManageApp() {
   if (token === null) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} title={copy.manage} />
+        <AppHeader title={copy.manage} />
         <main style={{ flex: 1, padding: 24 }}>
           <Empty
             title={copy.usingAs}
@@ -170,7 +170,7 @@ function ManageApp() {
   if (business === null) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} title={copy.manage} />
+        <AppHeader title={copy.manage} />
         <main style={{ flex: 1, padding: 24 }}>
           <Empty
             title={copy.usingAs}
@@ -185,7 +185,7 @@ function ManageApp() {
   if (!business.active) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} title={business.name} />
+        <AppHeader title={business.name} />
         <main style={{ flex: 1, padding: 24 }} />
         <Sheet open onClose={() => router.push("/")} labelledBy="inactive-title">
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -208,7 +208,6 @@ function ManageApp() {
   return (
     <>
       <AppHeader
-        languageLabel={copy.langSwitch}
         // The mark, as on the home screen: the switch beside it is the way back.
         switcher={
           <ContextSwitch

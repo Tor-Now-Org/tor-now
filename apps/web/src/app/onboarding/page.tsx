@@ -120,7 +120,7 @@ export default function OnboardingPage() {
   if (token === null) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} />
+        <AppHeader />
         <main className="scroll" style={{ flex: 1, padding: "28px 20px" }}>
           <VerifyPanel
             /* This is the same sign-in as everywhere else, so it says the same
@@ -259,7 +259,6 @@ export default function OnboardingPage() {
     return (
       <>
         <AppHeader
-          languageLabel={copy.langSwitch}
           onBack={() => router.push("/")}
           backLabel={copy.back}
           trailing={
@@ -288,7 +287,6 @@ export default function OnboardingPage() {
   return (
     <>
       <AppHeader
-        languageLabel={copy.langSwitch}
         title={copy.wizardTitle}
         onBack={index > 0 ? () => setStep(STEPS[index - 1] as Step) : () => router.push("/")}
         backLabel={copy.back}

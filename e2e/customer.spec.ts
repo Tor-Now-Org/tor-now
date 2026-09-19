@@ -821,6 +821,7 @@ test.describe("signing in again", () => {
 
 test.describe("both languages", () => {
   test("the whole screen turns around when the language changes", async ({ page }) => {
+    // Signed out, the switch is in the header; signed in, it is in the drawer.
     await page.goto("/");
     await ready(page);
 
@@ -833,7 +834,6 @@ test.describe("both languages", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Your next appointment");
   });
-
   test("remembers the choice across a reload", async ({ page }) => {
     await useEnglish(page);
     await page.goto("/");

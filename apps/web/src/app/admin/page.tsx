@@ -132,7 +132,7 @@ export default function AdminPage() {
   if (token === null || user === null || !user.isAdministrator) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} title={copy.platformAdmin} />
+        <AppHeader title={copy.platformAdmin} />
         <main style={{ flex: 1, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
           <Empty
             title={copy.platformAdmin}
@@ -161,7 +161,6 @@ export default function AdminPage() {
   return (
     <>
       <AppHeader
-        languageLabel={copy.langSwitch}
         title={copy.platformAdmin}
         trailing={
           <AccountButton

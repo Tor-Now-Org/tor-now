@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { Sheet } from "./ui.tsx";
 import { SignOutButton } from "./sign-out.tsx";
+import { LanguagePill } from "./language-pill.tsx";
 import { SUPPORT_PATH, SupportMark } from "./support-link.tsx";
 import { useCopy } from "@/lib/i18n/index.tsx";
 
@@ -196,11 +197,15 @@ export const AccountDrawer = ({
         <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>{support.supportLink}</span>
       </Link>
 
+      {/* Below the line are the settings of the person rather than places to
+          go: leaving, and the language — which has no button in the header, so
+          this is where a signed-in person finds it. */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "flex-start",
+          justifyContent: "space-between",
+          gap: 8,
           borderBlockStart: "1px solid var(--line)",
           marginBlockStart: 8,
           paddingBlockStart: 8,
@@ -210,6 +215,9 @@ export const AccountDrawer = ({
           label={labels.signOut}
           {...(onSignedOut === undefined ? {} : { onSignedOut })}
           style={{
+            // The quiet button is full-width by default; here it shares the
+            // line with the language pill and sits at the start.
+            width: "auto",
             minHeight: 44,
             padding: "0 12px",
             border: "none",
@@ -219,6 +227,7 @@ export const AccountDrawer = ({
             fontWeight: 500,
           }}
         />
+        <LanguagePill />
       </div>
     </div>
   </Sheet>

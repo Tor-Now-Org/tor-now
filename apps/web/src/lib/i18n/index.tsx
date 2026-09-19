@@ -45,7 +45,7 @@ const readStoredLanguage = (): Language | null => {
   }
 };
 
-export const LanguageProvider = ({ children }: { children: ReactNode }) => {
+export const LanguageProvider =({ children }: { children: ReactNode }) => {
   // The server renders the default language, so the first client render must
   // agree with it; a stored preference is applied after hydration rather than
   // during it.

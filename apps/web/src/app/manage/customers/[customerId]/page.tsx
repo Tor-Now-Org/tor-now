@@ -99,7 +99,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
   if (token === null || businessId === null) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} onBack={back} backLabel={copy.back} />
+        <AppHeader onBack={back} backLabel={copy.back} />
         <main style={{ flex: 1, padding: 24 }}>
           <Empty title={copy.usingAs} body={copy.oneIdentity} />
         </main>
@@ -110,7 +110,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
   if (record === null || business === null) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} onBack={back} backLabel={copy.tabCustomers} />
+        <AppHeader onBack={back} backLabel={copy.tabCustomers} />
         <main style={{ flex: 1, padding: 24 }}>
           {error === null ? <Spinner /> : <Critical>{error}</Critical>}
         </main>
@@ -166,7 +166,6 @@ function CustomerPage({ customerId }: { customerId: string }) {
   return (
     <>
       <AppHeader
-        languageLabel={copy.langSwitch}
         onBack={back}
         backLabel={copy.tabCustomers}
       />

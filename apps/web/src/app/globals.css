@@ -396,10 +396,10 @@ body {
 .header-lang { min-height: 37px; padding: 0 11px; font-size: 12.5px; }
 .header-account { width: 37px; height: 37px; font-size: 15px; }
 .header-account svg { width: 17px; height: 17px; }
-/* ponytail: stacks on every phone width, not only when the bar actually overflows;
-   measure the bar in JS if a wide phone should keep the one-line name. */
+/* One line at every width now that the language button has left the bar; a
+   notch smaller on a phone, where the context switch shares the row. */
 @media (max-width: 719.98px) {
-  .header-logo .wordmark { flex-direction: column; align-items: flex-start; gap: 1px; font-size: 15px !important; }
+  .header-logo .wordmark { font-size: 18px !important; }
 }
 @media (min-width: 720px) {
   .header-lang { min-height: 40px; padding: 0 13px; font-size: 12.5px; }

@@ -194,7 +194,6 @@ const customer = {
     "done": "התור נקבע",
     "doneBody": "שלחנו לכם אישור בוואטסאפ.",
     "toMine": "לתורים שלי",
-    "langSwitch": "EN",
     "back": "חזרה",
     "businessInactiveTitle": "העסק לא זמין",
     "businessInactiveBody": "העסק הזה אינו פעיל כרגע ולא ניתן לקבוע בו תורים חדשים. תורים שכבר נקבעו אצלו לא נפגעו.",
@@ -356,7 +355,6 @@ const customer = {
     "done": "You are booked",
     "doneBody": "We sent a confirmation on WhatsApp.",
     "toMine": "To my appointments",
-    "langSwitch": "עב",
     "back": "Back",
     "businessInactiveTitle": "This business isn't available",
     "businessInactiveBody": "This business is not active right now and cannot take new bookings. Appointments already made with it are unaffected.",
@@ -424,7 +422,6 @@ const signIn = {
     "welcomeTitle": "החשבון נוצר",
     "welcomeBody": "אפשר להתחיל לחפש עסק ולתפוס תור.",
     "tagline": "קובעים תור. חוסכים זמן.",
-    "langSwitch": "EN",
     "title": "כניסה",
     "body": "אותה כניסה בדיוק ללקוחות ובעלי עסק",
     "phoneLabel": "מספר טלפון",
@@ -449,7 +446,6 @@ const signIn = {
     "welcomeTitle": "Account created",
     "welcomeBody": "You can start looking for a business and take a slot.",
     "tagline": "Book a slot. Save time.",
-    "langSwitch": "עב",
     "title": "Sign in",
     "body": "The same sign-in for customers and owners",
     "phoneLabel": "Phone number",
@@ -517,7 +513,6 @@ const onboarding = {
     "liveBody": "העסק מופיע בחיפוש ומקבל תורים. אפשר להתחיל לשתף את הקישור.",
     "startOver": "להתחיל מחדש",
     "back": "חזרה",
-    "langSwitch": "EN",
     "stepOf": "שלב",
     "done": "סיום",
     "of": "מתוך",
@@ -586,7 +581,6 @@ const onboarding = {
     "liveBody": "The business is in search and taking bookings. You can start sharing the link.",
     "startOver": "Start over",
     "back": "Back",
-    "langSwitch": "עב",
     "stepOf": "Step",
     "done": "Done",
     "of": "of",
@@ -656,7 +650,6 @@ const owner = {
     "nowCustomerBody": "אותה כניסה ואותו מספר טלפון — רק ההקשר השתנה. כאן אתם מחפשים עסקים ורואים את התורים שאתם קבעתם.",
     "backToManaging": "חזרה לניהול העסק",
     "manage": "ניהול",
-    "langSwitch": "EN",
     "save": "שמירה",
     "delete": "מחיקה",
     "add": "הוספה",
@@ -1034,7 +1027,6 @@ const owner = {
     "nowCustomerBody": "Same sign-in, same phone number — only the context changed. Here you find businesses and see the appointments you booked.",
     "backToManaging": "Back to managing the business",
     "manage": "Manage",
-    "langSwitch": "עב",
     "save": "Save",
     "delete": "Delete",
     "add": "Add",
@@ -1366,7 +1358,6 @@ const owner = {
 
 const admin = {
   he: {
-    "langSwitch": "EN",
     "platformAdmin": "הנהלת הפלטפורמה",
     "account": "החשבון שלי",
     "signInOrUp": "כניסה או הרשמה",
@@ -1449,7 +1440,6 @@ const admin = {
     "days": ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"],
   },
   en: {
-    "langSwitch": "עב",
     "platformAdmin": "Platform administration",
     "account": "Your account",
     "signInOrUp": "Sign in or sign up",
@@ -1578,7 +1568,6 @@ const erasure = {
  */
 const support = {
   he: {
-    "langSwitch": "EN",
     "title": "תמיכה",
     "back": "חזרה",
     "lede": "רוב הדברים נפתרים כאן בשתי דקות. אם לא — כותבים לנו וחוזרים אליכם.",
@@ -1601,7 +1590,6 @@ const support = {
     "version": "גרסה 1.0",
   },
   en: {
-    "langSwitch": "עב",
     "title": "Support",
     "back": "Back",
     "lede": "Most things are answered here in two minutes. If not, write to us and we will come back to you.",
@@ -1633,7 +1621,6 @@ const support = {
  */
 const pricing = {
   he: {
-    "langSwitch": "EN",
     "title": "תוכניות ומחירים",
     "back": "חזרה",
     "trialBadge": "14 יום ניסיון, בלי כרטיס אשראי",
@@ -1659,7 +1646,6 @@ const pricing = {
     "talk": "דברו איתנו",
   },
   en: {
-    "langSwitch": "עב",
     "title": "Plans and pricing",
     "back": "Back",
     "trialBadge": "14-day trial, no credit card",

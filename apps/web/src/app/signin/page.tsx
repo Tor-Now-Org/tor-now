@@ -8,8 +8,7 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppHeader } from "@/components/app-header.tsx";
 import { Logo } from "@/components/logo.tsx";
 import { Button } from "@/components/ui.tsx";
-import { SupportLink } from "@/components/support-link.tsx";
-import { VerifyPanel } from "@/components/verify-panel.tsx";
+import { SupportLink } from "@/components/support-link.tsx";import { VerifyPanel } from "@/components/verify-panel.tsx";
 
 /**
  * ADR 0004: exactly the same door for customers, owners and administrators —
@@ -26,7 +25,7 @@ export default function SignInPage() {
 
   return (
     <>
-      <AppHeader languageLabel={copy.langSwitch} />
+      <AppHeader />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0, padding: "32px 20px" }}>
         {done && user !== null ? (

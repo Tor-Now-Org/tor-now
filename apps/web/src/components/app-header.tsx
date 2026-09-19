@@ -4,19 +4,20 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "./logo.tsx";
 import { useLanguage } from "@/lib/i18n/index.tsx";
+import { useSession } from "@/lib/session.tsx";
 
 /**
  * The header from the canvas: a back affordance or the brand, the language
- * switch, and the account circle. The back chevron points along the reading
- * direction, so it turns around with the language rather than always pointing
- * left.
+ * switch while signed out, and the account circle. Signed in, the language
+ * moves into the account drawer and the bar keeps its room for the context
+ * switch. The back chevron points along the reading direction, so it turns
+ * around with the language rather than always pointing left.
  */
 export const AppHeader = ({
   onBack,
   backLabel,
   showBackLabel = true,
   title,
-  languageLabel,
   switcher,
   trailing,
 }: {
@@ -26,19 +27,23 @@ export const AppHeader = ({
   /** Off where the title already says where you are: then a chevron is enough. */
   showBackLabel?: boolean;
   title?: string;
-  languageLabel: string;
   /**
    * The context switch, drawn beside the mark rather than at the end.
    *
    * It sits at the start because it answers "where am I" — which is what the
-   * mark answers too, and the two read as one statement. The language button
-   * and the account circle are settings, and settings live at the other end.
+   * mark answers too, and the two read as one statement. The account circle is
+   * a setting, and settings live at the other end.
    */
   switcher?: ReactNode;
   trailing?: ReactNode;
 }) => {
-  const { toggleLanguage, direction } = useLanguage();
+  const { language, toggleLanguage, direction } = useLanguage();
+  const { user, loading } = useSession();
   const router = useRouter();
+  // Signed in, the language lives in the account drawer. Signed out there is no
+  // drawer, so the bar carries it — but only once the session is known, or a
+  // signed-in person would see it flash on every load.
+  const showLanguage = !loading && user === null;
 
   return (
     <header
@@ -114,18 +119,22 @@ export const AppHeader = ({
           gap: 8,
         }}
       >
-        <button
-          onClick={toggleLanguage}
-          className="header-lang"
-          style={{
-            borderRadius: 999,
-            border: "1px solid var(--line)",
-            background: "var(--raised)",
-            fontWeight: 500,
-          }}
-        >
-          {languageLabel}
-        </button>
+        {showLanguage && (
+          <button
+            onClick={toggleLanguage}
+            lang={language === "he" ? "en" : "he"}
+            className="header-lang"
+            style={{
+              borderRadius: 999,
+              border: "1px solid var(--line)",
+              background: "var(--raised)",
+              fontWeight: 500,
+            }}
+          >
+            {/* The other language, written in itself: fixed, not translated. */}
+            {language === "he" ? "EN" : "עב"}
+          </button>
+        )}
         {trailing}
       </span>
     </header>

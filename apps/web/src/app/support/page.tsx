@@ -32,7 +32,6 @@ export default function SupportPage() {
       {/* A chevron and the title. The word "back" beside an arrow that already
           means back is one word too many when the title says where you are. */}
       <AppHeader
-        languageLabel={copy.langSwitch}
         title={copy.title}
         onBack={() => router.back()}
         backLabel={copy.back}

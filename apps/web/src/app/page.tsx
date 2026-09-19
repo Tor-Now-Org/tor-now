@@ -154,7 +154,7 @@ function CustomerAppInner() {
   if (loading) {
     return (
       <>
-        <AppHeader languageLabel={copy.langSwitch} />
+        <AppHeader />
         <main style={{ flex: 1, display: "grid", placeItems: "center" }}>
           <Spinner />
         </main>
@@ -184,7 +184,6 @@ function CustomerAppInner() {
   return (
     <>
       <AppHeader
-        languageLabel={copy.langSwitch}
         {...(routeBusinessId !== null || screen === "profile"
           ? {
               onBack: () =>

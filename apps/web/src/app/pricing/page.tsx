@@ -127,7 +127,6 @@ export default function PricingPage() {
   return (
     <>
       <AppHeader
-        languageLabel={copy.langSwitch}
         title={copy.title}
         onBack={() => router.back()}
         backLabel={copy.back}
