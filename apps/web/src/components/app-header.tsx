@@ -82,7 +82,7 @@ export const AppHeader = ({
       ) : title !== undefined ? (
         <h1 style={{ fontSize: 17 }}>{title}</h1>
       ) : (
-        <button onClick={() => router.push("/")} style={{ display: "flex", alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+        <button onClick={() => router.push("/")} className="header-logo" style={{ display: "flex", alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer" }}>
           <Logo />
         </button>
       )}
@@ -116,13 +116,11 @@ export const AppHeader = ({
       >
         <button
           onClick={toggleLanguage}
+          className="header-lang"
           style={{
-            minHeight: 40,
-            padding: "0 13px",
             borderRadius: 999,
             border: "1px solid var(--line)",
             background: "var(--raised)",
-            fontSize: 12.5,
             fontWeight: 500,
           }}
         >
@@ -170,16 +168,14 @@ export const AccountButton = ({
   <button
     onClick={onClick}
     aria-label={label}
+    className="header-account"
     style={{
       display: "grid",
       placeItems: "center",
-      width: 40,
-      height: 40,
       borderRadius: 999,
       background: initial === undefined ? "var(--raised)" : "var(--accent-soft)",
       color: initial === undefined ? "var(--muted)" : "var(--accent-strong)",
       fontFamily: "Rubik, sans-serif",
-      fontSize: 16,
       border:
         initial === undefined
           ? "1px solid var(--line)"
