@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/logo.tsx";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
@@ -21,30 +21,47 @@ import { SUPPORT, whatsappLink } from "@/lib/support.ts";
  * one route change away, whenever somebody wants to make it.
  */
 
-const CUSTOMER_STEPS = ["c1", "c2", "c3", "c4"] as const;
-const OWNER_STEPS = ["o1", "o2", "o3", "o4"] as const;
+const CUSTOMER_STEPS = ["c1", "c2", "c3", "c4", "c5"] as const;
+const OWNER_STEPS = ["o1", "o2", "o3", "o4", "o5"] as const;
 
 /**
  * What the hero cycles.
  *
  * Not simply the first few of the tour: two steps of one journey can be the
  * same screen scrolled, which reads as a slideshow that is broken rather than
- * as a product with range. These three share nothing — a map, a grid of hours,
- * a list of appointments — so the hero shows what the thing can do in the three
- * seconds somebody gives it.
+ * as a product with range. These three share nothing — searching, a map, the
+ * appointments somebody already has.
  */
-const HERO_STEPS = ["c1", "c3", "c4"] as const;
+const HERO_STEPS = ["c1", "c2", "c5"] as const;
 
+/**
+ * Every screen, and how it is shown.
+ *
+ * Some of what this product does is a noun and some of it is a verb. A map is a
+ * picture. "Search and filter" is not, and neither is "pick an hour and confirm
+ * it" — a still of either is a screen caught mid-gesture, which is how the
+ * first cut of this page ended up showing a half-scrolled screen with its top
+ * sliced off. Those are short silent films of the real thing being used.
+ *
+ * The films are recorded by the same suite that takes the stills — see
+ * e2e/landing-shots.spec.ts — so both stay true to the product together.
+ */
 const SHOT = {
-  c1: "/landing/c1-map.jpg",
-  c2: "/landing/c2-business.jpg",
-  c3: "/landing/c3-times.jpg",
-  c4: "/landing/c4-mine.jpg",
-  o1: "/landing/o1-month.jpg",
-  o2: "/landing/o2-day.jpg",
-  o3: "/landing/o3-booking.jpg",
-  o4: "/landing/o4-panel.jpg",
+  c1: { film: "/landing/c1-search.mp4", poster: "/landing/c1-search-poster.jpg" },
+  c2: { still: "/landing/c2-map.jpg" },
+  c3: { still: "/landing/c3-business.jpg" },
+  c4: { film: "/landing/c4-book.mp4", poster: "/landing/c4-book-poster.jpg" },
+  c5: { still: "/landing/c5-mine.jpg" },
+  o1: { still: "/landing/o1-month.jpg" },
+  o2: { still: "/landing/o2-day.jpg" },
+  o3: { film: "/landing/o3-booking.mp4", poster: "/landing/o3-booking-poster.jpg" },
+  o4: { still: "/landing/o4-customers.jpg" },
+  o5: { still: "/landing/o5-panel.jpg" },
 } as const;
+
+type Shot = { still: string } | { film: string; poster: string };
+
+const isFilm = (shot: Shot): shot is { film: string; poster: string } => "film" in shot;
 
 /** How long a step holds before the tour moves itself along. */
 const DWELL_MS = 5000;
@@ -57,13 +74,20 @@ export default function Welcome() {
   const [customerAt, setCustomerAt] = useState(0);
   const [ownerAt, setOwnerAt] = useState(0);
 
+  const nextHero = useCallback(
+    () => setHero((at) => (at + 1) % HERO_STEPS.length),
+    [],
+  );
+  const heroShot = SHOT[HERO_STEPS[hero] ?? "c1"];
+
   useEffect(() => {
-    const timer = window.setInterval(
-      () => setHero((at) => (at + 1) % HERO_STEPS.length),
-      HERO_MS,
-    );
-    return () => window.clearInterval(timer);
-  }, []);
+    // A film says when it is done; a picture has to be told. Putting a clip on
+    // the same fixed timer as a still would cut it off partway through the one
+    // gesture it exists to show.
+    if (isFilm(heroShot)) return;
+    const timer = window.setTimeout(nextHero, HERO_MS);
+    return () => window.clearTimeout(timer);
+  }, [heroShot, nextHero]);
 
   return (
     <div className="lp">
@@ -114,7 +138,14 @@ export default function Welcome() {
 
           <div className="lp-stage">
             <div className="lp-glowring" />
-            <Screen src={SHOT[HERO_STEPS[hero] ?? "c1"]} alt={copy.hTitle} eager />
+            <Screen
+              key={HERO_STEPS[hero]}
+              shot={heroShot}
+              alt={copy.hTitle}
+              eager
+              playing
+              onFinished={nextHero}
+            />
             <div className="lp-dots">
               {HERO_STEPS.map((step, at) => (
                 <button
@@ -138,9 +169,9 @@ export default function Welcome() {
           onPick={setCustomerAt}
           steps={CUSTOMER_STEPS.map((step, i) => ({
             key: step,
-            title: [copy.c1t, copy.c2t, copy.c3t, copy.c4t][i] ?? "",
-            body: [copy.c1b, copy.c2b, copy.c3b, copy.c4b][i] ?? "",
-            src: SHOT[step],
+            title: [copy.c1t, copy.c2t, copy.c3t, copy.c4t, copy.c5t][i] ?? "",
+            body: [copy.c1b, copy.c2b, copy.c3b, copy.c4b, copy.c5b][i] ?? "",
+            shot: SHOT[step],
           }))}
         />
       </section>
@@ -155,9 +186,9 @@ export default function Welcome() {
             onPick={setOwnerAt}
             steps={OWNER_STEPS.map((step, i) => ({
               key: step,
-              title: [copy.o1t, copy.o2t, copy.o3t, copy.o4t][i] ?? "",
-              body: [copy.o1b, copy.o2b, copy.o3b, copy.o4b][i] ?? "",
-              src: SHOT[step],
+              title: [copy.o1t, copy.o2t, copy.o3t, copy.o4t, copy.o5t][i] ?? "",
+              body: [copy.o1b, copy.o2b, copy.o3b, copy.o4b, copy.o5b][i] ?? "",
+              shot: SHOT[step],
             }))}
           />
           <div className="lp-actions" style={{ marginBlockStart: 36 }}>
@@ -260,28 +291,124 @@ export default function Welcome() {
   );
 }
 
-/** One screen of the product, in the shell every screen here wears. */
-const Screen = ({ src, alt, eager = false }: { src: string; alt: string; eager?: boolean }) => (
+/**
+ * One screen of the product, in the shell every screen here wears.
+ *
+ * A still where a still will do, a film where the thing being shown is
+ * something somebody does rather than something they look at. The film is
+ * silent, inline and unstoppable by design — it is an illustration, not a
+ * video somebody chose to watch — and it plays only while it is the screen on
+ * show and somebody is looking at it.
+ */
+const Screen = ({
+  shot,
+  alt,
+  eager = false,
+  playing = false,
+  onFinished,
+}: {
+  shot: Shot;
+  alt: string;
+  eager?: boolean;
+  /** Whether this is the screen on show, and on somebody's screen. */
+  playing?: boolean;
+  onFinished?: (() => void) | undefined;
+}) => (
   <div className="lp-phone">
-    {/* Not next/image: these are the 390x844 artboard at twice over, shown at
-        one size on every viewport, so the loader's srcset would buy nothing a
-        single well-sized JPEG does not.
+    {isFilm(shot) ? <Film shot={shot} alt={alt} playing={playing} onFinished={onFinished} /> : (
+      /* Not next/image: these are the 390x844 artboard at twice over, shown at
+         one size on every viewport, so the loader's srcset would buy nothing a
+         single well-sized JPEG does not.
 
-        Eager only in the hero. The rest are three screens down the page, and
-        making somebody wait for pictures they have not scrolled to is how a
-        page about saving people time opens slowly. */}
-    <img
-      src={src}
-      alt={alt}
-      width={390}
-      height={844}
-      loading={eager ? "eager" : "lazy"}
-      decoding="async"
-    />
+         Eager only in the hero. The rest are three screens down the page, and
+         making somebody wait for pictures they have not scrolled to is how a
+         page about saving people time opens slowly. */
+      <img
+        src={shot.still}
+        alt={alt}
+        width={390}
+        height={844}
+        loading={eager ? "eager" : "lazy"}
+        decoding="async"
+      />
+    )}
   </div>
 );
 
-type Step = { key: string; title: string; body: string; src: string };
+const Film = ({
+  shot,
+  alt,
+  playing,
+  onFinished,
+}: {
+  shot: { film: string; poster: string };
+  alt: string;
+  playing: boolean;
+  onFinished?: (() => void) | undefined;
+}) => {
+  const reel = useRef<HTMLVideoElement>(null);
+  const still = usePrefersStillness();
+
+  useEffect(() => {
+    const player = reel.current;
+    if (player === null) return;
+    if (!playing || still) {
+      player.pause();
+      return;
+    }
+    player.currentTime = 0;
+    // Autoplay is allowed for a muted inline video and refused otherwise; a
+    // refusal leaves the poster up, which is the right thing to be left with.
+    void player.play().catch(() => {});
+  }, [playing, still, shot.film]);
+
+  return (
+    <video
+      ref={reel}
+      src={shot.film}
+      poster={shot.poster}
+      aria-label={alt}
+      muted
+      playsInline
+      // Nothing is downloaded until the clip is wanted; the poster stands in.
+      preload="none"
+      // Somebody who has asked for stillness gets a picture and the means to
+      // start it themselves, rather than a picture and no way in.
+      controls={still}
+      // A tour step waits for its clip to finish before moving on, so the clip
+      // must end. Everywhere else it simply repeats.
+      loop={onFinished === undefined}
+      onEnded={onFinished}
+      width={390}
+      height={844}
+    />
+  );
+};
+
+/**
+ * Whether the reader has asked the machine to stop moving things.
+ *
+ * Read through state rather than at render, because the server has no media
+ * queries and a component that answers differently there and here is a
+ * hydration mismatch. Stillness starts false and corrects itself on arrival,
+ * which is the right way round: the correction stops a clip, it does not start
+ * one.
+ */
+const usePrefersStillness = (): boolean => {
+  const [still, setStill] = useState(false);
+
+  useEffect(() => {
+    const asked = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const follow = () => setStill(asked.matches);
+    follow();
+    asked.addEventListener("change", follow);
+    return () => asked.removeEventListener("change", follow);
+  }, []);
+
+  return still;
+};
+
+type Step = { key: string; title: string; body: string; shot: Shot };
 
 /**
  * A row of steps beside the screen each one describes.
@@ -311,14 +438,23 @@ const Tour = ({
     return () => eye.disconnect();
   }, [host]);
 
+  const shown = steps[at] ?? steps[0];
+  const next = useCallback(
+    () => onPick((at + 1) % steps.length),
+    [at, steps.length, onPick],
+  );
+
   useEffect(() => {
     if (!watching) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = window.setTimeout(() => onPick((at + 1) % steps.length), DWELL_MS);
+    // A step showing a film holds until the film is over — cutting away
+    // halfway through the one gesture it exists to show would be worse than
+    // not showing it.
+    if (shown !== undefined && isFilm(shown.shot)) return;
+    const timer = window.setTimeout(next, DWELL_MS);
     return () => window.clearTimeout(timer);
-  }, [watching, at, steps.length, onPick]);
+  }, [watching, shown, next]);
 
-  const shown = steps[at] ?? steps[0];
   return (
     <div className="lp-tour" ref={setHost}>
       <div className="lp-steps">
@@ -340,7 +476,15 @@ const Tour = ({
           </button>
         ))}
       </div>
-      {shown !== undefined && <Screen key={shown.key} src={shown.src} alt={shown.title} />}
+      {shown !== undefined && (
+        <Screen
+          key={shown.key}
+          shot={shown.shot}
+          alt={shown.title}
+          playing={watching}
+          onFinished={next}
+        />
+      )}
     </div>
   );
 };

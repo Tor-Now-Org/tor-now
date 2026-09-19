@@ -694,8 +694,8 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
    the product itself are the same object to the eye. */
 .lp-phone{position:relative;z-index:2;width:min(318px,82vw);border-radius:38px;padding:9px;
   background:linear-gradient(160deg,#1d3a63,#0a1d3a);box-shadow:0 24px 60px -28px oklch(10% 0.06 258/.55)}
-.lp-phone img{display:block;width:100%;height:auto;border-radius:30px;background:var(--paper);
-  animation:lp-fade .5s ease}
+.lp-phone img,.lp-phone video{display:block;width:100%;height:auto;border-radius:30px;
+  background:var(--paper);animation:lp-fade .5s ease}
 @keyframes lp-fade{from{opacity:0;transform:scale(.985)}}
 .lp-dots{position:absolute;bottom:-32px;display:flex;gap:7px;z-index:3}
 .lp-dots button{width:8px;height:8px;border-radius:999px;background:oklch(100% 0 0/.28);transition:all .25s}
@@ -771,7 +771,7 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
 
 @media (prefers-reduced-motion:reduce){
   .lp-pulse{animation:none}
-  .lp-phone img{animation:none}
+  .lp-phone img,.lp-phone video{animation:none}
   .lp-step.on .lp-bar i{animation:none;width:100%}
 }
 @media (max-width:980px){

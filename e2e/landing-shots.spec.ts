@@ -1,6 +1,9 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   aDayFromNow,
   aFreeStretch,
@@ -36,6 +39,143 @@ import {
  */
 
 const SHOTS = "apps/web/public/landing";
+
+/** The artboard the interface is designed against. */
+const FRAME = { width: 390, height: 844 };
+
+/**
+ * Record one flow, as a film.
+ *
+ * Some of what this product does cannot be photographed. "Search and filter" is
+ * a verb; so is "pick an hour and confirm it" — the still that tried to show it
+ * was a screen caught halfway through a scroll, with its top sliced off and no
+ * way for a reader to tell what had happened. A short silent loop of the real
+ * thing being used says it in three seconds and cannot be cropped into
+ * nonsense.
+ *
+ * The browser records the whole life of the context, so the setup — a blank
+ * page, a navigation, a first paint — is at the front of every take and gets
+ * trimmed off by the clock. What is left is the story.
+ *
+ * Out as H.264: it is the one format every browser plays, it is a fraction of
+ * the size of the equivalent GIF at the same length, and unlike a GIF it can be
+ * told not to play until somebody has scrolled to it.
+ */
+const film = async (
+  browser: Browser,
+  name: string,
+  setUp: (page: Page) => Promise<void>,
+  story: (page: Page) => Promise<void>,
+  options: { session?: string | undefined } = {},
+): Promise<void> => {
+  const reel = mkdtempSync(join(tmpdir(), "tor-now-film-"));
+  const context = await browser.newContext({
+    viewport: FRAME,
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    locale: "he-IL",
+    timezoneId: "Asia/Jerusalem",
+    permissions: ["geolocation"],
+    geolocation: HERE,
+    // The recording is the size of the viewport, not twice it: asked for more,
+    // the browser does not render larger — it pads the page into the corner of
+    // a bigger canvas and the clip comes out quarter-size on a grey field. The
+    // scaling up happens in the encoder instead, where it is honest about being
+    // scaling.
+    recordVideo: { dir: reel, size: FRAME },
+  });
+  const started = Date.now();
+  try {
+    const page = await context.newPage();
+    if (options.session !== undefined) {
+      await page.addInitScript(
+        ([key, token]) => window.localStorage.setItem(key as string, token as string),
+        ["tor-now.session", options.session],
+      );
+    }
+    await setUp(page);
+    // Everything before this instant is a browser opening a page, which is not
+    // what the clip is about.
+    const lead = (Date.now() - started) / 1000;
+    await story(page);
+    // A beat on the last frame, so the loop does not snap away from the thing
+    // it has just finished showing.
+    await page.waitForTimeout(1400);
+    const runFor = (Date.now() - started) / 1000 - lead;
+
+    const video = page.video();
+    expect(video, `${name}: nothing was recorded`).not.toBeNull();
+    await context.close();
+    const raw = await video!.path();
+
+    encode(raw, name, lead, runFor);
+  } finally {
+    await context.close().catch(() => {});
+    rmSync(reel, { recursive: true, force: true });
+  }
+};
+
+/**
+ * The take, as something a browser will play.
+ *
+ * A poster too, from the first frame: without one the phone on the page is a
+ * black rectangle until the video decodes, and on a connection slow enough to
+ * notice, a black rectangle is what somebody decides the product looks like.
+ */
+const encode = (raw: string, name: string, from: number, runFor: number): void => {
+  const out = `${SHOTS}/${name}.mp4`;
+  try {
+    execFileSync(
+      "ffmpeg",
+      ["-y", "-loglevel", "error", "-ss", String(from), "-t", String(runFor), "-i", raw,
+       "-vf", `scale=${FRAME.width * 2}:-2:flags=lanczos,fps=24`,
+       "-an", "-c:v", "libx264", "-preset", "slow", "-crf", "27",
+       "-pix_fmt", "yuv420p", "-movflags", "+faststart", out],
+      { stdio: "pipe" },
+    );
+    execFileSync(
+      "ffmpeg",
+      ["-y", "-loglevel", "error", "-i", out, "-frames:v", "1", "-q:v", "4",
+       `${SHOTS}/${name}-poster.jpg`],
+      { stdio: "pipe" },
+    );
+  } catch (trouble) {
+    throw new Error(
+      `ffmpeg could not encode ${name}. It is needed to turn the recording into ` +
+        `something a browser will play: brew install ffmpeg.\n${String(trouble)}`,
+    );
+  }
+};
+
+/**
+ * Scroll until something sits where the picture wants it.
+ *
+ * Scrolling by a guessed number of pixels is how both halves of this go wrong:
+ * too little and the screen above is still sliced across the top edge, too much
+ * and the subject is gone off it. Neither fails — both just produce a
+ * photograph of something else. So the target is a position, and the page is
+ * nudged until the subject is actually at it.
+ */
+const bring = async (page: Page, subject: Locator, toY: number): Promise<void> => {
+  await page.mouse.move(FRAME.width / 2, FRAME.height * 0.7);
+  for (let nudge = 0; nudge < 8; nudge += 1) {
+    const box = await subject.boundingBox();
+    if (box === null) break;
+    const drift = box.y - toY;
+    if (Math.abs(drift) < 6) return;
+    await page.mouse.wheel(0, drift);
+    await page.waitForTimeout(130);
+  }
+  const settled = await subject.boundingBox();
+  expect(settled, "the subject left the page while scrolling to it").not.toBeNull();
+  // The page may simply have run out of scroll, which is worth saying plainly
+  // rather than discovering later in a photograph.
+  expect(
+    Math.abs(settled!.y - toY),
+    `could not bring the subject to ${toY}px — the page stops at ${settled!.y}px`,
+  ).toBeLessThan(40);
+};
 
 /**
  * Show every chair at once.
@@ -226,10 +366,10 @@ const photograph = async (
   const box = await subject.boundingBox();
   expect(frame, "no viewport").not.toBeNull();
   expect(box, `${name}: its subject is not on the screen at all`).not.toBeNull();
-  // In the upper two thirds, which is where a subject sits when the screen has
+  // In the upper half, which is where a subject sits when the screen has
   // actually been scrolled to it rather than merely reaching it at the edge.
   expect(box!.y, `${name}: its subject is off the bottom of the frame`)
-    .toBeLessThan(frame!.height * 0.66);
+    .toBeLessThan(frame!.height * 0.5);
   expect(box!.y + box!.height, `${name}: its subject is off the top`).toBeGreaterThan(0);
 
   await page.screenshot({ path: `${SHOTS}/${name}.jpg`, quality: 78 });
@@ -241,12 +381,7 @@ test.describe("@shots the front door's photographs", () => {
 
   // The artboard the interface is designed against, so the picture is the
   // screen and nothing else — no strip of desk down either side.
-  test.use({
-    viewport: { width: 390, height: 844 },
-    deviceScaleFactor: 2,
-    isMobile: true,
-    hasTouch: true,
-  });
+  test.use({ viewport: FRAME, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 
   const day = aDayFromNow(4);
   let barber: Shop;
@@ -269,7 +404,11 @@ test.describe("@shots the front door's photographs", () => {
         { name: "עיצוב זקן", durationMinutes: 20, priceMinor: 5000 },
         { name: "תספורת ילד", durationMinutes: 25, priceMinor: 6000 },
       ],
-      hours: { start: "09:00", end: "19:00" },
+      // Eight until nine, which is a barbershop's day and also the reason the
+      // day screen has something to scroll. A diary shorter than the screen
+      // cannot be scrolled clear of the month above it, and a month sliced
+      // along the top edge is the one thing a reader cannot parse.
+      hours: { start: "08:00", end: "21:00" },
     });
 
     salon = await openA({
@@ -329,6 +468,30 @@ test.describe("@shots the front door's photographs", () => {
       services: [{ name: "עיסוי שוודי", durationMinutes: 60, priceMinor: 30000 }],
       hours: { start: "10:00", end: "21:00" },
     });
+    // More of the same trade, so filtering to one produces a list rather than a
+    // single card with the rest of the screen empty. A filter that narrows six
+    // businesses to one is not a filter anybody can see working.
+    const alsoHair: [string, string, string, number, string, number][] = [
+      ["מספרת אבי", "barbershop", "דיזנגוף 96, תל אביב", 430, "תספורת גבר", 7000],
+      ["ברבר שופ בן יהודה", "barbershop", "בן יהודה 174, תל אביב", 610, "תספורת גבר", 9000],
+      ["מספרת הצפון", "barbershop", "ארלוזורוב 33, תל אביב", 880, "תספורת גבר", 7500],
+      ["סטודיו רותם", "hair_salon", "פרישמן 42, תל אביב", 260, "צבע ופן", 26000],
+      ["שיער של תמי", "hair_salon", "גורדון 18, תל אביב", 540, "פן", 11000],
+    ];
+    for (const [name, category, address, metres, service, priceMinor] of alsoHair) {
+      await openA({
+        name,
+        phone: fakePhone(40 + alsoHair.findIndex(([other]) => other === name)),
+        category,
+        address,
+        metres,
+        description: "",
+        resourceNames: ["יומן"],
+        services: [{ name: service, durationMinutes: 30, priceMinor }],
+        hours: { start: "09:00", end: "20:00" },
+      });
+    }
+
     await openA({
       name: "סטודיו פילאטיס אורית",
       phone: fakePhone(6),
@@ -351,6 +514,8 @@ test.describe("@shots the front door's photographs", () => {
       [fakePhone(25), { givenName: "גיא", familyName: "אלון" }, "עיצוב זקן", "רן", "14:00"],
       [fakePhone(26), { givenName: "עומר", familyName: "דגן" }, "תספורת גבר", "רן", "15:30"],
       [fakePhone(27), { givenName: "דור", familyName: "שלו" }, "תספורת גבר", "שימי", "16:00"],
+      [fakePhone(28), { givenName: "אלון", familyName: "כהן" }, "תספורת וזקן", "רן", "17:30"],
+      [fakePhone(29), { givenName: "ניר", familyName: "אבידן" }, "תספורת גבר", "שימי", "19:00"],
     ];
     for (const [phone, name, service, chair, clock] of diary) {
       await bookFrom(barber, await signIn(phone, name), service, chair, day, clock);
@@ -389,6 +554,19 @@ test.describe("@shots the front door's photographs", () => {
         );
       }
     }
+
+    // Somebody the shop knows who is *not* in the composed day. The filmed
+    // booking picks him, and picking anybody already in that day puts the sheet
+    // into its "they have one of these today" warning — which is the right
+    // behaviour and the wrong clip.
+    await bookFrom(
+      barber,
+      await signIn(fakePhone(30), { givenName: "אמיר", familyName: "טל" }),
+      "תספורת גבר",
+      "רן",
+      aDayFromNow(9),
+      "12:00",
+    );
 
     // Lunch, so the day has a shape and the screen has something to show that
     // is neither an appointment nor an empty hour.
@@ -434,35 +612,23 @@ test.describe("@shots the front door's photographs", () => {
     await page.getByRole("button", { name: /^מפה/ }).click();
     const map = page.getByRole("dialog", { name: "מפה" });
     await expect(map.getByTitle("סטודיו ליה")).toBeVisible({ timeout: 15_000 });
-    await photograph(page, "c1-map", map.getByTitle("סטודיו ליה"));
+    await photograph(page, "c2-map", map.getByTitle("סטודיו ליה"));
 
     await map.getByTitle("סטודיו ליה").dispatchEvent("click");
     await map.getByRole("button", { name: "לקביעת תור" }).click();
     await expect(page.getByText("בוחרים שירות")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("צבע ופן").first()).toBeVisible();
-    await photograph(page, "c2-business", page.getByText("צבע ופן").first());
+    await photograph(page, "c3-business", page.getByText("צבע ופן").first());
 
-    // Down to the times, which is a grid of hours rather than another list of
-    // cards — a different picture from the one above it, and the assertion at
-    // the end of this file is what stops it quietly becoming the same one.
-    await page.getByRole("button", { name: /צבע ופן/ }).click();
-    // A day ahead rather than today: a shop photographed at six in the evening
-    // has almost nothing left to offer, and an empty grid is a poor argument
-    // for a product whose whole claim is that you can see what is free.
-    await showDay(page, 2);
-    const times = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
-    await expect(times.first()).toBeVisible({ timeout: 15_000 });
-    // Far enough that the grid of hours is the picture, rather than the foot of
-    // the services list with one row of times peeping under it.
-    await page.mouse.move(195, 600);
-    await page.mouse.wheel(0, 720);
-    await photograph(page, "c3-times", times.first());
+    // Picking an hour is not a screen, it is a sequence — scroll, choose,
+    // confirm — and the still that stood for it was caught mid-scroll with its
+    // top sliced off. It is filmed instead, below.
 
     await page.getByRole("button", { name: "התורים שלי" }).click();
     await expect(page.getByRole("heading", { name: "התורים שלי" })).toBeVisible({
       timeout: 15_000,
     });
-    await photograph(page, "c4-mine", page.getByText("סטודיו ליה").first());
+    await photograph(page, "c5-mine", page.getByText("סטודיו ליה").first());
   });
 
   test("the owner's four screens", async ({ page }) => {
@@ -486,34 +652,147 @@ test.describe("@shots the front door's photographs", () => {
     // picture is the diary rather than the grid above it.
     await showEveryCalendar(page);
     await expect(page.getByText("אורי שגב").first()).toBeVisible({ timeout: 15_000 });
-    // Past the month, so the picture is the two lanes rather than the grid
-    // above them. scrollIntoViewIfNeeded would do nothing here — the diary is
-    // already on screen, it is simply sharing it.
-    await page.mouse.move(195, 600);
-    await page.mouse.wheel(0, 460);
-    await photograph(page, "o2-day", page.getByText("אורי שגב").first());
+    // Clear of the month rather than halfway through it. A screen with a row of
+    // date squares sliced off along its top edge is the one thing a reader
+    // cannot make sense of — it reads as a rendering fault rather than as a
+    // calendar that has been scrolled. Either the month is the picture or the
+    // diary is.
+    const lane = page.getByText("שימי", { exact: true }).first();
+    await expect(lane).toBeVisible();
+    // Just under the app's own header, so the two lanes start at the top of the
+    // frame and the month is gone rather than sliced.
+    await bring(page, lane, 104);
+    await photograph(page, "o2-day", lane);
 
-    // The thing an owner actually does all day: somebody rings while the diary
-    // is open, and the next appointment is made from this side of the counter.
-    // It starts where the free hour is, which is why the picture is worth
-    // taking from the gap rather than from a menu.
-    await aFreeStretch(page).first().click();
-    await page.getByRole("button", { name: "תור ללקוח" }).click();
-    const sheet = page.getByRole("dialog");
-    // Not filtered down to one: the point of the picture is that the people who
-    // already come here are simply listed, with no typing at all. Which of them
-    // the list has room for is the picker's business and not this test's, so
-    // what is asserted is that the shop's own customers are in it.
-    const someoneKnown = /שגב|פרץ|רוזן|מזרחי|ברק|אלון|דגן|שלו/;
-    await expect(sheet.getByText(someoneKnown).first()).toBeVisible({ timeout: 15_000 });
-    await photograph(page, "o3-booking", sheet.getByText(someoneKnown).first());
-    await page.keyboard.press("Escape");
+    // Who comes here, and what they have had. Booking somebody in is filmed
+    // rather than photographed: it is a sequence, and the still that stood for
+    // it could only ever be one moment out of five.
+    await page.getByRole("button", { name: "לקוחות" }).click();
+    const someoneKnown = /שגב|פרץ|רוזן|מזרחי|ברק|אלון|דגן|שלו|אבידן/;
+    await expect(page.getByText(someoneKnown).first()).toBeVisible({ timeout: 15_000 });
+    await photograph(page, "o4-customers", page.getByText(someoneKnown).first());
 
     await page.goto(`/manage?business=${barber.id}`);
     await ready(page);
     await page.getByRole("button", { name: "העסק" }).click();
     await expect(page.getByText("תספורת וזקן").first()).toBeVisible({ timeout: 15_000 });
-    await photograph(page, "o4-panel", page.getByText("תספורת וזקן").first());
+    await photograph(page, "o5-panel", page.getByText("תספורת וזקן").first());
+  });
+
+  test("searching and filtering, filmed", async ({ browser }) => {
+    await film(
+      browser,
+      "c1-search",
+      async (page) => {
+        await page.goto("/");
+        await ready(page);
+        await expect(page.getByRole("group", { name: "סוגי עסקים" })).toBeVisible();
+      },
+      async (page) => {
+        const box = page.getByRole("combobox", { name: "מספרה, קליניקה, מאמן אישי…" });
+        await box.click();
+        await page.waitForTimeout(500);
+        // Typed rather than filled, because the point of the clip is the
+        // product answering while somebody is still typing.
+        await box.pressSequentially("ספר", { delay: 190 });
+        await page.waitForTimeout(1100);
+        await page.getByRole("option", { name: /^מספרה \/ ספר/ }).click();
+        await page.waitForTimeout(1500);
+
+        // And the other half of it: narrowing by hand, from the strip.
+        await box.fill("");
+        await page.waitForTimeout(700);
+        await page.getByRole("group", { name: "סוגי עסקים" })
+          .getByRole("button", { name: "מספרת נשים" })
+          .click();
+        await page.waitForTimeout(1600);
+        await box.pressSequentially("ליה", { delay: 190 });
+        await page.waitForTimeout(1800);
+      },
+      { session: dana },
+    );
+  });
+
+  test("choosing an hour and confirming it, filmed", async ({ browser }) => {
+    await film(
+      browser,
+      "c4-book",
+      async (page) => {
+        await page.goto(`/business/${salon.id}`);
+        await ready(page);
+        await expect(page.getByText("בוחרים שירות")).toBeVisible({ timeout: 15_000 });
+      },
+      async (page) => {
+        await page.waitForTimeout(700);
+        await page.getByRole("button", { name: /צבע ופן/ }).click();
+        await page.waitForTimeout(900);
+        // A day ahead: a shop filmed at six in the evening has almost nothing
+        // left to offer, and an empty grid argues against the product.
+        await showDay(page, 2);
+        await page.waitForTimeout(900);
+
+        // Scrolled in steps rather than jumped, so the clip shows somebody
+        // moving down the page instead of the page teleporting.
+        await page.mouse.move(195, 600);
+        for (let nudge = 0; nudge < 5; nudge += 1) {
+          await page.mouse.wheel(0, 150);
+          await page.waitForTimeout(140);
+        }
+        const times = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
+        await expect(times.first()).toBeVisible({ timeout: 15_000 });
+        await page.waitForTimeout(900);
+
+        await times.nth(2).click();
+        await page.waitForTimeout(1100);
+        await page.getByRole("button", { name: "אישור התור" }).click();
+        await expect(page.getByText("התור נקבע")).toBeVisible({ timeout: 20_000 });
+      },
+      { session: dana },
+    );
+  });
+
+  test("an owner booking somebody in, filmed", async ({ browser }) => {
+    await film(
+      browser,
+      "o3-booking",
+      async (page) => {
+        await page.goto(`/manage?business=${barber.id}`);
+        await ready(page);
+        await openTheDayOf(page, day);
+        await expect(page.getByText("אורי שגב").first()).toBeVisible({ timeout: 15_000 });
+      },
+      async (page) => {
+        await page.mouse.move(195, 600);
+        await page.mouse.wheel(0, 500);
+        await page.waitForTimeout(900);
+
+        await aFreeStretch(page).first().click();
+        await page.waitForTimeout(900);
+        await page.getByRole("button", { name: "תור ללקוח" }).click();
+        const sheet = page.getByRole("dialog");
+        await expect(sheet).toBeVisible({ timeout: 15_000 });
+        await page.waitForTimeout(1300);
+
+        // Somebody the shop already knows, found by name. Not chosen off the
+        // top of the list: everybody in that list is already in this day, and
+        // the sheet would rightly answer with its "they have one of these
+        // today" warning — true, and not what the clip is about.
+        await sheet.getByPlaceholder("חיפוש לפי שם או טלפון").pressSequentially("אמיר", {
+          delay: 180,
+        });
+        await page.waitForTimeout(800);
+        await sheet.getByText("אמיר טל").first().click();
+        await page.waitForTimeout(900);
+        await sheet.getByRole("button", { name: /^תספורת גבר/ }).click();
+        await page.waitForTimeout(1000);
+        await sheet.getByRole("button", { name: /^\d\d:\d\d$/ }).first().click();
+        await page.waitForTimeout(900);
+        await sheet.getByRole("button", { name: /^קביעה ל־/ }).click();
+        await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+        await page.waitForTimeout(700);
+      },
+      { session: barber.token },
+    );
   });
 
   /**
@@ -525,24 +804,28 @@ test.describe("@shots the front door's photographs", () => {
    * is what shipped, and this is the assertion that would have caught it.
    */
   test("every screen is a different screen", async () => {
-    const names = [
-      "c1-map",
-      "c2-business",
-      "c3-times",
-      "c4-mine",
-      "o1-month",
-      "o2-day",
-      "o3-booking",
-      "o4-panel",
-    ];
+    const stills = ["c2-map", "c3-business", "c5-mine", "o1-month", "o2-day",
+                    "o4-customers", "o5-panel"];
+    const films = ["c1-search", "c4-book", "o3-booking"];
+
     const seen = new Map<string, string>();
-    for (const name of names) {
-      const fingerprint = createHash("sha256")
-        .update(readFileSync(`${SHOTS}/${name}.jpg`))
-        .digest("hex");
+    const distinct = (name: string, file: string) => {
+      const fingerprint = createHash("sha256").update(readFileSync(file)).digest("hex");
       const twin = seen.get(fingerprint);
       expect(twin, `${name} is the same picture as ${twin}`).toBeUndefined();
       seen.set(fingerprint, name);
+    };
+
+    for (const name of stills) distinct(name, `${SHOTS}/${name}.jpg`);
+    // A film's poster is its first frame, so the posters have to differ from
+    // each other and from every still for the same reason the stills do.
+    for (const name of films) distinct(`${name} (poster)`, `${SHOTS}/${name}-poster.jpg`);
+
+    // And the films themselves are films: an encode that silently produced
+    // nothing leaves a file a browser will sit on forever showing the poster.
+    for (const name of films) {
+      const reel = readFileSync(`${SHOTS}/${name}.mp4`);
+      expect(reel.byteLength, `${name}.mp4 is empty`).toBeGreaterThan(20_000);
     }
   });
 });

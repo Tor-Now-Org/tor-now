@@ -18,16 +18,18 @@ test.describe("the welcome page", () => {
     await expect(page.getByRole("link", { name: "נסו עכשיו" })).toBeVisible();
     await expect(page.getByRole("link", { name: "יש לי עסק" })).toBeVisible();
 
-    // The screens are the product's own, served as files rather than drawn.
-    const shots = page.locator(".lp-phone img");
+    // The screens are the product's own, served as files rather than drawn —
+    // pictures where a picture will do, and short films of the rest.
+    const shots = page.locator(".lp-phone img, .lp-phone video");
     await expect(shots.first()).toBeVisible();
     for (const src of await shots.evaluateAll((nodes) =>
-      nodes.map((n) => (n as HTMLImageElement).getAttribute("src") ?? ""))) {
-      expect(src).toMatch(/^\/landing\/.+\.jpg$/);
+      nodes.map((n) => n.getAttribute("src") ?? ""))) {
+      expect(src).toMatch(/^\/landing\/.+\.(jpg|mp4)$/);
     }
     // And they actually load: a broken screenshot is a broken promise.
+    const still = page.locator(".lp-phone img").first();
     expect(
-      await shots.first().evaluate((n) => (n as HTMLImageElement).naturalWidth),
+      await still.evaluate((n) => (n as HTMLImageElement).naturalWidth),
     ).toBeGreaterThan(100);
   });
 
@@ -53,12 +55,14 @@ test.describe("the welcome page", () => {
         await steps.nth(at).click();
         // Each step names its own picture, so read it back after choosing.
         shown.push(
-          (await page.locator(`${tour} .lp-phone img`).getAttribute("src")) ?? "",
+          (await page
+            .locator(`${tour} .lp-phone img, ${tour} .lp-phone video`)
+            .getAttribute("src")) ?? "",
         );
       }
     }
 
-    expect(shown).toHaveLength(8);
+    expect(shown).toHaveLength(10);
     expect(new Set(shown).size, `two steps share a screen: ${shown.join(", ")}`)
       .toBe(shown.length);
   });
@@ -68,15 +72,15 @@ test.describe("the welcome page", () => {
     await ready(page);
 
     const customer = page.locator("#how .lp-step");
-    await expect(customer).toHaveCount(4);
-    await customer.nth(3).click();
-    await expect(customer.nth(3)).toHaveAttribute("aria-current", "true");
-    await expect(page.locator("#how .lp-phone img")).toHaveAttribute("src", /c4-mine/);
+    await expect(customer).toHaveCount(5);
+    await customer.nth(4).click();
+    await expect(customer.nth(4)).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#how .lp-phone img")).toHaveAttribute("src", /c5-mine/);
 
     const owner = page.locator("#owners .lp-step");
-    await expect(owner).toHaveCount(4);
-    await owner.nth(3).click();
-    await expect(page.locator("#owners .lp-phone img")).toHaveAttribute("src", /o4-panel/);
+    await expect(owner).toHaveCount(5);
+    await owner.nth(4).click();
+    await expect(page.locator("#owners .lp-phone img")).toHaveAttribute("src", /o5-panel/);
   });
 
   test("turns into English, and back", async ({ page }) => {
