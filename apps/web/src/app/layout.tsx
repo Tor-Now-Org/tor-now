@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { DEFAULT_LANGUAGE, DIRECTION } from "@/lib/i18n/dictionaries.ts";
 import { LanguageProvider } from "@/lib/i18n/index.tsx";
 import { SessionProvider } from "@/lib/session.tsx";
@@ -39,6 +41,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <div className="app-shell">{children}</div>
           </SessionProvider>
         </LanguageProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
