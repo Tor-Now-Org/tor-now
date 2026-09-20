@@ -384,6 +384,11 @@ export type DateOverrideRepository = {
     date: LocalDate,
   ): Promise<DateOverride | null>;
   /**
+   * One Override by its own id, so a caller holding nothing but the id can find
+   * out whose calendar it stands on — which is what says who may remove it.
+   */
+  findById(id: DateOverrideId): Promise<DateOverride | null>;
+  /**
    * Replaces the whole override for a date, ranges included. ADR 0002 makes an
    * Override a replacement rather than an addition, so writing one is a single
    * atomic act rather than a set of range edits.

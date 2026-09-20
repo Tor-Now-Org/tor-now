@@ -307,9 +307,10 @@ test.describe("finding and booking", () => {
     await ready(page);
     // Back to the same day the count was taken on, which need not be today.
     await showDay(page, day);
-    await expect(slots.first()).toBeVisible({ timeout: 20_000 });
-
-    expect(await slots.count()).toBe(before - 1);
+    // `toHaveCount` rather than a counted `expect`: the first slot appearing is
+    // not the list having arrived, and a one-shot count caught a single rendered
+    // radio on a slow machine and read it as "the day has one slot left".
+    await expect(slots).toHaveCount(before - 1, { timeout: 20_000 });
     if (takenLabel !== undefined) {
       await expect(page.getByRole("radio", { name: takenLabel, exact: true })).toHaveCount(0);
     }

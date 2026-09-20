@@ -238,6 +238,12 @@ export const dateOverrideRepository = (
       return hydrate(rows);
     },
 
+    async findById(id) {
+      const rows = await tx<Row[]>`select * from date_override where id = ${id}`;
+      const hydrated = await hydrate(rows);
+      return hydrated[0] ?? null;
+    },
+
     async findByDate(resourceId, date) {
       const rows = await tx<Row[]>`
         select * from date_override

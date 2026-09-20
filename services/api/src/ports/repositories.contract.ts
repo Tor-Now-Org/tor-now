@@ -705,6 +705,33 @@ export const describeRepositoryContract = (
 
     // --- Schedule layers: ADR 0002 -------------------------------------
 
+    it("finds an override by its own id, ranges included", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04801");
+        const date = parseLocalDate("2026-09-08");
+        const written = await repositories.dateOverrides.put({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          date,
+          note: "יום קצר",
+          ranges: [{ startMinutes: 600, endMinutes: 720 }],
+        });
+
+        const found = await repositories.dateOverrides.findById(written.id);
+
+        // Whose calendar it stands on is the point of the lookup.
+        expect(found?.resourceId).toBe(context.resource.id);
+        expect(found?.date).toBe(date);
+        expect(found?.ranges).toHaveLength(1);
+        expect(
+          await repositories.dateOverrides.findById(
+            asId("00000000-0000-4000-8000-999999999999"),
+          ),
+        ).toBeNull();
+      });
+    });
+
+
     /**
      * The batched writes, which a closure uses in place of one round trip per
      * calendar per date. Each asks the same thing: does writing them together

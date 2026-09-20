@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
-import { anEstablishedBusiness } from "../infrastructure/testing/scenarios.ts";
+import { anEstablishedBusiness, TUESDAY, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
 import type { Actor } from "../ports/unit-of-work.ts";
 
 /**
@@ -111,6 +111,107 @@ describe("who may reach a business", () => {
       "2026-09-01",
     );
     expect(day.date).toBe("2026-09-01");
+  });
+
+  /**
+   * What a worker may undo.
+   *
+   * `roles.ts` states the rule the interface offers: "a worker keeps their own
+   * calendar — blocking their own time is theirs". The server let them make a
+   * blockage and a special day and then refused to let them remove either, so
+   * the screen showed two buttons that existed to be refused.
+   */
+  it("lets a worker remove a blockage from their own calendar", async () => {
+    const { shop, worker } = await aShopWithAWorker();
+    const made = await test.services.calendar.createBlocks(
+      worker.actor,
+      shop.business.id,
+      shop.resource.id,
+      [{ startAt: TUESDAY_AT("10:00"), endAt: TUESDAY_AT("11:00"), reason: "רופא" }],
+      "KEEP",
+    );
+    const [block] = made;
+
+    await test.services.calendar.deleteBlock(
+      worker.actor,
+      shop.business.id,
+      block!.id,
+    );
+
+    expect(test.store.blocks.find((one) => one.id === block!.id)).toBeUndefined();
+  });
+
+  it("lets a worker remove the whole blockage they made, by its group", async () => {
+    const { shop, worker } = await aShopWithAWorker();
+    const made = await test.services.calendar.createBlocks(
+      worker.actor,
+      shop.business.id,
+      shop.resource.id,
+      [{ startAt: TUESDAY_AT("10:00"), endAt: TUESDAY_AT("11:00"), reason: "רופא" }],
+      "KEEP",
+    );
+
+    const removed = await test.services.calendar.deleteBlockGroup(
+      worker.actor,
+      shop.business.id,
+      made[0]!.groupId,
+    );
+
+    expect(removed).toBe(1);
+  });
+
+  it("lets a worker remove a special day from their own calendar", async () => {
+    const { shop, worker } = await aShopWithAWorker();
+    const written = await test.services.business.putOverride(
+      worker.actor,
+      shop.business.id,
+      shop.resource.id,
+      { date: TUESDAY, note: null, ranges: [{ start: "10:00", end: "12:00" }] },
+    );
+
+    await test.services.business.deleteOverride(
+      worker.actor,
+      shop.business.id,
+      written.id,
+    );
+
+    expect(test.store.dateOverrides.find((one) => one.id === written.id)).toBeUndefined();
+  });
+
+  it("refuses a worker the blockage on a calendar that is not theirs", async () => {
+    const { shop, second, worker } = await aShopWithAWorker();
+    const made = await test.services.calendar.createBlocks(
+      shop.owner.actor,
+      shop.business.id,
+      second.id,
+      [{ startAt: TUESDAY_AT("10:00"), endAt: TUESDAY_AT("11:00"), reason: "של מישהו אחר" }],
+      "KEEP",
+    );
+
+    await expect(
+      test.services.calendar.deleteBlock(worker.actor, shop.business.id, made[0]!.id),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      test.services.calendar.deleteBlockGroup(
+        worker.actor,
+        shop.business.id,
+        made[0]!.groupId,
+      ),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("refuses a worker the special day on a calendar that is not theirs", async () => {
+    const { shop, second, worker } = await aShopWithAWorker();
+    const written = await test.services.business.putOverride(
+      shop.owner.actor,
+      shop.business.id,
+      second.id,
+      { date: TUESDAY, note: null, ranges: [] },
+    );
+
+    await expect(
+      test.services.business.deleteOverride(worker.actor, shop.business.id, written.id),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("says a business nobody has is not there, whoever asks", async () => {

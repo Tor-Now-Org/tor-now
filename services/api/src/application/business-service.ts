@@ -1220,8 +1220,15 @@ export const businessService = ({
     id: DateOverride["id"],
   ): Promise<void> {
     await unitOfWork.run(actor, async ({ repositories }) => {
-      // ponytail: manager-and-up, for the reason `updateWorkingHours` gives.
-      await requireOwnerOrManager(repositories, actor, businessId);
+      // Whose calendar it stands on is what says who may remove it: a worker
+      // keeps their own, which is the same rule `putOverride` writes it under.
+      // Read before the check, because the id is all the caller has.
+      const held = await repositories.dateOverrides.findById(id);
+      if (held === null || held.businessId !== businessId) {
+        throw notFound("DateOverride", id);
+      }
+      await requireResourceAccess(repositories, actor, businessId, held.resourceId);
+
       // ADR 0018: removing an Override restores the whole weekday's Working
       // Hours, which hands back more time at once than writing one ever does.
       // Marked whether or not the day grew — a mark says a date is worth

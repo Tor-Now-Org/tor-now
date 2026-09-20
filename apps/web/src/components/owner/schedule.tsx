@@ -13,6 +13,7 @@ import type {
 import { addDaysTo, formatLocalDate, timeIn, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { mergedRanges, TEXT_RULES, type TimeRange } from "@tor-now/domain";
+import { canCloseBusiness } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useFieldProblem } from "@/lib/use-field-problem.ts";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
@@ -117,10 +118,15 @@ export const Schedule = ({
     const from = todayIn(business.timeZone);
     const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
     try {
-      const [loadedHours, loadedOverrides, calendarDays, everyCalendar] = await Promise.all([
+      const [loadedHours, loadedOverrides, loadedBlocks, everyCalendar] = await Promise.all([
         api.listWorkingHours(token, business.id, resource.id),
         api.listOverrides(token, business.id, resource.id, { from, to }),
-        api.calendarDay(token, business.id, resource.id, from),
+        // The same span the special days are read over. This used to read the
+        // day the screen opened on, so a blockage made for later was missing
+        // from the list that exists to show it — and it came back with a day of
+        // appointments, customers' names and numbers included, that this screen
+        // never draws.
+        api.listBlocks(token, business.id, resource.id, { from, to }),
         // Every calendar's special days, not only this one's. A day the shop
         // closed is one Override per calendar, and a row here that offers to
         // delete a single copy of it leaves the shop half shut.
@@ -136,7 +142,7 @@ export const Schedule = ({
       setWeek(weekFromRanges(loadedHours));
       setOverrides(loadedOverrides);
       setShopDates(shopWideDates(everyCalendar, resources.length));
-      setBlocks(calendarDays.blocks);
+      setBlocks(loadedBlocks);
     } catch (cause) {
       if (isStale()) return;
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
@@ -316,6 +322,11 @@ export const Schedule = ({
                     {override.note === null ? "" : ` · ${override.note}`}
                   </span>
                 </span>
+                {/* A day the whole shop is shut is the business speaking, and
+                    giving it back is a manager's to do — so a worker is not
+                    offered a button that could only be refused. Their own
+                    calendar's special days they may remove. */}
+                {(!shopWide || canCloseBusiness(business)) && (
                 <button
                   onClick={() =>
                     act(() =>
@@ -328,6 +339,7 @@ export const Schedule = ({
                 >
                   {copy.delete}
                 </button>
+                )}
               </Card>
             );
           })}

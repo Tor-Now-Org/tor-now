@@ -735,6 +735,40 @@ export const calendarService = ({
   },
 
   /**
+   * The blockages a calendar is holding across a span.
+   *
+   * The screen that lists them is not a day screen: an hour kept free next
+   * Thursday is as much a standing decision as one kept free this morning, and
+   * reading it from the day the screen happened to open on meant a blockage
+   * made for later looked as though it had not been made at all.
+   */
+  async blocksBetween(
+    actor: Actor,
+    businessId: BusinessId,
+    resourceId: ResourceId,
+    from: string,
+    to: string,
+  ): Promise<readonly Block[]> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      const business = await loadAccessibleBusiness(
+        repositories,
+        actor,
+        businessId,
+        resourceId,
+      );
+      await loadOwnedResource(repositories, businessId, resourceId);
+
+      // Midnight to midnight in the Business's own zone, as every other span
+      // on these screens is read.
+      return repositories.blocks.listForResourceBetween(
+        resourceId,
+        zonedToInstant(parseLocalDate(from), MIDNIGHT, business.timeZone),
+        zonedToInstant(parseLocalDate(to), END_OF_DAY, business.timeZone),
+      );
+    });
+  },
+
+  /**
    * Who is booked inside a blockage that has not been made yet.
    *
    * Blocking a fortnight is as capable of stranding somebody as closing the
@@ -780,9 +814,18 @@ export const calendarService = ({
     groupId: string,
   ): Promise<number> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      const business = await loadManagedBusiness(repositories, actor, businessId);
-      // Read before it goes: lifting a blockage frees every day it covered.
+      // Read before it goes: lifting a blockage frees every day it covered, and
+      // which calendar it stands on is what says who may lift it — the same
+      // rule renaming one obeys, and the same one that let it be made.
       const lifted = await repositories.blocks.listGroup(businessId, groupId);
+      const [first] = lifted;
+      if (first === undefined) throw notFound("Block", groupId);
+      const business = await loadAccessibleBusiness(
+        repositories,
+        actor,
+        businessId,
+        first.resourceId,
+      );
       const removed = await repositories.blocks.deleteGroup(businessId, groupId);
       for (const block of lifted) {
         await markSpanForRecheck(repositories, block, business.timeZone);
@@ -822,8 +865,13 @@ export const calendarService = ({
     groupId: string,
   ): Promise<readonly Block[]> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadManagedBusiness(repositories, actor, businessId);
-      return repositories.blocks.listGroup(businessId, groupId);
+      const held = await repositories.blocks.listGroup(businessId, groupId);
+      const [first] = held;
+      if (first === undefined) throw notFound("Block", groupId);
+      // Readable by whoever may undo it, which now includes the worker whose
+      // calendar it stands on.
+      await requireResourceAccess(repositories, actor, businessId, first.resourceId);
+      return held;
     });
   },
 
@@ -833,14 +881,21 @@ export const calendarService = ({
     blockId: BlockId,
   ): Promise<void> {
     await unitOfWork.run(actor, async ({ repositories }) => {
-      const business = await loadManagedBusiness(repositories, actor, businessId);
-      // Read before it goes: lifting a blockage frees the hours it covered,
-      // and afterwards there is nothing left to say which ones those were.
+      // Read before it goes: lifting a blockage frees the hours it covered, and
+      // afterwards there is nothing left to say which ones those were — nor
+      // whose calendar it stood on, which is what says who may lift it.
       const lifted = await repositories.blocks.findById(blockId);
-      await repositories.blocks.delete(blockId);
-      if (lifted !== null) {
-        await markSpanForRecheck(repositories, lifted, business.timeZone);
+      if (lifted === null || lifted.businessId !== businessId) {
+        throw notFound("Block", blockId);
       }
+      const business = await loadAccessibleBusiness(
+        repositories,
+        actor,
+        businessId,
+        lifted.resourceId,
+      );
+      await repositories.blocks.delete(blockId);
+      await markSpanForRecheck(repositories, lifted, business.timeZone);
     });
   },
 

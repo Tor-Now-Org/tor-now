@@ -800,6 +800,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             compareLocalDate(override.date, to) <= 0,
         );
       },
+      async findById(id) {
+        return store.dateOverrides.find((override) => override.id === id) ?? null;
+      },
       async findByDate(resourceId, date) {
         return (
           store.dateOverrides.find(

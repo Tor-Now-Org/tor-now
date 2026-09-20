@@ -745,6 +745,22 @@ const ownerRoutes = (services: Services) => {
   });
 
   // What a blockage would strand, before it is made.
+  /**
+   * The blockages a calendar holds across a span — the list its own screen
+   * shows. A day at a time was the wrong question for a standing decision.
+   */
+  owner.get("/:businessId/resources/:resourceId/blocks", async (context) => {
+    const { from, to } = parseQuery(context, schema.dateRangeSchema);
+    const blocks = await services.calendar.blocksBetween(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "resourceId"),
+      from,
+      to,
+    );
+    return context.json(blocks.map(wire.blockOut));
+  });
+
   owner.post("/:businessId/resources/:resourceId/blocks/preview", async (context) => {
     const body = await parseBody(context, schema.blockPreviewSchema);
     return context.json(

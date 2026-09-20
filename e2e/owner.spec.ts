@@ -1374,6 +1374,28 @@ test.describe("special days and blockages", () => {
     expect((await offeredOn(shop, aDayFromNow(3))).length).toBeGreaterThan(0);
   });
 
+  test("lists a blockage made for a later day, not only today's", async ({ page }) => {
+    const shop = await anOwnerAt("רשימת חסימות");
+    await openTheLayer(page, shop, "חסימות");
+
+    // Two days out: the list is a list of standing decisions, and the day the
+    // screen happens to be open on says nothing about which of them exist.
+    const later = aDayFromNow(2);
+    await page.getByRole("button", { name: "הוספת חסימה" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByLabel("מתאריך").fill(later);
+    await sheet.getByLabel("עד תאריך").fill(later);
+    await sheet.locator('input[type="time"]').first().fill("10:30");
+    await sheet.locator('input[type="time"]').nth(1).fill("11:00");
+    await sheet.getByLabel("סיבה").fill("פגישה עם ספק");
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+    // It is on the list that exists to show it, without going anywhere.
+    await expect(page.getByText("פגישה עם ספק")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("10:30–11:00")).toBeVisible();
+  });
+
   test("and can keep the same hours free on each of those days", async ({ page }) => {
     const shop = await anOwnerAt("שעה קבועה");
     await openTheLayer(page, shop, "חסימות");

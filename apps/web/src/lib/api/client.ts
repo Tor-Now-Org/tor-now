@@ -682,6 +682,18 @@ export const api = {
       { method: "POST", body: { blocks }, token },
     ),
 
+  /** The blockages a calendar holds across a span, for the list that shows them. */
+  listBlocks: (
+    token: string,
+    businessId: string,
+    resourceId: string,
+    range: { from: string; to: string },
+  ) =>
+    request<BlockDto[]>(
+      `/businesses/${businessId}/resources/${resourceId}/blocks?from=${range.from}&to=${range.to}`,
+      { token },
+    ),
+
   blockGroup: (token: string, businessId: string, groupId: string) =>
     request<BlockDto[]>(`/businesses/${businessId}/block-groups/${groupId}`, { token }),
 
