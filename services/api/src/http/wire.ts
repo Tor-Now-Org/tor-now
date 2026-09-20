@@ -178,6 +178,7 @@ export const waitingOut = (waiting: MyWaiting) => ({
   id: waiting.id,
   businessId: waiting.businessId,
   businessName: waiting.businessName,
+  serviceId: waiting.serviceId,
   serviceName: waiting.serviceName,
   resourceNames: waiting.resourceNames,
   onDate: waiting.onDate,

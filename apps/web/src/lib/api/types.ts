@@ -238,6 +238,7 @@ export type WaitingDto = {
   id: string;
   businessId: string;
   businessName: string;
+  serviceId: string;
   serviceName: string;
   resourceNames: string[];
   onDate: string;

@@ -2,7 +2,9 @@ import {
   formatInstant,
   forbidden,
   notFound,
+  addDays,
   datesBetween,
+  dayOfWeekOf,
   openingFor,
   parseInstant,
   parseLocalDate,
@@ -53,6 +55,7 @@ export type MyWaiting = {
   readonly id: WaitingEntryId;
   readonly businessId: BusinessId;
   readonly businessName: string;
+  readonly serviceId: ServiceId;
   readonly serviceName: string;
   readonly resourceNames: readonly string[];
   readonly onDate: LocalDate;
@@ -114,6 +117,29 @@ export const markSpanForRecheck = async (
   const last = todayIn(addMinutesToInstant(span.endAt, -1), zone);
   for (const date of datesBetween(first, last < first ? first : last)) {
     await markForRecheck(repositories, span.resourceId, date);
+  }
+};
+
+/**
+ * Every date inside the Booking Horizon that falls on one weekday.
+ *
+ * A recurring rule is not a day, it is every occurrence of a day — so making
+ * Tuesdays longer hands hours back on every Tuesday a customer can still book.
+ * Bounded by the Horizon, because a date beyond it cannot be booked and so
+ * cannot be waited for either.
+ */
+export const markWeekdayForRecheck = async (
+  repositories: Repositories,
+  resourceId: ResourceId,
+  weekday: number,
+  business: { timeZone: TimeZone; bookingHorizonDays: number },
+  now: Instant,
+): Promise<void> => {
+  const from = todayIn(now, business.timeZone);
+  const to = addDays(from, business.bookingHorizonDays);
+  for (const date of datesBetween(from, to)) {
+    if (dayOfWeekOf(date) !== weekday) continue;
+    await markForRecheck(repositories, resourceId, date);
   }
 };
 
@@ -223,6 +249,7 @@ export const waitingService = (dependencies: {
             id: entry.id,
             businessId: entry.businessId,
             businessName: business.name,
+            serviceId: entry.serviceId,
             serviceName: service.name,
             resourceNames: entry.resourceIds.flatMap((id) => {
               const resource = resources.find((one) => one.id === id);

@@ -21,6 +21,7 @@ export const SlotGrid = ({
   labels,
   businessPhone,
   onWaitFor,
+  waitingFor,
 }: {
   day: DayAvailabilityDto;
   timeZone: string;
@@ -36,6 +37,9 @@ export const SlotGrid = ({
     /** "{part} — tell me if something opens". ADR 0018. */
     waitForPart: string;
     waitForDay: string;
+    /** And what it says once they are on the list. */
+    waitingForPart: string;
+    waitingForDay: string;
   };
   businessPhone: string;
   /**
@@ -44,8 +48,16 @@ export const SlotGrid = ({
    * has no waiting list to offer.
    */
   onWaitFor?: ((part: PartOfDay | null) => void) | undefined;
+  /**
+   * Which parts of this day the customer is already waiting for. A button that
+   * still says "tell me" after they have been told we will is the screen
+   * forgetting what it was just asked — and the second press is somebody
+   * checking whether the first one worked.
+   */
+  waitingFor?: readonly PartOfDay[] | undefined;
 }) => {
   const { language } = useLanguage();
+  const waiting = waitingFor ?? [];
 
   if (day.slots.length === 0) {
     return (
@@ -67,7 +79,25 @@ export const SlotGrid = ({
             and could not have one. Not offered when the day is closed or
             beyond the horizon — there is nothing there to free up. */}
         {onWaitFor !== undefined && day.emptyReason === "FULLY_BOOKED" && (
-          <WaitButton label={labels.waitForDay} onClick={() => onWaitFor(null)} />
+          <WaitButton
+            waiting={waiting.length > 0}
+            // Which parts, unless it is all of them: somebody waiting only for
+            // a morning is not waiting for "this day", and a button that says
+            // so is a button that will be believed.
+            label={
+              waiting.length === 0
+                ? labels.waitForDay
+                : waiting.length === ORDER.length
+                  ? labels.waitingForDay
+                  : labels.waitingForPart.replace(
+                      "{part}",
+                      ORDER.filter((part) => waiting.includes(part))
+                        .map((part) => labels[part])
+                        .join(" · "),
+                    )
+            }
+            onClick={() => onWaitFor(null)}
+          />
         )}
       </div>
     );
@@ -89,7 +119,11 @@ export const SlotGrid = ({
           <span className="label">{labels[group.part]}</span>
           {group.slots.length === 0 && onWaitFor !== undefined && (
             <WaitButton
-              label={labels.waitForPart.replace("{part}", labels[group.part])}
+              waiting={waiting.includes(group.part)}
+              label={(waiting.includes(group.part)
+                ? labels.waitingForPart
+                : labels.waitForPart
+              ).replace("{part}", labels[group.part])}
               onClick={() => onWaitFor(group.part)}
             />
           )}
@@ -140,24 +174,48 @@ export const SlotGrid = ({
  * where the times would have been. A button that shouted would read as the
  * thing to do rather than as what is left when the thing to do is unavailable.
  */
-const WaitButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
+const WaitButton = ({
+  label,
+  waiting,
+  onClick,
+}: {
+  label: string;
+  waiting: boolean;
+  onClick: () => void;
+}) => (
   <button
     onClick={onClick}
+    aria-pressed={waiting}
     style={{
       minHeight: 44,
       padding: "0 14px",
       borderRadius: 13,
-      border: "1px solid color-mix(in oklab, var(--caution) 30%, transparent)",
-      background: "var(--caution-soft)",
-      color: "var(--caution)",
+      // Settled rather than offered, once they are on the list: the same
+      // control, saying what is true now, and still the way back in to change
+      // it or leave.
+      border: `1px solid color-mix(in oklab, var(--${waiting ? "positive" : "caution"}) 30%, transparent)`,
+      background: `var(--${waiting ? "positive" : "caution"}-soft)`,
+      color: `var(--${waiting ? "positive" : "caution"})`,
       fontSize: 14,
       fontWeight: 600,
       gap: 7,
     }}
   >
-    <BellIcon />
+    {waiting ? <TickIcon /> : <BellIcon />}
     {label}
   </button>
+);
+
+const TickIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M20 6L9 17l-5-5"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
 );
 
 const BellIcon = () => (

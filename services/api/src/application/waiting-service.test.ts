@@ -313,6 +313,67 @@ describe("waiting for a time", () => {
       expect(openings()).toHaveLength(1);
     });
 
+    /**
+     * The three the ADR promises and a cancellation hook would have missed.
+     * Each is time reappearing with nothing cancelled anywhere.
+     */
+    it("notices a day off being called off", async () => {
+      const shop = await anEstablishedBusiness(test);
+      await test.services.closures.close(
+        shop.owner.actor,
+        shop.business.id,
+        { fromDate: TUESDAY, toDate: TUESDAY, note: "חופשה", ranges: [] },
+        "CANCEL",
+      );
+      test.store.waitingRechecks = [];
+
+      await test.services.closures.lift(
+        shop.owner.actor,
+        shop.business.id,
+        TUESDAY,
+        TUESDAY,
+      );
+
+      expect(test.store.waitingRechecks).toEqual([
+        expect.objectContaining({ resourceId: shop.resource.id, onDate: TUESDAY }),
+      ]);
+    });
+
+    it("notices a date override being written", async () => {
+      const shop = await anEstablishedBusiness(test);
+      test.store.waitingRechecks = [];
+
+      await test.services.business.putOverride(
+        shop.owner.actor,
+        shop.business.id,
+        shop.resource.id,
+        { date: TUESDAY, note: null, ranges: [{ start: "08:00", end: "20:00" }] },
+      );
+
+      expect(test.store.waitingRechecks).toEqual([
+        expect.objectContaining({ resourceId: shop.resource.id, onDate: TUESDAY }),
+      ]);
+    });
+
+    it("notices a working day being made longer, on every one of its weekdays", async () => {
+      const shop = await anEstablishedBusiness(test);
+      test.store.waitingRechecks = [];
+
+      await test.services.business.replaceWorkingHours(
+        shop.owner.actor,
+        shop.business.id,
+        shop.resource.id,
+        [{ dayOfWeek: 2, start: "08:00", end: "20:00" }],
+      );
+
+      // Every Tuesday a customer could still book, not merely the next one.
+      expect(test.store.waitingRechecks.length).toBeGreaterThan(1);
+      for (const mark of test.store.waitingRechecks) {
+        expect(mark.resourceId).toBe(shop.resource.id);
+        expect(new Date(`${mark.onDate}T00:00:00.000Z`).getUTCDay()).toBe(2);
+      }
+    });
+
     it("leaves the mark alone until it has been looked at, then clears it", async () => {
       const { booked, taken } = await aFullTuesday();
 

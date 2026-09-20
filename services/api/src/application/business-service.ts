@@ -47,6 +47,7 @@ import {
   requireStaff,
   requireUser,
 } from "./authorization.ts";
+import { markForRecheck, markWeekdayForRecheck } from "./waiting-service.ts";
 
 /**
  * Everything an owner does to their own Business. ADR 0011 makes registration
@@ -1079,7 +1080,26 @@ export const businessService = ({
         }
       }
 
-      return repositories.workingHours.replaceForResource(resourceId, businessId, ranges);
+      const written = await repositories.workingHours.replaceForResource(
+        resourceId,
+        businessId,
+        ranges,
+      );
+      // ADR 0018: a longer working day is hours appearing, and a recurring
+      // rule appears on every one of its weekdays inside the Booking Horizon.
+      const business = await repositories.businesses.findById(businessId);
+      if (business !== null) {
+        for (const dayOfWeek of new Set(ranges.map((range) => range.dayOfWeek))) {
+          await markWeekdayForRecheck(
+            repositories,
+            resourceId,
+            dayOfWeek,
+            business,
+            clock.now(),
+          );
+        }
+      }
+      return written;
     });
   },
 
@@ -1154,6 +1174,9 @@ export const businessService = ({
     return unitOfWork.run(actor, async ({ repositories }) => {
       await requireResourceAccess(repositories, actor, businessId, resourceId);
       await loadOwnedResource(repositories, businessId, resourceId);
+      // ADR 0018: an Override replaces the weekday entirely, so writing one
+      // can hand hours back as easily as take them away.
+      await markForRecheck(repositories, resourceId, parseLocalDate(input.date));
       return repositories.dateOverrides.put({
         resourceId,
         businessId,

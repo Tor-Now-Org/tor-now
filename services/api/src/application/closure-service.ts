@@ -19,6 +19,7 @@ import {
   type Resource,
 } from "@tor-now/domain";
 import { loadManagedBusiness } from "./authorization.ts";
+import { markForRecheck } from "./waiting-service.ts";
 import { namedFor, stillToCome, type Impact, type Upcoming } from "./stranded.ts";
 import { notificationFor } from "./notifications.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
@@ -334,6 +335,10 @@ export const closureService = ({
           );
           for (const override of overrides) {
             await repositories.dateOverrides.delete(override.id);
+            // ADR 0018. This is the case a "hook the cancellation" design
+            // misses most plainly: a day off called off is a whole day of
+            // hours reappearing, with nothing cancelled anywhere.
+            await markForRecheck(repositories, calendar.id, override.date);
             removed += 1;
           }
         }

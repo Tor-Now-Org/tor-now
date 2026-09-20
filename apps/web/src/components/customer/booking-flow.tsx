@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError, isRecoverableSlotError } from "@/lib/api/errors.ts";
 import type {
+  WaitingDto,
   BusinessDto,
   BusinessProfileDto,
   DayAvailabilityDto,
@@ -85,7 +86,69 @@ export const BookingFlow = ({
    * null, which is a real answer.
    */
   const [waitingFor, setWaitingFor] = useState<PartOfDay | null | undefined>(undefined);
-  const [waitSaved, setWaitSaved] = useState(false);
+  /** What this customer already has standing at this business. */
+  const [waiting, setWaiting] = useState<readonly WaitingDto[]>([]);
+
+
+  /**
+   * What is standing for this Service on the day being looked at. One entry per
+   * Service per day is all the product allows, so this is the one the screen
+   * is about — and what the grid draws its buttons from.
+   */
+  const standing =
+    service === null
+      ? null
+      : (waiting.find(
+          (entry) => entry.onDate === date && entry.serviceId === service.id,
+        ) ?? null);
+  const standingParts: readonly PartOfDay[] =
+    standing === null
+      ? []
+      : standing.parts.map((part) =>
+          part === "MORNING" ? "morning" : part === "NOON" ? "noon" : "evening",
+        );
+
+  const loadWaiting = useCallback(async () => {
+    if (token === null) {
+      setWaiting([]);
+      return;
+    }
+    try {
+      const mine = await api.myWaiting(token);
+      setWaiting(mine.filter((entry) => entry.businessId === business.id));
+    } catch {
+      // The list is an embellishment on a screen that works without it: a
+      // failure here must not stop somebody booking.
+      setWaiting([]);
+    }
+  }, [token, business.id]);
+
+  useEffect(() => {
+    void loadWaiting();
+  }, [loadWaiting]);
+
+  /**
+   * Join, change or leave — all three are the same shape: do it, say so, and
+   * re-read the list so the screen matches what the server now holds.
+   */
+  const keepWaiting = async (change: (token: string) => Promise<void>) => {
+    if (token === null) {
+      setWaitingFor(undefined);
+      setStage("verifying");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await change(token);
+      setWaitingFor(undefined);
+      await loadWaiting();
+    } catch (trouble) {
+      setError(errorText(isApiError(trouble) ? trouble.code : "INTERNAL"));
+    } finally {
+      setBusy(false);
+    }
+  };
   /** Kilometres from the customer, when both they and the pin are known. */
   const [distance, setDistance] = useState<number | null>(null);
   useEffect(() => {
@@ -603,6 +666,8 @@ export const BookingFlow = ({
               callBusiness: copy.callBusiness,
               waitForPart: copy.waitForPart,
               waitForDay: copy.waitForDay,
+              waitingForPart: copy.waitingForPart,
+              waitingForDay: copy.waitingForDay,
             }}
             businessPhone={business.phone}
             // Offered only once a Service is chosen: what a day has free
@@ -611,6 +676,7 @@ export const BookingFlow = ({
             onWaitFor={
               service === null ? undefined : (part) => setWaitingFor(part)
             }
+            waitingFor={standingParts}
           />
         ) : null}
       </section>
@@ -628,38 +694,32 @@ export const BookingFlow = ({
           onDate={date}
           wantedPart={waitingFor}
           resourceId={resource?.id ?? null}
+          existing={standing}
           saving={busy}
           onClose={() => setWaitingFor(undefined)}
-          onConfirm={async (wish) => {
-            if (token === null) {
-              setWaitingFor(undefined);
-              setStage("verifying");
-              return;
-            }
-            setBusy(true);
-            setError(null);
-            try {
-              await api.waitForTime(token, {
+          onConfirm={(wish) =>
+            void keepWaiting(async (signedIn) => {
+              await api.waitForTime(signedIn, {
                 businessId: business.id,
                 serviceId: service.id,
                 onDate: date,
                 ...wish,
               });
-              setWaitingFor(undefined);
-              setWaitSaved(true);
-            } catch (trouble) {
-              setError(errorText(isApiError(trouble) ? trouble.code : "INTERNAL"));
-            } finally {
-              setBusy(false);
-            }
-          }}
+            })
+          }
+          onRemove={() =>
+            void keepWaiting(async (signedIn) => {
+              if (standing === null) return;
+              await api.stopWaiting(signedIn, standing.id);
+            })
+          }
         />
       )}
 
-      {/* Said once and left standing: the list is in "my appointments" now,
-          and a banner somebody has to dismiss is one more thing to do after
-          being told there was nothing to do. */}
-      {waitSaved && <Warning>{copy.waitingSaved}</Warning>}
+      {/* No banner. Joining, changing and leaving all show in the button that
+          was just pressed — which is where the person is looking, and which is
+          still true a minute later. A second confirmation further down the
+          page says the same thing somewhere nobody is. */}
 
       <ReviewSummary reviews={reviews} />
 
