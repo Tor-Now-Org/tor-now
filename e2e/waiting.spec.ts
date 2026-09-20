@@ -114,12 +114,12 @@ test.describe("waiting for a time", () => {
 
     // And it is waiting for them in their own list, above the appointments.
     await page.getByRole("button", { name: "התורים שלי" }).click();
-    await expect(page.getByText("ממתינים לשעה")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("ברשימת המתנה")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(new RegExp(shop.business.name)).first()).toBeVisible();
 
     // Withdrawing is one tap, which is what keeps the list worth notifying.
     await page.getByRole("button", { name: /הסרה/ }).first().click();
-    await expect(page.getByText("ממתינים לשעה")).toHaveCount(0);
+    await expect(page.getByText("ברשימת המתנה")).toHaveCount(0);
   });
 
   /**
@@ -345,7 +345,7 @@ test.describe("waiting for a time", () => {
 
     await page.getByRole("button", { name: "התורים שלי" }).click();
     await expect(page.getByText("תספורת").first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("ממתינים לשעה")).toHaveCount(0);
+    await expect(page.getByText("ברשימת המתנה")).toHaveCount(0);
     expect(day).toBeTruthy();
   });
 

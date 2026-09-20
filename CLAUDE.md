@@ -20,6 +20,7 @@ Multi-tenant appointment booking. npm workspaces, no monorepo tooling.
   `CONTEXT.md` is the glossary — use its words, avoid the listed synonyms.
 - Run `npm run lint` before claiming a feature done — the pre-push policy
   enforces it, so a lint error caught late just means redoing the push.
+- When you change dictionary value, make sure to update all languages too.
 
 ## Commands
 
