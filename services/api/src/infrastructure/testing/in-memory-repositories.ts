@@ -804,9 +804,12 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         return override;
       },
       async delete(id) {
+        const removed = store.dateOverrides.find((override) => override.id === id);
         store.dateOverrides = store.dateOverrides.filter(
           (override) => override.id !== id,
         );
+        if (removed === undefined) return null;
+        return { resourceId: removed.resourceId, date: removed.date };
       },
     },
 

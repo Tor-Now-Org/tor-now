@@ -301,8 +301,9 @@ export const auditedDateOverrides = (
     return after;
   },
   async delete(id) {
-    await inner.delete(id);
+    const removed = await inner.delete(id);
     await record(context, AUDIT_ACTIONS.dateOverrideChanged, "DateOverride", id, null, null);
+    return removed;
   },
 });
 

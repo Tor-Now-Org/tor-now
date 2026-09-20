@@ -1,4 +1,4 @@
-import { instant, notFound, type DateOverride } from "@tor-now/domain";
+import { asId, instant, notFound, type DateOverride } from "@tor-now/domain";
 import type {
   BlockRepository,
   DateOverrideRepository,
@@ -14,6 +14,7 @@ import {
   toService,
   toWorkingHours,
   type Row,
+  text,
   toLocalDate,
 } from "./mappers.ts";
 
@@ -245,7 +246,18 @@ export const dateOverrideRepository = (
     },
 
     async delete(id) {
-      await tx`delete from date_override where id = ${id}`;
+      // The delete already had to find the row; returning two of its columns
+      // saves the caller a read it could not make anyway — an Override cannot
+      // be looked up by id.
+      const rows = await tx<Row[]>`
+        delete from date_override where id = ${id}
+        returning resource_id, on_date`;
+      const removed = rows[0];
+      if (removed === undefined) return null;
+      return {
+        resourceId: asId(text(removed["resource_id"])),
+        date: toLocalDate(removed["on_date"]),
+      };
     },
   };
 };

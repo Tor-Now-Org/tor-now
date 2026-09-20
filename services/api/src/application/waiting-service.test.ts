@@ -355,6 +355,53 @@ describe("waiting for a time", () => {
       ]);
     });
 
+    it("notices a date override being removed", async () => {
+      const shop = await anEstablishedBusiness(test);
+      // A day off, so that removing it is plainly hours coming back.
+      const override = await test.services.business.putOverride(
+        shop.owner.actor,
+        shop.business.id,
+        shop.resource.id,
+        { date: TUESDAY, note: null, ranges: [] },
+      );
+      test.store.waitingRechecks = [];
+
+      await test.services.business.deleteOverride(
+        shop.owner.actor,
+        shop.business.id,
+        override.id,
+      );
+
+      expect(test.store.waitingRechecks).toEqual([
+        expect.objectContaining({ resourceId: shop.resource.id, onDate: TUESDAY }),
+      ]);
+    });
+
+    it("notices one range being widened by hand", async () => {
+      const shop = await anEstablishedBusiness(test);
+      const [tuesday] = (
+        await test.services.business.listWorkingHours(
+          shop.owner.actor,
+          shop.business.id,
+          shop.resource.id,
+        )
+      ).filter((hours) => hours.dayOfWeek === 2);
+      test.store.waitingRechecks = [];
+
+      await test.services.business.updateWorkingHours(
+        shop.owner.actor,
+        shop.business.id,
+        tuesday!.id,
+        { start: "08:00", end: "20:00" },
+      );
+
+      expect(test.store.waitingRechecks.length).toBeGreaterThan(1);
+      for (const mark of test.store.waitingRechecks) {
+        expect(mark.resourceId).toBe(shop.resource.id);
+        expect(new Date(`${mark.onDate}T00:00:00.000Z`).getUTCDay()).toBe(2);
+      }
+    });
+
     it("notices a working day being made longer, on every one of its weekdays", async () => {
       const shop = await anEstablishedBusiness(test);
       test.store.waitingRechecks = [];

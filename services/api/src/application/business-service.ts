@@ -1120,10 +1120,24 @@ export const businessService = ({
       const start = parseLocalTime(input.start);
       const end = parseLocalTime(input.end);
       if (end <= start) throw validationFailed("A range must end after it starts");
-      return repositories.workingHours.update(id, {
+      const saved = await repositories.workingHours.update(id, {
         startMinutes: start,
         endMinutes: end,
       });
+      // ADR 0018: a range widened by hand is hours appearing just as much as a
+      // week saved through `replaceWorkingHours`, and on every one of that
+      // weekday's dates inside the Booking Horizon.
+      const business = await repositories.businesses.findById(businessId);
+      if (business !== null) {
+        await markWeekdayForRecheck(
+          repositories,
+          saved.resourceId,
+          saved.dayOfWeek,
+          business,
+          clock.now(),
+        );
+      }
+      return saved;
     });
   },
 
@@ -1199,7 +1213,14 @@ export const businessService = ({
     await unitOfWork.run(actor, async ({ repositories }) => {
       // ponytail: manager-and-up, for the reason `updateWorkingHours` gives.
       await requireOwnerOrManager(repositories, actor, businessId);
-      await repositories.dateOverrides.delete(id);
+      // ADR 0018: removing an Override restores the whole weekday's Working
+      // Hours, which hands back more time at once than writing one ever does.
+      // Marked whether or not the day grew — a mark says a date is worth
+      // looking at again, and `publishOpenings` stays silent when it is not.
+      const removed = await repositories.dateOverrides.delete(id);
+      if (removed !== null) {
+        await markForRecheck(repositories, removed.resourceId, removed.date);
+      }
     });
   },
 });

@@ -349,7 +349,14 @@ export type DateOverrideRepository = {
     note: string | null;
     ranges: readonly { startMinutes: number; endMinutes: number }[];
   }): Promise<DateOverride>;
-  delete(id: DateOverrideId): Promise<void>;
+  /**
+   * Returns the calendar and date the removed Override stood on, or null when
+   * nothing matched. ADR 0018: removing one restores the weekday's Working
+   * Hours, so the caller has to mark that date — and the id is all it has.
+   */
+  delete(
+    id: DateOverrideId,
+  ): Promise<{ resourceId: ResourceId; date: LocalDate } | null>;
 };
 
 export type BlockRepository = {

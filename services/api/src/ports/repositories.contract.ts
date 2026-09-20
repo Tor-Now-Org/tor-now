@@ -1168,7 +1168,13 @@ export const describeRepositoryContract = (
             parseLocalDate("2026-09-17"),
           ),
         ).toHaveLength(1);
-        await repositories.dateOverrides.delete(override.id);
+        // The caller only has the id, so what comes back is what lets it mark
+        // the date for the waiting list. ADR 0018.
+        expect(await repositories.dateOverrides.delete(override.id)).toEqual({
+          resourceId: context.resource.id,
+          date: parseLocalDate("2026-09-17"),
+        });
+        expect(await repositories.dateOverrides.delete(override.id)).toBeNull();
         expect(
           await repositories.dateOverrides.listForResource(
             context.resource.id,
