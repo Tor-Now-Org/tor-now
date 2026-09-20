@@ -29,8 +29,26 @@ const RENDERERS: Readonly<Record<Template, (payload: NotificationPayload) => str
     [TEMPLATES.waitingListOpening]: (payload) =>
       `שלום ${payload.customerName}, התפנתה שעה ב${payload.businessName} ל${payload.serviceName}${
         payload.resourceName === undefined ? "" : ` אצל ${payload.resourceName}`
-      } — ${PART_IN_HEBREW[payload.partOfDay ?? ""] ?? "במהלך היום"} של ${payload.startAt}. ההודעה נשלחה גם לממתינים נוספים; מי שתופס ראשון, תופס.`,
+      } — ${PART_IN_HEBREW[payload.partOfDay ?? ""] ?? "במהלך היום"}${
+        payload.onDate === undefined ? "" : ` של ${dayInHebrew(payload.onDate)}`
+      }. ההודעה נשלחה גם לממתינים נוספים; מי שתופס ראשון, תופס.`,
   });
+
+/**
+ * A date a person can read.
+ *
+ * The other four templates print `startAt`, which is an Instant and renders as
+ * an ISO timestamp — a wart they share and one this template must not copy,
+ * because it names a day rather than an hour. Read as UTC: a Local Date is a
+ * calendar day with no zone, and re-interpreting it in one can move it.
+ */
+const dayInHebrew = (onDate: string): string =>
+  new Intl.DateTimeFormat("he-IL", {
+    timeZone: "UTC",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(`${onDate}T00:00:00.000Z`));
 
 /** The product's own words for the parts of the day, as the slot grid says them. */
 const PART_IN_HEBREW: Readonly<Record<string, string>> = Object.freeze({

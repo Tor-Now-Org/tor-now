@@ -304,6 +304,7 @@ export const waitingService = (dependencies: {
                 startAt: formatInstant(opening.startAt),
                 partOfDay: opening.part,
                 resourceName: resource.name,
+                onDate: mark.onDate,
               },
             });
             answered.push(one.entry.id);

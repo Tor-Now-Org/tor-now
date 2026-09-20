@@ -44,6 +44,13 @@ export type NotificationPayload = {
    */
   readonly partOfDay?: string;
   readonly resourceName?: string;
+  /**
+   * The day itself, as the Business's own calendar has it. The waiting-list
+   * message names a part of a day rather than an hour, and `startAt` is an
+   * Instant — rendering one where a date belongs puts an ISO timestamp in
+   * front of a customer.
+   */
+  readonly onDate?: string;
 };
 
 export type OutboundMessage = {
