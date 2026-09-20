@@ -300,9 +300,19 @@ export const createApp = (services: Services) => {
     return context.body(null, 204);
   });
 
-  app.get("/me/waiting", async (context) =>
-    context.json((await services.waiting.mine(actorOf(context))).map(wire.waitingOut)),
-  );
+  app.get("/me/waiting", async (context) => {
+    // `businessId` narrows it to the shop asking, which is what a business page
+    // draws — it used to take the lot and keep one shop's worth.
+    const { businessId } = parseQuery(context, schema.waitingListSchema);
+    return context.json(
+      (
+        await services.waiting.mine(
+          actorOf(context),
+          businessId === null ? undefined : (businessId as never),
+        )
+      ).map(wire.waitingOut),
+    );
+  });
 
   app.put("/appointments/:appointmentId/note", async (context) => {
     const { customerNote } = await parseBody(context, schema.customerNoteSchema);

@@ -48,17 +48,21 @@ const toEntry = (row: Row, resourceIds: readonly ResourceId[]): WaitingEntry => 
 const resourcesOf = async (
   tx: Transaction,
   entryIds: readonly string[],
-): Promise<Map<string, ResourceId[]>> => {
-  const byEntry = new Map<string, ResourceId[]>();
+): Promise<Map<string, { id: ResourceId; name: string }[]>> => {
+  const byEntry = new Map<string, { id: ResourceId; name: string }[]>();
   if (entryIds.length === 0) return byEntry;
 
+  // The calendar's name comes along in the same statement: the customer's own
+  // list names them, and a join costs nothing a second read would not.
   const rows = await tx<Row[]>`
-    select entry_id, resource_id from waiting_entry_resource
-    where entry_id = any(${entryIds}::uuid[])`;
+    select wr.entry_id, wr.resource_id, r.name
+    from waiting_entry_resource wr
+    join resource r on r.id = wr.resource_id
+    where wr.entry_id = any(${entryIds}::uuid[])`;
   for (const row of rows) {
     const key = text(row["entry_id"]);
     const held = byEntry.get(key) ?? [];
-    held.push(asId(text(row["resource_id"])));
+    held.push({ id: asId(text(row["resource_id"])), name: text(row["name"]) });
     byEntry.set(key, held);
   }
   return byEntry;
@@ -69,7 +73,12 @@ const withResources = async (
   rows: readonly Row[],
 ): Promise<WaitingEntry[]> => {
   const byEntry = await resourcesOf(tx, rows.map((row) => text(row["id"])));
-  return rows.map((row) => toEntry(row, byEntry.get(text(row["id"])) ?? []));
+  return rows.map((row) =>
+    toEntry(
+      row,
+      (byEntry.get(text(row["id"])) ?? []).map((resource) => resource.id),
+    ),
+  );
 };
 
 export const waitingEntryRepository = (tx: Transaction): WaitingEntryRepository => ({
@@ -112,6 +121,43 @@ export const waitingEntryRepository = (tx: Transaction): WaitingEntryRepository 
         and on_date >= ${from}
       order by on_date`;
     return withResources(tx, rows);
+  },
+
+  async openForCustomerNamed(customerId, from, businessId) {
+    const rows = await tx<Row[]>`
+      select w.*,
+             s.name as service_name,
+             b.name as business_name, b.time_zone
+        from waiting_entry w
+        join service s on s.id = w.service_id
+        join business b on b.id = w.business_id
+       where w.customer_id = ${customerId}
+         and w.closed_at is null
+         and w.on_date >= ${from}
+         and (${businessId}::uuid is null or w.business_id = ${businessId})
+       order by w.on_date`;
+
+    // An entry whose Business or Service has gone is dropped by the join, which
+    // is what reading them one at a time did by skipping a null.
+    const byEntry = await resourcesOf(tx, rows.map((row) => text(row["id"])));
+    return rows.map((row) => {
+      const named = byEntry.get(text(row["id"])) ?? [];
+      const entry = toEntry(
+        row,
+        named.map((resource) => resource.id),
+      );
+      return {
+        entry,
+        businessName: text(row["business_name"]),
+        businessTimeZone: text(row["time_zone"]),
+        serviceName: text(row["service_name"]),
+        // In the entry's own order, and without a calendar that has gone.
+        resourceNames: entry.resourceIds.flatMap((id) => {
+          const found = named.find((resource) => resource.id === id);
+          return found === undefined ? [] : [found.name];
+        }),
+      };
+    });
   },
 
   async toTell(resourceId, onDate, notifiedBefore) {

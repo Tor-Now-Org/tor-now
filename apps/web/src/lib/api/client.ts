@@ -354,7 +354,12 @@ export const api = {
   stopWaiting: (token: string, entryId: string) =>
     request<void>(`/waiting/${entryId}`, { method: "DELETE", token }),
 
-  myWaiting: (token: string) => request<WaitingDto[]>("/me/waiting", { token }),
+  /** `businessId` asks for one shop's worth, which is what a business page draws. */
+  myWaiting: (token: string, businessId?: string) =>
+    request<WaitingDto[]>(
+      businessId === undefined ? "/me/waiting" : `/me/waiting?businessId=${businessId}`,
+      { token },
+    ),
 
   setCustomerNote: (token: string, appointmentId: string, customerNote: string | null) =>
     request<AppointmentDto>(`/appointments/${appointmentId}/note`, {

@@ -114,8 +114,10 @@ export const BookingFlow = ({
       return;
     }
     try {
-      const mine = await api.myWaiting(token);
-      setWaiting(mine.filter((entry) => entry.businessId === business.id));
+      // This shop's worth, asked for as such: taking the customer's whole list
+      // and keeping one shop's rows meant the other shops' standing requests
+      // reached this page only to be thrown away.
+      setWaiting(await api.myWaiting(token, business.id));
     } catch {
       // The list is an embellishment on a screen that works without it: a
       // failure here must not stop somebody booking.
@@ -686,7 +688,7 @@ export const BookingFlow = ({
       {/* ADR 0018. Waiting needs a signed-in customer, because there has to be
           somebody to message — so an unverified visitor is taken through the
           same verification the booking flow uses, and lands back here. */}
-      {profile !== null && service !== null && waitingFor !== undefined && (
+      {service !== null && waitingFor !== undefined && (
         <WaitSheet
           open
           business={profile}

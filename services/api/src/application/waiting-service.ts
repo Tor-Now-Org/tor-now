@@ -246,7 +246,11 @@ export const waitingService = (dependencies: {
      * From today onward: an entry for a day that has gone by is not waiting
      * for anything, which is why a single date needs no expiry sweep.
      */
-    async mine(actor: Actor): Promise<readonly MyWaiting[]> {
+    async mine(
+      actor: Actor,
+      /** One shop's worth, for the screen that shows one shop. */
+      businessId?: BusinessId,
+    ): Promise<readonly MyWaiting[]> {
       const customerId = actorUserId(actor);
       if (customerId === null) throw forbidden("Only a signed-in customer has a list");
 
@@ -254,29 +258,27 @@ export const waitingService = (dependencies: {
         // A day earlier than any zone could make it, because the entries may
         // span businesses in different ones. Each is then judged against its
         // own Business's today, below.
-        const open = await repositories.waitingEntries.openForCustomer(
+        //
+        // The names travel with the entries: asked for one at a time they cost
+        // three reads each, and the list is drawn from nothing else.
+        const open = await repositories.waitingEntries.openForCustomerNamed(
           customerId,
           todayIn(addMinutesToInstant(clock.now(), -A_DAY_IN_MINUTES), UTC),
+          businessId ?? null,
         );
 
         const mine: MyWaiting[] = [];
-        for (const entry of open) {
-          const business = await repositories.businesses.findById(entry.businessId);
-          const service = await repositories.services.findById(entry.serviceId);
-          if (business === null || service === null) continue;
-          if (entry.onDate < todayIn(clock.now(), business.timeZone)) continue;
+        for (const held of open) {
+          const { entry } = held;
+          if (entry.onDate < todayIn(clock.now(), timeZone(held.businessTimeZone))) continue;
 
-          const resources = await repositories.resources.listForBusiness(entry.businessId);
           mine.push({
             id: entry.id,
             businessId: entry.businessId,
-            businessName: business.name,
+            businessName: held.businessName,
             serviceId: entry.serviceId,
-            serviceName: service.name,
-            resourceNames: entry.resourceIds.flatMap((id) => {
-              const resource = resources.find((one) => one.id === id);
-              return resource === undefined ? [] : [resource.name];
-            }),
+            serviceName: held.serviceName,
+            resourceNames: held.resourceNames,
             onDate: entry.onDate,
             parts: entry.parts,
           });

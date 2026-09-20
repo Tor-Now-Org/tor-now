@@ -381,6 +381,11 @@ export const dateRangeSchema = z.object({
 
 export const calendarDaySchema = z.object({ date: localDateSchema });
 
+/** ADR 0018: the customer's own list, optionally for one Business. */
+export const waitingListSchema = z.object({
+  businessId: z.string().uuid().nullable().catch(null).default(null),
+});
+
 /** Below the minimum length the answer is noise, which the service also says. */
 export const appointmentSearchSchema = z.object({
   q: z.string().trim().max(80).nullable().catch(null).default(null),

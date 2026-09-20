@@ -830,6 +830,19 @@ export type WaitingEntryRepository = {
     from: LocalDate,
   ): Promise<readonly WaitingEntry[]>;
   /**
+   * The same, carrying the names the customer's own list shows.
+   *
+   * Asked for entry by entry, the names cost three reads each — the Business,
+   * the Service and the calendars — so a customer waiting at five shops paid
+   * fifteen round trips to draw five rows. The join answers all of it at once,
+   * and `businessId` narrows it to the shop whose page is asking.
+   */
+  openForCustomerNamed(
+    customerId: UserId,
+    from: LocalDate,
+    businessId: BusinessId | null,
+  ): Promise<readonly WaitingEntryForCustomer[]>;
+  /**
    * Everyone still waiting on this calendar and date, ready to be told.
    *
    * `notifiedBefore` keeps one entry from becoming a stream of messages on a
@@ -855,6 +868,19 @@ export type WaitingEntryRepository = {
     onDate: LocalDate,
     at: Instant,
   ): Promise<void>;
+};
+
+/**
+ * A Waiting Entry as its own customer's list shows it: the entry, and the names
+ * of the things it points at. `resourceNames` is in the entry's own
+ * `resourceIds` order, and leaves out a calendar that has since gone.
+ */
+export type WaitingEntryForCustomer = {
+  readonly entry: WaitingEntry;
+  readonly businessName: string;
+  readonly businessTimeZone: string;
+  readonly serviceName: string;
+  readonly resourceNames: readonly string[];
 };
 
 /** A calendar date whose availability changed and has not been re-examined. */

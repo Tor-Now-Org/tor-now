@@ -1461,6 +1461,38 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           .sort((left, right) => compareLocalDate(left.onDate, right.onDate));
       },
 
+      async openForCustomerNamed(customerId, from, businessId) {
+        const open = store.waitingEntries
+          .filter(
+            (entry) =>
+              entry.customerId === customerId &&
+              entry.closedAt === null &&
+              compareLocalDate(entry.onDate, from) >= 0 &&
+              (businessId === null || entry.businessId === businessId),
+          )
+          .sort((left, right) => compareLocalDate(left.onDate, right.onDate));
+
+        // The join drops an entry whose Business or Service has gone, which is
+        // what the loop this replaced did by skipping a null.
+        return open.flatMap((entry) => {
+          const business = store.businesses.find((one) => one.id === entry.businessId);
+          const service = store.services.find((one) => one.id === entry.serviceId);
+          if (business === undefined || service === undefined) return [];
+          return [
+            {
+              entry,
+              businessName: business.name,
+              businessTimeZone: business.timeZone,
+              serviceName: service.name,
+              resourceNames: entry.resourceIds.flatMap((id) => {
+                const resource = store.resources.find((one) => one.id === id);
+                return resource === undefined ? [] : [resource.name];
+              }),
+            },
+          ];
+        });
+      },
+
       async toTell(resourceId, onDate, notifiedBefore) {
         const waiting = store.waitingEntries.filter(
           (entry) =>

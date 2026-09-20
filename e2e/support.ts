@@ -252,7 +252,18 @@ export const theNextOfferedTime = async (
     await expect(times.first().or(page.getByText(NO_TIMES))).toBeVisible({
       timeout: SLOTS_APPEAR_WITHIN,
     });
-    if ((await times.count()) >= atLeast) return { time: times.first(), day };
+    // A day that says so has none, and there is nothing to wait for.
+    if (await page.getByText(NO_TIMES).isVisible()) continue;
+    // The first time appearing is not the list having arrived. Counted the
+    // moment it did, a day offering forty-odd read as offering one on a loaded
+    // machine, and the walk gave up saying no day offered enough — so the count
+    // is polled until it is enough rather than sampled once.
+    const enough = await expect
+      .poll(async () => times.count(), { timeout: SLOTS_APPEAR_WITHIN })
+      .toBeGreaterThanOrEqual(atLeast)
+      .then(() => true)
+      .catch(() => false);
+    if (enough) return { time: times.first(), day };
   }
   throw new Error(
     `No day in the next ${DAYS_TO_TRY} offered ${atLeast} times or more.`,

@@ -2450,6 +2450,73 @@ export const describeRepositoryContract = (
         });
       });
 
+      it("gives a customer's open entries with the names their list shows", async () => {
+        await withRepositories(async (repositories) => {
+          const here = await aWaitingCustomer(repositories, "4109");
+          const there = await aBookableBusiness(repositories, "4110");
+          const second = await repositories.resources.create({
+            businessId: here.business.id,
+            name: "יומן ב",
+          });
+          const onDate = parseLocalDate("2026-09-21");
+
+          const mine = await repositories.waitingEntries.put({
+            businessId: here.business.id,
+            customerId: here.customer.id,
+            serviceId: here.service.id,
+            resourceIds: [here.resource.id, second.id],
+            onDate,
+            parts: ["MORNING"],
+          });
+          // A second shop, so the narrowing has something to leave out.
+          await repositories.waitingEntries.put({
+            businessId: there.business.id,
+            customerId: here.customer.id,
+            serviceId: there.service.id,
+            resourceIds: [there.resource.id],
+            onDate,
+            parts: ["EVENING"],
+          });
+
+          const all = await repositories.waitingEntries.openForCustomerNamed(
+            here.customer.id,
+            onDate,
+            null,
+          );
+
+          expect(all).toHaveLength(2);
+          const held = all.find((one) => one.entry.id === mine.id);
+          // The three names the loop this replaced fetched one read at a time.
+          expect(held?.businessName).toBe(here.business.name);
+          expect(held?.serviceName).toBe(here.service.name);
+          expect(held?.businessTimeZone).toBe("Asia/Jerusalem");
+          // In the entry's own order, so the chip reads the way it was asked.
+          expect(held?.resourceNames).toEqual(
+            held?.entry.resourceIds.map((id) =>
+              id === second.id ? "יומן ב" : here.resource.name,
+            ),
+          );
+
+          // One shop's worth, for the screen that draws one shop.
+          const narrowed = await repositories.waitingEntries.openForCustomerNamed(
+            here.customer.id,
+            onDate,
+            here.business.id,
+          );
+          expect(narrowed.map((one) => one.entry.id)).toEqual([mine.id]);
+
+          // A closed entry is nobody's standing question any more.
+          await repositories.waitingEntries.close([mine.id], AT("2026-09-20T10:00:00.000Z"));
+          expect(
+            await repositories.waitingEntries.openForCustomerNamed(
+              here.customer.id,
+              onDate,
+              here.business.id,
+            ),
+          ).toEqual([]);
+        });
+      });
+
       /**
        * Asking twice is the same ask, and changing one's mind replaces the
        * question rather than raising a second one. Two open rows would mean
