@@ -472,6 +472,36 @@ test.describe("the week a calendar keeps", () => {
     expect((await storedWeek(shop))(0)).toEqual(["09:00-18:00"]);
   });
 
+  test("a slow answer for the calendar being left cannot overwrite the one on screen", async ({
+    page,
+  }) => {
+    const { shop } = await anOwnerAt("יומן איטי", { start: "09:00", end: "17:00" });
+    await call<{ id: string; name: string }>(
+      `/businesses/${shop.business.id}/resources`,
+      { method: "POST", token: shop.owner.token, body: { name: "יומן ב" } },
+    );
+
+    await openTheWeek(page, shop);
+
+    // The second calendar's hours, held back long enough to be overtaken. This
+    // is the slow API a full suite — or a bad afternoon — produces on its own.
+    await page.route(/\/working-hours/, async (route) => {
+      await new Promise((wake) => setTimeout(wake, 2500));
+      await route.continue();
+    });
+
+    await page.getByRole("button", { name: "יומן ב" }).click();
+
+    // While that answer is outstanding the week is nobody's: the hours of the
+    // calendar just left must not be sitting there to be read or typed into.
+    await expect(page.locator('input[type="time"]')).toHaveCount(0);
+    await expect(page.locator(".spinner")).toBeVisible();
+
+    // And when it lands, it is this calendar's own week.
+    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('input[type="time"]').first()).toBeVisible();
+  });
+
   test("each calendar keeps its own week, and switching does not carry one over", async ({
     page,
   }) => {
@@ -1246,15 +1276,12 @@ test.describe("adding to a day", () => {
 });
 
 test.describe("special days and blockages", () => {
-  const anOwnerAt = async (name: string) => {
-    const ownerPhone = uniquePhone();
-    const shop = await aBusinessWithOpenHours({
+  const anOwnerAt = async (name: string) =>
+    aBusinessWithOpenHours({
       name: `${name} ${Date.now()}`,
-      ownerPhone,
+      ownerPhone: uniquePhone(),
       hours: { start: "08:00", end: "20:00" },
     });
-    return shop;
-  };
 
   const openTheLayer = async (
     page: Page,

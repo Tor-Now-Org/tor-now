@@ -37,25 +37,31 @@ export const stillToCome = (appointment: Appointment, now: number): boolean =>
 export const namedFor = async (
   repositories: Repositories,
   appointments: readonly Appointment[],
-): Promise<StrandedAppointment[]> =>
-  Promise.all(
-    appointments.map(async (appointment) => {
-      const customer = await repositories.users.findById(appointment.customerId);
-      return {
-        id: appointment.id,
-        startAt: appointment.startAt,
-        resourceName: appointment.resourceName,
-        serviceName: appointment.serviceName,
-        customerName:
-          customer === null
-            ? ""
-            : [customer.givenName, customer.familyName]
-                .filter((part) => part !== null && part !== "")
-                .join(" "),
-        customerPhone: customer?.phone ?? "",
-      };
-    }),
-  );
+): Promise<StrandedAppointment[]> => {
+  // One query for the lot: a fortnight's closure can strand dozens, and the
+  // owner is waiting on this before they are shown anything at all.
+  const customers = await repositories.users.findByIds([
+    ...new Set(appointments.map((appointment) => appointment.customerId)),
+  ]);
+  const byId = new Map(customers.map((customer) => [customer.id, customer]));
+
+  return appointments.map((appointment) => {
+    const customer = byId.get(appointment.customerId);
+    return {
+      id: appointment.id,
+      startAt: appointment.startAt,
+      resourceName: appointment.resourceName,
+      serviceName: appointment.serviceName,
+      customerName:
+        customer === undefined
+          ? ""
+          : [customer.givenName, customer.familyName]
+              .filter((part) => part !== null && part !== "")
+              .join(" "),
+      customerPhone: customer?.phone ?? "",
+    };
+  });
+};
 
 /** What a screen is shown before it is asked to decide. */
 export type Impact = {

@@ -111,7 +111,8 @@ export const Schedule = ({
     reason: string;
   } | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(
+    async (isStale: () => boolean = () => false) => {
     if (resource === null) return;
     const from = todayIn(business.timeZone);
     const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
@@ -127,18 +128,40 @@ export const Schedule = ({
           resources.map((one) => api.listOverrides(token, business.id, one.id, { from, to })),
         ),
       ]);
+      // Switched calendars while this was in flight: the answer is for the one
+      // being left, and writing the week from it would throw away whatever has
+      // been typed into the one now on screen.
+      if (isStale()) return;
       setHours(loadedHours);
       setWeek(weekFromRanges(loadedHours));
       setOverrides(loadedOverrides);
       setShopDates(shopWideDates(everyCalendar, resources.length));
       setBlocks(calendarDays.blocks);
     } catch (cause) {
+      if (isStale()) return;
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
-  }, [token, business.id, business.timeZone, resource, resources, errorText]);
+    },
+    [token, business.id, business.timeZone, resource, resources, errorText],
+  );
+
+  /**
+   * A calendar's week belongs to that calendar. Leaving it on screen while the
+   * next one is fetched let the hours of one chair be read — and edited, and
+   * saved — as if they were another's, which on a slow answer is a week
+   * overwritten with a week that was never on the screen it was typed into.
+   */
+  useEffect(() => {
+    setHours(null);
+    setWeek(emptyWeek);
+  }, [resource?.id]);
 
   useEffect(() => {
-    void load();
+    let stale = false;
+    void load(() => stale);
+    return () => {
+      stale = true;
+    };
   }, [load]);
 
   const act = async (action: () => Promise<unknown>) => {

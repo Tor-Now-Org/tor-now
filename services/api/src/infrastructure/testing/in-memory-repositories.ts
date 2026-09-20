@@ -106,6 +106,12 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         const found = store.users.find((user) => user.id === id);
         return found === undefined || found.deletedAt !== null ? null : found;
       },
+      async findByIds(ids) {
+        const wanted = new Set<string>(ids);
+        return store.users.filter(
+          (user) => wanted.has(user.id) && user.deletedAt === null,
+        );
+      },
       async findByPhone(phone) {
         // Deleted rows are returned deliberately: ADR 0008 keeps the phone, and
         // sign-in has to tell "closed" from "unknown".

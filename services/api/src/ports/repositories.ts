@@ -83,6 +83,16 @@ export type BusinessVolume = {
 
 export type UserRepository = {
   findById(id: UserId): Promise<User | null>;
+  /**
+   * The same question asked about many people at once, for the screens that
+   * name the customer on every row — a day's appointments, a business's
+   * customer list. One per id is one round trip per id, and a transaction holds
+   * a single connection, so the list of names cost as much as the list itself.
+   *
+   * Ids nothing answers for are absent rather than null, and the order is the
+   * database's: callers index the result by id.
+   */
+  findByIds(ids: readonly UserId[]): Promise<readonly User[]>;
   findByPhone(phone: string): Promise<User | null>;
   create(user: {
     phone: string;

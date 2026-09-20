@@ -906,14 +906,18 @@ export const calendarService = ({
   },
 });
 
+/**
+ * One query, not one per person. A transaction holds a single connection, so
+ * asking per id made a day's names cost a round trip each — and a business's
+ * customer list cost one per customer it had ever had.
+ */
 const loadCustomers = async (
   repositories: Parameters<typeof loadManagedBusiness>[0],
   ids: readonly User["id"][],
 ): Promise<Map<User["id"], User>> => {
-  const unique = [...new Set(ids)];
-  const users = await Promise.all(unique.map((id) => repositories.users.findById(id)));
-  return users.reduce((found, user) => {
-    if (user !== null) found.set(user.id, user);
-    return found;
-  }, new Map<User["id"], User>());
+  const users = await repositories.users.findByIds([...new Set(ids)]);
+  return users.reduce(
+    (found, user) => found.set(user.id, user),
+    new Map<User["id"], User>(),
+  );
 };

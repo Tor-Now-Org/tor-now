@@ -457,10 +457,19 @@ export const businessService = ({
       const memberships = (
         await repositories.memberships.listAllForBusiness(businessId)
       ).filter(isStaff);
+      // The people in one query; only a WORKER's calendars are still asked for
+      // one at a time, and a team is small enough that they may be.
+      const people = new Map(
+        (
+          await repositories.users.findByIds(
+            memberships.map((membership) => membership.userId),
+          )
+        ).map((user) => [user.id, user]),
+      );
       const members = await Promise.all(
         memberships.map(async (membership): Promise<TeamMember | null> => {
-          const user = await repositories.users.findById(membership.userId);
-          if (user === null) return null;
+          const user = people.get(membership.userId);
+          if (user === undefined) return null;
           return {
             user,
             membership,

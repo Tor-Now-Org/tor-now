@@ -138,6 +138,51 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("finds many users by id at once, and hides the deleted among them", async () => {
+      await withRepositories(async (repositories) => {
+        const her = await repositories.users.create({
+          phone: "+972500001121",
+          givenName: "דנה",
+          familyName: null,
+          birthDate: null,
+        });
+        const him = await repositories.users.create({
+          phone: "+972500001122",
+          givenName: "יוסי",
+          familyName: null,
+          birthDate: null,
+        });
+        const closed = await repositories.users.create({
+          phone: "+972500001123",
+          givenName: "סגור",
+          familyName: null,
+          birthDate: null,
+        });
+        await repositories.users.softDelete(closed.id);
+
+        // An id repeated, an id nobody answers for, and a closed account: the
+        // callers pass whatever the appointments gave them, so all three have
+        // to behave — and the result is indexed by id, never by position.
+        const found = await repositories.users.findByIds([
+          her.id,
+          him.id,
+          her.id,
+          closed.id,
+          asId("00000000-0000-4000-8000-999999999999"),
+        ]);
+
+        expect([...found].map((user) => user.id).sort()).toEqual(
+          [her.id, him.id].sort(),
+        );
+      });
+    });
+
+    it("asks nothing of the database for an empty list of ids", async () => {
+      await withRepositories(async (repositories) => {
+        expect(await repositories.users.findByIds([])).toEqual([]);
+      });
+    });
+
     it("restores a soft-deleted user", async () => {
       await withRepositories(async (repositories) => {
         const created = await repositories.users.create({

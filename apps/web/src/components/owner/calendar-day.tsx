@@ -208,12 +208,16 @@ export const CalendarDay = ({
     if (wanted === null || resource === null) return;
     let current = true;
     api
-      .listCustomers(token, business.id)
-      .then((people) => {
+      // Their record, not the whole book: the id is known, and the list would
+      // be every customer the business has in order to use one of them.
+      .customerRecord(token, business.id, wanted)
+      .then((record) => {
         if (!current) return;
-        const found = people.find((one) => one.id === wanted);
-        if (found === undefined) return;
-        setAimedCustomer({ id: found.id, name: found.name, phone: found.phone });
+        setAimedCustomer({
+          id: record.user.id,
+          name: record.user.name,
+          phone: record.user.phone,
+        });
         setAim("appointment");
         setAimedAt([]);
       })
