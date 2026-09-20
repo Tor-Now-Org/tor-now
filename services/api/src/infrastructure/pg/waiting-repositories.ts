@@ -177,6 +177,19 @@ export const waitingRecheckRepository = (tx: Transaction): WaitingRecheckReposit
     await tx`select app.mark_for_recheck(${resourceId}::uuid, ${onDate}::date)`;
   },
 
+  async markMany(marks) {
+    if (marks.length === 0) return;
+    // One statement, the function called once per pair: the marks stay
+    // unreadable and the upsert keeps seeing its own conflict, exactly as the
+    // single mark does. See the migration for why it cannot touch the table.
+    await tx`
+      select app.mark_for_recheck(m.resource_id, m.on_date)
+      from unnest(
+        ${marks.map((mark) => mark.resourceId)}::uuid[],
+        ${marks.map((mark) => mark.onDate)}::date[]
+      ) as m(resource_id, on_date)`;
+  },
+
   async oldest(limit) {
     const rows = await tx<Row[]>`
       select resource_id, on_date from waiting_recheck

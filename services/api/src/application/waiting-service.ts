@@ -88,6 +88,22 @@ export const markForRecheck = async (
 };
 
 /**
+ * Many days at once, in one statement.
+ *
+ * The changes that free time rarely free a single day: a blockage lifted, a
+ * closure called off, a weekday made longer. Marked one at a time, a fortnight
+ * given back cost fourteen round trips inside the transaction the owner was
+ * waiting on.
+ */
+export const markManyForRecheck = async (
+  repositories: Repositories,
+  marks: readonly { resourceId: ResourceId; onDate: LocalDate }[],
+): Promise<void> => {
+  if (marks.length === 0) return;
+  await repositories.waitingRechecks.markMany(marks);
+};
+
+/**
  * The same, for something that happened at an instant rather than on a date —
  * an Appointment, which knows when it starts and not which local day that is.
  */
@@ -115,9 +131,13 @@ export const markSpanForRecheck = async (
   const first = todayIn(span.startAt, zone);
   // The end is exclusive: a block ending at midnight belongs to the day before.
   const last = todayIn(addMinutesToInstant(span.endAt, -1), zone);
-  for (const date of datesBetween(first, last < first ? first : last)) {
-    await markForRecheck(repositories, span.resourceId, date);
-  }
+  await markManyForRecheck(
+    repositories,
+    datesBetween(first, last < first ? first : last).map((onDate) => ({
+      resourceId: span.resourceId,
+      onDate,
+    })),
+  );
 };
 
 /**
@@ -137,10 +157,12 @@ export const markWeekdayForRecheck = async (
 ): Promise<void> => {
   const from = todayIn(now, business.timeZone);
   const to = addDays(from, business.bookingHorizonDays);
-  for (const date of datesBetween(from, to)) {
-    if (dayOfWeekOf(date) !== weekday) continue;
-    await markForRecheck(repositories, resourceId, date);
-  }
+  await markManyForRecheck(
+    repositories,
+    datesBetween(from, to)
+      .filter((date) => dayOfWeekOf(date) === weekday)
+      .map((onDate) => ({ resourceId, onDate })),
+  );
 };
 
 const UTC = timeZone("UTC");

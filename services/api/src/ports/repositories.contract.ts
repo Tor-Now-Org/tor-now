@@ -705,6 +705,157 @@ export const describeRepositoryContract = (
 
     // --- Schedule layers: ADR 0002 -------------------------------------
 
+    /**
+     * The batched writes, which a closure uses in place of one round trip per
+     * calendar per date. Each asks the same thing: does writing them together
+     * leave exactly what writing them one at a time left?
+     */
+    it("writes many overrides at once, replacing what each day held", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04701");
+        const second = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "יומן ב",
+        });
+        const ids = [context.resource.id, second.id];
+        const first = parseLocalDate("2026-09-01");
+        const last = parseLocalDate("2026-09-03");
+        const dates = [first, parseLocalDate("2026-09-02"), last];
+
+        // A short day on one of them first, so the batch has something to replace.
+        await repositories.dateOverrides.put({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          date: first,
+          note: "לפני",
+          ranges: [{ startMinutes: 600, endMinutes: 660 }],
+        });
+
+        const written = await repositories.dateOverrides.putMany(
+          ids.flatMap((resourceId) =>
+            dates.map((date) => ({
+              resourceId,
+              businessId: context.business.id,
+              date,
+              note: "חופשה",
+              ranges: [],
+            })),
+          ),
+        );
+
+        expect(written).toHaveLength(6);
+        // Read back rather than trusted: a closed day is an override with no
+        // ranges, and the one that had hours has lost them.
+        const held = await repositories.dateOverrides.listForResources(ids, first, last);
+        expect(held).toHaveLength(6);
+        expect(held.every((one) => one.ranges.length === 0)).toBe(true);
+        expect(held.every((one) => one.note === "חופשה")).toBe(true);
+
+        // And again, which is what a closure written twice does: still six.
+        await repositories.dateOverrides.putMany(
+          ids.flatMap((resourceId) =>
+            dates.map((date) => ({
+              resourceId,
+              businessId: context.business.id,
+              date,
+              note: "שוב",
+              ranges: [{ startMinutes: 540, endMinutes: 720 }],
+            })),
+          ),
+        );
+        const again = await repositories.dateOverrides.listForResources(ids, first, last);
+        expect(again).toHaveLength(6);
+        expect(again.every((one) => one.ranges.length === 1)).toBe(true);
+        expect(await repositories.dateOverrides.putMany([])).toEqual([]);
+      });
+    });
+
+    it("removes a span of overrides and hands back what stood there", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04702");
+        const inside = parseLocalDate("2026-09-10");
+        const outside = parseLocalDate("2026-09-20");
+        for (const date of [inside, outside]) {
+          await repositories.dateOverrides.put({
+            resourceId: context.resource.id,
+            businessId: context.business.id,
+            date,
+            note: "סגור",
+            ranges: [{ startMinutes: 600, endMinutes: 720 }],
+          });
+        }
+
+        const removed = await repositories.dateOverrides.deleteBetween(
+          [context.resource.id],
+          inside,
+          inside,
+        );
+
+        // What was there, hours included — the caller has a date to mark and a
+        // trail to write, and after the delete there is nothing left to read.
+        expect(removed).toHaveLength(1);
+        expect(removed[0]?.date).toBe(inside);
+        expect(removed[0]?.ranges).toHaveLength(1);
+        // The day outside the span is untouched.
+        expect(
+          await repositories.dateOverrides.listForResource(context.resource.id, inside, outside),
+        ).toHaveLength(1);
+        expect(await repositories.dateOverrides.deleteBetween([], inside, inside)).toEqual([]);
+      });
+    });
+
+    it("rewords a span of overrides and leaves their hours alone", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04703");
+        const date = parseLocalDate("2026-09-14");
+        await repositories.dateOverrides.put({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          date,
+          note: "חופשה",
+          ranges: [{ startMinutes: 600, endMinutes: 720 }],
+        });
+
+        const renamed = await repositories.dateOverrides.renameBetween(
+          [context.resource.id],
+          date,
+          date,
+          "שיפוצים",
+        );
+
+        expect(renamed).toHaveLength(1);
+        expect(renamed[0]?.note).toBe("שיפוצים");
+        // The words changed and nothing else did.
+        expect(renamed[0]?.ranges).toHaveLength(1);
+        const held = await repositories.dateOverrides.findByDate(context.resource.id, date);
+        expect(held?.note).toBe("שיפוצים");
+        expect(held?.ranges).toHaveLength(1);
+        expect(await repositories.dateOverrides.renameBetween([], date, date, "x")).toEqual([]);
+      });
+    });
+
+    it("marks many days for a recheck in one go, and twice is once", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04704");
+        const dates = [parseLocalDate("2026-09-01"), parseLocalDate("2026-09-02")];
+
+        await repositories.waitingRechecks.markMany(
+          dates.map((onDate) => ({ resourceId: context.resource.id, onDate })),
+        );
+        // The same mark again is still one mark: the work is "look at this day".
+        await repositories.waitingRechecks.markMany([
+          { resourceId: context.resource.id, onDate: dates[0] as never },
+        ]);
+        await repositories.waitingRechecks.markMany([]);
+
+        const marks = await repositories.waitingRechecks.oldest(10);
+        const mine = marks.filter((mark) => mark.resourceId === context.resource.id);
+        expect(mine).toHaveLength(2);
+        expect([...mine].map((mark) => mark.onDate).sort()).toEqual([...dates].sort());
+      });
+    });
+
+
     it("reads the calendars of several businesses at once, inactive ones included", async () => {
       await withRepositories(async (repositories) => {
         const here = await aBookableBusiness(repositories, "04601");

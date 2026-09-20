@@ -830,6 +830,70 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         ];
         return override;
       },
+      async putMany(overrides) {
+        const written: (typeof store.dateOverrides)[number][] = [];
+        // The last write for a repeated (calendar, date) wins, as the upsert does.
+        const wanted = [
+          ...new Map(
+            overrides.map((override) => [`${override.resourceId}|${override.date}`, override]),
+          ).values(),
+        ];
+        for (const input of wanted) {
+          const existing = store.dateOverrides.find(
+            (override) =>
+              override.resourceId === input.resourceId && override.date === input.date,
+          );
+          const override = {
+            id: existing?.id ?? asId(nextId("override")),
+            resourceId: input.resourceId,
+            businessId: input.businessId,
+            date: input.date,
+            note: input.note,
+            ranges: input.ranges.map((range) => ({
+              start: localTime(range.startMinutes),
+              end: localTime(range.endMinutes),
+            })),
+          } as (typeof store.dateOverrides)[number];
+          store.dateOverrides = [
+            ...store.dateOverrides.filter((candidate) => candidate.id !== override.id),
+            override,
+          ];
+          written.push(override);
+        }
+        return written;
+      },
+      async deleteBetween(resourceIds, from, to) {
+        const wanted = new Set<string>(resourceIds);
+        const doomed = store.dateOverrides
+          .filter(
+            (override) =>
+              wanted.has(override.resourceId) &&
+              compareLocalDate(override.date, from) >= 0 &&
+              compareLocalDate(override.date, to) <= 0,
+          )
+          .sort((left, right) => compareLocalDate(left.date, right.date));
+        const gone = new Set(doomed.map((override) => override.id));
+        store.dateOverrides = store.dateOverrides.filter(
+          (override) => !gone.has(override.id),
+        );
+        return doomed;
+      },
+      async renameBetween(resourceIds, from, to, note) {
+        const wanted = new Set<string>(resourceIds);
+        const renamed = store.dateOverrides
+          .filter(
+            (override) =>
+              wanted.has(override.resourceId) &&
+              compareLocalDate(override.date, from) >= 0 &&
+              compareLocalDate(override.date, to) <= 0,
+          )
+          .map((override) => ({ ...override, note }));
+        const touched = new Map(renamed.map((override) => [override.id, override]));
+        store.dateOverrides = store.dateOverrides.map(
+          (override) => touched.get(override.id) ?? override,
+        );
+        return renamed;
+      },
       async delete(id) {
         const removed = store.dateOverrides.find((override) => override.id === id);
         store.dateOverrides = store.dateOverrides.filter(
@@ -1459,6 +1523,23 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           ...store.waitingRechecks,
           { resourceId, onDate, createdAt: store.waitingRechecks.length },
         ];
+      },
+
+      async markMany(marks) {
+        for (const mark of marks) {
+          const already = store.waitingRechecks.some(
+            (held) => held.resourceId === mark.resourceId && held.onDate === mark.onDate,
+          );
+          if (already) continue;
+          store.waitingRechecks = [
+            ...store.waitingRechecks,
+            {
+              resourceId: mark.resourceId,
+              onDate: mark.onDate,
+              createdAt: store.waitingRechecks.length,
+            },
+          ];
+        }
       },
 
       async oldest(limit) {

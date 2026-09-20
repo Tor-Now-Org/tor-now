@@ -275,6 +275,99 @@ export const dateOverrideRepository = (
       return toDateOverride(saved, rangeRows.flat());
     },
 
+    /**
+     * The same write, for many calendars and dates, in three statements rather
+     * than two per row. `on conflict` makes it a replacement per (calendar,
+     * date) exactly as `put` does, so a closure written twice is idempotent.
+     */
+    async putMany(overrides) {
+      if (overrides.length === 0) return [];
+      // One row per (calendar, date). A repeated pair would make the upsert
+      // touch the same row twice, which Postgres refuses, and the last writer
+      // is what `put` would have left anyway.
+      const wanted = [
+        ...new Map(
+          overrides.map((override) => [`${override.resourceId}|${override.date}`, override]),
+        ).values(),
+      ];
+
+      const saved = await tx<Row[]>`
+        insert into date_override ${tx(
+          wanted.map((override) => ({
+            resource_id: override.resourceId,
+            business_id: override.businessId,
+            on_date: override.date,
+            note: override.note,
+          })),
+        )}
+        on conflict (resource_id, on_date) do update set note = excluded.note
+        returning *`;
+
+      const idOf = new Map(
+        saved.map((row) => [`${text(row["resource_id"])}|${toLocalDate(row["on_date"])}`, String(row["id"])]),
+      );
+      await tx`
+        delete from date_override_range
+        where date_override_id = any(${saved.map((row) => String(row["id"]))}::uuid[])`;
+
+      const rangeRows = wanted.flatMap((override) => {
+        const id = idOf.get(`${override.resourceId}|${override.date}`);
+        return id === undefined
+          ? []
+          : override.ranges.map((range) => ({
+              date_override_id: id,
+              business_id: override.businessId,
+              start_local: range.startMinutes,
+              end_local: range.endMinutes,
+            }));
+      });
+      // A closed day has no ranges at all, which is the common case here.
+      const written =
+        rangeRows.length === 0
+          ? []
+          : await tx<Row[]>`insert into date_override_range ${tx(rangeRows)} returning *`;
+
+      return saved.map((row) =>
+        toDateOverride(
+          row,
+          written.filter((range) => String(range["date_override_id"]) === String(row["id"])),
+        ),
+      );
+    },
+
+    /**
+     * Read first, then removed in one statement: the caller has to mark every
+     * date this freed and the trail has to say what stood there, and the ranges
+     * go with the rows (`on delete cascade`) so afterwards there is nothing left
+     * to ask.
+     */
+    async deleteBetween(resourceIds, from, to) {
+      if (resourceIds.length === 0) return [];
+      const rows = await tx<Row[]>`
+        select * from date_override
+        where resource_id = any(${[...resourceIds]}::uuid[])
+          and on_date between ${from} and ${to}
+        order by on_date`;
+      const doomed = await hydrate(rows);
+      if (doomed.length === 0) return [];
+      await tx`
+        delete from date_override
+        where resource_id = any(${[...resourceIds]}::uuid[])
+          and on_date between ${from} and ${to}`;
+      return doomed;
+    },
+
+    async renameBetween(resourceIds, from, to, note) {
+      if (resourceIds.length === 0) return [];
+      const rows = await tx<Row[]>`
+        update date_override set note = ${note}
+        where resource_id = any(${[...resourceIds]}::uuid[])
+          and on_date between ${from} and ${to}
+        returning *`;
+      // The hours are untouched, so they are read back rather than rewritten.
+      return hydrate(rows);
+    },
+
     async delete(id) {
       // The delete already had to find the row; returning two of its columns
       // saves the caller a read it could not make anyway — an Override cannot

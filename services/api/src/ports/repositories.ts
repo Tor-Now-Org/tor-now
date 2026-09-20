@@ -396,6 +396,43 @@ export type DateOverrideRepository = {
     ranges: readonly { startMinutes: number; endMinutes: number }[];
   }): Promise<DateOverride>;
   /**
+   * The same write for many calendars and many dates at once.
+   *
+   * A shop closing for a fortnight is one Override per calendar per date — ADR
+   * 0002 keeps hours on calendars, so "the shop is shut" is not one row — and
+   * writing them one at a time made a month's closure across a few chairs cost
+   * hundreds of sequential statements while the owner watched.
+   */
+  putMany(
+    overrides: readonly {
+      resourceId: ResourceId;
+      businessId: BusinessId;
+      date: LocalDate;
+      note: string | null;
+      ranges: readonly { startMinutes: number; endMinutes: number }[];
+    }[],
+  ): Promise<readonly DateOverride[]>;
+  /**
+   * Every Override these calendars keep across this span, removed, and returned
+   * as they were — the caller has to mark each date it freed (ADR 0018), and
+   * the audit trail has to say what was there.
+   */
+  deleteBetween(
+    resourceIds: readonly ResourceId[],
+    from: LocalDate,
+    to: LocalDate,
+  ): Promise<readonly DateOverride[]>;
+  /**
+   * The reason, reworded, on every Override already standing across this span.
+   * Only the note changes: what each day keeps is what it already kept.
+   */
+  renameBetween(
+    resourceIds: readonly ResourceId[],
+    from: LocalDate,
+    to: LocalDate,
+    note: string | null,
+  ): Promise<readonly DateOverride[]>;
+  /**
    * Returns the calendar and date the removed Override stood on, or null when
    * nothing matched. ADR 0018: removing one restores the weekday's Working
    * Hours, so the caller has to mark that date — and the id is all it has.
@@ -828,6 +865,13 @@ export type WaitingRecheckRepository = {
    * asked for it.
    */
   mark(resourceId: ResourceId, onDate: LocalDate): Promise<void>;
+  /**
+   * Many marks in one statement, for the changes that free a stretch of days at
+   * once — a closure lifted, a blockage removed, a weekday made longer.
+   */
+  markMany(
+    marks: readonly { resourceId: ResourceId; onDate: LocalDate }[],
+  ): Promise<void>;
   /** Oldest first, so a busy morning cannot starve an earlier change. */
   oldest(limit: number): Promise<readonly WaitingRecheck[]>;
   clear(marks: readonly WaitingRecheck[]): Promise<void>;
