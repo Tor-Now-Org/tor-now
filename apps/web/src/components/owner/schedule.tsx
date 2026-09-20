@@ -118,22 +118,32 @@ export const Schedule = ({
     const from = todayIn(business.timeZone);
     const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
     try {
-      const [loadedHours, loadedOverrides, loadedBlocks, everyCalendar] = await Promise.all([
+      const [loadedHours, everyOverride, loadedBlocks] = await Promise.all([
         api.listWorkingHours(token, business.id, resource.id),
-        api.listOverrides(token, business.id, resource.id, { from, to }),
+        // Every calendar's special days in one answer, not one request each. A
+        // day the shop closed is one Override per calendar, and a row that
+        // offers to delete a single copy of it leaves the shop half shut — so
+        // this screen needs all of them to tell the two apart. Asked per
+        // calendar it was a request each, re-authorising every time, with the
+        // chosen calendar fetched twice over.
+        api.listAllOverrides(token, business.id, { from, to }),
         // The same span the special days are read over. This used to read the
         // day the screen opened on, so a blockage made for later was missing
         // from the list that exists to show it — and it came back with a day of
         // appointments, customers' names and numbers included, that this screen
         // never draws.
         api.listBlocks(token, business.id, resource.id, { from, to }),
-        // Every calendar's special days, not only this one's. A day the shop
-        // closed is one Override per calendar, and a row here that offers to
-        // delete a single copy of it leaves the shop half shut.
-        Promise.all(
-          resources.map((one) => api.listOverrides(token, business.id, one.id, { from, to })),
-        ),
       ]);
+      const loadedOverrides = everyOverride.filter(
+        (override) => override.resourceId === resource.id,
+      );
+      // One list per calendar, taken from the calendars on screen rather than
+      // from the rows: a calendar with no special day has to count as agreeing
+      // to nothing, and built the other way round it would drop out and change
+      // what "every calendar said the same" means.
+      const everyCalendar = resources.map((one) =>
+        everyOverride.filter((override) => override.resourceId === one.id),
+      );
       // Switched calendars while this was in flight: the answer is for the one
       // being left, and writing the week from it would throw away whatever has
       // been typed into the one now on screen.

@@ -214,6 +214,76 @@ describe("who may reach a business", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  /**
+   * The schedule screen reads every calendar's special days to tell a chair's
+   * own day from the shop's. What it is given has to be the calendars it was
+   * given elsewhere — an owner all of them, a worker their own — or the
+   * comparison that decides "the shop said so" is made against the wrong set.
+   */
+  it("gives an owner every calendar's special days over the span", async () => {
+    const { shop, second } = await aShopWithAWorker();
+    for (const resourceId of [shop.resource.id, second.id]) {
+      await test.services.business.putOverride(shop.owner.actor, shop.business.id, resourceId, {
+        date: TUESDAY,
+        note: null,
+        ranges: [],
+      });
+    }
+    // Outside the span, so the window is doing something.
+    await test.services.business.putOverride(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      { date: "2026-12-25", note: null, ranges: [] },
+    );
+
+    const held = await test.services.business.listAllOverrides(
+      shop.owner.actor,
+      shop.business.id,
+      TUESDAY,
+      TUESDAY,
+    );
+
+    expect([...held].map((one) => one.resourceId).sort()).toEqual(
+      [shop.resource.id, second.id].sort(),
+    );
+  });
+
+  it("gives a worker only their own calendar's special days", async () => {
+    const { shop, second, worker } = await aShopWithAWorker();
+    for (const resourceId of [shop.resource.id, second.id]) {
+      await test.services.business.putOverride(shop.owner.actor, shop.business.id, resourceId, {
+        date: TUESDAY,
+        note: null,
+        ranges: [],
+      });
+    }
+
+    const held = await test.services.business.listAllOverrides(
+      worker.actor,
+      shop.business.id,
+      TUESDAY,
+      TUESDAY,
+    );
+
+    // The one they were put on, and not the colleague's.
+    expect(held.map((one) => one.resourceId)).toEqual([shop.resource.id]);
+  });
+
+  it("refuses the whole business's special days to somebody who does not work there", async () => {
+    const { shop } = await aShopWithAWorker();
+    const stranger = await signIn(test, "+972500000077", "זר");
+
+    await expect(
+      test.services.business.listAllOverrides(
+        stranger.actor,
+        shop.business.id,
+        TUESDAY,
+        TUESDAY,
+      ),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("says a business nobody has is not there, whoever asks", async () => {
     const shop = await anEstablishedBusiness(test);
     const administrator: Actor = {

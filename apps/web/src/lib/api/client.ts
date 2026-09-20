@@ -567,6 +567,17 @@ export const api = {
       { method: "PUT", body: input, token },
     ),
 
+  /** Every readable calendar's special days, for telling a chair's day from the shop's. */
+  listAllOverrides: (
+    token: string,
+    businessId: string,
+    range: { from: string; to: string },
+  ) =>
+    request<OverrideDto[]>(
+      `/businesses/${businessId}/overrides?from=${range.from}&to=${range.to}`,
+      { token },
+    ),
+
   deleteOverride: (token: string, businessId: string, id: string) =>
     request<void>(`/businesses/${businessId}/overrides/${id}`, {
       method: "DELETE",

@@ -1162,6 +1162,37 @@ export const businessService = ({
     });
   },
 
+  /**
+   * Every calendar's special days across a span, for the screen that has to
+   * tell a chair's own day from the shop's.
+   *
+   * ADR 0002 keeps hours on calendars, so closing the business is one Override
+   * per calendar and there is no closure row to find — the only way to know a
+   * date is the shop's is that every calendar says the same about it. The
+   * schedule screen was answering that by asking once per calendar from the
+   * browser: five requests for a four-chair shop, each re-authorising and
+   * re-reading the business, with the chosen calendar fetched twice.
+   *
+   * The scope is `listResources`', so the answer covers exactly the calendars
+   * the caller was given — a worker's own, an owner's all.
+   */
+  async listAllOverrides(
+    actor: Actor,
+    businessId: BusinessId,
+    from: string,
+    to: string,
+  ): Promise<readonly DateOverride[]> {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      const membership = await requireStaff(repositories, actor, businessId);
+      const resources = await visibleResources(repositories, membership, businessId);
+      return repositories.dateOverrides.listForResources(
+        resources.map((resource) => resource.id),
+        parseLocalDate(from),
+        parseLocalDate(to),
+      );
+    });
+  },
+
   async listOverrides(
     actor: Actor,
     businessId: BusinessId,

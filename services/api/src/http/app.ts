@@ -597,6 +597,22 @@ const ownerRoutes = (services: Services) => {
     return context.body(null, 204);
   });
 
+  /**
+   * Every readable calendar's special days over a span. The schedule screen
+   * needs them all to tell one chair's day from the shop's, and used to ask one
+   * request per calendar to find out.
+   */
+  owner.get("/:businessId/overrides", async (context) => {
+    const { from, to } = parseQuery(context, schema.dateRangeSchema);
+    const overrides = await services.business.listAllOverrides(
+      actorOf(context),
+      idParam(context, "businessId"),
+      from,
+      to,
+    );
+    return context.json(overrides.map(wire.overrideOut));
+  });
+
   owner.get("/:businessId/resources/:resourceId/overrides", async (context) => {
     const { from, to } = parseQuery(context, schema.dateRangeSchema);
     const overrides = await services.business.listOverrides(
