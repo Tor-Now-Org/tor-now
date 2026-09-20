@@ -34,6 +34,7 @@ import type {
 } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { loadContext } from "./availability-service.ts";
+import { markInstantForRecheck } from "./waiting-service.ts";
 import { requireOwnership, requireResourceAccess, requireUser } from "./authorization.ts";
 
 export type BookingRequestInput = {
@@ -252,6 +253,18 @@ export const bookingService = (dependencies: {
             ),
           );
         }
+
+        // Whatever they were waiting for that day, they have it now. Nobody
+        // should be told about an opening for a time they already hold — and
+        // the entry closing here rather than on a timer is what keeps that
+        // true even when the opening and the booking are the same minute.
+        await repositories.waitingEntries.closeForBooking(
+          customerId,
+          appointment.businessId,
+          appointment.serviceId,
+          instantToZoned(appointment.startAt, context.business.timeZone).date,
+          clock.now(),
+        );
         return appointment;
       });
     },
@@ -261,7 +274,21 @@ export const bookingService = (dependencies: {
      * not permission. Cancelling inside it is recorded as a Late Cancellation
      * and shown to the Business, and never blocked.
      */
-    async cancel(actor: Actor, appointmentId: AppointmentId): Promise<Appointment> {
+    async cancel(
+      actor: Actor,
+      appointmentId: AppointmentId,
+      /**
+       * ADR 0018. Whether the hour this frees is published to whoever is
+       * waiting for it.
+       *
+       * The owner's choice on the cancel sheet, and only theirs: a customer
+       * cancelling wants the hour gone and has no opinion about who hears
+       * about it, so that path always publishes. Keeping the hour writes no
+       * mark at all — the feature is simply off for that hour, with nothing
+       * having to remember it was.
+       */
+      options: { publishFreedTime?: boolean } = {},
+    ): Promise<Appointment> {
       const userId = requireUser(actor);
 
       return unitOfWork.run(actor, async (session) => {
@@ -295,6 +322,19 @@ export const bookingService = (dependencies: {
         if (customer !== null) {
           await session.outbox.enqueue(
             notificationFor(TEMPLATES.bookingCancelled, updated, business, customer),
+          );
+        }
+
+        // In the same transaction as the cancellation, so an hour that never
+        // actually freed cannot leave a promise to tell people it did.
+        const publish =
+          cancelledBy === "CUSTOMER" ? true : options.publishFreedTime !== false;
+        if (publish) {
+          await markInstantForRecheck(
+            repositories,
+            appointment.resourceId,
+            appointment.startAt,
+            business.timeZone,
           );
         }
         return updated;
@@ -382,6 +422,22 @@ export const bookingService = (dependencies: {
             ),
           );
         }
+
+        // The hour it moved away from is free now, which a design that only
+        // hooked cancellation would never have noticed. Both days are marked:
+        // moving within a day still changes what that day offers.
+        await markInstantForRecheck(
+          repositories,
+          appointment.resourceId,
+          appointment.startAt,
+          context.business.timeZone,
+        );
+        await markInstantForRecheck(
+          repositories,
+          appointment.resourceId,
+          draft.startAt,
+          context.business.timeZone,
+        );
         return updated;
       });
     },

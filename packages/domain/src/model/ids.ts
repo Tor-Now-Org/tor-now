@@ -18,6 +18,7 @@ export type SubscriptionId = Id<"Subscription">;
 export type PaymentId = Id<"Payment">;
 export type BusinessPhotoId = Id<"BusinessPhoto">;
 export type ReviewId = Id<"Review">;
+export type WaitingEntryId = Id<"WaitingEntry">;
 
 /** The single cast site. Everywhere else, ids are already branded. */
 export const asId = <T extends string>(value: string): Id<T> => value as Id<T>;

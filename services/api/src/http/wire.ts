@@ -19,6 +19,7 @@ import {
   type User,
   type WorkingHours,
 } from "@tor-now/domain";
+import type { MyWaiting } from "../application/waiting-service.ts";
 import type { PlatformStats } from "../application/admin-service.ts";
 import type {
   StaffedBusiness,
@@ -166,6 +167,21 @@ export const impactOut = (impact: Impact) => ({
   days: impact.days,
   calendars: impact.calendars,
   appointments: impact.appointments.map(strandedOut),
+});
+
+/**
+ * ADR 0018. What a customer is waiting for, as their own screen reads it —
+ * names rather than ids, because the list is shown beside their appointments
+ * and those carry names too.
+ */
+export const waitingOut = (waiting: MyWaiting) => ({
+  id: waiting.id,
+  businessId: waiting.businessId,
+  businessName: waiting.businessName,
+  serviceName: waiting.serviceName,
+  resourceNames: waiting.resourceNames,
+  onDate: waiting.onDate,
+  parts: waiting.parts,
 });
 
 export const appointmentOut = (appointment: Appointment) => ({

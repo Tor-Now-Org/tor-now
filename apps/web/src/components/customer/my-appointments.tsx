@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type { MyAppointmentDto } from "@/lib/api/types.ts";
+import type { MyAppointmentDto, PartOfDayName, WaitingDto } from "@/lib/api/types.ts";
 import { distanceKm, distanceLabel, type GeoPoint } from "@/lib/distance.ts";
-import { countdownTo, formatPrice } from "@/lib/format.ts";
+import { countdownTo, formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { outcomeOfDto } from "../owner/appointment-sheet.tsx";
 import { colourOf } from "../owner/event-colour.ts";
@@ -37,6 +37,8 @@ export const MyAppointments = ({
   const errorText = useErrorText();
 
   const [appointments, setAppointments] = useState<MyAppointmentDto[] | null>(null);
+  /** ADR 0018. What this customer is still waiting for. */
+  const [waiting, setWaiting] = useState<WaitingDto[]>([]);
   const [cancelling, setCancelling] = useState<MyAppointmentDto | null>(null);
   const [noting, setNoting] = useState<MyAppointmentDto | null>(null);
   const [draftNote, setDraftNote] = useState("");
@@ -50,7 +52,12 @@ export const MyAppointments = ({
   const load = useCallback(async () => {
     if (token === null) return;
     try {
-      setAppointments(await api.myAppointments(token));
+      const [mine, standing] = await Promise.all([
+        api.myAppointments(token),
+        api.myWaiting(token),
+      ]);
+      setAppointments(mine);
+      setWaiting(standing);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
@@ -276,8 +283,26 @@ export const MyAppointments = ({
 
       {error !== null && <Critical>{error}</Critical>}
 
-      {upcoming.length === 0 && past.length === 0 && (
+      {upcoming.length === 0 && past.length === 0 && waiting.length === 0 && (
         <Empty title={copy.noAppointments} body={copy.noAppointmentsBody} />
+      )}
+
+      {/* Above the appointments, not below: a thing you are waiting for needs
+          chasing more than a thing already settled. */}
+      {waiting.length > 0 && (
+        <WaitingList
+          waiting={waiting}
+          onRemove={async (entryId) => {
+            if (token === null) return;
+            setWaiting((held) => held.filter((one) => one.id !== entryId));
+            try {
+              await api.stopWaiting(token, entryId);
+            } catch (cause) {
+              setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+              await load();
+            }
+          }}
+        />
       )}
 
       {next !== undefined && (
@@ -592,3 +617,83 @@ export const MyAppointments = ({
     </div>
   );
 };
+
+/**
+ * ADR 0018. What this customer is still waiting for.
+ *
+ * Deliberately quieter than an appointment and shaped differently: one is a
+ * time somebody holds, the other is a question somebody asked. Drawing them
+ * alike would be the first step towards a customer believing they have a
+ * booking they do not.
+ */
+const WaitingList = ({
+  waiting,
+  onRemove,
+}: {
+  waiting: readonly WaitingDto[];
+  onRemove: (entryId: string) => void;
+}) => {
+  const copy = useCopy("customer");
+  const { language } = useLanguage();
+
+  const partNames = (parts: readonly PartOfDayName[]): string =>
+    parts.length === 3
+      ? copy.waitAnyHour
+      : parts.map((part) => copy[PART_COPY[part]]).join(" · ");
+
+  return (
+    <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span className="label" style={{ color: "var(--caution)" }}>
+        {copy.waitingTitle}
+      </span>
+      {waiting.map((entry) => (
+        <div
+          key={entry.id}
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            borderRadius: 16,
+            padding: "12px 14px",
+            background: "var(--caution-soft)",
+            border: "1px solid color-mix(in oklab, var(--caution) 26%, transparent)",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ fontSize: 14 }}>
+              {entry.serviceName} · {entry.businessName}
+            </b>
+            <p className="hint" style={{ margin: "3px 0 0" }}>
+              {formatLocalDate(entry.onDate, language)} · {partNames(entry.parts)}
+              {entry.resourceNames.length > 0 && ` · ${entry.resourceNames.join(", ")}`}
+            </p>
+          </div>
+          <button
+            onClick={() => onRemove(entry.id)}
+            aria-label={`${copy.waitingRemove} ${entry.serviceName}`}
+            style={{
+              minHeight: 34,
+              padding: "0 12px",
+              borderRadius: 999,
+              fontSize: 13,
+              fontWeight: 600,
+              background: "var(--raised)",
+              border: "1px solid var(--line)",
+              color: "var(--muted)",
+            }}
+          >
+            {copy.waitingRemove}
+          </button>
+        </div>
+      ))}
+    </section>
+  );
+};
+
+/** The dictionary key for each part, so the wire's name never reaches a screen. */
+const PART_COPY: Readonly<Record<PartOfDayName, "morning" | "noon" | "evening">> =
+  Object.freeze({
+    MORNING: "morning",
+    NOON: "noon",
+    EVENING: "evening",
+  });

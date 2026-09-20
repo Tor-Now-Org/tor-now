@@ -60,6 +60,8 @@ export const AppointmentSheet = ({
   const [slots, setSlots] = useState<SlotDto[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** ADR 0018. Whether the hour a cancellation frees is published. */
+  const [publish, setPublish] = useState(true);
 
   const now = instant(Date.now());
   const started =
@@ -232,8 +234,31 @@ export const AppointmentSheet = ({
                   {copy.markNoShow}
                 </Button>
               )}
-              <Button intent="danger" onClick={() => act(() => api.cancel(token, appointment.id))} busy={busy}>
-                {copy.cancelAppointment}
+              {/* ADR 0018. What becomes of the hour this frees.
+                  On by default, because filling the gap is the point; off is
+                  for an owner cancelling *because* they need that hour — for
+                  another customer, a delivery, a blockage they are about to
+                  make. Shown whether or not anybody happens to be waiting:
+                  the owner cannot see the list, somebody may join between this
+                  tap and the job running, and it is a decision about their
+                  hour rather than a report on a queue. */}
+              {!started && (
+                <FreedHour publish={publish} onChoose={setPublish} />
+              )}
+              <Button
+                intent="danger"
+                onClick={() =>
+                  act(() => api.cancel(token, appointment.id, started ? undefined : publish))
+                }
+                busy={busy}
+              >
+                {/* Plain once the hour has been spent: there is nothing left
+                    to publish, so the button should not claim there is. */}
+                {started
+                  ? copy.cancelAppointment
+                  : publish
+                    ? copy.cancelAndPublish
+                    : copy.cancelAndKeep}
               </Button>
             </>
           )}
@@ -343,3 +368,73 @@ export const StatusTag = ({
 };
 
 /** The canvas's tag: a soft ground, a hairline of the same hue, and the hue. */
+
+/**
+ * What becomes of the hour a cancellation frees.
+ *
+ * "Publish" rather than "notify the waiting list": publishing an hour is
+ * something an owner already understands doing with their own diary, and it
+ * needs no knowledge of who is listening. Every other phrasing leaks the
+ * mechanism into a sentence that should only be about their time.
+ *
+ * The same two-part control the header wears for לקוח / ניהול, because this is
+ * the same shape of decision — one of two, both always visible — and a second
+ * way of drawing that would be a second thing to learn. The line underneath
+ * changes with the choice, so the consequence is on screen without being
+ * permanently in the way, and the button below repeats it: the last thing read
+ * before an irreversible tap is what is about to happen.
+ */
+const FreedHour = ({
+  publish,
+  onChoose,
+}: {
+  publish: boolean;
+  onChoose: (publish: boolean) => void;
+}) => {
+  const copy = useCopy("owner");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span className="label">{copy.freedHour}</span>
+      <div
+        role="group"
+        aria-label={copy.freedHour}
+        style={{
+          display: "flex",
+          gap: 3,
+          padding: 3,
+          borderRadius: 999,
+          background: "var(--sunken)",
+          border: "1px solid var(--line)",
+        }}
+      >
+        {[
+          { on: publish, name: copy.publishHour, press: () => onChoose(true) },
+          { on: !publish, name: copy.keepHour, press: () => onChoose(false) },
+        ].map((half) => (
+          <button
+            key={half.name}
+            aria-pressed={half.on}
+            onClick={half.press}
+            style={{
+              flex: 1,
+              minHeight: 38,
+              borderRadius: 999,
+              fontFamily: "Rubik, sans-serif",
+              fontSize: 13.5,
+              fontWeight: 600,
+              background: half.on ? "var(--raised)" : "transparent",
+              color: half.on ? "var(--ink)" : "var(--muted)",
+              boxShadow: half.on ? "0 1px 2px oklch(25% 0.055 258/.10)" : "none",
+            }}
+          >
+            {half.name}
+          </button>
+        ))}
+      </div>
+      <p className="hint" style={{ margin: 0 }}>
+        {publish ? copy.publishHourBody : copy.keepHourBody}
+      </p>
+    </div>
+  );
+};

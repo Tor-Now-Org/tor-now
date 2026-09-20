@@ -20,6 +20,7 @@ import type {
   MembershipRole,
   Money,
   OccupiedSpan,
+  PartOfDay,
   Payment,
   PhotoSlot,
   Resource,
@@ -30,6 +31,7 @@ import type {
   TimeZone,
   User,
   UserId,
+  WaitingEntryId,
   WorkingHours,
   WorkingHoursId,
   BusinessCategory,
@@ -351,6 +353,7 @@ export type DateOverrideRepository = {
 };
 
 export type BlockRepository = {
+  findById(id: BlockId): Promise<Block | null>;
   /** The interval only; the reason is the owner's business. */
   blockedBetween(
     resourceId: ResourceId,
@@ -649,6 +652,115 @@ export type AdministratorAllowlistRepository = {
   remove(phone: string): Promise<void>;
 };
 
+
+/**
+ * A Waiting Entry: a customer's standing request to be told when a Resource
+ * has time for one Service on one date, in the parts of the day they chose.
+ *
+ * It holds no time. ADR 0018 — a Slot is computed on demand and never stored,
+ * so what is kept here is the question, and the answer is recomputed by the
+ * ordinary availability code.
+ */
+export type WaitingEntry = {
+  readonly id: WaitingEntryId;
+  readonly businessId: BusinessId;
+  readonly customerId: UserId;
+  readonly serviceId: ServiceId;
+  /** One, several, or all of the Business's calendars. Never empty. */
+  readonly resourceIds: readonly ResourceId[];
+  readonly onDate: LocalDate;
+  /** Never empty; wanting all three is what "any time" means. */
+  readonly parts: readonly PartOfDay[];
+  readonly lastNotifiedAt: Instant | null;
+  readonly closedAt: Instant | null;
+};
+
+/**
+ * An entry the job is about to consider, with everything a message needs
+ * already attached — as a reminder carries its customer, and for the same
+ * reason: the alternative is a round trip per waiting person.
+ */
+export type WaitingEntryToTell = {
+  readonly entry: WaitingEntry;
+  readonly customerName: string;
+  readonly customerPhone: string;
+  readonly serviceName: string;
+  readonly businessName: string;
+  readonly businessPhone: string;
+  readonly businessTimeZone: string;
+};
+
+export type WaitingEntryRepository = {
+  /**
+   * The entry this customer has open for this Service on this date, written or
+   * rewritten.
+   *
+   * Asking twice is the same ask — so a second tap is not an error, and
+   * changing one's mind about which hours suit replaces the question rather
+   * than raising a second one. The unique index says the same thing in the
+   * database; upserting means no caller has to recover from it, and nothing
+   * has to survive an aborted transaction to do so.
+   */
+  put(draft: {
+    businessId: BusinessId;
+    customerId: UserId;
+    serviceId: ServiceId;
+    resourceIds: readonly ResourceId[];
+    onDate: LocalDate;
+    parts: readonly PartOfDay[];
+  }): Promise<WaitingEntry>;
+  findById(id: WaitingEntryId): Promise<WaitingEntry | null>;
+  /** What a customer is still waiting for, soonest first. */
+  openForCustomer(
+    customerId: UserId,
+    from: LocalDate,
+  ): Promise<readonly WaitingEntry[]>;
+  /**
+   * Everyone still waiting on this calendar and date, ready to be told.
+   *
+   * `notifiedBefore` keeps one entry from becoming a stream of messages on a
+   * day that frees up repeatedly: an entry told about an opening recently is
+   * passed over, exactly as ADR 0013's stamp keeps a reminder to one.
+   */
+  toTell(
+    resourceId: ResourceId,
+    onDate: LocalDate,
+    notifiedBefore: Instant,
+  ): Promise<readonly WaitingEntryToTell[]>;
+  /** Stamped in the same transaction as the outbox rows, so it happens once. */
+  markNotified(ids: readonly WaitingEntryId[], at: Instant): Promise<void>;
+  close(ids: readonly WaitingEntryId[], at: Instant): Promise<void>;
+  /**
+   * Close whatever this customer was waiting for, now that they have booked
+   * it. Nobody should be told about an opening for a time they already hold.
+   */
+  closeForBooking(
+    customerId: UserId,
+    businessId: BusinessId,
+    serviceId: ServiceId,
+    onDate: LocalDate,
+    at: Instant,
+  ): Promise<void>;
+};
+
+/** A calendar date whose availability changed and has not been re-examined. */
+export type WaitingRecheck = {
+  readonly resourceId: ResourceId;
+  readonly onDate: LocalDate;
+};
+
+export type WaitingRecheckRepository = {
+  /**
+   * Leave a mark, in the same transaction as whatever changed. Marking a date
+   * twice is one mark: the work is "look at this day", however many edits
+   * asked for it.
+   */
+  mark(resourceId: ResourceId, onDate: LocalDate): Promise<void>;
+  /** Oldest first, so a busy morning cannot starve an earlier change. */
+  oldest(limit: number): Promise<readonly WaitingRecheck[]>;
+  clear(marks: readonly WaitingRecheck[]): Promise<void>;
+};
+
 export type Repositories = {
   readonly users: UserRepository;
   readonly businesses: BusinessRepository;
@@ -665,4 +777,6 @@ export type Repositories = {
   readonly subscriptions: SubscriptionRepository;
   readonly payments: PaymentRepository;
   readonly administratorAllowlist: AdministratorAllowlistRepository;
+  readonly waitingEntries: WaitingEntryRepository;
+  readonly waitingRechecks: WaitingRecheckRepository;
 };

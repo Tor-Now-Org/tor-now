@@ -20,6 +20,10 @@ import {
   serviceRepository,
   workingHoursRepository,
 } from "./scheduling-repositories.ts";
+import {
+  waitingEntryRepository,
+  waitingRecheckRepository,
+} from "./waiting-repositories.ts";
 
 /**
  * The same contract, against a real Postgres.
@@ -121,6 +125,8 @@ if (databaseUrl === undefined || databaseUrl === "") {
           "administratorAllowlist",
           administratorAllowlistRepository(transaction),
         ),
+        waitingEntries: recording("waitingEntries", waitingEntryRepository(transaction)),
+        waitingRechecks: recording("waitingRechecks", waitingRecheckRepository(transaction)),
       },
       cleanUp: async () => {
         release();

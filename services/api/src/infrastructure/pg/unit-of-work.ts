@@ -22,6 +22,10 @@ import {
   serviceRepository,
   workingHoursRepository,
 } from "./scheduling-repositories.ts";
+import {
+  waitingEntryRepository,
+  waitingRecheckRepository,
+} from "./waiting-repositories.ts";
 
 const repositoriesOn = (tx: Transaction): Repositories => ({
   users: userRepository(tx),
@@ -39,6 +43,8 @@ const repositoriesOn = (tx: Transaction): Repositories => ({
   subscriptions: subscriptionRepository(tx),
   payments: paymentRepository(tx),
   administratorAllowlist: administratorAllowlistRepository(tx),
+  waitingEntries: waitingEntryRepository(tx),
+  waitingRechecks: waitingRecheckRepository(tx),
 });
 
 /**

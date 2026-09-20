@@ -16,6 +16,7 @@ import { discoveryService } from "../../application/discovery-service.ts";
 import { reviewService } from "../../application/review-service.ts";
 import { outboxWorker } from "../../application/outbox-worker.ts";
 import { reminderService } from "../../application/reminder-service.ts";
+import { waitingService } from "../../application/waiting-service.ts";
 import type { AuditLogEntry, AuditReader, AuditSink } from "../../ports/audit.ts";
 import type { Notifier, Outbox } from "../../ports/notifier.ts";
 import type { TokenIssuer, TokenVerifier } from "../../ports/tokens.ts";
@@ -274,6 +275,7 @@ export const harness = (options: { now?: Instant } = {}) => {
       admin,
       outboxWorker: outboxWorker({ unitOfWork, notifier, clock }),
       reminders: reminderService({ unitOfWork, clock }),
+      waiting: waitingService({ unitOfWork, clock, strategy: greedyWalk }),
     },
   };
 };

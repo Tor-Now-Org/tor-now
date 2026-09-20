@@ -4,6 +4,7 @@ import { forbidden } from "@tor-now/domain";
 import type { Services } from "../composition.ts";
 import {
   parseBody,
+  parseOptionalBody,
   parseQuery,
   readActor,
   idParam,
@@ -260,12 +261,47 @@ export const createApp = (services: Services) => {
     return context.json(wire.appointmentOut(appointment), 201);
   });
 
-  app.post("/appointments/:appointmentId/cancel", async (context) =>
-    context.json(
+  app.post("/appointments/:appointmentId/cancel", async (context) => {
+    // ADR 0018's switch on the owner's cancel sheet. A body is optional, so a
+    // customer's plain cancellation — and any older client — still publishes.
+    const { publishFreedTime } = await parseOptionalBody(
+      context,
+      schema.cancellationSchema,
+    );
+    return context.json(
       wire.appointmentOut(
-        await services.booking.cancel(actorOf(context), idParam(context, "appointmentId")),
+        await services.booking.cancel(
+          actorOf(context),
+          idParam(context, "appointmentId"),
+          { publishFreedTime },
+        ),
       ),
-    ),
+    );
+  });
+
+  /**
+   * ADR 0018. Joining is a PUT because asking twice is the same ask: the
+   * second tap rewrites the standing question rather than raising another.
+   */
+  app.put("/waiting", async (context) => {
+    const body = await parseBody(context, schema.waitingSchema);
+    const entry = await services.waiting.join(actorOf(context), {
+      businessId: body.businessId as never,
+      serviceId: body.serviceId as never,
+      resourceIds: body.resourceIds as never,
+      onDate: body.onDate,
+      parts: body.parts,
+    });
+    return context.json({ id: entry.id }, 201);
+  });
+
+  app.delete("/waiting/:entryId", async (context) => {
+    await services.waiting.withdraw(actorOf(context), idParam(context, "entryId") as never);
+    return context.body(null, 204);
+  });
+
+  app.get("/me/waiting", async (context) =>
+    context.json((await services.waiting.mine(actorOf(context))).map(wire.waitingOut)),
   );
 
   app.put("/appointments/:appointmentId/note", async (context) => {
@@ -1106,6 +1142,10 @@ const jobRoutes = (services: Services) => {
 
   jobs.post("/outbox", async (context) =>
     context.json(await services.outboxWorker.drain()),
+  );
+
+  jobs.post("/waiting-list", async (context) =>
+    context.json(await services.waiting.publishOpenings()),
   );
 
   jobs.post("/reminders", async (context) =>

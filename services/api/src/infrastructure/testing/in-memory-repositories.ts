@@ -33,7 +33,7 @@ import {
 } from "@tor-now/domain";
 import { SEARCH } from "../../config.ts";
 import { PG_ERRORS } from "../pg/client.ts";
-import type { Repositories } from "../../ports/repositories.ts";
+import type { Repositories, WaitingEntry } from "../../ports/repositories.ts";
 import type { Store } from "./in-memory-store.ts";
 
 /**
@@ -811,6 +811,10 @@ export const inMemoryRepositories = (store: Store): Repositories => {
     },
 
     blocks: {
+      async findById(id) {
+        return store.blocks.find((block) => block.id === id) ?? null;
+      },
+
       async blockedBetween(resourceId, from, to) {
         return store.blocks
           .filter(
@@ -1260,6 +1264,148 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       },
       async remove(phone) {
         store.allowlist = store.allowlist.filter((entry) => entry.phone !== phone);
+      },
+    },
+
+    /**
+     * A Waiting Entry holds no time, so there is nothing here for the
+     * exclusion constraint to guard. What the in-memory side does have to
+     * copy is the unique index: one open entry per customer, service and day,
+     * because two rows would mean two messages for one opening.
+     */
+    waitingEntries: {
+      async put(draft) {
+        const open = store.waitingEntries.find(
+          (entry) =>
+            entry.closedAt === null &&
+            entry.businessId === draft.businessId &&
+            entry.customerId === draft.customerId &&
+            entry.serviceId === draft.serviceId &&
+            entry.onDate === draft.onDate,
+        );
+        if (open !== undefined) {
+          const changed: WaitingEntry = {
+            ...open,
+            resourceIds: [...draft.resourceIds],
+            parts: [...draft.parts],
+            lastNotifiedAt: null,
+          };
+          store.waitingEntries = store.waitingEntries.map((entry) =>
+            entry.id === open.id ? changed : entry,
+          );
+          return changed;
+        }
+        const entry: WaitingEntry = {
+          id: asId(store.nextId("waiting")),
+          businessId: draft.businessId,
+          customerId: draft.customerId,
+          serviceId: draft.serviceId,
+          resourceIds: [...draft.resourceIds],
+          onDate: draft.onDate,
+          parts: [...draft.parts],
+          lastNotifiedAt: null,
+          closedAt: null,
+        };
+        store.waitingEntries = [...store.waitingEntries, entry];
+        return entry;
+      },
+
+      async findById(id) {
+        return store.waitingEntries.find((entry) => entry.id === id) ?? null;
+      },
+
+      async openForCustomer(customerId, from) {
+        return store.waitingEntries
+          .filter(
+            (entry) =>
+              entry.customerId === customerId &&
+              entry.closedAt === null &&
+              compareLocalDate(entry.onDate, from) >= 0,
+          )
+          .sort((left, right) => compareLocalDate(left.onDate, right.onDate));
+      },
+
+      async toTell(resourceId, onDate, notifiedBefore) {
+        const waiting = store.waitingEntries.filter(
+          (entry) =>
+            entry.closedAt === null &&
+            entry.onDate === onDate &&
+            entry.resourceIds.includes(resourceId) &&
+            (entry.lastNotifiedAt === null || entry.lastNotifiedAt < notifiedBefore),
+        );
+
+        return waiting.flatMap((entry) => {
+          const customer = store.users.find((one) => one.id === entry.customerId);
+          const business = store.businesses.find((one) => one.id === entry.businessId);
+          const service = store.services.find((one) => one.id === entry.serviceId);
+          // As the join does: an erased customer has nobody to tell.
+          if (customer === undefined || customer.deletedAt !== null) return [];
+          if (business === undefined || service === undefined) return [];
+          return [{
+            entry,
+            customerName: displayName(customer),
+            customerPhone: customer.phone,
+            serviceName: service.name,
+            businessName: business.name,
+            businessPhone: business.phone,
+            businessTimeZone: business.timeZone,
+          }];
+        });
+      },
+
+      async markNotified(ids, at) {
+        store.waitingEntries = store.waitingEntries.map((entry) =>
+          ids.includes(entry.id) ? { ...entry, lastNotifiedAt: at } : entry,
+        );
+      },
+
+      async close(ids, at) {
+        store.waitingEntries = store.waitingEntries.map((entry) =>
+          ids.includes(entry.id) && entry.closedAt === null
+            ? { ...entry, closedAt: at }
+            : entry,
+        );
+      },
+
+      async closeForBooking(customerId, businessId, serviceId, onDate, at) {
+        store.waitingEntries = store.waitingEntries.map((entry) =>
+          entry.closedAt === null &&
+          entry.customerId === customerId &&
+          entry.businessId === businessId &&
+          entry.serviceId === serviceId &&
+          entry.onDate === onDate
+            ? { ...entry, closedAt: at }
+            : entry,
+        );
+      },
+    },
+
+    waitingRechecks: {
+      async mark(resourceId, onDate) {
+        const already = store.waitingRechecks.some(
+          (mark) => mark.resourceId === resourceId && mark.onDate === onDate,
+        );
+        if (already) return;
+        store.waitingRechecks = [
+          ...store.waitingRechecks,
+          { resourceId, onDate, createdAt: store.waitingRechecks.length },
+        ];
+      },
+
+      async oldest(limit) {
+        return [...store.waitingRechecks]
+          .sort((left, right) => left.createdAt - right.createdAt)
+          .slice(0, limit)
+          .map(({ resourceId, onDate }) => ({ resourceId, onDate }));
+      },
+
+      async clear(marks) {
+        store.waitingRechecks = store.waitingRechecks.filter(
+          (held) =>
+            !marks.some(
+              (mark) => mark.resourceId === held.resourceId && mark.onDate === held.onDate,
+            ),
+        );
       },
     },
   };

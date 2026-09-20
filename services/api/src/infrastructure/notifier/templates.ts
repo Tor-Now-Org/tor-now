@@ -2,7 +2,7 @@ import { TEMPLATES, type NotificationPayload, type Template } from "../../ports/
 
 /**
  * ADR 0005 counts the approved templates. Meta bills per delivered template
- * message, so the set is closed deliberately: adding a fourth is an approval
+ * message, so the set is closed deliberately: adding a sixth is an approval
  * process with Meta, not a code change.
  *
  * Hebrew is the source language of the product, and a customer's WhatsApp is
@@ -18,7 +18,26 @@ const RENDERERS: Readonly<Record<Template, (payload: NotificationPayload) => str
       `שלום ${payload.customerName}, תזכורת: התור שלך ל${payload.serviceName} ב${payload.businessName} מחר ב־${payload.startAt}. לביטול או שינוי: ${payload.businessPhone}`,
     [TEMPLATES.bookingRescheduled]: (payload) =>
       `שלום ${payload.customerName}, התור שלך ל${payload.serviceName} ב${payload.businessName} הועבר מ־${payload.previousStartAt ?? "מועד קודם"} ל־${payload.startAt}.`,
+    /**
+     * ADR 0018. It names the part of the day rather than the hour: by the time
+     * anybody reads this the exact hour may be gone, and a wrong specific is
+     * worse than a right general. It does name the calendar, because "either
+     * of them" was on offer and which one freed is the thing the customer
+     * could not have worked out. And it says plainly that others were told, so
+     * arriving second is expected rather than a broken promise.
+     */
+    [TEMPLATES.waitingListOpening]: (payload) =>
+      `שלום ${payload.customerName}, התפנתה שעה ב${payload.businessName} ל${payload.serviceName}${
+        payload.resourceName === undefined ? "" : ` אצל ${payload.resourceName}`
+      } — ${PART_IN_HEBREW[payload.partOfDay ?? ""] ?? "במהלך היום"} של ${payload.startAt}. ההודעה נשלחה גם לממתינים נוספים; מי שתופס ראשון, תופס.`,
   });
+
+/** The product's own words for the parts of the day, as the slot grid says them. */
+const PART_IN_HEBREW: Readonly<Record<string, string>> = Object.freeze({
+  MORNING: "בבוקר",
+  NOON: "בצהריים",
+  EVENING: "בערב",
+});
 
 export const renderTemplate = (
   template: Template,

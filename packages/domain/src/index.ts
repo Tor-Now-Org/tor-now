@@ -21,6 +21,8 @@ export * from "./schedule/open-hours.ts";
 export * from "./booking/booking-window.ts";
 export * from "./booking/free-intervals.ts";
 export * from "./booking/slots.ts";
+export * from "./booking/part-of-day.ts";
+export * from "./booking/waiting.ts";
 export * from "./booking/availability.ts";
 export * from "./booking/booking.ts";
 export * from "./booking/cancellation.ts";

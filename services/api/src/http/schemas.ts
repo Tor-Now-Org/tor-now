@@ -97,6 +97,32 @@ export const availabilitySchema = z.object({
   to: localDateSchema,
 });
 
+/**
+ * ADR 0018. Joining a waiting list, or rewriting what was asked for: the same
+ * request either way, because asking twice is the same ask.
+ */
+export const waitingSchema = z.object({
+  businessId: uuidSchema,
+  serviceId: uuidSchema,
+  /** One, several, or all of the Business's calendars. Never empty. */
+  resourceIds: z.array(uuidSchema).min(1).max(50),
+  onDate: localDateSchema,
+  /** Wanting all three is what "any time" means; the domain refuses none. */
+  parts: z.array(z.enum(["MORNING", "NOON", "EVENING"])).min(1).max(3),
+});
+
+export const cancellationSchema = z.object({
+  /**
+   * Whether the hour this frees is published to whoever is waiting for it.
+   *
+   * Defaulted to true, and meaningful only when a Business is cancelling: a
+   * customer cancelling wants the hour gone and has no opinion about who hears
+   * about it. An older client that sends nothing therefore publishes, which is
+   * the behaviour the feature exists for.
+   */
+  publishFreedTime: z.boolean().default(true),
+});
+
 export const bookingSchema = z.object({
   businessId: uuidSchema,
   serviceId: uuidSchema,

@@ -79,6 +79,7 @@ import { namedFor, stillToCome, type Impact, type Upcoming } from "./stranded.ts
 import { TEMPLATES } from "../ports/notifier.ts";
 import type { BookedAppointment } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
+import { markSpanForRecheck } from "./waiting-service.ts";
 
 /**
  * How long the month containing this date is. Derived rather than tabulated, so
@@ -706,8 +707,14 @@ export const calendarService = ({
     groupId: string,
   ): Promise<number> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await loadManagedBusiness(repositories, actor, businessId);
-      return repositories.blocks.deleteGroup(businessId, groupId);
+      const business = await loadManagedBusiness(repositories, actor, businessId);
+      // Read before it goes: lifting a blockage frees every day it covered.
+      const lifted = await repositories.blocks.listGroup(businessId, groupId);
+      const removed = await repositories.blocks.deleteGroup(businessId, groupId);
+      for (const block of lifted) {
+        await markSpanForRecheck(repositories, block, business.timeZone);
+      }
+      return removed;
     });
   },
 
@@ -753,8 +760,14 @@ export const calendarService = ({
     blockId: BlockId,
   ): Promise<void> {
     await unitOfWork.run(actor, async ({ repositories }) => {
-      await loadManagedBusiness(repositories, actor, businessId);
+      const business = await loadManagedBusiness(repositories, actor, businessId);
+      // Read before it goes: lifting a blockage frees the hours it covered,
+      // and afterwards there is nothing left to say which ones those were.
+      const lifted = await repositories.blocks.findById(blockId);
       await repositories.blocks.delete(blockId);
+      if (lifted !== null) {
+        await markSpanForRecheck(repositories, lifted, business.timeZone);
+      }
     });
   },
 

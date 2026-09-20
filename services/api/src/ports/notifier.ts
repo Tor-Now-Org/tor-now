@@ -9,17 +9,21 @@ import type { Instant } from "@tor-now/domain";
 
 /**
  * The approved templates. ADR 0005 named three and deferred reminders "until a
- * scheduler exists"; one exists now, and the fourth is that reminder.
+ * scheduler exists"; one exists now, and the fourth is that reminder. The
+ * fifth is ADR 0018's waiting list.
  *
  * The set stays closed on purpose: Meta bills per delivered template message
- * and approves each one, so adding a fifth is a conversation with Meta rather
- * than a line of code.
+ * and approves each one, so adding a sixth is a conversation with Meta rather
+ * than a line of code — and the waiting-list one is the first whose volume
+ * grows with how many people are waiting rather than with what happened, which
+ * is why a Business can switch it off.
  */
 export const TEMPLATES = {
   bookingConfirmed: "BOOKING_CONFIRMED",
   bookingCancelled: "BOOKING_CANCELLED",
   bookingRescheduled: "BOOKING_RESCHEDULED",
   bookingReminder: "BOOKING_REMINDER",
+  waitingListOpening: "WAITING_LIST_OPENING",
 } as const;
 
 export type Template = (typeof TEMPLATES)[keyof typeof TEMPLATES];
@@ -31,6 +35,15 @@ export type NotificationPayload = {
   readonly customerName: string;
   readonly businessPhone: string;
   readonly previousStartAt?: string;
+  /**
+   * Only the waiting-list opening. It names the part of the day rather than
+   * the hour, because by the time anybody reads it the exact hour may be gone
+   * and a wrong specific is worse than a right general — and it names the
+   * calendar, because the customer was offered "either of them" and cannot
+   * work out for themselves which one freed.
+   */
+  readonly partOfDay?: string;
+  readonly resourceName?: string;
 };
 
 export type OutboundMessage = {

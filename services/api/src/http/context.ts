@@ -79,6 +79,21 @@ export const parseBody = async <T extends z.ZodTypeAny, E extends Env>(
   return parse(schema, body);
 };
 
+/**
+ * The same, for a request whose body is optional.
+ *
+ * A POST that takes only defaulted fields should not demand a body: the older
+ * client that sends none is asking for the defaults, and answering it with
+ * "A JSON body is required" would break a route that used to work.
+ */
+export const parseOptionalBody = async <T extends z.ZodTypeAny, E extends Env>(
+  context: AnyContext<E>,
+  schema: T,
+): Promise<z.infer<T>> => {
+  const body: unknown = await context.req.json().catch(() => ({}));
+  return parse(schema, body ?? {});
+};
+
 export const parseQuery = <T extends z.ZodTypeAny, E extends Env>(
   context: AnyContext<E>,
   schema: T,

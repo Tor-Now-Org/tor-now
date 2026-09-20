@@ -35,6 +35,8 @@ import type {
   UserDto,
   UserLookupDto,
   WorkingHoursDto,
+  PartOfDayName,
+  WaitingDto,
 } from "./types.ts";
 
 /**
@@ -322,11 +324,37 @@ export const api = {
       token,
     }),
 
-  cancel: (token: string, appointmentId: string) =>
+  /**
+   * ADR 0018's `publishFreedTime` is the owner's choice on the cancel sheet.
+   * Left out on a customer's own cancellation, where there is no choice to
+   * make: the hour is published either way.
+   */
+  cancel: (token: string, appointmentId: string, publishFreedTime?: boolean) =>
     request<AppointmentDto>(`/appointments/${appointmentId}/cancel`, {
       method: "POST",
       token,
+      ...(publishFreedTime === undefined ? {} : { body: { publishFreedTime } }),
     }),
+
+  /**
+   * Joining a waiting list, or rewriting what was asked for — the same call
+   * either way, because asking twice is the same ask.
+   */
+  waitForTime: (
+    token: string,
+    wish: {
+      businessId: string;
+      serviceId: string;
+      resourceIds: string[];
+      onDate: string;
+      parts: PartOfDayName[];
+    },
+  ) => request<{ id: string }>("/waiting", { method: "PUT", token, body: wish }),
+
+  stopWaiting: (token: string, entryId: string) =>
+    request<void>(`/waiting/${entryId}`, { method: "DELETE", token }),
+
+  myWaiting: (token: string) => request<WaitingDto[]>("/me/waiting", { token }),
 
   setCustomerNote: (token: string, appointmentId: string, customerNote: string | null) =>
     request<AppointmentDto>(`/appointments/${appointmentId}/note`, {

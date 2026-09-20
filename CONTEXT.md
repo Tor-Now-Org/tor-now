@@ -145,3 +145,17 @@ _Avoid_: Window, opening, gap, availability
 A candidate start time offered to a customer. Slots are computed on demand, never
 stored — a Slot only exists in the answer to "when is this Resource free?".
 _Avoid_: Timeslot, opening, availability
+
+**Waiting Entry**:
+A customer's standing request to be told when a Resource has time for one
+Service on one date, in the parts of the day they chose. Holds no time and is
+not an Appointment — the question is stored and the answer recomputed. Ends
+when it is withdrawn, when its customer books that day, or when the date
+passes.
+_Avoid_: Queue, waitlist, reservation, hold, standby
+
+**Part of Day**:
+Morning, noon or evening in the Business's own zone — the three groups the slot
+grid has always shown, and the unit a Waiting Entry is expressed in. Wanting all
+three is what "any time" means.
+_Avoid_: Time of day, period, shift, slot group

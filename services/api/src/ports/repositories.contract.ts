@@ -1970,6 +1970,250 @@ export const describeRepositoryContract = (
       });
     });
 
+
+    it("gives a block back by its id, so what a deletion frees is knowable", async () => {
+      await withRepositories(async (repositories) => {
+        const { business, resource } = await aBookableBusiness(repositories, "4107");
+        const block = await repositories.blocks.create({
+          resourceId: resource.id,
+          businessId: business.id,
+          startAt: AT("2026-09-21T06:00:00.000Z"),
+          endAt: AT("2026-09-21T09:00:00.000Z"),
+          reason: "מילואים",
+          groupId: crypto.randomUUID(),
+        });
+
+        expect(await repositories.blocks.findById(block.id)).toEqual(block);
+        await repositories.blocks.delete(block.id);
+        expect(await repositories.blocks.findById(block.id)).toBeNull();
+      });
+    });
+
+    // --- Waiting for a time ---------------------------------------------
+
+    describe("waiting for a time", () => {
+      const aWaitingCustomer = async (repositories: Repositories, suffix: string) => {
+        const shop = await aBookableBusiness(repositories, suffix);
+        const customer = await repositories.users.create({
+          phone: `+972520000${suffix}`,
+          givenName: "דנה",
+          familyName: "כהן",
+          birthDate: null,
+        });
+        return { ...shop, customer };
+      };
+
+      it("keeps the question a customer asked, and gives it back", async () => {
+        await withRepositories(async (repositories) => {
+          const { business, service, resource, customer } =
+            await aWaitingCustomer(repositories, "4101");
+          const onDate = parseLocalDate("2026-09-21");
+
+          const entry = await repositories.waitingEntries.put({
+            businessId: business.id,
+            customerId: customer.id,
+            serviceId: service.id,
+            resourceIds: [resource.id],
+            onDate,
+            parts: ["MORNING", "EVENING"],
+          });
+
+          expect(entry.parts).toEqual(["MORNING", "EVENING"]);
+          expect(entry.resourceIds).toEqual([resource.id]);
+          expect(entry.closedAt).toBeNull();
+          expect(entry.lastNotifiedAt).toBeNull();
+
+          const found = await repositories.waitingEntries.findById(entry.id);
+          expect(found).toEqual(entry);
+
+          expect(
+            await repositories.waitingEntries.openForCustomer(customer.id, onDate),
+          ).toEqual([entry]);
+        });
+      });
+
+      /**
+       * Asking twice is the same ask, and changing one's mind replaces the
+       * question rather than raising a second one. Two open rows would mean
+       * two messages for one opening.
+       */
+      it("keeps one open entry per service and day, rewritten in place", async () => {
+        await withRepositories(async (repositories) => {
+          const { business, service, resource, customer } =
+            await aWaitingCustomer(repositories, "4102");
+          const other = await repositories.resources.create({
+            businessId: business.id,
+            name: "כיסא שני",
+          });
+          const draft = {
+            businessId: business.id,
+            customerId: customer.id,
+            serviceId: service.id,
+            resourceIds: [resource.id],
+            onDate: parseLocalDate("2026-09-21"),
+            parts: ["MORNING"] as const,
+          };
+
+          const first = await repositories.waitingEntries.put(draft);
+          const again = await repositories.waitingEntries.put({
+            ...draft,
+            parts: ["EVENING"],
+            resourceIds: [resource.id, other.id],
+          });
+
+          expect(again.id).toBe(first.id);
+          expect(again.parts).toEqual(["EVENING"]);
+          expect([...again.resourceIds].sort()).toEqual([resource.id, other.id].sort());
+          expect(
+            await repositories.waitingEntries.openForCustomer(
+              customer.id,
+              parseLocalDate("2026-09-21"),
+            ),
+          ).toHaveLength(1);
+
+          // Closed, it is out of the way and the customer may ask afresh.
+          await repositories.waitingEntries.close([first.id], AT("2026-09-20T10:00:00.000Z"));
+          const later = await repositories.waitingEntries.put(draft);
+          expect(later.id).not.toBe(first.id);
+        });
+      });
+
+      it("tells whoever waits on the calendar that freed, and nobody else", async () => {
+        await withRepositories(async (repositories) => {
+          const { business, service, resource, customer } =
+            await aWaitingCustomer(repositories, "4103");
+          const other = await repositories.resources.create({
+            businessId: business.id,
+            name: "כיסא שני",
+          });
+          const onDate = parseLocalDate("2026-09-21");
+
+          const entry = await repositories.waitingEntries.put({
+            businessId: business.id,
+            customerId: customer.id,
+            serviceId: service.id,
+            resourceIds: [resource.id],
+            onDate,
+            parts: ["MORNING"],
+          });
+
+          const never = AT("1970-01-01T00:00:00.000Z");
+          const told = await repositories.waitingEntries.toTell(resource.id, onDate, never);
+          expect(told).toHaveLength(1);
+          expect(told[0]!.entry.id).toBe(entry.id);
+          expect(told[0]!.customerPhone).toBe(`+9725200004103`);
+          expect(told[0]!.serviceName).toBe("שירות");
+          expect(told[0]!.businessName).toBe("עסק 4103");
+          expect(told[0]!.businessTimeZone).toBe("Asia/Jerusalem");
+
+          expect(await repositories.waitingEntries.toTell(other.id, onDate, never)).toEqual([]);
+          expect(
+            await repositories.waitingEntries.toTell(
+              resource.id,
+              parseLocalDate("2026-09-22"),
+              never,
+            ),
+          ).toEqual([]);
+        });
+      });
+
+      /**
+       * ADR 0013's trick, applied to a second job: the stamp on the row is what
+       * stops a day that frees up repeatedly becoming a stream of messages, and
+       * it does so without querying the outbox.
+       */
+      it("passes over an entry told about an opening recently", async () => {
+        await withRepositories(async (repositories) => {
+          const { business, service, resource, customer } =
+            await aWaitingCustomer(repositories, "4104");
+          const onDate = parseLocalDate("2026-09-21");
+          const entry = await repositories.waitingEntries.put({
+            businessId: business.id,
+            customerId: customer.id,
+            serviceId: service.id,
+            resourceIds: [resource.id],
+            onDate,
+            parts: ["MORNING"],
+          });
+
+          await repositories.waitingEntries.markNotified(
+            [entry.id],
+            AT("2026-09-20T09:00:00.000Z"),
+          );
+
+          expect(
+            await repositories.waitingEntries.toTell(
+              resource.id,
+              onDate,
+              AT("2026-09-20T08:00:00.000Z"),
+            ),
+          ).toEqual([]);
+          expect(
+            await repositories.waitingEntries.toTell(
+              resource.id,
+              onDate,
+              AT("2026-09-20T12:00:00.000Z"),
+            ),
+          ).toHaveLength(1);
+        });
+      });
+
+      it("closes what a customer was waiting for once they have booked it", async () => {
+        await withRepositories(async (repositories) => {
+          const { business, service, resource, customer } =
+            await aWaitingCustomer(repositories, "4105");
+          const onDate = parseLocalDate("2026-09-21");
+          await repositories.waitingEntries.put({
+            businessId: business.id,
+            customerId: customer.id,
+            serviceId: service.id,
+            resourceIds: [resource.id],
+            onDate,
+            parts: ["MORNING"],
+          });
+
+          await repositories.waitingEntries.closeForBooking(
+            customer.id,
+            business.id,
+            service.id,
+            onDate,
+            AT("2026-09-20T10:00:00.000Z"),
+          );
+
+          expect(
+            await repositories.waitingEntries.openForCustomer(customer.id, onDate),
+          ).toEqual([]);
+        });
+      });
+
+      /**
+       * A mark says only "look at this calendar's day again". Marking twice is
+       * one mark, because the work is the same however many edits asked for it.
+       */
+      it("collapses repeated marks on one day, and hands them back oldest first", async () => {
+        await withRepositories(async (repositories) => {
+          const { resource } = await aBookableBusiness(repositories, "4106");
+          const monday = parseLocalDate("2026-09-21");
+          const tuesday = parseLocalDate("2026-09-22");
+
+          await repositories.waitingRechecks.mark(resource.id, monday);
+          await repositories.waitingRechecks.mark(resource.id, monday);
+          await repositories.waitingRechecks.mark(resource.id, tuesday);
+
+          const waiting = await repositories.waitingRechecks.oldest(10);
+          expect(waiting).toEqual([
+            { resourceId: resource.id, onDate: monday },
+            { resourceId: resource.id, onDate: tuesday },
+          ]);
+
+          await repositories.waitingRechecks.clear([waiting[0]!]);
+          expect(await repositories.waitingRechecks.oldest(10)).toEqual([
+            { resourceId: resource.id, onDate: tuesday },
+          ]);
+        });
+      });
+    });
+
     it("never invents an id it was not given", async () => {
       await withRepositories(async (repositories) => {
         expect(await repositories.users.findById(asId("00000000-0000-4000-8000-999999999999"))).toBeNull();

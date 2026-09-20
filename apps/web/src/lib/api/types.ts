@@ -227,6 +227,23 @@ export type AppointmentDto = {
   createdAt: string;
 };
 
+/** ADR 0018. The coarse parts a day is read in, as the slot grid groups it. */
+export type PartOfDayName = "MORNING" | "NOON" | "EVENING";
+
+/**
+ * What a customer is still waiting for. It holds no time — a date, the parts
+ * of it that suit, and the calendars it will accept.
+ */
+export type WaitingDto = {
+  id: string;
+  businessId: string;
+  businessName: string;
+  serviceName: string;
+  resourceNames: string[];
+  onDate: string;
+  parts: PartOfDayName[];
+};
+
 export type MyAppointmentDto = AppointmentDto & {
   businessName: string;
   businessCategory: BusinessCategory | null;

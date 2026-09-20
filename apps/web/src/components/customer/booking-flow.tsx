@@ -12,7 +12,13 @@ import type {
   SlotDto,
 } from "@/lib/api/types.ts";
 import { distanceKm, distanceLabel } from "@/lib/distance.ts";
-import { formatLocalDate, formatPrice, timeIn, todayIn } from "@/lib/format.ts";
+import {
+  formatLocalDate,
+  formatPrice,
+  timeIn,
+  todayIn,
+  type PartOfDay,
+} from "@/lib/format.ts";
 import { fillParts } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { categoryLabel } from "@tor-now/domain";
@@ -24,6 +30,7 @@ import { SlotGrid } from "../slot-grid.tsx";
 import { VerifyPanel } from "../verify-panel.tsx";
 import { BusinessPhotos } from "./business-photos.tsx";
 import { ReviewPrompt, ReviewSummary, useBusinessReviews } from "./business-reviews.tsx";
+import { WaitSheet } from "./wait-sheet.tsx";
 import { Button, Card, Critical, MultilineField, Sheet, Spinner, Warning } from "../ui.tsx";
 
 /** How much of the calendar the strip offers at once. */
@@ -72,6 +79,13 @@ export const BookingFlow = ({
   const [note, setNote] = useState("");
   /** Briefly true after the address is copied, where there is no share sheet. */
   const [shared, setShared] = useState(false);
+  /**
+   * ADR 0018. Which empty stretch the customer pressed "tell me" on, or null
+   * for the whole day. Undefined means the sheet is closed — distinct from
+   * null, which is a real answer.
+   */
+  const [waitingFor, setWaitingFor] = useState<PartOfDay | null | undefined>(undefined);
+  const [waitSaved, setWaitSaved] = useState(false);
   /** Kilometres from the customer, when both they and the pin are known. */
   const [distance, setDistance] = useState<number | null>(null);
   useEffect(() => {
@@ -587,13 +601,65 @@ export const BookingFlow = ({
               noTimes: copy.noTimes,
               noTimesBody: copy.noTimesBody,
               callBusiness: copy.callBusiness,
+              waitForPart: copy.waitForPart,
+              waitForDay: copy.waitForDay,
             }}
             businessPhone={business.phone}
+            // Offered only once a Service is chosen: what a day has free
+            // depends on how long the Service takes, so waiting for "a
+            // morning" is not a question until there is something to fit in it.
+            onWaitFor={
+              service === null ? undefined : (part) => setWaitingFor(part)
+            }
           />
         ) : null}
       </section>
 
       {error !== null && stage === "choosing" && <Critical>{error}</Critical>}
+
+      {/* ADR 0018. Waiting needs a signed-in customer, because there has to be
+          somebody to message — so an unverified visitor is taken through the
+          same verification the booking flow uses, and lands back here. */}
+      {profile !== null && service !== null && waitingFor !== undefined && (
+        <WaitSheet
+          open
+          business={profile}
+          serviceName={service.name}
+          onDate={date}
+          wantedPart={waitingFor}
+          resourceId={resource?.id ?? null}
+          saving={busy}
+          onClose={() => setWaitingFor(undefined)}
+          onConfirm={async (wish) => {
+            if (token === null) {
+              setWaitingFor(undefined);
+              setStage("verifying");
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            try {
+              await api.waitForTime(token, {
+                businessId: business.id,
+                serviceId: service.id,
+                onDate: date,
+                ...wish,
+              });
+              setWaitingFor(undefined);
+              setWaitSaved(true);
+            } catch (trouble) {
+              setError(errorText(isApiError(trouble) ? trouble.code : "INTERNAL"));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      )}
+
+      {/* Said once and left standing: the list is in "my appointments" now,
+          and a banner somebody has to dismiss is one more thing to do after
+          being told there was nothing to do. */}
+      {waitSaved && <Warning>{copy.waitingSaved}</Warning>}
 
       <ReviewSummary reviews={reviews} />
 

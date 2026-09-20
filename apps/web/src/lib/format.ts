@@ -1,3 +1,9 @@
+import {
+  parseInstant,
+  partOfDayAt,
+  timeZone as asTimeZone,
+  type PartOfDay as DomainPartOfDay,
+} from "@tor-now/domain";
 import type { Language } from "./i18n/dictionaries.ts";
 
 /**
@@ -166,28 +172,28 @@ export const formatDuration = (minutes: number, minutesLabel: string): string =>
   `${minutes} ${minutesLabel}`;
 
 /**
- * The parts of the day the customer's slot list is grouped into, matching the
- * design's morning / noon / evening headings.
+ * The parts of the day the customer's slot list is grouped into.
+ *
+ * Where morning ends used to be decided here, which was fine while the groups
+ * were only headings. ADR 0018 made them something a customer can ask about —
+ * "tell me if a morning opens up" — so the boundary is a fact about the
+ * product now, and it lives in the domain where both sides of the wire read
+ * the same one. This is the interface's own lower-case name for it.
  */
-export const PART_OF_DAY_BOUNDARIES = Object.freeze({
-  noonStartsAtHour: 12,
-  eveningStartsAtHour: 17,
-});
-
 export type PartOfDay = "morning" | "noon" | "evening";
 
-export const partOfDay = (isoInstant: string, timeZone: string): PartOfDay => {
-  const hour = Number(
-    new Intl.DateTimeFormat("en-GB", {
-      timeZone,
-      hour: "2-digit",
-      hour12: false,
-    }).format(new Date(isoInstant)),
-  );
-  if (hour < PART_OF_DAY_BOUNDARIES.noonStartsAtHour) return "morning";
-  if (hour < PART_OF_DAY_BOUNDARIES.eveningStartsAtHour) return "noon";
-  return "evening";
-};
+const NAMED: Readonly<Record<DomainPartOfDay, PartOfDay>> = Object.freeze({
+  MORNING: "morning",
+  NOON: "noon",
+  EVENING: "evening",
+});
+
+export const partOfDay = (isoInstant: string, timeZone: string): PartOfDay =>
+  NAMED[partOfDayAt(parseInstant(isoInstant), asTimeZone(timeZone))];
+
+/** The domain's name for a part, for anything crossing the wire. */
+export const asWirePart = (part: PartOfDay): DomainPartOfDay =>
+  part === "morning" ? "MORNING" : part === "noon" ? "NOON" : "EVENING";
 
 /**
  * "September 2026", in the reader's language. Built from the first of the

@@ -15,6 +15,7 @@ import type {
   WorkingHours,
 } from "@tor-now/domain";
 import type { AuditEntry } from "../../ports/audit.ts";
+import type { WaitingEntry, WaitingRecheck } from "../../ports/repositories.ts";
 import type { OutboundMessage } from "../../ports/notifier.ts";
 import type { VerificationCodeRecord } from "../../ports/verification.ts";
 
@@ -48,6 +49,8 @@ export type Store = {
   subscriptions: Subscription[];
   payments: Payment[];
   allowlist: { phone: string; note: string | null }[];
+  waitingEntries: WaitingEntry[];
+  waitingRechecks: (WaitingRecheck & { createdAt: number })[];
   audit: (AuditEntry & { occurredAt: number })[];
   outbox: {
     id: string;
@@ -78,6 +81,8 @@ export const emptyStore = (): Store => ({
   subscriptions: [],
   payments: [],
   allowlist: [],
+  waitingEntries: [],
+  waitingRechecks: [],
   audit: [],
   outbox: [],
   verificationCodes: [],

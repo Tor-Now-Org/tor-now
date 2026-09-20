@@ -48,6 +48,23 @@ export const REMINDERS = Object.freeze({
   batchSize: 200,
 });
 
+/**
+ * ADR 0018's waiting list.
+ *
+ * `cooldownMinutes` is what stops a day that frees up repeatedly becoming a
+ * stream of messages to the same person: an entry told about an opening is
+ * passed over until it has elapsed. It is the only bound on spend, since every
+ * waiting customer is told about every opening — the per-Business switch is
+ * the other lever, and it is a decision rather than a number.
+ *
+ * `marksPerRun` bounds the work of one run, not the day's total: whatever is
+ * left is picked up by the next one, oldest first.
+ */
+export const WAITING_LIST = Object.freeze({
+  cooldownMinutes: 120,
+  marksPerRun: 100,
+});
+
 export const OUTBOX = Object.freeze({
   batchSize: 50,
   maxAttempts: 5,

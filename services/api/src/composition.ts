@@ -11,6 +11,7 @@ import { discoveryService } from "./application/discovery-service.ts";
 import { reviewService } from "./application/review-service.ts";
 import { outboxWorker } from "./application/outbox-worker.ts";
 import { reminderService } from "./application/reminder-service.ts";
+import { waitingService } from "./application/waiting-service.ts";
 import { pruneAuditLog } from "./application/retention-service.ts";
 import { measureDatabase } from "./http/diagnostics.ts";
 import { createPool, type Sql } from "./infrastructure/pg/client.ts";
@@ -120,6 +121,7 @@ export const compose = (
 
     outboxWorker: outboxWorker({ unitOfWork, notifier, clock }),
     reminders: reminderService({ unitOfWork, clock }),
+    waiting: waitingService({ unitOfWork, clock, strategy: greedyWalk }),
     measureDatabase: () => measureDatabase(sql),
     pruneAuditLog: () => pruneAuditLog(sql),
     deactivateLapsedBusinesses: () => admin.deactivateLapsedBusinesses(system()),

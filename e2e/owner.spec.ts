@@ -2137,7 +2137,7 @@ test.describe("a customer's own page", () => {
     // The same actions the calendar offers, from where the owner is looking.
     await page.getByText(shop.service.name).first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByRole("button", { name: "ביטול התור" }).click();
+    await page.getByRole("button", { name: "ביטול ופרסום השעה" }).click();
 
     // The history keeps it, struck through, exactly as the customer sees it.
     await expect(page.locator(".cancelled").first()).toBeVisible({ timeout: 15_000 });
@@ -4653,7 +4653,7 @@ test.describe("acting on something the search found", () => {
 
     await results.first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByRole("button", { name: "ביטול התור" }).click();
+    await page.getByRole("button", { name: "ביטול ופרסום השעה" }).click();
 
     // She still has one. The list has to be the answer to the question still
     // in the box, which means asking it again — the appointment that was just
@@ -4746,7 +4746,7 @@ test.describe("acting on something the search found", () => {
     await expect(results).toHaveCount(1, { timeout: 15_000 });
 
     await results.first().click();
-    await page.getByRole("button", { name: "ביטול התור" }).click();
+    await page.getByRole("button", { name: "ביטול ופרסום השעה" }).click();
 
     // Empty is the right answer here, and it has to be arrived at rather than
     // left over: the cancelled appointment must not still be sitting there.
@@ -4781,7 +4781,7 @@ test.describe("acting on something the search found", () => {
     await expect(hers).toHaveCount(2, { timeout: 15_000 });
 
     await hers.first().click();
-    await page.getByRole("button", { name: "ביטול התור" }).click();
+    await page.getByRole("button", { name: "ביטול ופרסום השעה" }).click();
     await expect(hers).toHaveCount(1, { timeout: 15_000 });
   });
 
@@ -4803,7 +4803,7 @@ test.describe("acting on something the search found", () => {
     await openTheDay(page, day);
     await page.getByText("תמר בן דוד").first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByRole("button", { name: "ביטול התור" }).click();
+    await page.getByRole("button", { name: "ביטול ופרסום השעה" }).click();
 
     // A cancelled appointment is not gone, it is cancelled — and the filter
     // that asks for cancelled ones has to be able to find it.

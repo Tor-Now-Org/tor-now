@@ -251,6 +251,12 @@ export const dateOverrideRepository = (
 };
 
 export const blockRepository = (tx: Transaction): BlockRepository => ({
+  async findById(id) {
+    const rows = await tx<Row[]>`select * from block where id = ${id}`;
+    const row = rows[0];
+    return row === undefined ? null : toBlock(row);
+  },
+
   async blockedBetween(resourceId, from, to) {
     const rows = await tx<Row[]>`
       select * from app.blocked_spans(${resourceId}, ${new Date(from)}, ${new Date(to)})`;

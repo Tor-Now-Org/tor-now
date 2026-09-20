@@ -235,5 +235,68 @@ begin
     raise exception 'POLICY BROKEN: a stranger reviewed a business they never booked';
   end if;
 
+  -- --- ADR 0018: waiting for a time ----------------------------------------
+  -- Leaving a mark is the one write here that no policy admits: it goes
+  -- through a SECURITY DEFINER function, because an upsert that cannot see its
+  -- own conflict is refused by Row Level Security. The repository contract
+  -- runs as the owner and so cannot tell — which is precisely why this is
+  -- here, and why it was the end-to-end suite that found it the first time.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_customer)::text, true);
+  set local role authenticated;
+  perform app.mark_for_recheck(v_res, date '2026-10-06');
+  -- Twice, because a busy morning marks the same day again and the second one
+  -- has a conflict to resolve.
+  perform app.mark_for_recheck(v_res, date '2026-10-06');
+  reset role;
+  select count(*) into v_seen from waiting_recheck
+    where resource_id = v_res and on_date = date '2026-10-06';
+  if v_seen <> 1 then
+    raise exception 'POLICY BROKEN: marking a day twice left % rows', v_seen;
+  end if;
+
+  -- And the marks themselves are readable by nobody: they would otherwise
+  -- hand any signed-in user a listing of which calendars changed and when.
+  set local role authenticated;
+  select count(*) into v_seen from waiting_recheck;
+  reset role;
+  if v_seen <> 0 then
+    raise exception 'POLICY BROKEN: a signed-in user can read the recheck marks';
+  end if;
+
+  -- A Waiting Entry belongs to the customer who wrote it. A stranger cannot
+  -- write one in their name, and cannot read theirs.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_customer)::text, true);
+  set local role authenticated;
+  insert into waiting_entry (business_id, customer_id, service_id, on_date, parts)
+    values (v_biz, v_customer, v_svc, date '2026-10-07', array['MORNING']);
+  reset role;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_stranger)::text, true);
+  set local role authenticated;
+  select count(*) into v_seen from waiting_entry;
+  v_failed := false;
+  begin
+    insert into waiting_entry (business_id, customer_id, service_id, on_date, parts)
+      values (v_biz, v_customer, v_svc, date '2026-10-08', array['EVENING']);
+  exception when insufficient_privilege or others then v_failed := true;
+  end;
+  reset role;
+  if v_seen <> 0 then
+    raise exception 'POLICY BROKEN: a stranger read somebody else''s waiting list';
+  end if;
+  if not v_failed then
+    raise exception 'POLICY BROKEN: a stranger waited in somebody else''s name';
+  end if;
+
+  -- The Business cannot read the list either: the owner's only involvement is
+  -- deciding whether a cancelled hour is published.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
+  set local role authenticated;
+  select count(*) into v_seen from waiting_entry;
+  reset role;
+  if v_seen <> 0 then
+    raise exception 'POLICY BROKEN: an owner can read who is waiting';
+  end if;
+
   raise exception 'ALL_POLICIES_HELD';
 end $$;
