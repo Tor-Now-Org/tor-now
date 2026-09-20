@@ -93,6 +93,8 @@ const daysInMonthOf = (date: LocalDate): number => {
 import {
   loadManagedBusiness,
   loadOwnedResource,
+  loadAccessibleBusiness,
+  loadStaffedBusiness,
   requireResourceAccess,
   requireStaff,
 } from "./authorization.ts";
@@ -122,14 +124,24 @@ const readableCalendars = async (
   actor: Actor,
   businessId: BusinessId,
 ) => {
-  const membership = await requireStaff(repositories, actor, businessId);
+  // The Business comes back with them: authorizing had to read it, and both
+  // screens below need its time zone — so it travels rather than being read a
+  // second time.
+  const { membership, business } = await loadStaffedBusiness(
+    repositories,
+    actor,
+    businessId,
+  );
   const resources = await repositories.resources.listForBusiness(businessId);
   const active = resources.filter((resource) => resource.active);
-  if (membership === null || manages(membership)) return active;
+  if (membership === null || manages(membership)) return { calendars: active, business };
 
   const assignments = await repositories.membershipResources.listForMembership(membership.id);
   const mine = new Set(assignments.map((assignment) => assignment.resourceId));
-  return active.filter((resource) => mine.has(resource.id));
+  return {
+    calendars: active.filter((resource) => mine.has(resource.id)),
+    business,
+  };
 };
 
 /**
@@ -289,10 +301,13 @@ export const calendarService = ({
   ): Promise<readonly MonthDay[]> {
     const first = parseLocalDate(firstOfMonth);
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await requireResourceAccess(repositories, actor, businessId, resourceId);
+      const business = await loadAccessibleBusiness(
+        repositories,
+        actor,
+        businessId,
+        resourceId,
+      );
       await loadOwnedResource(repositories, businessId, resourceId);
-      const business = await repositories.businesses.findById(businessId);
-      if (business === null) throw notFound("Business", businessId);
 
       const start = zonedToInstant(first, MIDNIGHT, business.timeZone);
       const afterLast = zonedToInstant(
@@ -355,9 +370,11 @@ export const calendarService = ({
       // Wider than "managed": a worker reads the month and the day for the
       // calendars they were put on, which is what the team feature promised
       // them. Owners and managers read all of them.
-      const onOffer = await readableCalendars(repositories, actor, businessId);
-      const business = await repositories.businesses.findById(businessId);
-      if (business === null) throw notFound("Business", businessId);
+      const { calendars: onOffer, business } = await readableCalendars(
+        repositories,
+        actor,
+        businessId,
+      );
 
       const days = daysInMonthOf(first);
       const last = addDays(first, days - 1);
@@ -502,9 +519,11 @@ export const calendarService = ({
       // Wider than "managed": a worker reads the month and the day for the
       // calendars they were put on, which is what the team feature promised
       // them. Owners and managers read all of them.
-      const onOffer = await readableCalendars(repositories, actor, businessId);
-      const business = await repositories.businesses.findById(businessId);
-      if (business === null) throw notFound("Business", businessId);
+      const { calendars: onOffer, business } = await readableCalendars(
+        repositories,
+        actor,
+        businessId,
+      );
 
       const on = parseLocalDate(date);
       const from = zonedToInstant(on, MIDNIGHT, business.timeZone);
@@ -579,10 +598,13 @@ export const calendarService = ({
     date: string,
   ): Promise<CalendarDay> {
     return unitOfWork.run(actor, async ({ repositories }) => {
-      await requireResourceAccess(repositories, actor, businessId, resourceId);
+      const business = await loadAccessibleBusiness(
+        repositories,
+        actor,
+        businessId,
+        resourceId,
+      );
       await loadOwnedResource(repositories, businessId, resourceId);
-      const business = await repositories.businesses.findById(businessId);
-      if (business === null) throw notFound("Business", businessId);
 
       const on = parseLocalDate(date);
       const from = zonedToInstant(on, MIDNIGHT, business.timeZone);

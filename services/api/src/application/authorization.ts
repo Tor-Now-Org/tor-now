@@ -5,6 +5,7 @@ import {
   manages,
   notFound,
   unauthenticated,
+  type Business,
   type BusinessId,
   type Membership,
   type ResourceId,
@@ -57,13 +58,68 @@ export const requireOperator = (actor: Actor): UserId | null => {
 const requireActiveBusiness = async (
   repositories: Repositories,
   businessId: BusinessId,
-): Promise<void> => {
+): Promise<Business> => {
   const business = await repositories.businesses.findById(businessId);
   if (business === null) throw notFound("Business", businessId);
   if (!business.active) {
     throw new DomainError("BUSINESS_INACTIVE", "This business is deactivated");
   }
+  // Handed back rather than dropped: the caller almost always wants the row it
+  // just read, and reading it twice is a round trip spent on an answer already
+  // in hand.
+  return business;
 };
+
+const businessOrNotFound = async (
+  repositories: Repositories,
+  businessId: BusinessId,
+): Promise<Business> => {
+  const business = await repositories.businesses.findById(businessId);
+  if (business === null) throw notFound("Business", businessId);
+  return business;
+};
+
+/**
+ * The Membership half of each check, without the Business half.
+ *
+ * Split out so "authorize" and "authorize and hand me the Business" can share
+ * the role rules without either reading the Business twice. Null means an
+ * administrator throughout, exactly as the exported checks report it.
+ */
+const membershipThat = async (
+  repositories: Repositories,
+  actor: Actor,
+  businessId: BusinessId,
+  allowed: (membership: Membership) => boolean,
+  refusal: string,
+): Promise<Membership | null> => {
+  if (actor.kind === "ADMINISTRATOR") return null;
+
+  const userId = requireUser(actor);
+  const membership = await repositories.memberships.find(userId, businessId);
+  if (membership === null || !allowed(membership)) throw forbidden(refusal);
+  return membership;
+};
+
+const owns = (membership: Membership): boolean => membership.role === "OWNER";
+const NOT_YOURS = "You do not manage this business";
+const NOT_STAFF = "You do not work at this business";
+
+/**
+ * Authorize, and hand back the Business that was read to do it.
+ *
+ * An administrator is not bound by deactivation (ADR 0010) and holds no
+ * Membership, so their row is read without the active check — which is what the
+ * exported checks already do by returning before it.
+ */
+const authorizedBusiness = async (
+  repositories: Repositories,
+  businessId: BusinessId,
+  membership: Membership | null,
+): Promise<Business> =>
+  membership === null
+    ? businessOrNotFound(repositories, businessId)
+    : requireActiveBusiness(repositories, businessId);
 
 export const requireOwnership = async (
   repositories: Repositories,
@@ -72,14 +128,14 @@ export const requireOwnership = async (
 ): Promise<void> => {
   // An administrator may act on a Business on its owner's behalf (ADR 0010),
   // and every such action is audited.
-  if (actor.kind === "ADMINISTRATOR") return;
-
-  const userId = requireUser(actor);
-  const membership = await repositories.memberships.find(userId, businessId);
-  if (membership === null || membership.role !== "OWNER") {
-    throw forbidden("You do not manage this business");
-  }
-  await requireActiveBusiness(repositories, businessId);
+  const membership = await membershipThat(
+    repositories,
+    actor,
+    businessId,
+    owns,
+    NOT_YOURS,
+  );
+  if (membership !== null) await requireActiveBusiness(repositories, businessId);
 };
 
 /**
@@ -96,14 +152,14 @@ export const requireOwnerOrManager = async (
   actor: Actor,
   businessId: BusinessId,
 ): Promise<Membership | null> => {
-  if (actor.kind === "ADMINISTRATOR") return null;
-
-  const userId = requireUser(actor);
-  const membership = await repositories.memberships.find(userId, businessId);
-  if (membership === null || !manages(membership)) {
-    throw forbidden("You do not manage this business");
-  }
-  await requireActiveBusiness(repositories, businessId);
+  const membership = await membershipThat(
+    repositories,
+    actor,
+    businessId,
+    manages,
+    NOT_YOURS,
+  );
+  if (membership !== null) await requireActiveBusiness(repositories, businessId);
   return membership;
 };
 
@@ -118,15 +174,40 @@ export const requireStaff = async (
   actor: Actor,
   businessId: BusinessId,
 ): Promise<Membership | null> => {
-  if (actor.kind === "ADMINISTRATOR") return null;
-
-  const userId = requireUser(actor);
-  const membership = await repositories.memberships.find(userId, businessId);
-  if (membership === null || !isStaff(membership)) {
-    throw forbidden("You do not work at this business");
-  }
-  await requireActiveBusiness(repositories, businessId);
+  const membership = await membershipThat(
+    repositories,
+    actor,
+    businessId,
+    isStaff,
+    NOT_STAFF,
+  );
+  if (membership !== null) await requireActiveBusiness(repositories, businessId);
   return membership;
+};
+
+/**
+ * `requireStaff`, with the Business it read handed back.
+ *
+ * The screens that show "the business" — the day and the month — need both the
+ * calendars this caller may read and the Business's own time zone, and were
+ * reading the row a second time to get it.
+ */
+export const loadStaffedBusiness = async (
+  repositories: Repositories,
+  actor: Actor,
+  businessId: BusinessId,
+): Promise<{ membership: Membership | null; business: Business }> => {
+  const membership = await membershipThat(
+    repositories,
+    actor,
+    businessId,
+    isStaff,
+    NOT_STAFF,
+  );
+  return {
+    membership,
+    business: await authorizedBusiness(repositories, businessId, membership),
+  };
 };
 
 /**
@@ -141,15 +222,44 @@ export const requireResourceAccess = async (
   businessId: BusinessId,
   resourceId: ResourceId,
 ): Promise<void> => {
-  if (actor.kind === "ADMINISTRATOR") return;
+  await accessibleBusiness(repositories, actor, businessId, resourceId);
+};
 
-  const userId = requireUser(actor);
-  const membership = await repositories.memberships.find(userId, businessId);
-  if (membership === null || !isStaff(membership)) {
-    throw forbidden("You do not work at this business");
-  }
-  await requireActiveBusiness(repositories, businessId);
-  if (manages(membership)) return;
+/**
+ * `requireResourceAccess`, with the Business it read handed back — for the
+ * screens that gate on one calendar and then need the Business's time zone.
+ *
+ * An administrator reads nothing to be authorized (ADR 0010), so their row is
+ * read here instead: one read either way, which is what the callers used to do
+ * for themselves.
+ */
+export const loadAccessibleBusiness = async (
+  repositories: Repositories,
+  actor: Actor,
+  businessId: BusinessId,
+  resourceId: ResourceId,
+): Promise<Business> =>
+  (await accessibleBusiness(repositories, actor, businessId, resourceId)) ??
+  businessOrNotFound(repositories, businessId);
+
+/** Null for an administrator, who is authorized without the Business being read. */
+const accessibleBusiness = async (
+  repositories: Repositories,
+  actor: Actor,
+  businessId: BusinessId,
+  resourceId: ResourceId,
+): Promise<Business | null> => {
+  const membership = await membershipThat(
+    repositories,
+    actor,
+    businessId,
+    isStaff,
+    NOT_STAFF,
+  );
+  if (membership === null) return null;
+
+  const business = await requireActiveBusiness(repositories, businessId);
+  if (manages(membership)) return business;
 
   const assignments = await repositories.membershipResources.listForMembership(
     membership.id,
@@ -157,17 +267,22 @@ export const requireResourceAccess = async (
   if (!assignments.some((assignment) => assignment.resourceId === resourceId)) {
     throw forbidden("This calendar is not yours");
   }
+  return business;
 };
 
 export const loadOwnedBusiness = async (
   repositories: Repositories,
   actor: Actor,
   businessId: BusinessId,
-) => {
-  await requireOwnership(repositories, actor, businessId);
-  const business = await repositories.businesses.findById(businessId);
-  if (business === null) throw notFound("Business", businessId);
-  return business;
+): Promise<Business> => {
+  const membership = await membershipThat(
+    repositories,
+    actor,
+    businessId,
+    owns,
+    NOT_YOURS,
+  );
+  return authorizedBusiness(repositories, businessId, membership);
 };
 
 /** Same as `loadOwnedBusiness`, but for the OWNER-or-MANAGER work ADR 0016 allows. */
@@ -175,11 +290,15 @@ export const loadManagedBusiness = async (
   repositories: Repositories,
   actor: Actor,
   businessId: BusinessId,
-) => {
-  await requireOwnerOrManager(repositories, actor, businessId);
-  const business = await repositories.businesses.findById(businessId);
-  if (business === null) throw notFound("Business", businessId);
-  return business;
+): Promise<Business> => {
+  const membership = await membershipThat(
+    repositories,
+    actor,
+    businessId,
+    manages,
+    NOT_YOURS,
+  );
+  return authorizedBusiness(repositories, businessId, membership);
 };
 
 /** A Resource must belong to the Business the caller was authorized against. */
