@@ -128,6 +128,15 @@ export const serviceRepository = (tx: Transaction): ServiceRepository => ({
 export const workingHoursRepository = (
   tx: Transaction,
 ): WorkingHoursRepository => ({
+  async listForResources(resourceIds) {
+    if (resourceIds.length === 0) return [];
+    const rows = await tx<Row[]>`
+      select * from working_hours
+      where resource_id = any(${[...resourceIds]}::uuid[])
+      order by day_of_week, start_local`;
+    return rows.map(toWorkingHours);
+  },
+
   async listForResource(resourceId) {
     const rows = await tx<Row[]>`
       select * from working_hours where resource_id = ${resourceId}
@@ -200,6 +209,18 @@ export const dateOverrideRepository = (
   };
 
   return {
+    async listForResources(resourceIds, from, to) {
+      if (resourceIds.length === 0) return [];
+      const rows = await tx<Row[]>`
+        select * from date_override
+        where resource_id = any(${[...resourceIds]}::uuid[])
+          and on_date between ${from} and ${to}
+        order by on_date`;
+      // `hydrate` loads every override's ranges in one query, so a month of
+      // special days across six calendars is two reads rather than two a day.
+      return hydrate(rows);
+    },
+
     async listForResource(resourceId, from, to) {
       const rows = await tx<Row[]>`
         select * from date_override
@@ -292,6 +313,16 @@ export const blockRepository = (tx: Transaction): BlockRepository => ({
       date: toLocalDate(row["on_date"]),
       count: Number(row["count"]),
     }));
+  },
+
+  async listForResourcesBetween(resourceIds, from, to) {
+    if (resourceIds.length === 0) return [];
+    const rows = await tx<Row[]>`
+      select * from block
+      where resource_id = any(${[...resourceIds]}::uuid[])
+        and start_at < ${new Date(to)} and end_at > ${new Date(from)}
+      order by start_at`;
+    return rows.map(toBlock);
   },
 
   async listForResourceBetween(resourceId, from, to) {

@@ -132,6 +132,24 @@ const readableCalendars = async (
   return active.filter((resource) => mine.has(resource.id));
 };
 
+/**
+ * Rows read for many calendars at once, back into one list per calendar.
+ *
+ * Seeded from the calendars that were *asked* about rather than from the rows
+ * that came back, because a calendar with nothing on it has no rows — and built
+ * the other way round it would vanish from the screen instead of showing as an
+ * empty day. Order within each list is the order the read returned, which is
+ * the order the single-calendar reads used to give.
+ */
+const byResource = <T extends { readonly resourceId: ResourceId }>(
+  resourceIds: readonly ResourceId[],
+  rows: readonly T[],
+): Map<ResourceId, T[]> => {
+  const grouped = new Map<ResourceId, T[]>(resourceIds.map((id) => [id, []]));
+  for (const row of rows) grouped.get(row.resourceId)?.push(row);
+  return grouped;
+};
+
 /** One day, every calendar: what is booked, what is blocked, and when it is open. */
 export type BusinessDay = {
   readonly date: string;
@@ -346,20 +364,37 @@ export const calendarService = ({
       const start = zonedToInstant(first, MIDNIGHT, business.timeZone);
       const afterLast = zonedToInstant(addDays(first, days), MIDNIGHT, business.timeZone);
 
-      const perResource = await Promise.all(
-        onOffer.map(async (resource) => ({
-          resource,
-          appointments: await repositories.appointments.countsByLocalDay(
-            resource.id, start, afterLast, business.timeZone,
-          ),
-          overrides: await repositories.dateOverrides.listForResource(resource.id, first, last),
-          blocks: await repositories.blocks.listForResourceBetween(resource.id, start, afterLast),
-          // The week itself, so the grid can tell a day nobody works from a day
-          // somebody decided to close. They look the same to a customer and are
-          // not the same thing at all to an owner.
-          hours: await repositories.workingHours.listForResource(resource.id),
-        })),
-      );
+      // Four reads for the month, not four per calendar — and these four used to
+      // run one after another inside the loop, so a six-chair shop drawing one
+      // grid waited through twenty-four sequential round trips.
+      const ids = onOffer.map((resource) => resource.id);
+      const [everyCount, everyOverride, everyBlock, everyWeek] = await Promise.all([
+        repositories.appointments.countsByLocalDayForResources(
+          ids, start, afterLast, business.timeZone,
+        ),
+        repositories.dateOverrides.listForResources(ids, first, last),
+        repositories.blocks.listForResourcesBetween(ids, start, afterLast),
+        // The week itself, so the grid can tell a day nobody works from a day
+        // somebody decided to close. They look the same to a customer and are
+        // not the same thing at all to an owner.
+        repositories.workingHours.listForResources(ids),
+      ]);
+
+      const countsOf = byResource(ids, everyCount);
+      const overridesOf = byResource(ids, everyOverride);
+      const blocksOf = byResource(ids, everyBlock);
+      const weekOf = byResource(ids, everyWeek);
+
+      // The same shape, in the same order as the calendars: everything below
+      // reads this array positionally — whether every calendar said the same
+      // thing is the first one compared with the last.
+      const perResource = onOffer.map((resource) => ({
+        resource,
+        appointments: countsOf.get(resource.id) ?? [],
+        overrides: overridesOf.get(resource.id) ?? [],
+        blocks: blocksOf.get(resource.id) ?? [],
+        hours: weekOf.get(resource.id) ?? [],
+      }));
 
       const countOn = (
         counts: readonly { date: LocalDate; count: number }[],
@@ -476,46 +511,62 @@ export const calendarService = ({
       const to = zonedToInstant(on, END_OF_DAY, business.timeZone);
       const weekday = dayOfWeekOf(on);
 
-      const calendars = await Promise.all(
-        onOffer.map(async (resource) => {
-          const [appointments, blocks, hours, overrides] = await Promise.all([
-            repositories.appointments.listForResourceBetween(resource.id, from, to),
-            repositories.blocks.listForResourceBetween(resource.id, from, to),
-            repositories.workingHours.listForResource(resource.id),
-            repositories.dateOverrides.listForResource(resource.id, on, on),
-          ]);
-          const customers = await loadCustomers(
-            repositories,
-            appointments.map((appointment) => appointment.customerId),
-          );
-          // The override replaces the weekday entirely (ADR 0002); its absence
-          // is what makes the week's own hours the answer.
-          const override = overrides.find((entry) => entry.date === on) ?? null;
-          const open =
-            override !== null
-              ? override.ranges
-              : hours
-                  .filter((entry) => entry.dayOfWeek === weekday)
-                  .map((entry) => ({ start: entry.start, end: entry.end }));
+      // Four reads for the whole day, whatever the shop has chairs. Asking per
+      // calendar cost four round trips each, and a transaction holds one
+      // connection — so six chairs meant twenty-four trips in a row to draw one
+      // screen.
+      const ids = onOffer.map((resource) => resource.id);
+      const [everyAppointment, everyBlock, everyWeek, everyOverride] = await Promise.all([
+        repositories.appointments.listForResourcesBetween(ids, from, to),
+        repositories.blocks.listForResourcesBetween(ids, from, to),
+        repositories.workingHours.listForResources(ids),
+        repositories.dateOverrides.listForResources(ids, on, on),
+      ]);
 
-          return {
-            resourceId: resource.id,
-            resourceName: resource.name,
-            open,
-            note: override?.note ?? null,
-            special: override !== null,
-            appointments: appointments.map((appointment) => {
-              const customer = customers.get(appointment.customerId);
-              return {
-                ...appointment,
-                customerName: customer === undefined ? "—" : displayName(customer),
-                customerPhone: customer?.phone ?? "",
-              };
-            }),
-            blocks,
-          };
-        }),
+      const appointmentsOf = byResource(ids, everyAppointment);
+      const blocksOf = byResource(ids, everyBlock);
+      const weekOf = byResource(ids, everyWeek);
+      const overridesOf = byResource(ids, everyOverride);
+
+      // The people once for the day, not once per calendar — and once for
+      // anybody sitting in two of them.
+      const customers = await loadCustomers(
+        repositories,
+        everyAppointment.map((appointment) => appointment.customerId),
       );
+
+      const calendars = onOffer.map((resource) => {
+        const appointments = appointmentsOf.get(resource.id) ?? [];
+        const blocks = blocksOf.get(resource.id) ?? [];
+        const hours = weekOf.get(resource.id) ?? [];
+        const overrides = overridesOf.get(resource.id) ?? [];
+        // The override replaces the weekday entirely (ADR 0002); its absence
+        // is what makes the week's own hours the answer.
+        const override = overrides.find((entry) => entry.date === on) ?? null;
+        const open =
+          override !== null
+            ? override.ranges
+            : hours
+                .filter((entry) => entry.dayOfWeek === weekday)
+                .map((entry) => ({ start: entry.start, end: entry.end }));
+
+        return {
+          resourceId: resource.id,
+          resourceName: resource.name,
+          open,
+          note: override?.note ?? null,
+          special: override !== null,
+          appointments: appointments.map((appointment) => {
+            const customer = customers.get(appointment.customerId);
+            return {
+              ...appointment,
+              customerName: customer === undefined ? "—" : displayName(customer),
+              customerPhone: customer?.phone ?? "",
+            };
+          }),
+          blocks,
+        };
+      });
 
       return { date: on, calendars };
     });

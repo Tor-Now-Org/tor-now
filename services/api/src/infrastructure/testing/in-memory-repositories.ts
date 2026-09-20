@@ -720,6 +720,12 @@ export const inMemoryRepositories = (store: Store): Repositories => {
     },
 
     workingHours: {
+      async listForResources(resourceIds) {
+        const wanted = new Set<string>(resourceIds);
+        return store.workingHours
+          .filter((hours) => wanted.has(hours.resourceId))
+          .sort((left, right) => left.dayOfWeek - right.dayOfWeek || left.start - right.start);
+      },
       async listForResource(resourceId) {
         return store.workingHours
           .filter((hours) => hours.resourceId === resourceId)
@@ -771,6 +777,17 @@ export const inMemoryRepositories = (store: Store): Repositories => {
     },
 
     dateOverrides: {
+      async listForResources(resourceIds, from, to) {
+        const wanted = new Set<string>(resourceIds);
+        return store.dateOverrides
+          .filter(
+            (override) =>
+              wanted.has(override.resourceId) &&
+              compareLocalDate(override.date, from) >= 0 &&
+              compareLocalDate(override.date, to) <= 0,
+          )
+          .sort((left, right) => compareLocalDate(left.date, right.date));
+      },
       async listForResource(resourceId, from, to) {
         return store.dateOverrides.filter(
           (override) =>
@@ -848,6 +865,15 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
       },
 
+      async listForResourcesBetween(resourceIds, from, to) {
+        const wanted = new Set<string>(resourceIds);
+        return store.blocks
+          .filter(
+            (block) => wanted.has(block.resourceId) && block.startAt < to && block.endAt > from,
+          )
+          .sort((left, right) => left.startAt - right.startAt);
+      },
+
       async listForResourceBetween(resourceId, from, to) {
         return store.blocks.filter(
           (block) =>
@@ -912,6 +938,24 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             occupiedUntil: appointment.occupiedUntil,
           }));
       },
+      async countsByLocalDayForResources(resourceIds, from, to, timeZone) {
+        // Per calendar, then flattened: the same grouping the SQL does with
+        // `group by resource_id, day`.
+        return resourceIds.flatMap((resourceId) =>
+          countByLocalDay(
+            store.appointments
+              .filter(
+                (appointment) =>
+                  appointment.resourceId === resourceId &&
+                  appointment.startAt >= from &&
+                  appointment.startAt < to &&
+                  appointment.status !== "CANCELLED",
+              )
+              .map((appointment) => appointment.startAt),
+            timeZone,
+          ).map((entry) => ({ ...entry, resourceId })),
+        );
+      },
       async countsByLocalDay(resourceId, from, to, timeZone) {
         return countByLocalDay(
           store.appointments
@@ -953,6 +997,18 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             customerPhone: (customer as User).phone,
           }));
       },
+      async listForResourcesBetween(resourceIds, from, to) {
+        const wanted = new Set<string>(resourceIds);
+        return store.appointments
+          .filter(
+            (appointment) =>
+              wanted.has(appointment.resourceId) &&
+              appointment.startAt < to &&
+              appointment.occupiedUntil > from,
+          )
+          .sort((left, right) => left.startAt - right.startAt);
+      },
+
       async listForResourceBetween(resourceId, from, to) {
         return store.appointments
           .filter(

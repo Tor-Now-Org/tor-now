@@ -705,6 +705,114 @@ export const describeRepositoryContract = (
 
     // --- Schedule layers: ADR 0002 -------------------------------------
 
+    /**
+     * The plural reads, which a screen drawing every calendar side by side uses
+     * in place of one round trip per calendar.
+     *
+     * What each case is really asking is whether the batched statement answers
+     * exactly what the single-calendar one answers, calendar by calendar —
+     * because that equivalence is the whole claim being made by using it.
+     */
+    it("reads the schedule of several calendars at once, as the single-calendar reads would", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04501");
+        const second = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "יומן ב",
+        });
+        // A third, left empty on purpose: a calendar with nothing on it must
+        // still be answerable, and is exactly what a naive grouping loses.
+        const empty = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "יומן ג",
+        });
+        const ids = [context.resource.id, second.id, empty.id];
+        const date = parseLocalDate("2026-09-01");
+        const from = parseInstant("2026-09-01T00:00:00Z");
+        const to = parseInstant("2026-09-02T00:00:00Z");
+
+        // One of each layer, on two of the three calendars.
+        for (const resourceId of [context.resource.id, second.id]) {
+          await repositories.workingHours.create({
+            resourceId,
+            businessId: context.business.id,
+            dayOfWeek: 2,
+            startMinutes: 540,
+            endMinutes: 1020,
+          });
+          await repositories.dateOverrides.put({
+            resourceId,
+            businessId: context.business.id,
+            date,
+            note: "יום מיוחד",
+            ranges: [{ startMinutes: 600, endMinutes: 720 }],
+          });
+          await repositories.blocks.create({
+            resourceId,
+            businessId: context.business.id,
+            startAt: parseInstant("2026-09-01T09:00:00Z"),
+            endAt: parseInstant("2026-09-01T10:00:00Z"),
+            reason: "הפסקה",
+            groupId: crypto.randomUUID(),
+          });
+        }
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-01T11:00:00Z", "2026-09-01T11:30:00Z", "2026-09-01T11:40:00Z"),
+        );
+        await repositories.appointments.create({
+          ...anAppointmentAt(context, "2026-09-01T13:00:00Z", "2026-09-01T13:30:00Z", "2026-09-01T13:40:00Z"),
+          resourceId: second.id,
+        });
+
+        const [hours, overrides, blocks, appointments] = await Promise.all([
+          repositories.workingHours.listForResources(ids),
+          repositories.dateOverrides.listForResources(ids, date, date),
+          repositories.blocks.listForResourcesBetween(ids, from, to),
+          repositories.appointments.listForResourcesBetween(ids, from, to),
+        ]);
+
+        // Grouped by calendar, the batch is the single-calendar answer.
+        for (const resourceId of ids) {
+          expect(hours.filter((one) => one.resourceId === resourceId)).toEqual(
+            await repositories.workingHours.listForResource(resourceId),
+          );
+          expect(overrides.filter((one) => one.resourceId === resourceId)).toEqual(
+            await repositories.dateOverrides.listForResource(resourceId, date, date),
+          );
+          expect(blocks.filter((one) => one.resourceId === resourceId)).toEqual(
+            await repositories.blocks.listForResourceBetween(resourceId, from, to),
+          );
+          expect(appointments.filter((one) => one.resourceId === resourceId)).toEqual(
+            await repositories.appointments.listForResourceBetween(resourceId, from, to),
+          );
+        }
+
+        // And the empty calendar contributes nothing rather than failing.
+        expect(hours.filter((one) => one.resourceId === empty.id)).toEqual([]);
+        expect(appointments.filter((one) => one.resourceId === empty.id)).toEqual([]);
+        // The ranges came back hydrated, not as a bare override with no hours.
+        expect(overrides.every((one) => one.ranges.length === 1)).toBe(true);
+      });
+    });
+
+    it("asks nothing of the database for an empty list of calendars", async () => {
+      await withRepositories(async (repositories) => {
+        const date = parseLocalDate("2026-09-01");
+        const from = parseInstant("2026-09-01T00:00:00Z");
+        const to = parseInstant("2026-09-02T00:00:00Z");
+        expect(await repositories.workingHours.listForResources([])).toEqual([]);
+        expect(await repositories.dateOverrides.listForResources([], date, date)).toEqual([]);
+        expect(await repositories.blocks.listForResourcesBetween([], from, to)).toEqual([]);
+        expect(await repositories.appointments.listForResourcesBetween([], from, to)).toEqual([]);
+        expect(
+          await repositories.appointments.countsByLocalDayForResources(
+            [], from, to, timeZone("Asia/Jerusalem"),
+          ),
+        ).toEqual([]);
+      });
+    });
+
+
     it("replaces a date override wholesale, ranges included", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "04001");
@@ -1530,6 +1638,59 @@ export const describeRepositoryContract = (
           timeZone("Asia/Jerusalem"),
         );
         expect(counts).toEqual([{ date: parseLocalDate("2026-09-02"), count: 1 }]);
+      });
+    });
+
+    it("counts a month for several calendars at once, each day naming its calendar", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "4104");
+        const second = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "יומן ב",
+        });
+        const zone = timeZone("Asia/Jerusalem");
+        const from = parseInstant("2026-09-01T00:00:00Z");
+        const to = parseInstant("2026-09-30T21:00:00Z");
+
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-10T09:00:00Z", "2026-09-10T09:30:00Z", "2026-09-10T09:40:00Z"),
+        );
+        await repositories.appointments.create({
+          ...anAppointmentAt(context, "2026-09-10T11:00:00Z", "2026-09-10T11:30:00Z", "2026-09-10T11:40:00Z"),
+          resourceId: second.id,
+        });
+        // Cancelled, and so not a busy day for anybody — the same rule the
+        // single-calendar count obeys.
+        const calledOff = await repositories.appointments.create({
+          ...anAppointmentAt(context, "2026-09-11T09:00:00Z", "2026-09-11T09:30:00Z", "2026-09-11T09:40:00Z"),
+          resourceId: second.id,
+        });
+        await repositories.appointments.update(calledOff.id, {
+          status: "CANCELLED",
+          cancelledAt: parseInstant("2026-09-10T09:00:00Z"),
+          cancelledBy: "CUSTOMER",
+        });
+
+        const counts = await repositories.appointments.countsByLocalDayForResources(
+          [context.resource.id, second.id], from, to, zone,
+        );
+
+        expect([...counts].sort((left, right) => left.resourceId.localeCompare(right.resourceId)))
+          .toEqual(
+            [
+              { resourceId: context.resource.id, date: parseLocalDate("2026-09-10"), count: 1 },
+              { resourceId: second.id, date: parseLocalDate("2026-09-10"), count: 1 },
+            ].sort((left, right) => left.resourceId.localeCompare(right.resourceId)),
+          );
+
+        // Calendar by calendar, it agrees with the single-calendar count.
+        for (const resourceId of [context.resource.id, second.id]) {
+          expect(
+            counts
+              .filter((one) => one.resourceId === resourceId)
+              .map(({ date, count }) => ({ date, count })),
+          ).toEqual(await repositories.appointments.countsByLocalDay(resourceId, from, to, zone));
+        }
       });
     });
 

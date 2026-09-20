@@ -59,6 +59,15 @@ export type DayCount = {
   readonly count: number;
 };
 
+/**
+ * One day of one calendar's month overview.
+ *
+ * The plural reads answer for several calendars at once, so the row has to say
+ * whose day it is — a flat list the caller groups, rather than a shape the port
+ * has to know how to nest.
+ */
+export type ResourceDayCount = DayCount & { readonly resourceId: ResourceId };
+
 /** How many rows were created in a month, for a signup trend. */
 export type MonthCount = {
   readonly monthStart: LocalDate;
@@ -310,6 +319,16 @@ export type ServiceRepository = {
 
 export type WorkingHoursRepository = {
   listForResource(resourceId: ResourceId): Promise<readonly WorkingHours[]>;
+  /**
+   * The weeks of several calendars at once, flat, each row naming its own.
+   *
+   * A screen that draws every calendar side by side asked this once per
+   * calendar, and a transaction holds one connection — so a shop with six
+   * chairs paid six round trips for what is one question with six answers.
+   */
+  listForResources(
+    resourceIds: readonly ResourceId[],
+  ): Promise<readonly WorkingHours[]>;
   create(hours: {
     resourceId: ResourceId;
     businessId: BusinessId;
@@ -340,6 +359,12 @@ export type WorkingHoursRepository = {
 export type DateOverrideRepository = {
   listForResource(
     resourceId: ResourceId,
+    from: LocalDate,
+    to: LocalDate,
+  ): Promise<readonly DateOverride[]>;
+  /** As `listForResource`, for several calendars at once. See `listForResources` on working hours. */
+  listForResources(
+    resourceIds: readonly ResourceId[],
     from: LocalDate,
     to: LocalDate,
   ): Promise<readonly DateOverride[]>;
@@ -379,6 +404,12 @@ export type BlockRepository = {
   ): Promise<readonly BlockedSpan[]>;
   listForResourceBetween(
     resourceId: ResourceId,
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly Block[]>;
+  /** As `listForResourceBetween`, for several calendars at once. */
+  listForResourcesBetween(
+    resourceIds: readonly ResourceId[],
     from: Instant,
     to: Instant,
   ): Promise<readonly Block[]>;
@@ -485,6 +516,12 @@ export type AppointmentRepository = {
     from: Instant,
     to: Instant,
   ): Promise<readonly Appointment[]>;
+  /** As `listForResourceBetween`, for several calendars at once. */
+  listForResourcesBetween(
+    resourceIds: readonly ResourceId[],
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly Appointment[]>;
   /**
    * How many appointments fall on each day of a span, counted in the Business's
    * own zone rather than the server's.
@@ -500,6 +537,13 @@ export type AppointmentRepository = {
     to: Instant,
     timeZone: TimeZone,
   ): Promise<readonly DayCount[]>;
+  /** As `countsByLocalDay`, for several calendars at once, each row naming its own. */
+  countsByLocalDayForResources(
+    resourceIds: readonly ResourceId[],
+    from: Instant,
+    to: Instant,
+    timeZone: TimeZone,
+  ): Promise<readonly ResourceDayCount[]>;
   /**
    * Appointments still to come at this Business whose customer matches a
    * search, soonest first.
