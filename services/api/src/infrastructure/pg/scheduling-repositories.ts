@@ -37,6 +37,15 @@ export const resourceRepository = (tx: Transaction): ResourceRepository => ({
     return rows.map(toResource);
   },
 
+  async listForBusinesses(businessIds) {
+    if (businessIds.length === 0) return [];
+    const rows = await tx<Row[]>`
+      select * from resource
+      where business_id = any(${[...businessIds]}::uuid[])
+      order by created_at`;
+    return rows.map(toResource);
+  },
+
   async create({ businessId, name }) {
     const rows = await tx<Row[]>`
       insert into resource (business_id, name) values (${businessId}, ${name})

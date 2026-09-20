@@ -625,6 +625,10 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       async listForBusiness(businessId) {
         return store.resources.filter((resource) => resource.businessId === businessId);
       },
+      async listForBusinesses(businessIds) {
+        const wanted = new Set<string>(businessIds);
+        return store.resources.filter((resource) => wanted.has(resource.businessId));
+      },
       async create({ businessId, name }) {
         const resource: Resource = {
           id: asId(nextId("resource")),

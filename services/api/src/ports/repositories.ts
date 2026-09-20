@@ -286,6 +286,17 @@ export type MembershipResourceRepository = {
 export type ResourceRepository = {
   findById(id: ResourceId): Promise<Resource | null>;
   listForBusiness(businessId: BusinessId): Promise<readonly Resource[]>;
+  /**
+   * The calendars of several Businesses at once, flat, each row naming its own.
+   *
+   * Search asks whether each result is open right now, and that question is
+   * per calendar (ADR 0002 has no business-wide hours) — so asking per result
+   * made a page of twenty shops twenty reads before the hours were even looked
+   * at. Inactive ones come back too, exactly as `listForBusiness` returns them.
+   */
+  listForBusinesses(
+    businessIds: readonly BusinessId[],
+  ): Promise<readonly Resource[]>;
   create(resource: {
     businessId: BusinessId;
     name: string;

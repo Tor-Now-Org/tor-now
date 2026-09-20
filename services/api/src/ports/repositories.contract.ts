@@ -705,6 +705,34 @@ export const describeRepositoryContract = (
 
     // --- Schedule layers: ADR 0002 -------------------------------------
 
+    it("reads the calendars of several businesses at once, inactive ones included", async () => {
+      await withRepositories(async (repositories) => {
+        const here = await aBookableBusiness(repositories, "04601");
+        const there = await aBookableBusiness(repositories, "04602");
+        // A withdrawn calendar still comes back, exactly as the single-business
+        // read returns it: search decides what "active" means, not the store.
+        const withdrawn = await repositories.resources.create({
+          businessId: here.business.id,
+          name: "יומן שהוסר",
+        });
+        await repositories.resources.update(withdrawn.id, { active: false });
+
+        const both = await repositories.resources.listForBusinesses([
+          here.business.id,
+          there.business.id,
+        ]);
+
+        for (const business of [here.business, there.business]) {
+          expect(both.filter((one) => one.businessId === business.id)).toEqual(
+            await repositories.resources.listForBusiness(business.id),
+          );
+        }
+        expect(both.some((one) => one.id === withdrawn.id && !one.active)).toBe(true);
+        expect(await repositories.resources.listForBusinesses([])).toEqual([]);
+      });
+    });
+
+
     /**
      * The plural reads, which a screen drawing every calendar side by side uses
      * in place of one round trip per calendar.

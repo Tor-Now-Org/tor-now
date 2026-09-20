@@ -1,4 +1,5 @@
 import {
+  compareLocalDate,
   containsPoint,
   END_OF_DAY,
   inferCategories,
@@ -60,28 +61,84 @@ export type SearchResult = { readonly business: Business; readonly openNow: bool
  * Open, for this purpose, means "some active Resource has it": ADR 0002 has no
  * business-wide hours, only per-Resource ones, and a customer deciding whether
  * to walk in cares whether anyone at all can see them right now.
+ *
+ * Answered for the whole page at once, in three reads rather than three per
+ * result. Asked per result it was one read for the calendars and two more for
+ * every calendar they had — a page of twenty shops spent well over a hundred
+ * sequential round trips to draw twenty open/closed pills.
  */
-const isOpenNow = async (
+const openNowPerBusiness = async (
   repositories: Repositories,
-  business: Business,
+  businesses: readonly Business[],
   now: ReturnType<Clock["now"]>,
-): Promise<boolean> => {
-  const resources = await repositories.resources.listForBusiness(business.id);
-  const zoned = instantToZoned(now, business.timeZone);
-
-  const openPerResource = await Promise.all(
-    resources
-      .filter((resource) => resource.active)
-      .map(async (resource) => {
-        const [hours, override] = await Promise.all([
-          repositories.workingHours.listForResource(resource.id),
-          repositories.dateOverrides.findByDate(resource.id, zoned.date),
-        ]);
-        const open = openIntervalsOn(zoned.date, hours, override === null ? [] : [override]);
-        return open.some((range) => containsPoint(range, zoned.time));
-      }),
+): Promise<Map<BusinessId, boolean>> => {
+  const open = new Map<BusinessId, boolean>(
+    businesses.map((business) => [business.id, false]),
   );
-  return openPerResource.some(Boolean);
+  if (businesses.length === 0) return open;
+
+  const resources = await repositories.resources.listForBusinesses(
+    businesses.map((business) => business.id),
+  );
+  const active = resources.filter((resource) => resource.active);
+  if (active.length === 0) return open;
+
+  // "Today" is not one date across the page: each Business keeps its own zone,
+  // so two results can be on either side of midnight. The reads cover the span
+  // those dates make, and each Business is then judged against its own.
+  const sorted = businesses
+    .map((business) => instantToZoned(now, business.timeZone).date)
+    .sort(compareLocalDate);
+  const firstDate = sorted[0];
+  const lastDate = sorted[sorted.length - 1];
+  /* istanbul ignore next -- both hold while there is a business, checked above */
+  if (firstDate === undefined || lastDate === undefined) return open;
+
+  const activeIds = active.map((resource) => resource.id);
+  const [hours, overrides] = await Promise.all([
+    repositories.workingHours.listForResources(activeIds),
+    repositories.dateOverrides.listForResources(activeIds, firstDate, lastDate),
+  ]);
+
+  const hoursOf = groupBy(activeIds, hours, (row) => row.resourceId);
+  const overridesOf = groupBy(activeIds, overrides, (row) => row.resourceId);
+  const calendarsOf = groupBy(
+    businesses.map((business) => business.id),
+    active,
+    (row) => row.businessId,
+  );
+
+  for (const business of businesses) {
+    const zoned = instantToZoned(now, business.timeZone);
+    open.set(
+      business.id,
+      (calendarsOf.get(business.id) ?? []).some((resource) => {
+        // `openIntervalsOn` picks the override for this date out of what it is
+        // given, which is what lets one read cover a span of them.
+        const intervals = openIntervalsOn(
+          zoned.date,
+          hoursOf.get(resource.id) ?? [],
+          overridesOf.get(resource.id) ?? [],
+        );
+        return intervals.some((range) => containsPoint(range, zoned.time));
+      }),
+    );
+  }
+  return open;
+};
+
+/**
+ * Rows read for many owners at once, back into one list each — seeded from the
+ * keys asked about, so something with no rows reads as empty rather than absent.
+ */
+const groupBy = <K, T>(
+  keys: readonly K[],
+  rows: readonly T[],
+  keyOf: (row: T) => K,
+): Map<K, T[]> => {
+  const grouped = new Map<K, T[]>(keys.map((key) => [key, []]));
+  for (const row of rows) grouped.get(keyOf(row))?.push(row);
+  return grouped;
 };
 
 export const discoveryService = ({
@@ -122,13 +179,12 @@ export const discoveryService = ({
         .filter((result) => text === "" || result.score >= SEARCH.similarityThreshold)
         .map((result) => result.business);
 
-      const now = clock.now();
-      return Promise.all(
-        businesses.map(async (business) => ({
-          business,
-          openNow: await isOpenNow(repositories, business, now),
-        })),
-      );
+      // One pass for the page, not one per result.
+      const openNow = await openNowPerBusiness(repositories, businesses, clock.now());
+      return businesses.map((business) => ({
+        business,
+        openNow: openNow.get(business.id) ?? false,
+      }));
     });
   },
 
