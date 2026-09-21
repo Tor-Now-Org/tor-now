@@ -237,31 +237,32 @@ test.describe("the schedule layers", () => {
     await page.getByRole("button", { name: "הוספת יום חריג" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     // Tomorrow, not today: late in the evening today is already empty because
-    // the minimum notice has run past closing, and the reason under test —
-    // that the override closed the day — would be hidden behind TOO_SOON.
-    const closedDay = aDayFromNow(1);
-    await page.getByLabel("תאריך").fill(closedDay);
-    await page.getByRole("button", { name: "סגור כל היום" }).click();
+    // the minimum notice has run past closing, and the shorter day under test
+    // would be hidden behind TOO_SOON.
+    const shortDay = aDayFromNow(1);
+    await page.getByLabel("תאריך").fill(shortDay);
+    // This tab only gives a day other hours — shutting one outright is the
+    // shop's own decision, made from the month.
+    await expect(page.getByRole("button", { name: "סגור כל היום" })).toHaveCount(0);
     await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
-    // The sheet closing is what says the save went through. "סגור כל היום" is
-    // also the button inside it, so matching that text proved nothing and let
-    // the availability below be read before the override had landed.
+    // The sheet closing is what says the save went through: reading the
+    // availability before the override had landed is what used to flake.
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
-    await expect(page.getByText("סגור כל היום").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("10:00–14:00").first()).toBeVisible({ timeout: 15_000 });
 
-    // A closed day offers a customer nothing at all.
+    // The day keeps the override's hours, not the week's 08:00–20:00.
     await expect
       .poll(
         async () => {
-          const days = await call<{ slots: unknown[]; emptyReason: string | null }[]>(
+          const days = await call<{ slots: { startAt: string }[] }[]>(
             `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
-              `&resourceId=${shop.resource.id}&from=${closedDay}&to=${closedDay}`,
+              `&resourceId=${shop.resource.id}&from=${shortDay}&to=${shortDay}`,
           );
-          return { slots: days[0]?.slots.length ?? -1, reason: days[0]?.emptyReason };
+          return (days[0]?.slots ?? []).length;
         },
         { timeout: 15_000 },
       )
-      .toEqual({ slots: 0, reason: "CLOSED" });
+      .toBeGreaterThan(0);
   });
 });
 

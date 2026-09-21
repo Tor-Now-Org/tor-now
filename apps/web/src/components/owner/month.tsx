@@ -442,10 +442,17 @@ export const Month = ({
       <Sheet open={openClosure !== null} onClose={() => setOpenClosure(null)}>
         {openClosure !== null && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* A shortened day is named by what it is, the way its band in the
+                month names it, and the words somebody put on it read as the
+                subtitle underneath. */}
             <h2 style={{ fontSize: 18 }}>
-              {openClosure.note ??
-                (openClosure.kind === "SHUT" ? copy.closedWord : copy.differentHours)}
+              {openClosure.kind === "SHUT"
+                ? (openClosure.note ?? copy.closedWord)
+                : copy.shortDayWord}
             </h2>
+            {openClosure.kind !== "SHUT" && openClosure.note !== null && (
+              <p className="hint" style={{ margin: 0 }}>{openClosure.note}</p>
+            )}
             {/* What the shop is actually doing that day — the half-day was the
                 case with nothing to read at all. */}
             <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }} className="tab">

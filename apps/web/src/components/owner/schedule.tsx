@@ -101,7 +101,6 @@ export const Schedule = ({
    */
   const [editingOverride, setEditingOverride] = useState<{
     date: string;
-    closed: boolean;
     ranges: TimeRange[];
   } | null>(null);
   /**
@@ -407,7 +406,6 @@ export const Schedule = ({
             onClick={() =>
               setEditingOverride({
                 date: todayIn(business.timeZone),
-                closed: true,
                 ranges: [{ start: "10:00", end: "14:00" }],
               })
             }
@@ -510,57 +508,36 @@ export const Schedule = ({
             <Note>{copy.overrideFormHint}</Note>
             <Field id="override-date" label={copy.date} type="date" value={editingOverride.date}
               onChange={(e) => setEditingOverride({ ...editingOverride, date: e.target.value })} />
-            <span className="label">{copy.whatHappens}</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              {[true, false].map((closed) => (
-                <button
-                  key={String(closed)}
-                  className="chip"
-                  onClick={() => setEditingOverride({ ...editingOverride, closed })}
-                  aria-pressed={editingOverride.closed === closed}
-                  style={{
-                    flex: 1,
-                    background: editingOverride.closed === closed ? "var(--accent)" : "var(--raised)",
-                    color: editingOverride.closed === closed ? "var(--on-accent)" : "var(--ink)",
-                    border: "1px solid var(--line)",
-                  }}
-                >
-                  {closed ? copy.closedAllDay : copy.differentHours}
-                </button>
-              ))}
+            {/* ponytail: this calendar's special day only ever gives other
+                hours. Shutting a day outright is the shop's decision, made
+                from the month — so the choice is not offered here. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* The same editor the week uses: a special day is a day, and a
+                  day that shuts for lunch has two stretches whichever layer
+                  it belongs to. */}
+              <Stretches
+                id="override"
+                ranges={editingOverride.ranges}
+                setRanges={(ranges) => setEditingOverride({ ...editingOverride, ranges })}
+                namesTheGap={false}
+              />
             </div>
-            {!editingOverride.closed && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* The same editor the week uses: a special day is a day, and a
-                    day that shuts for lunch has two stretches whichever layer
-                    it belongs to. */}
-                <Stretches
-                  id="override"
-                  ranges={editingOverride.ranges}
-                  setRanges={(ranges) => setEditingOverride({ ...editingOverride, ranges })}
-                  namesTheGap={false}
-                />
-              </div>
-            )}
             <Note>{copy.overrideReplaces}</Note>
-            {!editingOverride.closed && !editingOverride.ranges.every(isUsable) && (
+            {!editingOverride.ranges.every(isUsable) && (
               <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>
             )}
             <Button
               busy={busy}
-              disabled={!editingOverride.closed && !editingOverride.ranges.every(isUsable)}
+              disabled={!editingOverride.ranges.every(isUsable)}
               onClick={() =>
                 act(() =>
                   api.putOverride(token, business.id, resource.id, {
                     date: editingOverride.date,
                     note: null,
-                    // An empty list is a day off — the absence of ranges is the
-                    // whole of what "closed" means (ADR 0002). Merged on the
-                    // way out, so two stretches the owner ran together are the
-                    // one stretch they describe rather than a refusal.
-                    ranges: editingOverride.closed
-                      ? []
-                      : mergedRanges(editingOverride.ranges),
+                    // Merged on the way out, so two stretches the owner ran
+                    // together are the one stretch they describe rather than a
+                    // refusal.
+                    ranges: mergedRanges(editingOverride.ranges),
                   }),
                 )
               }
