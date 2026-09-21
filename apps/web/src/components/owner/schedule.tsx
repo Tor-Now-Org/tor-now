@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type {
@@ -81,9 +81,13 @@ export const Schedule = ({
   const [hours, setHours] = useState<WorkingHoursDto[] | null>(null);
   const [week, setWeek] = useState<DayHours[]>(emptyWeek);
   const [saved, setSaved] = useState(false);
-  const [overrides, setOverrides] = useState<OverrideDto[]>([]);
-  /** The dates on which this override is the shop's decision, not this chair's. */
-  const [shopDates, setShopDates] = useState<Set<string>>(new Set());
+  /**
+   * Every calendar's special days, raw. Business-wide and calendar-independent,
+   * so it is fetched on its own rather than with the chosen calendar's week —
+   * switching chairs changes nothing about it and used to refetch it anyway.
+   * `null` is "not read yet", which an empty list is not.
+   */
+  const [everyOverride, setEveryOverride] = useState<OverrideDto[] | null>(null);
   const [blocks, setBlocks] = useState<BlockDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -118,15 +122,8 @@ export const Schedule = ({
     const from = todayIn(business.timeZone);
     const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
     try {
-      const [loadedHours, everyOverride, loadedBlocks] = await Promise.all([
+      const [loadedHours, loadedBlocks] = await Promise.all([
         api.listWorkingHours(token, business.id, resource.id),
-        // Every calendar's special days in one answer, not one request each. A
-        // day the shop closed is one Override per calendar, and a row that
-        // offers to delete a single copy of it leaves the shop half shut — so
-        // this screen needs all of them to tell the two apart. Asked per
-        // calendar it was a request each, re-authorising every time, with the
-        // chosen calendar fetched twice over.
-        api.listAllOverrides(token, business.id, { from, to }),
         // The same span the special days are read over. This used to read the
         // day the screen opened on, so a blockage made for later was missing
         // from the list that exists to show it — and it came back with a day of
@@ -134,31 +131,65 @@ export const Schedule = ({
         // never draws.
         api.listBlocks(token, business.id, resource.id, { from, to }),
       ]);
-      const loadedOverrides = everyOverride.filter(
-        (override) => override.resourceId === resource.id,
-      );
-      // One list per calendar, taken from the calendars on screen rather than
-      // from the rows: a calendar with no special day has to count as agreeing
-      // to nothing, and built the other way round it would drop out and change
-      // what "every calendar said the same" means.
-      const everyCalendar = resources.map((one) =>
-        everyOverride.filter((override) => override.resourceId === one.id),
-      );
       // Switched calendars while this was in flight: the answer is for the one
       // being left, and writing the week from it would throw away whatever has
       // been typed into the one now on screen.
       if (isStale()) return;
       setHours(loadedHours);
       setWeek(weekFromRanges(loadedHours));
-      setOverrides(loadedOverrides);
-      setShopDates(shopWideDates(everyCalendar, resources.length));
       setBlocks(loadedBlocks);
     } catch (cause) {
       if (isStale()) return;
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
     },
-    [token, business.id, business.timeZone, resource, resources, errorText],
+    [token, business.id, business.timeZone, resource, errorText],
+  );
+
+  /**
+   * The special days of every calendar, in one request. Deliberately not keyed
+   * on the chosen calendar: a day the shop closed is one Override per calendar,
+   * and telling that from one chair's day off needs all of them — the same
+   * answer whichever chair is on screen.
+   */
+  const loadOverrides = useCallback(
+    async (isStale: () => boolean = () => false) => {
+      const from = todayIn(business.timeZone);
+      const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
+      try {
+        const everyone = await api.listAllOverrides(token, business.id, { from, to });
+        if (isStale()) return;
+        setEveryOverride(everyone);
+      } catch (cause) {
+        if (isStale()) return;
+        setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+      }
+    },
+    [token, business.id, business.timeZone, errorText],
+  );
+
+  const overrides = useMemo(
+    () =>
+      resource === null
+        ? []
+        : (everyOverride ?? []).filter((override) => override.resourceId === resource.id),
+    [everyOverride, resource],
+  );
+
+  /** The dates on which an override is the shop's decision, not this chair's. */
+  const shopDates = useMemo(
+    // One list per calendar, taken from the calendars on screen rather than
+    // from the rows: a calendar with no special day has to count as agreeing
+    // to nothing, and built the other way round it would drop out and change
+    // what "every calendar said the same" means.
+    () =>
+      shopWideDates(
+        resources.map((one) =>
+          (everyOverride ?? []).filter((override) => override.resourceId === one.id),
+        ),
+        resources.length,
+      ),
+    [everyOverride, resources],
   );
 
   /**
@@ -180,6 +211,14 @@ export const Schedule = ({
     };
   }, [load]);
 
+  useEffect(() => {
+    let stale = false;
+    void loadOverrides(() => stale);
+    return () => {
+      stale = true;
+    };
+  }, [loadOverrides]);
+
   const act = async (action: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
@@ -188,7 +227,7 @@ export const Schedule = ({
       setEditingRange(null);
       setEditingOverride(null);
       setEditingBlock(null);
-      await load();
+      await Promise.all([load(), loadOverrides()]);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
@@ -223,7 +262,12 @@ export const Schedule = ({
     }
   };
 
-  if (hours === null || resource === null) return <Spinner />;
+  // What the tab on screen is still waiting for. The special days are read
+  // once for the whole business, so that tab has nothing to wait for when the
+  // chosen calendar changes — only the week and the blockages do.
+  const pending = layer === "overrides" ? everyOverride === null : hours === null;
+
+  if (resource === null) return <Spinner />;
 
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -268,7 +312,12 @@ export const Schedule = ({
 
       {error !== null && <Critical>{error}</Critical>}
 
-      {layer === "hours" && (
+      {/* ponytail: only the layer below waits for the new calendar — the
+          picker and the tabs stay put, so switching calendars does not blank
+          the page out from under the hand that pressed it. */}
+      {pending && <Spinner />}
+
+      {!pending && layer === "hours" && (
         <>
           {/* The same editor the wizard uses. A business described its week
               once in plain words and then edited it, ever after, as a list of
@@ -293,7 +342,7 @@ export const Schedule = ({
         </>
       )}
 
-      {layer === "overrides" && (
+      {!pending && layer === "overrides" && (
         <>
           {/* ADR 0002: an override replaces the weekday's rules entirely. */}
           <Note>{copy.overrideNote}</Note>
@@ -368,7 +417,7 @@ export const Schedule = ({
         </>
       )}
 
-      {layer === "blocks" && (
+      {!pending && layer === "blocks" && (
         <>
           <Note>{copy.blockNote}</Note>
           {blocks.length === 0 && <Empty title={copy.noBlocks} body={copy.blockFormHint} />}
