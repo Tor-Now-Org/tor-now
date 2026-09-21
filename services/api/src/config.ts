@@ -240,7 +240,18 @@ const signingSecretFrom = (
 export const loadConfig = (env: Environment): Config => {
   const signing = signingSecretFrom(env);
   const parsed = schema.safeParse({
-    databaseUrl: env["SUPABASE_DB_URL"],
+    // SUPABASE_DB_URL is the direct connection, and the database has 60 slots
+    // for the whole project. Every request boots its own isolate, which opens
+    // its own connection and leaves it behind when it ends, so a busy minute
+    // exhausts them and unrelated requests fail with "remaining connection
+    // slots are reserved". DATABASE_POOLER_URL points at Supavisor in
+    // transaction mode instead — which is what `prepare: false` in the pool
+    // was already written for. The direct URL remains the fallback so a
+    // deployment without the secret still runs.
+    //
+    // The name carries no SUPABASE_ prefix because the platform reserves that
+    // for the variables it injects and refuses to store a secret using it.
+    databaseUrl: env["DATABASE_POOLER_URL"] ?? env["SUPABASE_DB_URL"],
     jwtSecret: signing.secret,
     jwtSecretSource: signing.source,
     verificationTransport: env["VERIFICATION_TRANSPORT"],

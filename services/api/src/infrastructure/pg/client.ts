@@ -12,15 +12,30 @@ export type Transaction = postgres.TransactionSql;
 export type Queryable = Sql | Transaction;
 
 const POOL = Object.freeze({
-  /** Enough for the widest fan-out a single request makes. */
-  maxConnections: 4,
   /**
-   * Opening a connection to a distant database costs seconds, so an idle one is
-   * kept far longer than a request lasts: a customer clicking through a booking
-   * reuses the connection their search opened instead of paying for it again.
+   * An Edge Function has no single pool: every isolate opens its own, so
+   * whatever this says is multiplied by however many isolates are warm. Four
+   * was sized for "the widest fan-out a single request makes", which misreads
+   * postgres.js — `begin` reserves one connection and every query through the
+   * transaction queues onto it, so a request has only ever used one however
+   * wide its `Promise.all`.
+   *
+   * One would therefore be enough, and two is the margin: a query run on the
+   * pool rather than in the caller's transaction (verification codes, the job
+   * credential) needs a second connection, and at a maximum of one such a query
+   * issued inside a transaction would wait forever for the connection its own
+   * caller is holding. Nothing does that today. Two means nothing has to keep
+   * not doing it.
    */
-  idleSeconds: 600,
-  connectSeconds: 15,
+  maxConnections: 2,
+  /**
+   * The database has 60 slots for every isolate, every job and Supabase's own
+   * services together, so an isolate that has stopped working gives its slot
+   * back rather than holding it against the next one. Reconnecting costs a
+   * round trip; running out of slots costs a 500.
+   */
+  idleSeconds: 15,
+  connectSeconds: 10,
 });
 
 /**
