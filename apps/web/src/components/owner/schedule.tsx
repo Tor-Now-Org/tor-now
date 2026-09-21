@@ -10,7 +10,7 @@ import type {
   ResourceDto,
   WorkingHoursDto,
 } from "@/lib/api/types.ts";
-import { addDaysTo, formatLocalDate, timeIn, todayIn } from "@/lib/format.ts";
+import { addDaysTo, dateIn, formatLocalDate, timeIn, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { mergedRanges, TEXT_RULES, type TimeRange } from "@tor-now/domain";
 import { canCloseBusiness } from "@/lib/roles.ts";
@@ -426,6 +426,7 @@ export const Schedule = ({
               <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontWeight: 500 }}>{block.reason || copy.reason}</span>
                 <span className="hint tab">
+                  {dateIn(block.startAt, business.timeZone, language)} ·{" "}
                   {timeIn(block.startAt, business.timeZone, language)}–{timeIn(block.endAt, business.timeZone, language)}
                 </span>
               </span>
