@@ -96,6 +96,9 @@ export const CalendarDay = ({
   const [freshness, setFreshness] = useState(0);
   /** Bumped when the day changes something the month draws, so it reloads. */
   const [monthKey, setMonthKey] = useState(0);
+  /** The grid above has drawn, so the day may show its own wait. */
+  const [monthReady, setMonthReady] = useState(false);
+  const monthDrew = useCallback(() => setMonthReady(true), []);
   /**
    * The booking being written, and what the way in already answered.
    *
@@ -606,13 +609,14 @@ export const CalendarDay = ({
           setAimedCustomer(null);
         }}
         onChanged={() => void load()}
+        onReady={monthDrew}
         firstOfMonth={firstOfMonth}
       />
 
       {error !== null && <Critical>{error}</Critical>}
 
       {busy && wholeDay === null ? (
-        <Spinner />
+        monthReady ? <Spinner /> : null
       ) : wholeDay === null ? (
         <Empty title={copy.noAppointments} body={copy.refreshHint} />
       ) : shut !== null ? (

@@ -45,7 +45,7 @@ export const Customers = ({
     void load();
   }, [load]);
 
-  if (customers === null) return <Spinner />;
+  if (customers === null) return <Spinner page />;
 
   const needle = query.trim().toLowerCase();
   const shown = customers.filter(

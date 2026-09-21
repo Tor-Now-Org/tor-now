@@ -386,7 +386,7 @@ function ManageApp() {
 export default function ManagePage() {
   // useSearchParams needs a Suspense boundary for static rendering.
   return (
-    <Suspense fallback={<Spinner />}>
+    <Suspense fallback={<Spinner page />}>
       <ManageApp />
     </Suspense>
   );

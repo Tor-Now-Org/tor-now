@@ -78,6 +78,7 @@ export const Month = ({
   onChosen,
   onCancelChoosing,
   onChanged,
+  onReady,
 }: {
   token: string;
   business: BusinessDto;
@@ -127,6 +128,13 @@ export const Month = ({
    * open day until the screen was reopened.
    */
   onChanged: () => void;
+  /**
+   * The grid has an answer to draw.
+   *
+   * The day below waits for it, so a first load shows one spinner where the
+   * calendar will be instead of two, one under the other.
+   */
+  onReady?: () => void;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -171,11 +179,14 @@ export const Month = ({
     const asked = firstOfMonth;
     try {
       const data = await api.businessMonth(token, business.id, asked);
-      if (wanted.current === asked) setMonth({ of: asked, data });
+      if (wanted.current === asked) {
+        setMonth({ of: asked, data });
+        onReady?.();
+      }
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
-  }, [token, business.id, firstOfMonth, errorText]);
+  }, [token, business.id, firstOfMonth, errorText, onReady]);
 
   useEffect(() => {
     void load();
@@ -201,7 +212,7 @@ export const Month = ({
     }
   };
 
-  if (month === null) return <Spinner />;
+  if (month === null) return <Spinner page />;
 
   // Until the answer for this month arrives, the squares are drawn with nothing
   // said about them rather than with what was true of another month.

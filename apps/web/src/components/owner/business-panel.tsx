@@ -195,7 +195,7 @@ export const BusinessPanel = ({
     }
   };
 
-  if (services === null) return <Spinner />;
+  if (services === null) return <Spinner page />;
 
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>

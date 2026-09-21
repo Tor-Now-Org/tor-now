@@ -47,7 +47,7 @@ type Screen = "search" | "mine" | "visited" | "profile";
 export default function CustomerApp() {
   // useSearchParams needs a Suspense boundary for static rendering.
   return (
-    <Suspense fallback={<Spinner />}>
+    <Suspense fallback={<Spinner page />}>
       <CustomerAppInner />
     </Suspense>
   );

@@ -325,8 +325,22 @@ export const Sheet = ({
   );
 };
 
-export const Spinner = () => (
-  <div style={{ display: "grid", placeItems: "center", padding: 40 }}>
+/**
+ * `page` is for a spinner that *is* the screen — a tab body or a route still
+ * loading. It claims the height the content will take, so the ring sits in the
+ * middle of the page instead of under the header. Inline waits leave it off.
+ */
+export const Spinner = ({ page = false }: { page?: boolean }) => (
+  <div
+    style={{
+      display: "grid",
+      placeItems: "center",
+      padding: 40,
+      // Extra padding below rather than above: optically centred sits a touch
+      // higher than measured centre.
+      ...(page ? { flex: 1, minHeight: "55svh", paddingBottom: 5 } : {}),
+    }}
+  >
     <span className="spinner" />
   </div>
 );

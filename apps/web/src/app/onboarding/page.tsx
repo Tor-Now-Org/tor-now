@@ -113,7 +113,7 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner page />;
 
   // Registering a business needs an identity; it is the same sign-in as
   // everything else, so it happens here rather than sending anyone away.

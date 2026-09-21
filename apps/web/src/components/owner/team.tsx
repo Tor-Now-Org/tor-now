@@ -109,7 +109,7 @@ export const Team = ({
     }
   };
 
-  if (members === null) return <Spinner />;
+  if (members === null) return <Spinner page />;
 
   // Absent means an API deployed before roles existed, where anybody staffing
   // was an owner. Treating the absence as the weakest role would lock the

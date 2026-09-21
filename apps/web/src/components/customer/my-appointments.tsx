@@ -127,7 +127,7 @@ export const MyAppointments = ({
     }
   };
 
-  if (appointments === null) return <Spinner />;
+  if (appointments === null) return <Spinner page />;
 
   // The same rule the owner's screens use, from the same function: an
   // appointment is still ahead of you until it has ended. Splitting on the

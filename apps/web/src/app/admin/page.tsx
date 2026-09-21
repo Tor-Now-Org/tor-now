@@ -127,7 +127,7 @@ export default function AdminPage() {
     }
   };
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner page />;
 
   if (token === null || user === null || !user.isAdministrator) {
     return (
