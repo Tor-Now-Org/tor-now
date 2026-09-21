@@ -24,6 +24,8 @@ import {
   type Membership,
   type MembershipId,
   type MembershipRole,
+  type Instant,
+  type Resource,
   type ResourceId,
   type Service,
   type ServiceId,
@@ -60,10 +62,31 @@ import { markForRecheck, markWeekdayForRecheck } from "./waiting-service.ts";
  * null for OWNER and MANAGER, who reach every calendar — an empty list would
  * read as "assigned to none", which is a different thing.
  */
+/** A calendar and how much is still booked on it, as every screen is given it. */
+export type ResourceWithUpcoming = {
+  readonly resource: Resource;
+  readonly upcoming: number;
+};
+
 export type StaffedBusiness = {
   readonly business: Business;
   readonly role: MembershipRole;
   readonly resourceIds: readonly ResourceId[] | null;
+  /**
+   * The calendars this person may see there, narrowed exactly as
+   * `listResources` narrows them — and carrying the same upcoming count.
+   *
+   * Carried here because the owner app cannot draw anything without them and
+   * cannot ask for them until it knows which business it is in, so asking
+   * separately made the first paint a chain: who am I, where do I work, what are
+   * its calendars, and only then the day.
+   *
+   * The count travels with them deliberately. Without it the screen that asks
+   * "this calendar has N appointments on it, remove it anyway?" reads the
+   * absence as none booked — which is the one thing the field's own note says
+   * must not happen.
+   */
+  readonly resources: readonly ResourceWithUpcoming[];
 };
 
 export type RegistrationInput = {
@@ -193,6 +216,23 @@ const requireRoleWithinReach = (
 };
 
 /** A MANAGER/OWNER (or administrator) sees every calendar; a WORKER only theirs. */
+/** The calendars a caller may see, each with what is still booked on it. */
+const visibleResourcesWithUpcoming = async (
+  repositories: Repositories,
+  membership: Membership | null,
+  businessId: BusinessId,
+  now: Instant,
+): Promise<readonly ResourceWithUpcoming[]> => {
+  const [resources, counts] = await Promise.all([
+    visibleResources(repositories, membership, businessId),
+    repositories.appointments.upcomingCountsByResource(businessId, now),
+  ]);
+  return resources.map((resource) => ({
+    resource,
+    upcoming: counts.get(resource.id) ?? 0,
+  }));
+};
+
 const visibleResources = async (
   repositories: Repositories,
   membership: Membership | null,
@@ -407,12 +447,25 @@ export const businessService = ({
     return unitOfWork.run(actor, async ({ repositories }) => {
       const memberships = await repositories.memberships.listForUser(userId);
       const staffed = memberships.filter(isStaff);
+      if (staffed.length === 0) return [];
+
+      // The calendars travel with the business, through the same helper the
+      // resources endpoint uses — so what a screen is given here and what it
+      // would have fetched are the same thing, counts included.
+      // ponytail: still a few reads per business; a person staffing several
+      // shops is rare enough not to warrant plural forms of all of them.
       const entries = await Promise.all(
         staffed.map(async (membership): Promise<StaffedBusiness | null> => {
           const business = await repositories.businesses.findById(membership.businessId);
           if (business === null) return null;
+          const theirs = await visibleResourcesWithUpcoming(
+            repositories,
+            membership,
+            business.id,
+            clock.now(),
+          );
           if (membership.role !== "WORKER") {
-            return { business, role: membership.role, resourceIds: null };
+            return { business, role: membership.role, resourceIds: null, resources: theirs };
           }
           const assignments = await repositories.membershipResources.listForMembership(
             membership.id,
@@ -421,6 +474,7 @@ export const businessService = ({
             business,
             role: membership.role,
             resourceIds: assignments.map((assignment) => assignment.resourceId),
+            resources: theirs,
           };
         }),
       );
@@ -859,14 +913,12 @@ export const businessService = ({
   async listResourcesWithUpcoming(actor: Actor, businessId: BusinessId) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       const membership = await requireStaff(repositories, actor, businessId);
-      const [resources, counts] = [
-        await visibleResources(repositories, membership, businessId),
-        await repositories.appointments.upcomingCountsByResource(businessId, clock.now()),
-      ];
-      return resources.map((resource) => ({
-        resource,
-        upcoming: counts.get(resource.id) ?? 0,
-      }));
+      return visibleResourcesWithUpcoming(
+        repositories,
+        membership,
+        businessId,
+        clock.now(),
+      );
     });
   },
 

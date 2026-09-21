@@ -74,8 +74,9 @@ function ManageApp() {
     businessId: string;
     list: ResourceDto[];
   } | null>(null);
-  const resources =
-    business !== null && loadedResources?.businessId === business.id ? loadedResources.list : NONE;
+  const alreadyHaveResources =
+    business !== null && loadedResources?.businessId === business.id;
+  const resources = alreadyHaveResources ? loadedResources.list : NONE;
   const [panel, setPanel] = useState<Panel>("services");
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -115,6 +116,12 @@ function ManageApp() {
         : chosen,
     );
     if (chosen !== null) rememberManaged(chosen.id);
+    // The calendars come with the business now, so the screen does not wait on a
+    // second request before it can draw anything. An API that does not send them
+    // leaves this alone and the effect below asks, as it always did.
+    if (chosen?.resources !== undefined) {
+      setLoadedResources({ businessId: chosen.id, list: chosen.resources });
+    }
   }, [token, requested]);
 
   useEffect(() => {
@@ -143,12 +150,16 @@ function ManageApp() {
   );
 
   useEffect(() => {
+    // Already in hand for this business, from the businesses list: asking again
+    // is the round trip this was meant to remove. Every other path — switching
+    // business, or a calendar changing — calls `loadResources` directly.
+    if (alreadyHaveResources) return;
     let stale = false;
     void loadResources(() => stale);
     return () => {
       stale = true;
     };
-  }, [loadResources]);
+  }, [loadResources, alreadyHaveResources]);
 
   /** Days left in the Grace Period, shown once per app open. Billing is the
    * OWNER's alone (ADR 0016) — the same rule the billing panel applies. */

@@ -487,12 +487,8 @@ const ownerRoutes = (services: Services) => {
       actorOf(context),
       idParam(context, "businessId"),
     );
-    return context.json(
-      list.map((entry) => ({
-        ...wire.resourceOut(entry.resource),
-        upcomingAppointments: entry.upcoming,
-      })),
-    );
+    // The same shape the businesses list carries, so the two cannot drift.
+    return context.json(list.map(wire.resourceWithUpcomingOut));
   });
 
   owner.post("/:businessId/resources", async (context) => {

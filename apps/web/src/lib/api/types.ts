@@ -40,6 +40,13 @@ export type BusinessDto = {
   /** The calendars a WORKER is on. Empty for an OWNER or MANAGER, who reach all of them. */
   resourceIds?: string[];
   /**
+   * The calendars this person may see there, on the businesses list only.
+   *
+   * Optional, like `role`: an API deployed before it travelled here sends no
+   * key, and the manage screen then asks for them as it always did.
+   */
+  resources?: ResourceDto[];
+  /**
    * Whether some active Resource is open right now, in the Business's own
    * timezone. Search results only — every other endpoint that returns a
    * BusinessDto has no use for it and never sends it.

@@ -22,6 +22,7 @@ import {
 import type { MyWaiting } from "../application/waiting-service.ts";
 import type { PlatformStats } from "../application/admin-service.ts";
 import type {
+  ResourceWithUpcoming,
   StaffedBusiness,
   TeamMember,
 } from "../application/business-service.ts";
@@ -66,10 +67,22 @@ export const businessOut = (business: Business) => ({
  * A Business as it reaches someone who works there, flattened so the client
  * reads one object: the same fields plus the terms they work on it under.
  */
+/** A calendar as every owner screen is given it: the calendar, and what is still booked. */
+export const resourceWithUpcomingOut = (entry: ResourceWithUpcoming) => ({
+  ...resourceOut(entry.resource),
+  upcomingAppointments: entry.upcoming,
+});
+
 export const staffedBusinessOut = (staffed: StaffedBusiness) => ({
   ...businessOut(staffed.business),
   role: staffed.role,
   resourceIds: staffed.resourceIds,
+  // The calendars travel with the business: the screen behind `/manage` needs
+  // them to draw anything, and asking for them separately cost a round trip it
+  // could not start until this one answered. Through the same shape the
+  // resources endpoint sends, count included — a list without it reads as
+  // "nobody booked" on the screen that asks before removing a calendar.
+  resources: staffed.resources.map(resourceWithUpcomingOut),
 });
 
 /**

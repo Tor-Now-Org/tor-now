@@ -284,6 +284,42 @@ describe("who may reach a business", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  /**
+   * What the businesses list carries.
+   *
+   * The owner app cannot draw anything without the calendars and cannot ask for
+   * them until it knows which business it is in, so they travel with the list.
+   * What travels has to be what `listResources` would have answered — an owner
+   * all of them, a worker their own — or the screens fed from it show the wrong
+   * calendars while believing they are narrowed.
+   */
+  it("carries the same calendars the resources endpoint would have given", async () => {
+    const { shop, worker } = await aShopWithAWorker();
+
+    const [mine] = await test.services.business.listMine(shop.owner.actor);
+    // Against the counted list, because that is what the endpoint sends and what
+    // the screen that removes a calendar reads: a list without the count reads
+    // as "nobody booked" on exactly the screen that must not believe that.
+    const asked = await test.services.business.listResourcesWithUpcoming(
+      shop.owner.actor,
+      shop.business.id,
+    );
+
+    expect(mine?.resources).toEqual(asked);
+    expect(mine?.role).toBe("OWNER");
+    expect(mine?.resourceIds).toBeNull();
+
+    const [theirs] = await test.services.business.listMine(worker.actor);
+    const theyAsked = await test.services.business.listResourcesWithUpcoming(
+      worker.actor,
+      shop.business.id,
+    );
+    // The worker's own, and the same list the endpoint narrows to.
+    expect(theirs?.resources).toEqual(theyAsked);
+    expect(theirs?.resources.map((one) => one.resource.id)).toEqual([shop.resource.id]);
+    expect(theirs?.role).toBe("WORKER");
+  });
+
   it("says a business nobody has is not there, whoever asks", async () => {
     const shop = await anEstablishedBusiness(test);
     const administrator: Actor = {

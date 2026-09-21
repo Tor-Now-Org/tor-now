@@ -321,6 +321,11 @@ export const CalendarDay = ({
     setFacets(NOTHING);
     setQuery("");
     setReach("DAY");
+    // The box goes too, not only what was typed in it. `looking` is the box
+    // being open *or* holding words, and while it is true the month is not on
+    // screen — so clearing the words alone handed back a calendar with no way
+    // to reach another month, which is most of what choosing a day is.
+    setSearching(false);
   };
 
   return (
