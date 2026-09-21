@@ -419,13 +419,19 @@ export const Schedule = ({
         <>
           <Note>{copy.blockNote}</Note>
           {blocks.length === 0 && <Empty title={copy.noBlocks} body={copy.blockFormHint} />}
-          {blocks.map((block) => (
+          {blocks.map((block) => {
+            const from = timeIn(block.startAt, business.timeZone, language);
+            const until = timeIn(block.endAt, business.timeZone, language);
+            // ponytail: a blockage spanning the whole day is stored as 00:00–23:59
+            // (see spansOf); those two clocks say "closed" to nobody.
+            const wholeDay = from === "00:00" && until === "23:59";
+            return (
             <Card key={block.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontWeight: 500 }}>{block.reason || copy.reason}</span>
+                <span style={{ fontWeight: 500 }}>{block.reason || copy.blockedWord}</span>
                 <span className="hint tab">
                   {dateIn(block.startAt, business.timeZone, language)} ·{" "}
-                  {timeIn(block.startAt, business.timeZone, language)}–{timeIn(block.endAt, business.timeZone, language)}
+                  {wholeDay ? copy.closedAllDay : `${from}–${until}`}
                 </span>
               </span>
               <button
@@ -445,7 +451,8 @@ export const Schedule = ({
                 {copy.delete}
               </button>
             </Card>
-          ))}
+            );
+          })}
           <Button
             intent="quiet"
             onClick={() =>
