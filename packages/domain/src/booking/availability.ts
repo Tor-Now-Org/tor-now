@@ -10,6 +10,8 @@ import { bufferForBooking, freeIntervalsOn } from "./free-intervals.ts";
 import { greedyWalk, type Slot, type SlotGenerationStrategy } from "./slots.ts";
 import { zonedToInstant } from "../time/zone.ts";
 import { END_OF_DAY, MIDNIGHT } from "../time/local-time.ts";
+import { openIntervalsOn } from "../schedule/open-hours.ts";
+import { partsOfDayOpen, type PartOfDay } from "./part-of-day.ts";
 
 export type AvailabilityRequest = {
   readonly business: Business;
@@ -42,6 +44,8 @@ export type DayAvailability = {
   readonly slots: readonly Slot[];
   /** Null when slots were found. */
   readonly emptyReason: EmptyReason | null;
+  /** The parts of the day this calendar works at all, whatever is booked. */
+  readonly openParts: readonly PartOfDay[];
 };
 
 const startOfDay = (request: AvailabilityRequest): Instant =>
@@ -76,11 +80,14 @@ export const availableSlotsOn = (
   });
 
   const slots = strategy(free, service.durationMinutes, bufferMinutes);
+  const openParts = partsOfDayOpen(
+    openIntervalsOn(date, request.workingHours, request.overrides),
+  );
   if (slots.length > 0) {
-    return { date, slots, emptyReason: null };
+    return { date, slots, emptyReason: null, openParts };
   }
 
-  return { date, slots: [], emptyReason: emptyReasonFor(request, window) };
+  return { date, slots: [], emptyReason: emptyReasonFor(request, window), openParts };
 };
 
 const emptyReasonFor = (

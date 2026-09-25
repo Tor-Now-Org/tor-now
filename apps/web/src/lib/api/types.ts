@@ -200,6 +200,8 @@ export type DayAvailabilityDto = {
   date: string;
   slots: SlotDto[];
   emptyReason: EmptyReason | null;
+  /** The parts of the day this calendar works at all, whatever is booked. */
+  openParts: PartOfDayName[];
 };
 
 export type AppointmentStatus =

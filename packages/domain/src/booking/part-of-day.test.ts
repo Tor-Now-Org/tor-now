@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { parseInstant } from "../time/instant.ts";
+import { interval } from "../time/interval.ts";
+import { localTimeOf } from "../time/local-time.ts";
 import { timeZone } from "../time/zone.ts";
 import {
   PARTS_OF_DAY,
   partOfDayAt,
+  partsOfDayOpen,
   wantedPartsOfDay,
   type PartOfDay,
 } from "./part-of-day.ts";
@@ -75,6 +78,28 @@ describe("parts of the day", () => {
 
     it("accepts every part, which is what 'any time' means", () => {
       expect(wantedPartsOfDay([...PARTS_OF_DAY])).toEqual([...PARTS_OF_DAY]);
+    });
+  });
+
+  /** A part the calendar never works has nothing to wait for. */
+  describe("which parts a calendar works", () => {
+    const hours = (from: number, to: number) =>
+      interval(localTimeOf(from, 0), localTimeOf(to, 0));
+
+    it("leaves out the evening when the day ends at five", () => {
+      expect(partsOfDayOpen([hours(9, 17)])).toEqual(["MORNING", "NOON"]);
+    });
+
+    it("counts a part touched by even a little of the hours", () => {
+      expect(partsOfDayOpen([hours(11, 12), hours(16, 18)])).toEqual([
+        "MORNING",
+        "NOON",
+        "EVENING",
+      ]);
+    });
+
+    it("has nothing on a closed day", () => {
+      expect(partsOfDayOpen([])).toEqual([]);
     });
   });
 });
