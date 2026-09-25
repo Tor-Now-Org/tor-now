@@ -184,7 +184,7 @@ const half = (pressed: boolean) => ({
   padding: "0 12px",
   borderRadius: 999,
   fontFamily: "Rubik, sans-serif",
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 600,
   background: pressed ? "var(--raised)" : "transparent",
   color: pressed ? "var(--ink)" : "var(--muted)",

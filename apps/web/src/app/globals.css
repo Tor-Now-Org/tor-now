@@ -405,13 +405,14 @@ body {
 /* One line at every width now that the language button has left the bar; a
    notch smaller on a phone, where the context switch shares the row. */
 @media (max-width: 719.98px) {
-  .header-logo .wordmark { font-size: 18px !important; }
+  .header-logo .wordmark { font-size: 17px !important; }
   .header-logo svg { translate: 0 2px; }
 }
 @media (min-width: 720px) {
   .header-lang { min-height: 40px; padding: 0 13px; font-size: 12.5px; }
   .header-account { width: 40px; height: 40px; font-size: 16px; }
   .header-account svg { width: 19px; height: 19px; }
+  .header-logo .wordmark { font-size: 18px !important; }
 }
 
 /* ---------------------------------------------------------------------------
