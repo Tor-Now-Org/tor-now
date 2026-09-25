@@ -1,6 +1,6 @@
 "use client";
 
-import { partOfDay, timeIn, type PartOfDay } from "@/lib/format.ts";
+import { partOfDay, timeIn, todayIn, type PartOfDay } from "@/lib/format.ts";
 import { useLanguage } from "@/lib/i18n/index.tsx";
 import type { DayAvailabilityDto, SlotDto } from "@/lib/api/types.ts";
 import { Empty } from "./ui.tsx";
@@ -103,6 +103,12 @@ export const SlotGrid = ({
     );
   }
 
+  // A part of today that is already over has nothing left to free up.
+  const firstOpenPart =
+    day.date === todayIn(timeZone)
+      ? ORDER.indexOf(partOfDay(new Date().toISOString(), timeZone))
+      : 0;
+
   const grouped = ORDER.map((part) => ({
     part,
     slots: day.slots.filter((slot) => partOfDay(slot.startAt, timeZone) === part),
@@ -110,7 +116,10 @@ export const SlotGrid = ({
     // A part with nothing in it is kept only when there is something to offer
     // there: somebody who wants a morning should find the morning, and find it
     // saying it is empty, rather than not find it at all.
-    .filter((group) => group.slots.length > 0 || onWaitFor !== undefined);
+    .filter(
+      (group, index) =>
+        group.slots.length > 0 || (onWaitFor !== undefined && index >= firstOpenPart),
+    );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
