@@ -4,7 +4,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, TileLayer } from "react-leaflet";
 import { categoryLabel, type BusinessCategory } from "@tor-now/domain";
 import type { BusinessDto } from "@/lib/api/types.ts";
 import { distanceLabel, type GeoPoint } from "@/lib/distance.ts";
@@ -43,17 +43,6 @@ const pinIcon = (category: BusinessCategory | null | undefined, selected: boolea
     iconSize: [34, 42],
     iconAnchor: [17, 42],
   });
-
-/** Frames the pins and the customer together, once per new set of results. */
-const FitToResults = ({ points, resultsKey }: { points: [number, number][]; resultsKey: string }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (points.length === 1) map.setView(points[0]!, 15);
-    else if (points.length > 1) map.fitBounds(points, { padding: [48, 48], maxZoom: 16 });
-    // Refit on new results only, not on every render that rebuilds `points`.
-  }, [map, resultsKey]);
-  return null;
-};
 
 export const BusinessMap = ({
   entries,
@@ -98,7 +87,6 @@ export const BusinessMap = ({
       : [],
   );
   const selected = located.find((entry) => entry.business.id === selectedId) ?? null;
-  const resultsKey = located.map((entry) => entry.business.id).join();
   const userPoint: [number, number] | null = userPos === null ? null : [userPos.latitude, userPos.longitude];
 
   useEffect(() => {
@@ -112,7 +100,7 @@ export const BusinessMap = ({
   return (
     <div className="map-view" role="dialog" aria-modal="true" aria-label={copy.mapButton}>
       <MapContainer
-        center={located[0]?.position ?? userPoint ?? FALLBACK_CENTER}
+        center={userPoint ?? located[0]?.position ?? FALLBACK_CENTER}
         zoom={14}
         zoomControl={false}
         ref={setMap}
@@ -121,10 +109,6 @@ export const BusinessMap = ({
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <FitToResults
-          resultsKey={resultsKey}
-          points={[...located.map((entry) => entry.position), ...(userPoint === null ? [] : [userPoint])]}
         />
         {userPoint !== null && (
           <Marker position={userPoint} icon={meIcon} interactive={false} keyboard={false} title={copy.yourLocation} />
