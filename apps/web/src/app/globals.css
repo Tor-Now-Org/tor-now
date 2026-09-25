@@ -234,7 +234,7 @@ body {
   animation: spin 0.85s linear infinite;
 }
 /* A spinner that is the whole screen (`<Spinner page />`). */
-.spinner-page { --ring: 5px; width: 48px; height: 48px; }
+.spinner-page { --ring: 5px; width: 46px; height: 47px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .skeleton {
@@ -572,37 +572,120 @@ body {
 /* ---------------------------------------------------------------------------
  * The business gallery.
  *
- * On a phone the cover is the top of the screen and the thumbnails are a row
- * under it, which is the whole of the design. On a wide screen the same markup
- * would give a 720px cover and 227px thumbnails, pushing the thing the page is
- * for — choosing a service and a time — below the fold. So the pictures are
- * capped there rather than scaled with the column.
+ * A carousel, cover first, one photo at the column's full width. On a phone
+ * that is the top of the screen, which is the whole of the design. On a wide
+ * screen the same markup would give a 720px-wide photo 405px tall, pushing the
+ * thing the page is for — choosing a service and a time — below the fold. So
+ * the photo is capped there rather than scaled with the column.
  * ------------------------------------------------------------------------- */
-.gallery-cover {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
+.gallery { position: relative; }
+.gallery-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--sunken);
 }
-.gallery-thumbs { display: flex; gap: 8px; }
-.gallery-thumb {
-  flex: 1;
-  aspect-ratio: 1 / 1;
-  border-radius: 12px;
-  overflow: hidden;
+.gallery-track::-webkit-scrollbar { display: none; }
+.gallery-slide {
+  flex: 0 0 100%;
+  aspect-ratio: 16 / 9;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
   padding: 0;
-  transition: opacity .13s ease, border-color .13s ease;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
 }
-.gallery-thumb img { width: 100%; height: 100%; object-fit: cover; }
+div.gallery-slide { cursor: auto; }
+.gallery-slide img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* The arrows sit on the photo, at the start and end edges, so they swap sides
+   with the language along with everything else; the chevrons turn with them. */
+.gallery-arrow {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: 0 4px 14px -6px oklch(10% 0.06 258 / .5);
+}
+.gallery-prev { inset-inline-start: 10px; }
+.gallery-next { inset-inline-end: 10px; }
+[dir="rtl"] .gallery-arrow svg { scale: -1 1; }
+.gallery-count {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: oklch(20% 0.04 258 / .55);
+}
+.gallery-dots { display: flex; justify-content: center; gap: 7px; margin-top: 10px; }
+.gallery-dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--line);
+  transition: width .2s ease, background .2s ease;
+}
+.gallery-dots button[aria-current="true"] { width: 22px; background: var(--accent); }
+
+/* Full screen: the same strip, the whole photo rather than a crop of it. */
+.gallery-full {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #000;
+}
+.gallery-full::backdrop { background: #000; }
+.gallery-full[open] { display: flex; align-items: center; }
+.gallery-full .gallery { width: 100%; }
+.gallery-full .gallery-track { border: 0; border-radius: 0; background: none; }
+.gallery-full .gallery-slide { aspect-ratio: auto; height: calc(100dvh - 80px); }
+.gallery-full .gallery-slide img { object-fit: contain; }
+.gallery-full .gallery-dots button:not([aria-current="true"]) { background: oklch(100% 0 0 / .35); }
+.gallery-full .gallery-count { top: auto; bottom: -34px; inset-inline-end: 16px; }
+.gallery-close {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  inset-inline-end: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: oklch(100% 0 0 / .15);
+}
 
 @media (min-width: 1024px) {
-  .gallery-cover { max-height: 300px; }
-  /* Fixed rather than a share of the column, so three thumbnails do not become
-     three more covers. */
-  .gallery-thumbs { gap: 10px; }
-  .gallery-thumb { flex: 0 0 96px; }
+  .gallery > .gallery-track .gallery-slide { max-height: 300px; }
+  .gallery-full .gallery-slide { max-height: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gallery-dots button { transition: none; }
 }
 
 /* A pointer is not a thumb: rows that are merely tappable on a phone should

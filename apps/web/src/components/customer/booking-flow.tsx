@@ -411,7 +411,14 @@ export const BookingFlow = ({
       <BusinessPhotos
         photos={profile.photos}
         businessName={business.name}
-        labels={{ gallery: copy.photosOf, showPhoto: copy.showPhoto }}
+        labels={{
+          gallery: copy.photosOf,
+          showPhoto: copy.showPhoto,
+          previousPhoto: copy.previousPhoto,
+          nextPhoto: copy.nextPhoto,
+          enlargePhoto: copy.enlargePhoto,
+          closePhoto: copy.closePhoto,
+        }}
       />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

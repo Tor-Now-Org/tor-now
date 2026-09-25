@@ -2424,7 +2424,7 @@ test.describe("photos", () => {
     await page.getByText(name).first().click();
     const gallery = page.getByRole("region", { name: "תמונות מהעסק" });
     await expect(gallery).toBeVisible({ timeout: 15_000 });
-    await expect(gallery.getByRole("button")).toHaveCount(2);
+    await expect(gallery.getByRole("button", { name: /^הצגת תמונה/ })).toHaveCount(2);
 
     // The bytes really load, rather than the page holding two broken frames.
     const loaded = await gallery
