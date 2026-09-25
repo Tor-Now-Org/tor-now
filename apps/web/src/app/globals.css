@@ -225,13 +225,16 @@ body {
    masked to its rim rather than a border, because a border can only carry one
    colour per side and the brand is a gradient. */
 .spinner {
-  width: 48px; height: 48px; border-radius: 999px;
+  --ring: 2.5px;
+  width: 18px; height: 18px; border-radius: 999px;
   background: conic-gradient(from 0deg,
     transparent 0 25%, var(--brand-blue) 55%, var(--brand-cyan) 92%, transparent 97%);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4.5px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4.5px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring) + 0.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring) + 0.5px));
   animation: spin 0.85s linear infinite;
 }
+/* A spinner that is the whole screen (`<Spinner page />`). */
+.spinner-page { --ring: 5px; width: 48px; height: 48px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .skeleton {
@@ -412,7 +415,7 @@ body {
   .header-lang { min-height: 40px; padding: 0 13px; font-size: 12.5px; }
   .header-account { width: 40px; height: 40px; font-size: 16px; }
   .header-account svg { width: 19px; height: 19px; }
-  .header-logo .wordmark { font-size: 18px !important; }
+  .header-logo .wordmark { font-size: 22px !important; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -613,10 +616,13 @@ body {
   .map-view .leaflet-bottom { bottom: auto; top: calc(120px + env(safe-area-inset-top)); }
 }
 
-.business-search-box { min-height: 56px; padding: 0 16px; }
+.search-headline { font-size: 30px; }
+@media (max-width: 719px) { .search-headline { font-size: 24px; } }
+
+.business-search-box { min-height: 54px; padding: 0 16px; }
 /* Smaller on a phone; the input keeps 16px text so iOS doesn't zoom on focus. */
 @media (max-width: 719px) {
-  .business-search-box { min-height: 46px; padding: 0 12px; border-radius: 12px; }
+  .business-search-box { min-height: 44px; padding: 0 12px; border-radius: 12px; }
 }
 
 /* ---------------------------------------------------------------------------

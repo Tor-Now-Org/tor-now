@@ -80,7 +80,7 @@ export const ContextSwitch = ({
         aria-label={copy.switchContext}
         style={{
           display: "inline-flex",
-          gap: 3,
+          gap: 1,
           padding: 3,
           minWidth: 0,
           borderRadius: 999,
@@ -180,8 +180,8 @@ const half = (pressed: boolean) => ({
   alignItems: "center",
   gap: 5,
   minWidth: 0,
-  minHeight: 34,
-  padding: "0 12px",
+  minHeight: 31,
+  padding: "0 8px",
   borderRadius: 999,
   fontFamily: "Rubik, sans-serif",
   fontSize: 12,

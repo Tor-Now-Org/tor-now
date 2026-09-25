@@ -381,7 +381,7 @@ export const Spinner = ({ page = false }: { page?: boolean }) => (
       ...(page ? { flex: 1, minHeight: "55svh", paddingBottom: 5 } : {}),
     }}
   >
-    <span className="spinner" />
+    <span className={page ? "spinner spinner-page" : "spinner"} />
   </div>
 );
 

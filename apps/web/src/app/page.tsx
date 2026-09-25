@@ -156,7 +156,7 @@ function CustomerAppInner() {
       <>
         <AppHeader />
         <main style={{ flex: 1, display: "grid", placeItems: "center" }}>
-          <Spinner />
+          <Spinner page />
         </main>
       </>
     );
