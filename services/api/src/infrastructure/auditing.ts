@@ -481,6 +481,12 @@ export const auditedUsers = (
     });
     return after;
   },
+  async acceptTerms(id, version) {
+    const before = await inner.findById(id);
+    const after = await inner.acceptTerms(id, version);
+    await record(context, AUDIT_ACTIONS.termsAccepted, "User", id, before, after);
+    return after;
+  },
   async setAdministrator(id, isAdministrator) {
     const before = await inner.findById(id);
     const after = await inner.setAdministrator(id, isAdministrator);

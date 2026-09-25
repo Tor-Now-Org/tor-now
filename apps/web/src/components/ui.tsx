@@ -375,10 +375,10 @@ export const Spinner = ({ page = false }: { page?: boolean }) => (
     style={{
       display: "grid",
       placeItems: "center",
-      padding: 40,
+      padding: 0,
       // Extra padding below rather than above: optically centred sits a touch
       // higher than measured centre.
-      ...(page ? { flex: 1, minHeight: "55svh", paddingBottom: 5 } : {}),
+      ...(page ? { flex: 1, minHeight: "55svh", paddingBottom: 50 } : {}),
     }}
   >
     <span className={page ? "spinner spinner-page" : "spinner"} />

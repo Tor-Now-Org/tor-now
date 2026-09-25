@@ -5,6 +5,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { DEFAULT_LANGUAGE, DIRECTION } from "@/lib/i18n/dictionaries.ts";
 import { LanguageProvider } from "@/lib/i18n/index.tsx";
 import { SessionProvider } from "@/lib/session.tsx";
+import { TermsNotice } from "@/components/legal.tsx";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -38,7 +39,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <LanguageProvider>
           <SessionProvider>
-            <div className="app-shell">{children}</div>
+            <div className="app-shell">
+              {children}
+              <TermsNotice />
+            </div>
           </SessionProvider>
         </LanguageProvider>
         <Analytics />

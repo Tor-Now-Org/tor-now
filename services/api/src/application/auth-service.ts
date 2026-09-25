@@ -3,6 +3,7 @@ import {
   forbidden,
   instant,
   parseLocalDate,
+  TERMS_VERSION,
   UNNAMED,
   unauthenticated,
   type Clock,
@@ -136,7 +137,7 @@ export const authService = (dependencies: AuthDependencies) => ({
         );
       }
 
-      const user =
+      const found =
         existing ??
         (await repositories.users.create({
           phone,
@@ -146,6 +147,13 @@ export const authService = (dependencies: AuthDependencies) => ({
           familyName: name?.familyName?.trim() || null,
           birthDate: null,
         }));
+      // The code was asked for under "by continuing you agree to the terms",
+      // so verifying it is the agreement — to the version in force now. A
+      // returning User on an older version agrees to the new one here too.
+      const user =
+        found.termsVersion === TERMS_VERSION
+          ? found
+          : await repositories.users.acceptTerms(found.id, TERMS_VERSION);
 
       // ADR 0010: the flag alone is not sufficient — the number must also
       // appear on the allowlist, so a mistakenly set flag or a stolen session
@@ -195,6 +203,17 @@ export const profileService = ({ unitOfWork }: ProfileDependencies) => ({
         ...(changes.familyName === undefined ? {} : { familyName: changes.familyName }),
         ...(birthDate === undefined ? {} : { birthDate }),
       }),
+    );
+  },
+
+  /**
+   * Agreement to the terms in force: the business-terms checkbox, and the
+   * update notice. Always the server's version, never one the client names.
+   */
+  async acceptTerms(actor: Actor): Promise<User> {
+    const userId = requireUser(actor);
+    return unitOfWork.run(actor, ({ repositories }) =>
+      repositories.users.acceptTerms(userId, TERMS_VERSION),
     );
   },
 

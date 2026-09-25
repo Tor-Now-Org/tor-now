@@ -316,6 +316,8 @@ export type UserDto = {
  * work anywhere, which is what decides the invitation to open a business.
  */
 export type MeDto = UserDto & {
+  /** The terms version last agreed to; older than TERMS_VERSION shows the notice. */
+  termsVersion: string | null;
   isHasBusinesses: boolean;
 };
 

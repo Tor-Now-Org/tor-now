@@ -105,6 +105,13 @@ export const userRepository = (tx: Transaction): UserRepository => ({
     return one(rows, toUser, "User");
   },
 
+  async acceptTerms(id, version) {
+    const rows = await tx<Row[]>`
+      update app_user set terms_version = ${version}, terms_accepted_at = now()
+      where id = ${id} and deleted_at is null returning *`;
+    return one(rows, toUser, "User");
+  },
+
   async list(page: Page, query) {
     const rows = await tx<Row[]>`
       select * from app_user

@@ -7,6 +7,7 @@ import { Sheet } from "./ui.tsx";
 import { SignOutButton } from "./sign-out.tsx";
 import { LanguagePill } from "./language-pill.tsx";
 import { SUPPORT_PATH, SupportMark } from "./support-link.tsx";
+import { legalPath } from "@/lib/legal.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 
 /**
@@ -167,6 +168,7 @@ export const AccountDrawer = ({
   // The one word the drawer reads for itself: support is a single destination
   // with a single name, so both apps would pass the same string.
   const support = useCopy("support");
+  const legal = useCopy("legal");
 
   return (
   <Sheet open={open} onClose={onClose} labelledBy="drawer-title">
@@ -195,6 +197,15 @@ export const AccountDrawer = ({
           <SupportMark />
         </span>
         <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>{support.supportLink}</span>
+      </Link>
+      <Link href={legalPath("terms")} style={ROW}>
+        <span style={{ ...BADGE, background: "var(--sunken)", color: "var(--accent-strong)" }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+            <path d="M14 3v5h5M9 13h6M9 17h4" />
+          </svg>
+        </span>
+        <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>{legal.title}</span>
       </Link>
 
       {/* Below the line are the settings of the person rather than places to

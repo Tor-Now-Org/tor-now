@@ -877,3 +877,15 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
   .lp-tour{grid-template-columns:1fr}
   .lp-tour .lp-phone{order:-1;justify-self:center}
 }
+
+/* The legal documents, rendered from docs/legal. A reading column: the
+   paragraphs are long, so they get line height rather than width. */
+.legal{font-size:14.5px;line-height:1.75;overflow-wrap:anywhere}
+.legal h1{font-size:22px;margin-block-end:4px}
+.legal h2{font-size:16.5px;margin-block:22px 6px;padding-block-start:14px;border-block-start:1px solid var(--line)}
+.legal p{margin-block:8px}
+.legal ul{margin-block:6px;padding-inline-start:20px}
+.legal li{margin-block:3px}
+.legal table{display:block;overflow-x:auto;border-collapse:collapse;font-size:13.5px;margin-block:10px}
+.legal th,.legal td{border:1px solid var(--line);padding:6px 8px;text-align:start;vertical-align:top}
+.legal th{background:var(--sunken)}

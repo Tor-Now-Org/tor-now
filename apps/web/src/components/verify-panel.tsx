@@ -8,6 +8,7 @@ import { isApiError } from "@/lib/api/errors.ts";
 import { checkLocalPhone, toE164 } from "@/lib/phone.ts";
 import type { MeDto } from "@/lib/api/types.ts";
 import { PhoneField } from "./phone-field.tsx";
+import { ConsentText, useLegalSheet } from "./legal.tsx";
 import { Button, Critical, Field, Note } from "./ui.tsx";
 
 /**
@@ -76,6 +77,7 @@ export const VerifyPanel = ({
     setTouched((previous) => new Set(previous).add(field));
 
   const problem = useFieldProblem();
+  const legal = useLegalSheet();
   const givenProblem = problem.text(givenName, TEXT_RULES.personName, touched.has("given"));
   const familyProblem = problem.text(familyName, TEXT_RULES.personName, touched.has("family"));
 
@@ -172,6 +174,13 @@ export const VerifyPanel = ({
           >
             {labels.sendCode}
           </Button>
+          {/* Sending the code is where an account starts, so it is where the
+              terms are agreed to — for the booking flow's customer and the
+              owner opening a business alike. */}
+          <p className="hint" style={{ margin: 0, textAlign: "center" }}>
+            <ConsentText variant="continue" onOpen={legal.open} />
+          </p>
+          {legal.sheet}
         </>
       ) : stage === "code" ? (
         <>

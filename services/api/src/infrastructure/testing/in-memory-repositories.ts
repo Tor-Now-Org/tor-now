@@ -130,6 +130,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           deletedAt: null,
           anonymisedAt: null,
           isAdministrator: false,
+          termsVersion: null,
+          termsAcceptedAt: null,
           createdAt: now(),
         };
         store.users = [...store.users, user];
@@ -167,6 +169,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
 
       async setAdministrator(id, isAdministrator) {
         return replaceUser({ ...requireUser(id), isAdministrator });
+      },
+      async acceptTerms(id, version) {
+        return replaceUser({ ...requireUser(id), termsVersion: version, termsAcceptedAt: now() });
       },
       async list(page, query) {
         const matching = store.users.filter(
@@ -507,6 +512,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             deletedAt: null,
             anonymisedAt: null,
             isAdministrator: false,
+            termsVersion: null,
+            termsAcceptedAt: null,
             createdAt: now(),
           };
           store.users = [...store.users, user];
@@ -546,6 +553,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             deletedAt: null,
             anonymisedAt: null,
             isAdministrator: false,
+            termsVersion: null,
+            termsAcceptedAt: null,
             createdAt: now(),
           };
           store.users = [...store.users, user];

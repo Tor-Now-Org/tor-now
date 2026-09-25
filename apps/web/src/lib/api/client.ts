@@ -240,6 +240,9 @@ export const api = {
       token,
     }),
 
+  acceptTerms: (token: string) =>
+    request<MeDto>("/me/terms", { method: "POST", token }),
+
   deleteAccount: (token: string) =>
     request<void>("/me", { method: "DELETE", token }),
 

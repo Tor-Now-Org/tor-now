@@ -32,6 +32,7 @@ import {
 import { weekIsUsable } from "@/components/owner/usual-week.ts";
 import { Button, Card, Critical, Field, Spinner } from "@/components/ui.tsx";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
+import { ConsentText, useLegalSheet } from "@/components/legal.tsx";
 import type { BusinessDto } from "@/lib/api/types.ts";
 
 // Leaflet reaches for `window`, so the map can only render on the client.
@@ -101,6 +102,11 @@ export default function OnboardingPage() {
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<readonly ChosenPhoto[]>([]);
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
+  // A business pays and holds its customers' data, so it ticks the terms
+  // rather than agreeing by carrying on. Asked last, once it knows what it
+  // is agreeing to run.
+  const [agreed, setAgreed] = useState(false);
+  const legal = useLegalSheet();
   const leave = (field: string) =>
     setTouched((previous) => new Set(previous).add(field));
   const problem = useFieldProblem();
@@ -185,6 +191,8 @@ export default function OnboardingPage() {
     setBusy(true);
     setError(null);
     try {
+      // The ticked box, recorded against the owner before the business exists.
+      await api.acceptTerms(token);
       const business = await api.registerBusiness(token, {
         name: name.trim(),
         phone: toE164(phone),
@@ -526,6 +534,31 @@ export default function OnboardingPage() {
             <StepHeading title={copy.hoursTitle} body={copy.hoursBody} />
 
             <WeeklyHours hours={hours} setHours={setHours} />
+
+            <label
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+                padding: 14,
+                borderRadius: 14,
+                background: "var(--accent-soft)",
+                fontSize: 14,
+                lineHeight: 1.6,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(event) => setAgreed(event.target.checked)}
+                style={{ width: 22, height: 22, margin: "1px 0 0", flexShrink: 0, accentColor: "var(--accent)" }}
+              />
+              <span>
+                <ConsentText variant="agree" onOpen={legal.open} />
+              </span>
+            </label>
+            {legal.sheet}
           </>
         )}
 
@@ -536,7 +569,7 @@ export default function OnboardingPage() {
             step === "hours" ? void finish() : setStep(STEPS[index + 1] as Step)
           }
           busy={busy}
-          disabled={!canContinue}
+          disabled={!canContinue || (step === "hours" && !agreed)}
         >
           {step === "hours" ? copy.finish : copy.next}
         </Button>

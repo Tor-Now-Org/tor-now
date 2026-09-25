@@ -65,6 +65,7 @@ export const AUDIT_ACTIONS = {
   membershipResourceUnassigned: "MEMBERSHIP_RESOURCE_UNASSIGNED",
   administratorGranted: "ADMINISTRATOR_GRANTED",
   administratorRevoked: "ADMINISTRATOR_REVOKED",
+  termsAccepted: "TERMS_ACCEPTED",
   allowlistChanged: "ADMINISTRATOR_ALLOWLIST_CHANGED",
   paymentRecorded: "PAYMENT_RECORDED",
   /**

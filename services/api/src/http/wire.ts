@@ -326,6 +326,16 @@ export const userOut = (user: User) => ({
   createdAt: formatInstant(user.createdAt),
 });
 
+/**
+ * The signed-in User as they see themselves. The terms version is theirs
+ * alone; a Business looking at a customer has no use for it.
+ */
+export const meOut = (user: User, isHasBusinesses: boolean) => ({
+  ...userOut(user),
+  termsVersion: user.termsVersion,
+  isHasBusinesses,
+});
+
 /** A User as their Business sees them: the person, plus their standing here. */
 export const customerOut = (customer: Customer) => ({
   ...userOut(customer.user),

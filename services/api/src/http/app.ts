@@ -115,7 +115,7 @@ export const createApp = (services: Services) => {
     return context.json({
       token: result.token,
       isNewUser: result.isNewUser,
-      user: { ...wire.userOut(result.user), isHasBusinesses },
+      user: wire.meOut(result.user, isHasBusinesses),
     });
   });
 
@@ -128,7 +128,7 @@ export const createApp = (services: Services) => {
       services.profile.me(actor),
       services.business.hasAny(actor),
     ]);
-    return context.json({ ...wire.userOut(user), isHasBusinesses });
+    return context.json(wire.meOut(user, isHasBusinesses));
   });
 
   app.patch("/me", async (context) => {
@@ -138,7 +138,16 @@ export const createApp = (services: Services) => {
       services.profile.updateProfile(actor, changes),
       services.business.hasAny(actor),
     ]);
-    return context.json({ ...wire.userOut(user), isHasBusinesses });
+    return context.json(wire.meOut(user, isHasBusinesses));
+  });
+
+  app.post("/me/terms", async (context) => {
+    const actor = actorOf(context);
+    const [user, isHasBusinesses] = await Promise.all([
+      services.profile.acceptTerms(actor),
+      services.business.hasAny(actor),
+    ]);
+    return context.json(wire.meOut(user, isHasBusinesses));
   });
 
   app.delete("/me", async (context) => {

@@ -1918,7 +1918,60 @@ const landing = {
   },
 } as const;
 
+/**
+ * The words around the legal documents — never the documents themselves,
+ * which live in docs/legal. The consent sentences come in pieces because both
+ * document names inside them open a sheet.
+ */
+const legal = {
+  he: {
+    "title": "מידע משפטי",
+    "back": "חזרה",
+    "terms": "תנאי שימוש",
+    "privacy": "מדיניות פרטיות",
+    "accessibility": "הצהרת נגישות",
+    "termsInline": "תנאי השימוש",
+    "privacyInline": "מדיניות הפרטיות",
+    "continueLead": "בהמשך אני מסכים/ה ל",
+    "continueAnd": " ול",
+    "continueEnd": ".",
+    "agreeLead": "קראתי ואני מסכים/ה ל",
+    "agreeAnd": ", כולל התנאים לעסקים, ול",
+    "agreeEnd": ".",
+    "close": "סגירה",
+    "openFull": "פתיחה בעמוד מלא",
+    "failed": "לא הצלחנו לטעון את המסמך. נסו שוב בעוד רגע.",
+    "updateTitle": "עדכנו את התנאים",
+    "updateBody": "תנאי השימוש ומדיניות הפרטיות של תור פנוי עודכנו. המשך השימוש מהווה הסכמה לנוסח המעודכן.",
+    "understood": "הבנתי",
+    "acceptFailed": "לא הצלחנו לשמור. נסו שוב.",
+  },
+  en: {
+    "title": "Legal",
+    "back": "Back",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "accessibility": "Accessibility",
+    "termsInline": "Terms of Service",
+    "privacyInline": "Privacy Policy",
+    "continueLead": "By continuing you agree to the ",
+    "continueAnd": " and the ",
+    "continueEnd": ".",
+    "agreeLead": "I have read and agree to the ",
+    "agreeAnd": ", including the terms for businesses, and the ",
+    "agreeEnd": ".",
+    "close": "Close",
+    "openFull": "Open as a full page",
+    "failed": "The document didn't load. Try again in a moment.",
+    "updateTitle": "We've updated our terms",
+    "updateBody": "Tor Panuy's Terms of Service and Privacy Policy have changed. Continuing to use the app means you agree to the new versions.",
+    "understood": "Got it",
+    "acceptFailed": "That didn't save. Try again.",
+  },
+} as const;
+
 export const DICTIONARIES = {
+  legal,
   customer,
   signIn,
   onboarding,

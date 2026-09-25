@@ -322,6 +322,17 @@ export const aDayFromNow = (days: number): string => {
   return new Intl.DateTimeFormat("en-CA", { timeZone: BUSINESS_TIMEZONE }).format(when);
 };
 
+/**
+ * That day of next month, for a journey that needs two dates on one month's
+ * page whatever today is — "two and nine days from now" straddle a month end
+ * for a week of every month.
+ */
+export const aDayNextMonth = (dayOfMonth: number): string => {
+  const [year = 0, month = 0] = aDayFromNow(0).split("-").map(Number);
+  // `month` is 1-based and Date.UTC's is 0-based, so this is next month.
+  return new Date(Date.UTC(year, month, dayOfMonth)).toISOString().slice(0, 10);
+};
+
 const BUSINESS_TIMEZONE = "Asia/Jerusalem";
 
 /**
@@ -438,6 +449,19 @@ export const pickACategory = async (page: Page, typed = "ספר"): Promise<void>
 };
 
 /**
+ * Turns the month forward until that date's square is on it. A date a few days
+ * out is next month's for the last days of every month, so a journey that
+ * looks a date up without this passes most of the month and fails at its end.
+ */
+export const showTheMonthOf = async (page: Page, date: string): Promise<void> => {
+  const square = page.getByRole("button", { name: date });
+  for (let turns = 0; turns < 6 && (await square.count()) === 0; turns += 1) {
+    await page.getByRole("button", { name: "החודש הבא" }).click();
+    await page.waitForTimeout(300);
+  }
+};
+
+/**
  * Open a day by its date, turning the month over if it is not this one.
  *
  * The grid holds one month, so a day a fortnight out is often not on it — and
@@ -446,12 +470,8 @@ export const pickACategory = async (page: Page, typed = "ספר"): Promise<void>
  * way of being broken that only shows up later and somewhere else.
  */
 export const openTheDayOf = async (page: Page, date: string): Promise<void> => {
-  const square = page.getByRole("button", { name: date });
-  for (let turns = 0; turns < 6 && (await square.count()) === 0; turns += 1) {
-    await page.getByRole("button", { name: "החודש הבא" }).click();
-    await page.waitForTimeout(300);
-  }
-  await square.click({ timeout: 15_000 });
+  await showTheMonthOf(page, date);
+  await page.getByRole("button", { name: date }).click({ timeout: 15_000 });
 };
 
 /**

@@ -249,6 +249,24 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("records which terms a user agreed to, and when", async () => {
+      await withRepositories(async (repositories) => {
+        const created = await repositories.users.create({
+          phone: "+972500001116",
+          givenName: "דנה",
+          familyName: null,
+          birthDate: null,
+        });
+        expect(created.termsVersion).toBeNull();
+        expect(created.termsAcceptedAt).toBeNull();
+
+        const accepted = await repositories.users.acceptTerms(created.id, "2026-09-25");
+        expect(accepted.termsVersion).toBe("2026-09-25");
+        expect(accepted.termsAcceptedAt).not.toBeNull();
+        expect((await repositories.users.findById(created.id))?.termsVersion).toBe("2026-09-25");
+      });
+    });
+
     // --- Memberships ---------------------------------------------------
 
     it("does not demote an owner who books at their own business", async () => {

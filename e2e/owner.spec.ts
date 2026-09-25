@@ -3,12 +3,14 @@ import {
   aBusinessWithOpenHours,
   asTyped,
   aDayFromNow,
+  aDayNextMonth,
   localDayOf,
   theNextStart,
   aFreeStretch,
   anInstantAt,
   call,
   openTheDayOf,
+  showTheMonthOf,
   pickACategory,
   pickAnAddress,
   stubAddressSearch,
@@ -99,6 +101,7 @@ test.describe("opening a business", () => {
 
     // 5 — hours, then live
     await expect(page.getByText("מתי אתם פתוחים")).toBeVisible();
+    await page.getByRole("checkbox", { name: /קראתי ואני מסכים/ }).check();
     await page.getByRole("button", { name: "סיום" }).click();
 
     await expect(page.getByText("באוויר")).toBeVisible({ timeout: 20_000 });
@@ -1399,7 +1402,8 @@ test.describe("special days and blockages", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await sheet.getByLabel("תאריך").fill(day);
-    await sheet.getByRole("button", { name: "שעות אחרות" }).click();
+    // Straight to the hours: a calendar's special day only ever gives other
+    // hours, so there is no "closed all day" to choose between.
 
     // Morning, then a break, then the evening — one form, not two special days
     // (which the store could not have held anyway: one override per date).
@@ -2403,6 +2407,7 @@ test.describe("photos", () => {
     await page.getByRole("button", { name: "המשך" }).click();
     await page.getByLabel("שם השירות").fill("ייעוץ");
     await page.getByRole("button", { name: "המשך" }).click();
+    await page.getByRole("checkbox", { name: /קראתי ואני מסכים/ }).check();
     await page.getByRole("button", { name: "סיום" }).click();
     await expect(page.getByText("באוויר")).toBeVisible({ timeout: 20_000 });
 
@@ -3507,7 +3512,9 @@ test.describe("where a band is drawn", () => {
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
-    const busy = aDayFromNow(2);
+    // Two weeks apart on one month's page, whatever today is.
+    const busy = aDayNextMonth(3);
+    const quietDay = aDayNextMonth(17);
     await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
       method: "POST",
       token: shop.owner.token,
@@ -3527,9 +3534,11 @@ test.describe("where a band is drawn", () => {
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
 
+    await showTheMonthOf(page, busy);
+
     // A day in the week that has a blockage, and one in a week that has none.
     const withBand = await page.getByRole("button", { name: busy }).boundingBox();
-    const quiet = await page.getByRole("button", { name: aDayFromNow(9) }).boundingBox();
+    const quiet = await page.getByRole("button", { name: quietDay }).boundingBox();
     expect(withBand!.height).toBe(quiet!.height);
   });
 });
@@ -3945,7 +3954,7 @@ test.describe("a day the shop is closed on", () => {
     await expect(aFreeStretch(page)).toHaveCount(0);
 
     // And the way back out is right there.
-    await page.getByRole("button", { name: "ביטול השינוי" }).click();
+    await page.getByRole("button", { name: "ביטול הסגירה" }).click();
     await expect(aFreeStretch(page).first()).toBeVisible({
       timeout: 15_000,
     });
@@ -4295,6 +4304,8 @@ test.describe("a calendar's own days off", () => {
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
 
+    await showTheMonthOf(page, friday);
+
     // Reading the chair that takes Fridays off: the Friday says so.
     const square = page.getByRole("button", { name: friday });
     await expect(square.getByText("סגור")).toBeVisible({ timeout: 15_000 });
@@ -4470,7 +4481,7 @@ test.describe("a day nobody works, and why nobody works it", () => {
     // The two controls that used to be here matched no closure — there is no
     // decision about this Saturday to name or to undo — so they did nothing at
     // all, twice, in silence.
-    await expect(page.getByRole("button", { name: "ביטול השינוי" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "ביטול הסגירה" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "שמירה" })).toHaveCount(0);
     await expect(page.getByText("סגור כל היום")).toHaveCount(0);
   });
@@ -4514,7 +4525,7 @@ test.describe("a day nobody works, and why nobody works it", () => {
     await expect(page.getByText("חופשה משפחתית")).toBeVisible({ timeout: 15_000 });
 
     // And the closure comes off, leaving an ordinary day behind it.
-    await page.getByRole("button", { name: "ביטול השינוי" }).click();
+    await page.getByRole("button", { name: "ביטול הסגירה" }).click();
     await expect(page.getByText("סגור כל היום")).toHaveCount(0, { timeout: 15_000 });
   });
 });
@@ -5165,7 +5176,9 @@ test.describe("booking a customer in", () => {
     await page.getByRole("button", { name: "הוספה ליום" }).click();
     await page.getByRole("button", { name: /תור ללקוח/ }).click();
 
+    await showTheMonthOf(page, first);
     await page.getByRole("button", { name: first }).click();
+    await showTheMonthOf(page, second);
     await page.getByRole("button", { name: second }).click();
     await page.getByRole("button", { name: "המשך" }).click();
 

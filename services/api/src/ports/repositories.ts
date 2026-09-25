@@ -123,6 +123,8 @@ export type UserRepository = {
    */
   anonymise(id: UserId): Promise<User>;
   setAdministrator(id: UserId, isAdministrator: boolean): Promise<User>;
+  /** Records agreement to that version of the terms, timed by the store. */
+  acceptTerms(id: UserId, version: string): Promise<User>;
   list(page: Page, query: string | null): Promise<readonly User[]>;
   /** Platform-wide signups by month, for the administrator's statistics tab. */
   monthlySignups(from: Instant, to: Instant): Promise<readonly MonthCount[]>;

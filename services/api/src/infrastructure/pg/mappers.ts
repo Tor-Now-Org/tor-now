@@ -87,6 +87,8 @@ export const toUser = (row: Row): User => ({
   deletedAt: nullableInstant(row["deleted_at"]),
   anonymisedAt: nullableInstant(row["anonymised_at"]),
   isAdministrator: bool(row["is_administrator"]),
+  termsVersion: nullableText(row["terms_version"]),
+  termsAcceptedAt: nullableInstant(row["terms_accepted_at"]),
   createdAt: toInstant(row["created_at"]),
 });
 

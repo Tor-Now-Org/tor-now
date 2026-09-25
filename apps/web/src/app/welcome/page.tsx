@@ -7,6 +7,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import type { Language } from "@/lib/i18n/dictionaries.ts";
 import { SOLO_PRICE } from "@/lib/plans.ts";
 import { SUPPORT, whatsappLink } from "@/lib/support.ts";
+import { LegalLinks } from "@/components/legal.tsx";
 
 /**
  * The front door.
@@ -290,9 +291,12 @@ export default function Welcome() {
       </section>
 
       <footer className="lp-foot">
-        <div className="lp-wrap lp-navrow">
+        {/* Wraps where the header row does not: three links beside the note
+            do not fit a phone's width. */}
+        <div className="lp-wrap lp-navrow" style={{ flexWrap: "wrap", paddingBlock: 8 }}>
           <Logo />
           <span>{copy.footNote}</span>
+          <LegalLinks style={{ marginInlineStart: "auto" }} />
         </div>
       </footer>
     </div>
