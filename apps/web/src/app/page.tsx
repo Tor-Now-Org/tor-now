@@ -47,7 +47,15 @@ type Screen = "search" | "mine" | "visited" | "profile";
 export default function CustomerApp() {
   // useSearchParams needs a Suspense boundary for static rendering.
   return (
-    <Suspense fallback={<Spinner page />}>
+    <Suspense
+      fallback={
+        // The first thing on screen, with no header yet: centred on the whole
+        // shell (both grid rows on desktop), lifted above true centre, where it reads as centred.
+        <div style={{ flex: 1, gridRow: "1 / -1", display: "grid", placeItems: "center" }}>
+          <span className="spinner spinner-page" style={{ translate: "0 -20px" }} />
+        </div>
+      }
+    >
       <CustomerAppInner />
     </Suspense>
   );
@@ -242,7 +250,7 @@ function CustomerAppInner() {
               </Sheet>
             )
           ) : (
-            <Spinner />
+            <Spinner page />
           )
         ) : (
           <>

@@ -349,7 +349,7 @@ export const BookingFlow = ({
     return `${day} ${copy.atTime} ${from}${until}`;
   };
 
-  if (profile === null) return <Spinner />;
+  if (profile === null) return <Spinner page />;
 
   /**
    * Absent and empty both mean "this business has none". An API deployed before
