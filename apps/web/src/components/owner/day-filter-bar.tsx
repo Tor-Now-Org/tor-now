@@ -39,6 +39,11 @@ const Magnifier = () => (
  * a week of squares to hold two chips. The month already has a row — the one
  * with its name and its arrows — and it had space going spare.
  */
+// ponytail: hidden for now, not removed — flip back to true to bring the
+// filter button (and its sheet) back; the e2e journeys that press it are
+// skipped under the same name.
+const FILTER_BUTTON = false;
+
 export const FindControls = ({
   query,
   onQuery,
@@ -103,6 +108,7 @@ export const FindControls = ({
           >
             <Magnifier />
           </button>
+          {FILTER_BUTTON && (
           <button
             className="chip tap"
             onClick={() => onSheet(true)}
@@ -140,6 +146,7 @@ export const FindControls = ({
               </span>
             )}
           </button>
+          )}
         </>
       )}
     </div>

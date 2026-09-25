@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   columnOf,
   datesBetween,
+  firstOfWeekOf,
   labelFitting,
+  mergeMonths,
   mergeOverlapping,
+  monthsOf,
   packBands,
   segmentIn,
   shiftMonth,
+  weekFrom,
   weeksOf,
   worksOn,
 } from "./month-model.ts";
@@ -230,5 +234,53 @@ describe("whether anybody works that day", () => {
     // closed drew every day of every month as a day nobody works — which is
     // what a whole calendar going grey looks like from the outside.
     expect(worksOn(facts())).toBe(true);
+  });
+});
+
+describe("a week read on its own", () => {
+  it("starts on the Sunday and runs across the month's edge", () => {
+    expect(firstOfWeekOf("2026-10-01")).toBe("2026-09-27");
+    expect(firstOfWeekOf("2026-09-27")).toBe("2026-09-27");
+    const week = weekFrom("2026-09-27");
+    expect(week).toEqual([
+      "2026-09-27", "2026-09-28", "2026-09-29", "2026-09-30",
+      "2026-10-01", "2026-10-02", "2026-10-03",
+    ]);
+    expect(monthsOf(week)).toEqual(["2026-09-01", "2026-10-01"]);
+    expect(monthsOf(weekFrom("2026-09-20"))).toEqual(["2026-09-01"]);
+  });
+
+  it("stitches what the month's edge cut in two back into one decision", () => {
+    const shut = { kind: "SHUT" as const, note: "חופש", hours: [] };
+    const merged = mergeMonths([
+      {
+        days: [],
+        blockages: [
+          { groupId: "g", resourceId: "r", reason: "", fromDate: "2026-09-29", toDate: "2026-09-30", days: 2, allDay: true },
+        ],
+        closures: [
+          { ...shut, fromDate: "2026-09-10", toDate: "2026-09-10", days: 1 },
+          { ...shut, fromDate: "2026-09-30", toDate: "2026-09-30", days: 1 },
+        ],
+      },
+      {
+        days: [],
+        blockages: [
+          { groupId: "g", resourceId: "r", reason: "", fromDate: "2026-10-01", toDate: "2026-10-02", days: 2, allDay: true },
+        ],
+        closures: [
+          { ...shut, fromDate: "2026-10-01", toDate: "2026-10-02", days: 2 },
+          { ...shut, note: "אחר", fromDate: "2026-10-03", toDate: "2026-10-03", days: 1 },
+        ],
+      },
+    ]);
+    expect(merged.blockages).toEqual([
+      expect.objectContaining({ fromDate: "2026-09-29", toDate: "2026-10-02", days: 4 }),
+    ]);
+    expect(merged.closures.map((one) => [one.fromDate, one.toDate, one.days])).toEqual([
+      ["2026-09-10", "2026-09-10", 1],
+      ["2026-09-30", "2026-10-02", 3],
+      ["2026-10-03", "2026-10-03", 1],
+    ]);
   });
 });

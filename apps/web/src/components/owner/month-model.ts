@@ -244,3 +244,73 @@ export const shiftMonth = (firstOfMonth: string, by: number): string => {
   const moved = new Date(Date.UTC(year, month - 1 + by, 1));
   return `${moved.getUTCFullYear()}-${String(moved.getUTCMonth() + 1).padStart(2, "0")}-01`;
 };
+
+/** The Sunday a date's week starts on. */
+export const firstOfWeekOf = (date: string): string => addDaysTo(date, -columnOf(date));
+
+/** A week's seven dates, from its Sunday. */
+export const weekFrom = (firstOfWeek: string): string[] =>
+  Array.from({ length: DAYS_IN_A_WEEK }, (_unused, offset) => addDaysTo(firstOfWeek, offset));
+
+/** The firsts of the months these dates fall in, in order, each once. */
+export const monthsOf = (dates: readonly string[]): string[] => [
+  ...new Set(dates.map((date) => `${date.slice(0, 7)}-01`)),
+];
+
+/**
+ * Two months' answers read as one.
+ *
+ * A week that crosses the first of the month is half in each, and the API
+ * answers a month at a time — clipping every blockage and closure at the
+ * month's edge. Stitched back together here, so a week away from the 29th to
+ * the 2nd is still one bar and opens as the one decision it was, rather than
+ * as two that each say half of it.
+ */
+export const mergeMonths = (months: readonly BusinessMonthDto[]): BusinessMonthDto => {
+  const blockages = new Map<string, BusinessMonthDto["blockages"][number]>();
+  months
+    .flatMap((month) => month.blockages)
+    .forEach((blockage) => {
+      const seen = blockages.get(blockage.groupId);
+      blockages.set(
+        blockage.groupId,
+        seen === undefined
+          ? blockage
+          : {
+              ...seen,
+              fromDate: seen.fromDate < blockage.fromDate ? seen.fromDate : blockage.fromDate,
+              toDate: seen.toDate > blockage.toDate ? seen.toDate : blockage.toDate,
+              days: seen.days + blockage.days,
+              allDay: seen.allDay && blockage.allDay,
+            },
+      );
+    });
+
+  const closures = months
+    .flatMap((month) => month.closures)
+    .sort((left, right) => left.fromDate.localeCompare(right.fromDate))
+    .reduce<BusinessMonthDto["closures"]>((joined, closure) => {
+      const open = joined[joined.length - 1];
+      // Only across the month's edge: inside one month the API already drew
+      // the runs, and two it kept apart are two decisions.
+      const continues =
+        open !== undefined &&
+        closure.fromDate.endsWith("-01") &&
+        addDaysTo(open.toDate, 1) === closure.fromDate &&
+        open.kind === closure.kind &&
+        open.note === closure.note &&
+        JSON.stringify(open.hours) === JSON.stringify(closure.hours);
+      return continues
+        ? [
+            ...joined.slice(0, -1),
+            { ...open, toDate: closure.toDate, days: open.days + closure.days },
+          ]
+        : [...joined, closure];
+    }, []);
+
+  return {
+    days: months.flatMap((month) => month.days),
+    blockages: [...blockages.values()],
+    closures,
+  };
+};

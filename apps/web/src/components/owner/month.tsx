@@ -22,11 +22,14 @@ import {
   factsOn,
   BAND_ROWS_IN_A_WEEK,
   labelFitting,
+  mergeMonths,
   mergeOverlapping,
+  monthsOf,
   nothingKnown,
   worksOn,
   packBands,
   segmentIn,
+  weekFrom,
   weeksOf,
   type Merged,
   type Segment,
@@ -72,6 +75,7 @@ export const Month = ({
   scope,
   selected,
   firstOfMonth,
+  firstOfWeek = null,
   onPickDay,
   reloadKey,
   choosing,
@@ -95,6 +99,15 @@ export const Month = ({
    * put when the screen swaps the calendar for a list of search results.
    */
   firstOfMonth: string;
+  /**
+   * One week instead of the month, from its Sunday.
+   *
+   * The same grid folded to a single row rather than a view of its own, so
+   * everything a month does — reading a day, aiming a blockage or special
+   * hours at a run of days, the bars across them — a week does the same way.
+   * A week that crosses the first of the month is read from both months.
+   */
+  firstOfWeek?: string | null;
   onPickDay: (date: string) => void;
   /** Changes when something elsewhere edited the month, so it reloads. */
   reloadKey: number;
@@ -171,14 +184,21 @@ export const Month = ({
    * is still in flight — which is the only way to tell a late answer to a
    * question nobody is asking any more from the answer to this one.
    */
-  const wanted = useRef(firstOfMonth);
-  wanted.current = firstOfMonth;
+  const reading = firstOfWeek ?? firstOfMonth;
+  const wanted = useRef(reading);
+  wanted.current = reading;
 
   const load = useCallback(async () => {
     setError(null);
-    const asked = firstOfMonth;
+    const asked = firstOfWeek ?? firstOfMonth;
     try {
-      const data = await api.businessMonth(token, business.id, asked);
+      const data = mergeMonths(
+        await Promise.all(
+          (firstOfWeek === null ? [firstOfMonth] : monthsOf(weekFrom(firstOfWeek))).map(
+            (month) => api.businessMonth(token, business.id, month),
+          ),
+        ),
+      );
       if (wanted.current === asked) {
         setMonth({ of: asked, data });
         onReady?.();
@@ -186,7 +206,7 @@ export const Month = ({
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
-  }, [token, business.id, firstOfMonth, errorText, onReady]);
+  }, [token, business.id, firstOfMonth, firstOfWeek, errorText, onReady]);
 
   useEffect(() => {
     void load();
@@ -216,10 +236,10 @@ export const Month = ({
 
   // Until the answer for this month arrives, the squares are drawn with nothing
   // said about them rather than with what was true of another month.
-  const known = month.of === firstOfMonth ? month.data : null;
+  const known = month.of === reading ? month.data : null;
 
   const chosen = from === null ? [] : datesBetween(from, to ?? from);
-  const weeks = weeksOf(firstOfMonth);
+  const weeks = firstOfWeek === null ? weeksOf(firstOfMonth) : [weekFrom(firstOfWeek)];
   const today = todayIn(business.timeZone);
 
   /** Which calendars a change made here would touch. */

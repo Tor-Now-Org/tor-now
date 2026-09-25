@@ -257,3 +257,19 @@ const offsetAt = (instant: number, timeZone: string): number => {
   const read = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? "0");
   return Date.UTC(read("year"), read("month") - 1, read("day"), read("hour") % 24, read("minute"), read("second")) - instant;
 };
+
+/**
+ * A week's dates as one range — "20–26 בספט׳", "27 בספט׳ – 3 באוק׳".
+ *
+ * Intl's own range formatting, so the month is said once when both ends share
+ * it and twice when they do not, in each language's order.
+ */
+export const weekName = (firstOfWeek: string, language: Language): string =>
+  new Intl.DateTimeFormat(LOCALE[language], {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).formatRange(
+    new Date(`${firstOfWeek}T12:00:00Z`),
+    new Date(`${addDaysTo(firstOfWeek, 6)}T12:00:00Z`),
+  );

@@ -731,6 +731,77 @@ test.describe("the month", () => {
     await expect(page.getByRole("button", { name: "המשך" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "ביטול הבחירה" })).toHaveCount(0);
   });
+
+  test("folds to a week that aims days the way the month does, and opens again", async ({
+    page,
+  }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `שבוע ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+    });
+    await openTheMonth(page, shop);
+    const offered = async (date: string) => {
+      const days = await call<{ slots: unknown[] }[]>(
+        `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+          `&resourceId=${shop.resource.id}&from=${date}&to=${date}`,
+      );
+      return (days[0]?.slots ?? []).length;
+    };
+    /** Steps forward a week at a time until that day is on the row. */
+    const weekWith = async (date: string) => {
+      for (let step = 0; step < 3 && (await dayCell(page, date).count()) === 0; step += 1) {
+        await page.getByRole("button", { name: "השבוע הבא" }).click();
+      }
+      await expect(dayCell(page, date)).toBeVisible();
+    };
+
+    await page.getByRole("button", { name: "הצגת שבוע" }).click();
+    await expect(page.getByRole("button", { name: "הצגת חודש" })).toBeVisible();
+    // One row: seven days, not a month of them.
+    await expect(page.getByRole("grid").getByRole("button", { name: /^\d{4}-\d{2}-\d{2}$/ }))
+      .toHaveCount(7);
+
+    // A range whose ends are in different weeks, the second tap one week on.
+    const first = aDayFromNow(1);
+    const last = aDayFromNow(8);
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
+    await weekWith(first);
+    await dayCell(page, first).click();
+    await weekWith(last);
+    await dayCell(page, last).click();
+    await expect(page.getByText(/8 ימים/).first()).toBeVisible();
+    await page.getByRole("button", { name: "המשך" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "כל היום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "חסום", exact: true }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    for (const date of [first, aDayFromNow(4), last]) {
+      await expect.poll(async () => offered(date), { timeout: 15_000 }).toBe(0);
+    }
+
+    // A special day, aimed from the week too.
+    const special = aDayFromNow(9);
+    await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /יום מיוחד/ }).click();
+    await weekWith(special);
+    await dayCell(page, special).click();
+    await page.getByRole("button", { name: "המשך" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "סגור כל היום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+    await expect.poll(async () => offered(special), { timeout: 15_000 }).toBe(0);
+
+    // And back to the month.
+    await page.getByRole("button", { name: "הצגת חודש" }).click();
+    await expect(page.getByRole("button", { name: "הצגת שבוע" })).toBeVisible();
+    expect(
+      await page.getByRole("grid").getByRole("button", { name: /^\d{4}-\d{2}-\d{2}$/ }).count(),
+    ).toBeGreaterThanOrEqual(28);
+  });
 });
 
 /**
@@ -1095,7 +1166,8 @@ test.describe("finding things in a day", () => {
     });
   });
 
-  test("the sheet chooses kinds, and the button says how many are set", async ({ page }) => {
+  // FILTER_BUTTON is off in day-filter-bar.tsx; back on, unskip.
+  test.skip("the sheet chooses kinds, and the button says how many are set", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `סינון ${Date.now()}`,
       ownerPhone: uniquePhone(),
@@ -2768,7 +2840,8 @@ test.describe("reading a day at a glance", () => {
     expect(painted[1]?.background).not.toBe(painted[0]?.background);
   });
 
-  test("keeps the + out of the way of any sheet, including the filter", async ({ page }) => {
+  // FILTER_BUTTON is off in day-filter-bar.tsx; back on, unskip.
+  test.skip("keeps the + out of the way of any sheet, including the filter", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `כפתור ${Date.now()}`,
       ownerPhone: uniquePhone(),
@@ -4835,7 +4908,8 @@ test.describe("acting on something the search found", () => {
     await expect(hers).toHaveCount(1, { timeout: 15_000 });
   });
 
-  test("the status filter finds the one that was just cancelled", async ({ page }) => {
+  // FILTER_BUTTON is off in day-filter-bar.tsx; back on, unskip.
+  test.skip("the status filter finds the one that was just cancelled", async ({ page }) => {
     const ownerPhone = uniquePhone();
     const shop = await aBusinessWithOpenHours({
       name: `סטטוס ${Date.now()}`,
@@ -4863,7 +4937,8 @@ test.describe("acting on something the search found", () => {
     await expect(page.getByText("תמר בן דוד").first()).toBeVisible({ timeout: 15_000 });
   });
 
-  test("filters narrow together, and clearing gives the whole day back", async ({ page }) => {
+  // FILTER_BUTTON is off in day-filter-bar.tsx; back on, unskip.
+  test.skip("filters narrow together, and clearing gives the whole day back", async ({ page }) => {
     const ownerPhone = uniquePhone();
     const shop = await aBusinessWithOpenHours({
       name: `צירוף ${Date.now()}`,
