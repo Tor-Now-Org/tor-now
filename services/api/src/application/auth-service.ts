@@ -20,6 +20,7 @@ import type {
 } from "../ports/verification.ts";
 import { system, type Actor, type UnitOfWork } from "../ports/unit-of-work.ts";
 import { requireUser } from "./authorization.ts";
+import { usageRecordFor } from "./usage.ts";
 
 /**
  * ADR 0004: registering, logging in and confirming a booking are the same act.
@@ -80,7 +81,22 @@ export const authService = (dependencies: AuthDependencies) => ({
       expiresAt: instant(now + VERIFICATION.lifetimeSeconds * MILLISECONDS),
     });
 
-    await dependencies.sender.send(phone, code);
+    const sent = await dependencies.sender.send(phone, code);
+    // A code is the platform's to pay for, not any Business's. Recorded as the
+    // system: the caller is not signed in yet, and usage is no caller's to write.
+    const usage = usageRecordFor({
+      businessId: null,
+      source: "SIGN_IN",
+      kind: "AUTHENTICATION",
+      via: sent.via,
+      units: sent.units,
+      at: now,
+    });
+    if (usage !== null) {
+      await dependencies.unitOfWork.run(system(), ({ repositories }) =>
+        repositories.usageRecords.record([usage]),
+      );
+    }
 
     return {
       expiresInSeconds: VERIFICATION.lifetimeSeconds,

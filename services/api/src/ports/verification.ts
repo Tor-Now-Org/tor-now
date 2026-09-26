@@ -1,4 +1,5 @@
 import type { Instant } from "@tor-now/domain";
+import type { DeliveryChannel } from "./notifier.ts";
 
 /**
  * ADR 0004: proving control of a phone number is the platform's only
@@ -10,7 +11,8 @@ import type { Instant } from "@tor-now/domain";
  * complete implementation, it simply delivers to the log.
  */
 export type VerificationSender = {
-  send(phone: string, code: string): Promise<void>;
+  /** How it went out and how many billable units that took, so it can be costed. */
+  send(phone: string, code: string): Promise<{ via: DeliveryChannel; units: number }>;
   /** Named so an operator can see which transport a deployment actually uses. */
   readonly channel: string;
 };

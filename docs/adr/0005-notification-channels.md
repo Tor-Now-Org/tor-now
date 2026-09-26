@@ -4,7 +4,7 @@ Date: 2026-08-24
 
 ## Status
 
-Accepted
+Accepted. What each message costs is measured as ADR 0022 describes.
 
 ## Context
 

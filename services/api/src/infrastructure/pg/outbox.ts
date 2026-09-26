@@ -1,4 +1,4 @@
-import { instant } from "@tor-now/domain";
+import { asId, instant } from "@tor-now/domain";
 import { OUTBOX } from "../../config.ts";
 import type {
   NotificationPayload,
@@ -18,6 +18,7 @@ export const outbox = (tx: Transaction): Outbox => ({
   async enqueue(message) {
     await tx`
       select app.enqueue_notification(
+        ${message.businessId},
         ${message.recipientPhone},
         ${message.template},
         ${JSON.stringify(message.payload)}::jsonb)`;
@@ -40,6 +41,7 @@ export const outbox = (tx: Transaction): Outbox => ({
       attempts: Number(row["attempts"]),
       createdAt: instant(new Date(row["created_at"] as string).getTime()),
       message: {
+        businessId: asId(String(row["business_id"])),
         recipientPhone: String(row["recipient_phone"]),
         template: String(row["template"]) as Template,
         payload: row["payload"] as NotificationPayload,

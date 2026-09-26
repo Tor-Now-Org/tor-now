@@ -165,3 +165,31 @@ describe("the person's own profile", () => {
     expect(stored?.phone).toBe("+972500000002");
   });
 });
+
+describe("what a sign-in code uses", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  it("is recorded against the platform, as an authentication template", async () => {
+    test.sendCodesBy("WHATSAPP");
+
+    await test.services.auth.requestCode("+972500000071");
+
+    expect(test.store.usageRecords).toEqual([
+      expect.objectContaining({
+        businessId: null,
+        source: "SIGN_IN",
+        unit: "WHATSAPP_AUTHENTICATION",
+        quantity: 1,
+      }),
+    ]);
+  });
+
+  it("is nothing when the code only went to the log", async () => {
+    await test.services.auth.requestCode("+972500000072");
+    expect(test.store.usageRecords).toEqual([]);
+  });
+});

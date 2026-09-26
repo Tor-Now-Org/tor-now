@@ -16,6 +16,7 @@ export const notificationFor = (
   customer: { givenName: string; familyName: string | null; phone: string },
   previousStartAt?: string,
 ): OutboundMessage => ({
+  businessId: appointment.businessId,
   recipientPhone: customer.phone,
   template,
   payload: {

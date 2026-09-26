@@ -44,6 +44,7 @@ export const reminderService = (dependencies: {
 
       for (const entry of due) {
         await session.outbox.enqueue({
+          businessId: entry.appointment.businessId,
           recipientPhone: entry.customerPhone,
           template: TEMPLATES.bookingReminder,
           payload: {

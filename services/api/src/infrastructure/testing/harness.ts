@@ -20,7 +20,7 @@ import { outboxWorker } from "../../application/outbox-worker.ts";
 import { reminderService } from "../../application/reminder-service.ts";
 import { waitingService } from "../../application/waiting-service.ts";
 import type { AuditLogEntry, AuditReader, AuditSink } from "../../ports/audit.ts";
-import type { Notifier, Outbox } from "../../ports/notifier.ts";
+import type { DeliveryChannel, Notifier, Outbox } from "../../ports/notifier.ts";
 import type { TokenIssuer, TokenVerifier } from "../../ports/tokens.ts";
 import { actorUserId, type Session, type UnitOfWork } from "../../ports/unit-of-work.ts";
 import type {
@@ -161,10 +161,13 @@ export const harness = (options: { now?: Instant } = {}) => {
   const generator: CodeGenerator = { generate: (length) => "1".repeat(length) };
 
   const sent: { phone: string; code: string }[] = [];
+  /** How codes go out; a test about what signing in costs sets a paid channel. */
+  let codesVia: DeliveryChannel = "LOG";
   const sender: VerificationSender = {
     channel: "TEST",
     async send(phone, code) {
       sent.push({ phone, code });
+      return { via: codesVia, units: 1 };
     },
   };
 
@@ -231,11 +234,13 @@ export const harness = (options: { now?: Instant } = {}) => {
   const delivered: string[] = [];
   /** Set by a test that wants delivery to fail, so retries can be exercised. */
   let refuseDelivery: string | null = null;
+  /** How messages go out, and in how many billable units; LOG costs nothing. */
+  let deliverVia: { via: DeliveryChannel; units: number } = { via: "LOG", units: 1 };
   const notifier: Notifier = {
     async deliver(message) {
       if (refuseDelivery !== null) return { delivered: false, reason: refuseDelivery };
       delivered.push(message.template);
-      return { delivered: true, via: "LOG" };
+      return { delivered: true, ...deliverVia };
     },
   };
 
@@ -246,6 +251,14 @@ export const harness = (options: { now?: Instant } = {}) => {
     store,
     clock,
     /** Moves the harness's clock, so a later moment can be tested. */
+    /** Delivers every message by this channel from now on, as a provider would bill it. */
+    deliverBy: (via: DeliveryChannel, units = 1) => {
+      deliverVia = { via, units };
+    },
+    /** Sends every code by this channel from now on. */
+    sendCodesBy: (via: DeliveryChannel) => {
+      codesVia = via;
+    },
     travelTo: (moment: Instant) => {
       currentTime = moment;
     },

@@ -1,4 +1,4 @@
-import type { Instant } from "@tor-now/domain";
+import type { BusinessId, Instant } from "@tor-now/domain";
 
 /**
  * ADR 0005. All outbound messaging goes through this port, with swappable
@@ -54,6 +54,8 @@ export type NotificationPayload = {
 };
 
 export type OutboundMessage = {
+  /** Whose message it is — the Business its delivery is charged to. */
+  readonly businessId: BusinessId;
   readonly recipientPhone: string;
   readonly template: Template;
   readonly payload: NotificationPayload;
@@ -62,9 +64,13 @@ export type OutboundMessage = {
 export const DELIVERY_CHANNELS = ["WHATSAPP", "SMS", "LOG"] as const;
 export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
 
-/** What an adapter reports back; the worker records it against the outbox row. */
+/**
+ * What an adapter reports back; the worker records it against the outbox row.
+ * `units` is what the provider bills for it: one WhatsApp template, or however
+ * many segments an SMS was split into.
+ */
 export type DeliveryResult =
-  | { readonly delivered: true; readonly via: DeliveryChannel }
+  | { readonly delivered: true; readonly via: DeliveryChannel; readonly units: number }
   | { readonly delivered: false; readonly reason: string };
 
 export type Notifier = {

@@ -14,6 +14,6 @@ export const logNotifier = (
       `[notification] → ${message.recipientPhone} (${message.template}): ` +
         renderTemplate(message.template, message.payload),
     );
-    return { delivered: true, via: "LOG" };
+    return { delivered: true, via: "LOG", units: 1 };
   },
 });

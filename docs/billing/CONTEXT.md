@@ -74,10 +74,11 @@ One Feature given to one Business beyond what its Plan Version includes, for a
 stated reason and until a stated date. Never permanent.
 _Avoid_: Override, exception, comp, gift
 
-**Cost Record**:
-One thing the platform paid for on a Business's behalf — a message sent, say —
-attributed to the Feature that caused it, with its amount.
-_Avoid_: Usage event, charge, expense line
+**Usage Record**:
+One billable thing that happened — a message sent, in so many units —
+attributed to the Business and the Feature that caused it. Holds no price;
+its cost is worked out from the Unit Rate in force on the day it happened.
+_Avoid_: Cost record, usage event, charge, expense line
 
 **Entitlement**:
 What a Subscription grants at a given moment: its Features and its Resource
@@ -96,6 +97,13 @@ to operate unaffected, on the same Plan. Only a Subscription that has received a
 least one Payment has one. Fourteen days; Deactivation follows only once it
 elapses. A Trial never has one.
 _Avoid_: Overdue window, buffer, leniency
+
+**Unit Rate**:
+What one unit — a WhatsApp template of a given category, or one SMS segment —
+cost from a given day, and where that figure was checked. A correction is a new
+Unit Rate from the day it applies, which may be in the past; Usage Records are
+never rewritten.
+_Avoid_: Price, tariff, fee
 
 **Standing**:
 Where a Business stands with the platform at a given moment: exactly one of

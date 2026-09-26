@@ -8,6 +8,8 @@ import {
   planVersionRepository,
   previewRepository,
   subscriptionRepository,
+  unitRateRepository,
+  usageRecordRepository,
 } from "./billing-repositories.ts";
 import {
   administratorAllowlistRepository,
@@ -128,6 +130,8 @@ if (databaseUrl === undefined || databaseUrl === "") {
         payments: recording("payments", paymentRepository(transaction)),
         planVersions: recording("planVersions", planVersionRepository(transaction)),
         previews: recording("previews", previewRepository(transaction)),
+        usageRecords: recording("usageRecords", usageRecordRepository(transaction)),
+        unitRates: recording("unitRates", unitRateRepository(transaction)),
         administratorAllowlist: recording(
           "administratorAllowlist",
           administratorAllowlistRepository(transaction),

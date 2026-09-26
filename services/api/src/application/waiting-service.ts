@@ -321,6 +321,7 @@ export const waitingService = (dependencies: {
             if (opening === null) continue;
 
             await session.outbox.enqueue({
+              businessId: one.entry.businessId,
               recipientPhone: one.customerPhone,
               template: TEMPLATES.waitingListOpening,
               payload: {

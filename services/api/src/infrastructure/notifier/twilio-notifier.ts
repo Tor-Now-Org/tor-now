@@ -1,4 +1,5 @@
 import type { DeliveryChannel, Notifier } from "../../ports/notifier.ts";
+import { smsSegments } from "@tor-now/domain";
 import { renderTemplate } from "./templates.ts";
 
 export type TwilioCredentials = {
@@ -65,7 +66,11 @@ export const twilioNotifier = (credentials: TwilioCredentials): Notifier => ({
     for (const attempt of attempts) {
       try {
         await sendVia(credentials, attempt.from, attempt.to, body);
-        return { delivered: true, via: attempt.channel };
+        return {
+          delivered: true,
+          via: attempt.channel,
+          units: attempt.channel === "SMS" ? smsSegments(body) : 1,
+        };
       } catch (error) {
         failures.push(
           `${attempt.channel}: ${error instanceof Error ? error.message : String(error)}`,

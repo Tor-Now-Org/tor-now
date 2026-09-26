@@ -8,6 +8,8 @@ import type {
   MembershipResource,
   LocalDate,
   Payment,
+  UnitRate,
+  UsageRecord,
   PlanVersion,
   Preview,
   Resource,
@@ -17,7 +19,7 @@ import type {
   User,
   WorkingHours,
 } from "@tor-now/domain";
-import { addDays, asId, money, parseLocalDate, planTerms } from "@tor-now/domain";
+import { addDays, asId, microShekels, money, parseLocalDate, planTerms } from "@tor-now/domain";
 import type { AuditEntry } from "../../ports/audit.ts";
 import type { WaitingEntry, WaitingRecheck } from "../../ports/repositories.ts";
 import type { OutboundMessage } from "../../ports/notifier.ts";
@@ -54,6 +56,8 @@ export type Store = {
   payments: Payment[];
   planVersions: PlanVersion[];
   previews: Preview[];
+  usageRecords: UsageRecord[];
+  unitRates: UnitRate[];
   /** app_user.trial_taken_on, kept beside the User as the database keeps it. */
   trialsTaken: { userId: string; on: LocalDate }[];
   allowlist: { phone: string; note: string | null }[];
@@ -92,6 +96,14 @@ export const emptyStore = (
   subscriptions: [],
   payments: [],
   ...initialCatalogue(today),
+  usageRecords: [],
+  // The usage_records migration's default rates.
+  unitRates: (["SMS_SEGMENT", "WHATSAPP_AUTHENTICATION", "WHATSAPP_UTILITY"] as const).map((unit) => ({
+    unit,
+    effectiveFrom: parseLocalDate("2026-09-01"),
+    perUnit: microShekels(unit === "SMS_SEGMENT" ? 952_750 : 19_610),
+    source: "Default",
+  })),
   trialsTaken: [],
   allowlist: [],
   waitingEntries: [],

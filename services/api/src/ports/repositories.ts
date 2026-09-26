@@ -25,6 +25,10 @@ import type {
   PhotoSlot,
   PlanVersion,
   PlanVersionId,
+  CostSource,
+  CostUnit,
+  UnitRate,
+  UsageRecord,
   GrantTerm,
   Preview,
   Resource,
@@ -695,6 +699,31 @@ export type PreviewRepository = {
   list(): Promise<readonly Preview[]>;
 };
 
+/**
+ * Usage added up per Business, source, unit and day — the day being what a
+ * Unit Rate is dated by, so each line is priced by the rate in force on it.
+ * Days are UTC, as providers bill.
+ */
+export type DailyUsageLine = {
+  readonly businessId: BusinessId | null;
+  readonly source: CostSource;
+  readonly unit: CostUnit;
+  readonly day: LocalDate;
+  readonly quantity: number;
+};
+
+export type UsageRecordRepository = {
+  /** Append-only: what happened is never revised; only its price may be. */
+  record(records: readonly UsageRecord[]): Promise<void>;
+  /** Everything recorded from `from` up to but not including `to`. */
+  summarise(from: Instant, to: Instant): Promise<readonly DailyUsageLine[]>;
+};
+
+export type UnitRateRepository = {
+  /** Every rate ever entered, past ones included, oldest first per unit. */
+  list(): Promise<readonly UnitRate[]>;
+};
+
 export type PaymentRepository = {
   create(payment: {
     subscriptionId: Subscription["id"];
@@ -840,6 +869,8 @@ export type Repositories = {
   readonly payments: PaymentRepository;
   readonly planVersions: PlanVersionRepository;
   readonly previews: PreviewRepository;
+  readonly usageRecords: UsageRecordRepository;
+  readonly unitRates: UnitRateRepository;
   readonly administratorAllowlist: AdministratorAllowlistRepository;
   readonly waitingEntries: WaitingEntryRepository;
   readonly waitingRechecks: WaitingRecheckRepository;

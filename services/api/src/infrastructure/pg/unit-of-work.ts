@@ -18,6 +18,8 @@ import {
   planVersionRepository,
   previewRepository,
   subscriptionRepository,
+  unitRateRepository,
+  usageRecordRepository,
 } from "./billing-repositories.ts";
 import { outbox } from "./outbox.ts";
 import {
@@ -49,6 +51,8 @@ const repositoriesOn = (tx: Transaction): Repositories => ({
   payments: paymentRepository(tx),
   planVersions: planVersionRepository(tx),
   previews: previewRepository(tx),
+  usageRecords: usageRecordRepository(tx),
+  unitRates: unitRateRepository(tx),
   administratorAllowlist: administratorAllowlistRepository(tx),
   waitingEntries: waitingEntryRepository(tx),
   waitingRechecks: waitingRecheckRepository(tx),

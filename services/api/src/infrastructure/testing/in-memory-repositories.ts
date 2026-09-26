@@ -34,7 +34,7 @@ import {
 } from "@tor-now/domain";
 import { SEARCH } from "../../config.ts";
 import { PG_ERRORS } from "../pg/client.ts";
-import type { Repositories, WaitingEntry } from "../../ports/repositories.ts";
+import type { DailyUsageLine, Repositories, WaitingEntry } from "../../ports/repositories.ts";
 import type { Store } from "./in-memory-store.ts";
 
 /**
@@ -1314,6 +1314,42 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       async listAll() {
         return [...store.planVersions].sort(
           (a, b) => a.plan.localeCompare(b.plan) || a.number - b.number,
+        );
+      },
+    },
+
+    usageRecords: {
+      async record(records) {
+        store.usageRecords = [...store.usageRecords, ...records];
+      },
+      async summarise(from, to) {
+        const lines = new Map<string, DailyUsageLine>();
+        for (const record of store.usageRecords) {
+          if (record.occurredAt < from || record.occurredAt >= to) continue;
+          const day = parseLocalDate(new Date(record.occurredAt).toISOString().slice(0, 10));
+          const key = [record.businessId ?? "", record.source, record.unit, day].join("|");
+          lines.set(key, {
+            businessId: record.businessId,
+            source: record.source,
+            unit: record.unit,
+            day,
+            quantity: (lines.get(key)?.quantity ?? 0) + record.quantity,
+          });
+        }
+        return [...lines.values()].sort(
+          (a, b) =>
+            (a.businessId ?? "").localeCompare(b.businessId ?? "") ||
+            a.source.localeCompare(b.source) ||
+            a.unit.localeCompare(b.unit) ||
+            a.day.localeCompare(b.day),
+        );
+      },
+    },
+
+    unitRates: {
+      async list() {
+        return [...store.unitRates].sort(
+          (a, b) => a.unit.localeCompare(b.unit) || a.effectiveFrom.localeCompare(b.effectiveFrom),
         );
       },
     },

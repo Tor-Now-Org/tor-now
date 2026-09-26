@@ -2,6 +2,7 @@ import { addMinutesToInstant, type Clock, type Instant } from "@tor-now/domain";
 import { OUTBOX } from "../config.ts";
 import type { Notifier } from "../ports/notifier.ts";
 import { system, type UnitOfWork } from "../ports/unit-of-work.ts";
+import { SOURCE_OF_TEMPLATE, usageRecordFor } from "./usage.ts";
 
 /**
  * ADR 0005: messages are delivered by a worker, never inside the transaction
@@ -56,7 +57,23 @@ export const outboxWorker = (dependencies: {
       }),
     );
 
-    await dependencies.unitOfWork.run(system(), async ({ outbox }) => {
+    // What each delivery used is written in the same transaction that marks it
+    // sent, so a message is never recorded as delivered without its usage.
+    const at = dependencies.clock.now();
+    const usage = outcomes.flatMap(({ entry, result }) => {
+      if (!result.delivered) return [];
+      const record = usageRecordFor({
+        businessId: entry.message.businessId,
+        source: SOURCE_OF_TEMPLATE[entry.message.template],
+        kind: "UTILITY",
+        via: result.via,
+        units: result.units,
+        at,
+      });
+      return record === null ? [] : [record];
+    });
+
+    await dependencies.unitOfWork.run(system(), async ({ outbox, repositories }) => {
       await Promise.all(
         outcomes.map(({ entry, result, nextAttempt }) =>
           result.delivered
@@ -64,6 +81,7 @@ export const outboxWorker = (dependencies: {
             : outbox.markFailed(entry.id, result.reason, nextAttempt),
         ),
       );
+      await repositories.usageRecords.record(usage);
     });
 
     const delivered = outcomes.filter((outcome) => outcome.result.delivered).length;

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { asId, smsSegments } from "@tor-now/domain";
 import { TEMPLATES, type OutboundMessage } from "../../ports/notifier.ts";
 import { logNotifier } from "./log-notifier.ts";
 import { twilioNotifier } from "./twilio-notifier.ts";
@@ -12,6 +13,7 @@ import { twilioNotifier } from "./twilio-notifier.ts";
  * the first time anyone found out would have been the first real message.
  */
 const aMessage: OutboundMessage = {
+  businessId: asId("business-1"),
   recipientPhone: "+972501234567",
   template: TEMPLATES.bookingConfirmed,
   payload: {
@@ -34,7 +36,7 @@ describe("the log notifier", () => {
     const lines: string[] = [];
     const result = await logNotifier((line) => lines.push(line)).deliver(aMessage);
 
-    expect(result).toEqual({ delivered: true, via: "LOG" });
+    expect(result).toEqual({ delivered: true, via: "LOG", units: 1 });
     expect(lines).toHaveLength(1);
     // The rendered text, not just the template name: a message nobody can read
     // is not a delivery, even to a log.
@@ -72,7 +74,7 @@ describe("the Twilio notifier", () => {
 
     const result = await twilioNotifier(CREDENTIALS).deliver(aMessage);
 
-    expect(result).toEqual({ delivered: true, via: "WHATSAPP" });
+    expect(result).toEqual({ delivered: true, via: "WHATSAPP", units: 1 });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.to).toBe("whatsapp:+972501234567");
     expect(calls[0]?.from).toBe("whatsapp:+14155238886");
@@ -87,7 +89,9 @@ describe("the Twilio notifier", () => {
       aMessage,
     );
 
-    expect(result).toEqual({ delivered: true, via: "SMS" });
+    // Billed by the segment: a Hebrew message is Unicode, 70 characters to a segment.
+    expect(result).toEqual({ delivered: true, via: "SMS", units: smsSegments(calls[1]?.body ?? "") });
+    expect(result.delivered && result.units).toBeGreaterThan(1);
     expect(calls).toHaveLength(2);
     // The SMS goes to the bare number, not the whatsapp: form.
     expect(calls[1]?.to).toBe("+972501234567");

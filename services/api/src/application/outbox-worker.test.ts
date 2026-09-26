@@ -92,3 +92,75 @@ describe("draining the outbox", () => {
     });
   });
 });
+
+/**
+ * Usage Records: every message a provider bills for is recorded against the
+ * Business it was for and the Feature that caused it — unpriced, so a rate
+ * corrected later prices it without rewriting it.
+ */
+describe("what delivering uses", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+  });
+
+  const aBooking = async () => {
+    const shop = await anEstablishedBusiness(test);
+    const customer = await signIn(test, "+972500000002", "דנה");
+    await test.services.booking.book(customer.actor, {
+      businessId: shop.business.id,
+      serviceId: shop.service.id,
+      resourceId: shop.resource.id,
+      startAt: TUESDAY_AT("09:00"),
+      customerNote: null,
+    });
+    return shop;
+  };
+
+  it("records a WhatsApp confirmation against its Business, as a booking message", async () => {
+    const shop = await aBooking();
+    test.deliverBy("WHATSAPP");
+
+    await test.services.outboxWorker.drain();
+
+    expect(test.store.usageRecords).toEqual([
+      {
+        businessId: shop.business.id,
+        source: "BOOKING",
+        unit: "WHATSAPP_UTILITY",
+        quantity: 1,
+        occurredAt: expect.any(Number),
+      },
+    ]);
+  });
+
+  it("records an SMS by the segments it went out in", async () => {
+    await aBooking();
+    test.deliverBy("SMS", 3);
+
+    await test.services.outboxWorker.drain();
+
+    expect(test.store.usageRecords).toEqual([
+      expect.objectContaining({ unit: "SMS_SEGMENT", quantity: 3 }),
+    ]);
+  });
+
+  it("records nothing for a message that was not delivered", async () => {
+    await aBooking();
+    test.deliverBy("WHATSAPP");
+    test.refuseDeliveries("provider said no");
+
+    await test.services.outboxWorker.drain();
+
+    expect(test.store.usageRecords).toEqual([]);
+  });
+
+  it("records nothing for a message that only went to the log", async () => {
+    await aBooking();
+
+    await test.services.outboxWorker.drain();
+
+    expect(test.store.usageRecords).toEqual([]);
+  });
+});

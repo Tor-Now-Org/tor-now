@@ -1,3 +1,4 @@
+import { smsSegments } from "@tor-now/domain";
 import type { VerificationSender } from "../../ports/verification.ts";
 import type { TwilioCredentials } from "../notifier/twilio-notifier.ts";
 
@@ -14,6 +15,7 @@ export const logVerificationSender = (
   channel: "LOG",
   async send(phone, code) {
     write(`[verification] ${phone} → ${code}`);
+    return { via: "LOG", units: 1 };
   },
 });
 
@@ -33,6 +35,7 @@ export const twilioVerificationSender = (
         ? `whatsapp:${credentials.whatsappFrom}`
         : (credentials.smsFrom ?? credentials.whatsappFrom);
     const to = channel === "WHATSAPP" ? `whatsapp:${phone}` : phone;
+    const body = `קוד האימות שלך ל־תורNow: ${code}`;
 
     const response = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${credentials.accountSid}/Messages.json`,
@@ -42,11 +45,7 @@ export const twilioVerificationSender = (
           "Content-Type": "application/x-www-form-urlencoded",
           Authorization: `Basic ${btoa(`${credentials.accountSid}:${credentials.authToken}`)}`,
         },
-        body: new URLSearchParams({
-          From: from,
-          To: to,
-          Body: `קוד האימות שלך ל־תורNow: ${code}`,
-        }),
+        body: new URLSearchParams({ From: from, To: to, Body: body }),
       },
     );
 
@@ -55,5 +54,6 @@ export const twilioVerificationSender = (
         `Twilio refused the verification code (${response.status}): ${await response.text()}`,
       );
     }
+    return { via: channel, units: channel === "SMS" ? smsSegments(body) : 1 };
   },
 });

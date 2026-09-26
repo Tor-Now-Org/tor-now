@@ -7,17 +7,24 @@ import {
   notFound,
   parseFeature,
   parseLocalDate,
+  COST_UNITS,
+  microShekels,
+  type CostSource,
+  type CostUnit,
 } from "@tor-now/domain";
 import type {
   PaymentRepository,
   PlanVersionRepository,
   PreviewRepository,
   SubscriptionRepository,
+  UnitRateRepository,
+  UsageRecordRepository,
 } from "../../ports/repositories.ts";
 import { errorCodeOf, PG_ERRORS, type Transaction } from "./client.ts";
 import {
   text,
   toBusiness,
+  toLocalDate,
   toPayment,
   toPlanVersion,
   toPreview,
@@ -187,3 +194,61 @@ export const paymentRepository = (tx: Transaction): PaymentRepository => ({
     return rows.map(toPayment);
   },
 });
+
+export const usageRecordRepository = (tx: Transaction): UsageRecordRepository => ({
+  async record(records) {
+    if (records.length === 0) return;
+    await tx`
+      insert into usage_record ${tx(
+        records.map((record) => ({
+          business_id: record.businessId,
+          source: record.source,
+          unit: record.unit,
+          quantity: record.quantity,
+          occurred_at: new Date(record.occurredAt),
+        })),
+      )}`;
+  },
+
+  async summarise(from, to) {
+    const rows = await tx<Row[]>`
+      select business_id, source, unit,
+             (occurred_at at time zone 'UTC')::date as day,
+             sum(quantity)::int as quantity
+      from usage_record
+      where occurred_at >= ${new Date(from)} and occurred_at < ${new Date(to)}
+      group by business_id, source, unit, day
+      order by business_id nulls first, source, unit, day`;
+    return rows.map((row) => ({
+      businessId: row["business_id"] === null ? null : asId(text(row["business_id"])),
+      source: toCostSource(text(row["source"])),
+      unit: toCostUnit(text(row["unit"])),
+      day: toLocalDate(row["day"]),
+      quantity: Number(row["quantity"]),
+    }));
+  },
+});
+
+export const unitRateRepository = (tx: Transaction): UnitRateRepository => ({
+  async list() {
+    const rows = await tx<Row[]>`
+      select unit, effective_from, micro_shekels, source
+      from unit_rate order by unit, effective_from`;
+    return rows.map((row) => ({
+      unit: toCostUnit(text(row["unit"])),
+      effectiveFrom: toLocalDate(row["effective_from"]),
+      perUnit: microShekels(Number(row["micro_shekels"])),
+      source: text(row["source"]),
+    }));
+  },
+});
+
+const toCostUnit = (value: string): CostUnit => {
+  if (!(COST_UNITS as readonly string[]).includes(value)) {
+    throw new Error(`Unknown cost unit in the database: ${value}`);
+  }
+  return value as CostUnit;
+};
+
+const toCostSource = (value: string): CostSource =>
+  value === "BOOKING" || value === "SIGN_IN" ? value : parseFeature(value);

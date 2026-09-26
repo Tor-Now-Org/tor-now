@@ -2045,6 +2045,50 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("reads the default unit rates, dated and sourced", async () => {
+      await withRepositories(async (repositories) => {
+        const rates = await repositories.unitRates.list();
+        expect(rates.map(({ unit, effectiveFrom, perUnit }) => ({ unit, effectiveFrom, perUnit }))).toEqual([
+          { unit: "SMS_SEGMENT", effectiveFrom: "2026-09-01", perUnit: 952_750 },
+          { unit: "WHATSAPP_AUTHENTICATION", effectiveFrom: "2026-09-01", perUnit: 19_610 },
+          { unit: "WHATSAPP_UTILITY", effectiveFrom: "2026-09-01", perUnit: 19_610 },
+        ]);
+        for (const rate of rates) expect(rate.source).toMatch(/^Default/);
+      });
+    });
+
+    it("records usage and adds it up per Business, source, unit and UTC day, within the span", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07009");
+        const morning = AT("2031-03-10T08:00:00.000Z");
+        const evening = AT("2031-03-10T20:00:00.000Z");
+        const nextDay = AT("2031-03-11T08:00:00.000Z");
+        const outside = AT("2031-04-10T10:00:00.000Z");
+        const shop = context.business.id;
+        await repositories.usageRecords.record([]);
+        await repositories.usageRecords.record([
+          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", quantity: 1, occurredAt: morning },
+          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", quantity: 1, occurredAt: evening },
+          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", quantity: 1, occurredAt: nextDay },
+          { businessId: shop, source: "WAITING_LIST", unit: "SMS_SEGMENT", quantity: 2, occurredAt: morning },
+          { businessId: null, source: "SIGN_IN", unit: "WHATSAPP_AUTHENTICATION", quantity: 1, occurredAt: morning },
+          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", quantity: 1, occurredAt: outside },
+        ]);
+
+        const summary = await repositories.usageRecords.summarise(
+          AT("2031-03-01T00:00:00.000Z"),
+          AT("2031-04-01T00:00:00.000Z"),
+        );
+
+        expect(summary).toEqual([
+          { businessId: null, source: "SIGN_IN", unit: "WHATSAPP_AUTHENTICATION", day: "2031-03-10", quantity: 1 },
+          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", day: "2031-03-10", quantity: 2 },
+          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", day: "2031-03-11", quantity: 1 },
+          { businessId: shop, source: "WAITING_LIST", unit: "SMS_SEGMENT", day: "2031-03-10", quantity: 2 },
+        ]);
+      });
+    });
+
     it("lists a paid subscription as lapsed only past its grace period", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "07002");
