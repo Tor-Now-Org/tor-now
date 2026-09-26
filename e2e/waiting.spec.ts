@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
   aDayFromNow,
+  anInstantAt,
   call,
   openTheDayOf,
   ready,
@@ -260,8 +261,21 @@ test.describe("waiting for a time", () => {
       ownerPhone: uniquePhone(),
       serviceName: "תספורת",
       durationMinutes: 60,
-      // Opens at noon: there is no morning to be had, and an evening there is.
-      hours: { start: "12:00", end: "20:00" },
+      // Works the morning and the middle of the day, never the evening.
+      hours: { start: "09:00", end: "17:00" },
+    });
+    // The morning is worked but taken: that is a part something could free up
+    // in. A block, not a change of hours, so the calendar still works it.
+    const day = aDayFromNow(3);
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        blocks: [
+          { startAt: anInstantAt(day, "09:00"), endAt: anInstantAt(day, "12:00"), reason: "ספק" },
+        ],
+        upcoming: "KEEP",
+      },
     });
     await signInDirectly(page, uniquePhone(), "שירה");
 
@@ -275,6 +289,8 @@ test.describe("waiting for a time", () => {
     // The parts that have times offer no such thing.
     await expect(page.getByRole("button", { name: /הודיעו לי אם מתפנה צהריים/ })).toHaveCount(0);
     await expect(offer(page)).toHaveCount(0);
+    // And an evening the calendar never works has nothing to free up.
+    await expect(page.getByRole("button", { name: /הודיעו לי אם מתפנה ערב/ })).toHaveCount(0);
 
     // Pressing it opens the sheet already narrowed to that part.
     await morning.click();

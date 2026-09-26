@@ -3294,13 +3294,18 @@ test.describe("a day the shop keeps its own hours", () => {
  * Sunday is the only one guaranteed not to be split by the grid itself.
  */
 const fourDaysFromTheNextSunday = (): string[] => {
-  for (let ahead = 2; ahead < 16; ahead += 1) {
+  for (let ahead = 2; ahead < 30; ahead += 1) {
     const date = aDayFromNow(ahead);
-    if (new Date(`${date}T00:00:00Z`).getUTCDay() === 0) {
-      return [0, 1, 2, 3].map((on) => aDayFromNow(ahead + on));
+    const days = [0, 1, 2, 3].map((on) => aDayFromNow(ahead + on));
+    // And inside one month, or the month's page cuts the run in two.
+    if (
+      new Date(`${date}T00:00:00Z`).getUTCDay() === 0 &&
+      days[3]!.slice(0, 7) === date.slice(0, 7)
+    ) {
+      return days;
     }
   }
-  throw new Error("No Sunday within a fortnight, which cannot happen");
+  throw new Error("No Sunday within a month, which cannot happen");
 };
 
 test.describe("a month with a lot decided about it", () => {
@@ -3339,12 +3344,14 @@ test.describe("a month with a lot decided about it", () => {
     });
 
     // Two days with a gap between them: separate runs, so two bars — and one
-    // line, because a bar on Monday does not overlap one on Thursday.
-    const days = [aDayFromNow(2), aDayFromNow(5)];
+    // line, because a bar on one day does not overlap one three days later.
+    // Next month's, so both are on one page whatever today is.
+    const days = [aDayNextMonth(2), aDayNextMonth(5)];
     await blockOn(shop, shop.resource.id, days[0]!, "רופא");
     await blockOn(shop, shop.resource.id, days[1]!, "ספק");
 
     await openMonth(page, shop);
+    await showTheMonthOf(page, days[0]!);
 
     for (const date of days) {
       await expect(page.getByRole("button", { name: date })).toBeVisible();
@@ -3381,6 +3388,7 @@ test.describe("a month with a lot decided about it", () => {
     }
 
     await openMonth(page, shop);
+    await showTheMonthOf(page, days[0]!);
 
     const bar = page.getByRole("button", { name: "חסום", exact: true });
     await expect(bar).toBeVisible({ timeout: 15_000 });
@@ -4033,33 +4041,29 @@ test.describe("the calendar, altogether", () => {
     return shop;
   };
 
-  /** The first Saturday ahead, which this business never works. */
-  const aRestDay = (): string => {
-    for (let ahead = 1; ahead < 20; ahead += 1) {
+  /**
+   * A Saturday ahead, which this business never works, and the Sunday after
+   * it, which it does — on one month's page, so both squares are on screen.
+   */
+  const aRestDayAndTheDayAfter = (): [string, string] => {
+    for (let ahead = 1; ahead < 30; ahead += 1) {
       const date = aDayFromNow(ahead);
-      if (new Date(`${date}T00:00:00Z`).getUTCDay() === 6) return date;
+      const next = aDayFromNow(ahead + 1);
+      if (new Date(`${date}T00:00:00Z`).getUTCDay() === 6 && next.slice(0, 7) === date.slice(0, 7)) {
+        return [date, next];
+      }
     }
     throw new Error("no Saturday ahead");
   };
 
-  /** The soonest day this shop actually works, which is any day but Saturday. */
-  const aWorkingDayAhead = (notThis: string): string => {
-    for (let ahead = 2; ahead < 20; ahead += 1) {
-      const date = aDayFromNow(ahead);
-      if (date !== notThis && new Date(`${date}T00:00:00Z`).getUTCDay() !== 6) return date;
-    }
-    throw new Error("no working day ahead");
-  };
-
   test("tells a day nobody works from a day somebody closed", async ({ page }) => {
     const shop = await aWeekdayBusiness(`מנוחה ${Date.now()}`);
-    const rest = aRestDay();
     // A day the shop does work, so the two squares are telling two different
     // stories. Taking whatever fell two days ahead meant that on a Thursday it
     // fell on the rest day itself and the test compared a square with itself —
     // and the ternary written to avoid exactly that had the same number in
     // both branches.
-    const shut = aWorkingDayAhead(rest);
+    const [rest, shut] = aRestDayAndTheDayAfter();
     await call(`/businesses/${shop.business.id}/closures`, {
       method: "POST",
       token: shop.owner.token,
@@ -4067,6 +4071,7 @@ test.describe("the calendar, altogether", () => {
     });
 
     await openCalendar(page, shop, shop.owner.token);
+    await showTheMonthOf(page, rest);
 
     const restSquare = page.getByRole("button", { name: rest });
     const shutSquare = page.getByRole("button", { name: shut });
@@ -4473,7 +4478,7 @@ test.describe("a day nobody works, and why nobody works it", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: saturday }).click();
+    await openTheDayOf(page, saturday);
 
     await expect(page.getByText("יום שבו לא עובדים")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/כך נראה השבוע הרגיל/)).toBeVisible();
