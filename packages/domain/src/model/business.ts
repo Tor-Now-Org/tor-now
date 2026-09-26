@@ -86,8 +86,23 @@ export type Resource = {
   readonly id: ResourceId;
   readonly businessId: BusinessId;
   readonly name: string;
+  /** False once its owner hid or removed it. */
   readonly active: boolean;
+  /**
+   * Set while the Business holds more Resources than its Resource Allowance
+   * (CONTEXT.md, Paused Resource). It keeps its hours and appointments, and
+   * comes back as it was once the Allowance covers it again.
+   */
+  readonly pausedAt: Instant | null;
 };
+
+/**
+ * Whether customers can book it: its owner offers it, and it is not paused.
+ * The question every booking path asks — the owner's own views ask only
+ * `active`, so a paused calendar stays in front of them.
+ */
+export const isOnOffer = (resource: Pick<Resource, "active" | "pausedAt">): boolean =>
+  resource.active && resource.pausedAt === null;
 
 /** Something a Business offers at a defined duration and price. */
 export type Service = {

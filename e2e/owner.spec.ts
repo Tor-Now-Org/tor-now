@@ -5782,7 +5782,7 @@ test.describe("typing a number into a number", () => {
 test.describe("the billing tab", () => {
   test("shows the owner their Trial, when it ends, and what happens then", async ({ page }) => {
     const ownerPhone = uniquePhone();
-    const shop = await aBusinessWithOpenHours({ name: `ניסיון ${Date.now()}`, ownerPhone });
+    const shop = await aBusinessWithOpenHours({ name: `ניסיון ${Date.now()}`, ownerPhone, plan: "SOLO" });
 
     await signInDirectly(page, ownerPhone, "בעלים");
     await page.goto(`/manage?business=${shop.business.id}`);
@@ -5796,5 +5796,80 @@ test.describe("the billing tab", () => {
     await expect(page.getByText("ניסיון עד", { exact: true })).toBeVisible();
     await expect(page.getByText(/תקופת הניסיון מסתיימת/)).toBeVisible();
     await expect(page.getByText("עדיין אין תשלומים.")).toBeVisible();
+  });
+});
+
+test.describe("what Solo locks", () => {
+  const aSoloShop = async (ownerPhone: string) =>
+    aBusinessWithOpenHours({ name: `יחיד ${Date.now()}`, ownerPhone, plan: "SOLO" });
+
+  const openPanel = async (page: Page, businessId: string, panel: string) => {
+    await page.goto(`/manage?business=${businessId}`);
+    await ready(page);
+    await page.getByRole("button", { name: "העסק", exact: true }).click();
+    await page.getByRole("button", { name: panel, exact: true }).click();
+  };
+
+  test("a second calendar is a lock that leads to the plans", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aSoloShop(ownerPhone);
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await openPanel(page, shop.business.id, "יומנים");
+
+    // Said only now that there is no room left.
+    await expect(page.getByText("המסלול כולל יומן אחד, והוא בשימוש")).toBeVisible({ timeout: 15_000 });
+    const lock = page.getByRole("group", { name: "יומן נוסף זמין במסלול צוות" });
+    await expect(lock).toBeVisible();
+    await expect(page.getByRole("button", { name: "הוספה", exact: true })).toHaveCount(0);
+
+    await lock.getByRole("button", { name: "למסלולים" }).click();
+    await expect(page.getByText("ניסיון", { exact: true })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("adding to the team is a lock, and whoever is there stays", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aSoloShop(ownerPhone);
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await openPanel(page, shop.business.id, "צוות");
+
+    await expect(page.getByRole("group", { name: "הוספת מנהלים ועובדים זמינה במסלול צוות" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("button", { name: "הוספה", exact: true })).toHaveCount(0);
+  });
+
+  test("a customer's record still books them in, with their history locked", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aSoloShop(ownerPhone);
+    const customerPhone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", { method: "POST", body: { phone: customerPhone } });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone: customerPhone, code, name: { givenName: "דנה", familyName: "כהן" } },
+    });
+    await call("/appointments", {
+      method: "POST",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        startAt: await theNextStart(shop),
+        customerNote: null,
+      },
+    });
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "לקוחות", exact: true }).click();
+    await page.getByText("דנה כהן").first().click();
+    await expect(page).toHaveURL(/\/manage\/customers\//, { timeout: 15_000 });
+
+    await expect(page.getByRole("button", { name: "תור ללקוח" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "היסטוריית לקוח זמינה במסלול צוות" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "חסימת הלקוח" })).toHaveCount(0);
+    // What is coming is not history: it stays.
+    await expect(page.getByText("התורים הקרובים")).toBeVisible();
   });
 });

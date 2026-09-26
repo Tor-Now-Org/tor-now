@@ -72,6 +72,10 @@ export const staffedBusinessOut = (staffed: StaffedBusiness) => ({
   ...businessOut(staffed.business),
   role: staffed.role,
   resourceIds: staffed.resourceIds,
+  entitlement: {
+    features: staffed.entitlement.features,
+    resourceAllowance: staffed.entitlement.resourceAllowance,
+  },
 });
 
 /**
@@ -117,6 +121,8 @@ export const resourceOut = (resource: Resource) => ({
   businessId: resource.businessId,
   name: resource.name,
   active: resource.active,
+  /** Taken out of booking for the Resource Allowance; still the owner's. */
+  paused: resource.pausedAt !== null,
 });
 
 export const workingHoursOut = (hours: WorkingHours) => ({

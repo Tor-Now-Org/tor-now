@@ -26,6 +26,8 @@ import {
   type LocalTimeRangeValue,
   type ResourceId,
   type User,
+  hasFeature,
+  requireFeature,
 } from "@tor-now/domain";
 import { SEARCH } from "../config.ts";
 
@@ -74,6 +76,7 @@ export type BusinessMonth = {
   readonly closures: readonly ClosureBand[];
 };
 import { closureBandsOf, type ClosureBand } from "./closure-bands.ts";
+import { entitlementToday } from "./billing.ts";
 import { notificationFor } from "./notifications.ts";
 import { namedFor, stillToCome, type Impact, type Upcoming } from "./stranded.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
@@ -860,6 +863,10 @@ export const calendarService = ({
       if (membership === null || membership.role !== "CUSTOMER") {
         throw notFound("Customer", customerId);
       }
+      // Blocking is a Feature; lifting a block never is — it only undoes.
+      if (blocked) {
+        requireFeature(await entitlementToday(repositories, businessId, clock), "CUSTOMER_BLOCKING");
+      }
       return repositories.memberships.setBlocked(
         customerId,
         businessId,
@@ -882,12 +889,18 @@ export const calendarService = ({
       const membership = await repositories.memberships.find(customerId, businessId);
       if (membership === null) throw notFound("Customer", customerId);
 
-      const [user, appointments] = await Promise.all([
+      const [user, appointments, entitlement] = await Promise.all([
         repositories.users.findById(customerId),
         repositories.appointments.listForCustomerAtBusiness(customerId, businessId),
+        entitlementToday(repositories, businessId, clock),
       ]);
       if (user === null) throw notFound("Customer", customerId);
 
+      // The record still opens without Customer History, because it is where
+      // an owner books this person in and sees what they have coming. What the
+      // Feature holds is the past: what happened, and the counts drawn from it.
+      const historyIncluded = hasFeature(entitlement, "CUSTOMER_HISTORY");
+      const now = clock.now();
       return {
         user,
         blocked: membership.blockedAt !== null,
@@ -895,12 +908,18 @@ export const calendarService = ({
         // the OWNER role, and setCustomerBlocked rightly refuses it. Say so
         // here rather than offering a control that can only fail.
         blockable: membership.role === "CUSTOMER",
-        appointments,
-        lateCancellations: appointments.filter(
-          (appointment) => appointment.lateCancellation,
-        ).length,
-        noShows: appointments.filter((appointment) => appointment.status === "NO_SHOW")
-          .length,
+        historyIncluded,
+        appointments: historyIncluded
+          ? appointments
+          : appointments.filter(
+              (appointment) => appointment.status === "CONFIRMED" && appointment.startAt >= now,
+            ),
+        lateCancellations: historyIncluded
+          ? appointments.filter((appointment) => appointment.lateCancellation).length
+          : null,
+        noShows: historyIncluded
+          ? appointments.filter((appointment) => appointment.status === "NO_SHOW").length
+          : null,
       };
     });
   },

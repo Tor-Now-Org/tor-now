@@ -40,11 +40,29 @@ export type BusinessDto = {
   /** The calendars a WORKER is on. Empty for an OWNER or MANAGER, who reach all of them. */
   resourceIds?: string[];
   /**
+   * What the Business's plan lets its staff do (ADR 0019), on the businesses
+   * list only. Absent from an API that predates plans: read as "everything",
+   * so nothing is locked by a deploy that has not caught up.
+   */
+  entitlement?: EntitlementDto;
+  /**
    * Whether some active Resource is open right now, in the Business's own
    * timezone. Search results only — every other endpoint that returns a
    * BusinessDto has no use for it and never sends it.
    */
   openNow?: boolean;
+};
+
+export type FeatureName =
+  | "REMINDERS"
+  | "CUSTOMER_HISTORY"
+  | "CUSTOMER_BLOCKING"
+  | "TEAM_ROLES"
+  | "WAITING_LIST";
+
+export type EntitlementDto = {
+  features: FeatureName[];
+  resourceAllowance: number;
 };
 
 export type ServiceDto = {
@@ -69,6 +87,12 @@ export type ResourceDto = {
    * as "none booked" when it is about to ask what to do with them.
    */
   upcomingAppointments?: number;
+  /**
+   * Taken out of booking because the Business holds more calendars than its
+   * plan allows. Still the owner's, still carrying its appointments. Absent
+   * from an older API, which never paused anything.
+   */
+  paused?: boolean;
 };
 
 export type BusinessProfileDto = {
@@ -86,6 +110,11 @@ export type BusinessProfileDto = {
   photos?: BusinessPhotoDto[];
   /** Present when the request asked for a date range. */
   availability?: DayAvailabilityDto[];
+  /**
+   * Whether a customer may ask to hear about a freed time here. Absent from an
+   * older API, where every Business had the waiting list.
+   */
+  waitingList?: boolean;
 };
 
 /** One square of the owner's month grid. */
@@ -373,8 +402,14 @@ export type CustomerRecordDto = {
    */
   blockable?: boolean;
   appointments: AppointmentDto[];
-  lateCancellations: number;
-  noShows: number;
+  /**
+   * False when the plan does not include Customer History: `appointments` is
+   * then only what is still to come, and the counts are null. Absent from an
+   * older API, which always sent the whole history.
+   */
+  historyIncluded?: boolean;
+  lateCancellations: number | null;
+  noShows: number | null;
 };
 
 export type PlanName = "SOLO" | "TEAM";
@@ -516,3 +551,11 @@ export type AllowlistEntryDto = { phone: string; note: string | null };
 export type UserLookupDto =
   | { exists: false }
   | { exists: true; givenName: string; familyName: string | null };
+
+/** A Business's calendars as an administrator settles its Resource Allowance. */
+export type AdminCalendarsDto = {
+  resourceAllowance: number;
+  /** How many calendars on offer are beyond the Allowance; 0 when within it. */
+  overBy: number;
+  calendars: (ResourceDto & { upcoming: number })[];
+};

@@ -21,6 +21,7 @@ import {
   type Subscription,
   type User,
   forbidden,
+  isOnOffer,
   PLANS,
   shouldDeactivate,
   type PlanVersion,
@@ -638,9 +639,16 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           businessId,
           name,
           active: true,
+          pausedAt: null,
         };
         store.resources = [...store.resources, resource];
         return resource;
+      },
+      async setPaused(ids, at) {
+        store.resources = store.resources.map((resource) =>
+          ids.includes(resource.id) ? { ...resource, pausedAt: at } : resource,
+        );
+        return store.resources.filter((resource) => ids.includes(resource.id));
       },
       async update(id, changes) {
         const resource = store.resources.find((candidate) => candidate.id === id);
@@ -1288,7 +1296,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
                 business,
                 subscription,
                 resourcesOnOffer: store.resources.filter(
-                  (resource) => resource.businessId === business.id && resource.active,
+                  (resource) => resource.businessId === business.id && isOnOffer(resource),
                 ).length,
                 owner: owner === undefined ? null : { name: displayName(owner), phone: owner.phone },
               },

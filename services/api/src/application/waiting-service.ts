@@ -21,7 +21,10 @@ import {
   type SlotGenerationStrategy,
   type TimeZone,
   type WaitingEntryId,
+  hasFeature,
+  requireFeature,
 } from "@tor-now/domain";
+import { entitlementsFor, entitlementToday } from "./billing.ts";
 import { addMinutesToInstant } from "@tor-now/domain";
 import { WAITING_LIST } from "../config.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
@@ -168,6 +171,7 @@ export const waitingService = (dependencies: {
       return unitOfWork.run(actor, async ({ repositories }) => {
         const business = await repositories.businesses.findById(wish.businessId);
         if (business === null) throw notFound("Business", wish.businessId);
+        requireFeature(await entitlementToday(repositories, business.id, clock), "WAITING_LIST");
 
         const service = await repositories.services.findById(wish.serviceId);
         if (service === null || service.businessId !== wish.businessId) {
@@ -279,6 +283,9 @@ export const waitingService = (dependencies: {
       return unitOfWork.run(system(), async (session) => {
         const { repositories } = session;
         const marks = await repositories.waitingRechecks.oldest(WAITING_LIST.marksPerRun);
+        // A Business that no longer has the waiting list keeps its entries,
+        // but nobody on them is told: each message is a new cost (ADR 0019).
+        const entitled = entitlementsFor(repositories, clock);
         let told = 0;
 
         for (const mark of marks) {
@@ -294,6 +301,7 @@ export const waitingService = (dependencies: {
 
           const answered: WaitingEntryId[] = [];
           for (const one of waiting) {
+            if (!hasFeature(await entitled(one.entry.businessId), "WAITING_LIST")) continue;
             // The ordinary availability question, per entry: what a day
             // offers depends on how long the Service takes, so two people
             // waiting on one calendar are not asking the same thing.

@@ -12,6 +12,8 @@ import { blocking, checkText, useFieldProblem } from "@/lib/use-field-problem.ts
 import { checkLocalPhone, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "../phone-field.tsx";
 import { Button, Card, Chip, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
+import { Locked, useLockText } from "../locked.tsx";
+import { includes } from "@/lib/entitlement.ts";
 
 /** The three a person can be given. CUSTOMER is not a thing you invite somebody as. */
 const ROLES = ["OWNER", "MANAGER", "WORKER"] as const;
@@ -54,14 +56,19 @@ export const Team = ({
   business,
   resources,
   onChanged,
+  onSeePlans,
 }: {
   token: string;
   business: BusinessDto;
   resources: readonly ResourceDto[];
   /** The actor may have just changed their own terms, so the screen reloads. */
   onChanged?: () => void;
+  /** Opens the plans; absent for someone who cannot change the plan. */
+  onSeePlans?: (() => void) | undefined;
 }) => {
   const copy = useCopy("owner");
+  const billingCopy = useCopy("billing");
+  const locks = useLockText();
   const { user } = useSession();
   const errorText = useErrorText();
   const problem = useFieldProblem();
@@ -202,17 +209,26 @@ export const Team = ({
           ))
       )}
 
-      <Button
-        intent="quiet"
-        onClick={() => {
-          // A new sheet has nothing behind it: whatever was left half-filled
-          // last time is not this person's fault.
-          setLeft({});
-          setDraft(EMPTY);
-        }}
-      >
-        {copy.invite}
-      </Button>
+      {/* Whoever is on the team already stays; what the plan holds back is
+          adding someone new (ADR 0019). */}
+      {includes(business, "TEAM_ROLES") ? (
+        <Button
+          intent="quiet"
+          onClick={() => {
+            // A new sheet has nothing behind it: whatever was left half-filled
+            // last time is not this person's fault.
+            setLeft({});
+            setDraft(EMPTY);
+          }}
+        >
+          {copy.invite}
+        </Button>
+      ) : (
+        <Locked
+          {...locks.feature("TEAM_ROLES")}
+          {...(onSeePlans === undefined ? {} : { action: billingCopy.seePlans, onAction: onSeePlans })}
+        />
+      )}
 
       <Sheet open={draft !== null} onClose={() => setDraft(null)} labelledBy="team-draft-title">
         {draft !== null && (

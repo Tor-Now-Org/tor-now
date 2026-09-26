@@ -577,3 +577,60 @@ describe("the catalogue", () => {
     ]);
   });
 });
+
+describe("the plan, where the screens need it", () => {
+  let api: HttpHarness;
+
+  beforeEach(() => {
+    api = httpHarness();
+  });
+
+  it("tells staff what their Business's plan allows, and customers whether they may wait", async () => {
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const created = await api.post("/businesses", { ...A_BUSINESS, plan: "SOLO" }, owner.token);
+    const businessId = (created.body as { id: string }).id;
+
+    const mine = await api.get("/me/businesses", owner.token);
+    expect(mine.body).toEqual([
+      expect.objectContaining({ entitlement: expect.objectContaining({ resourceAllowance: 1 }) }),
+    ]);
+
+    const profile = await api.get(`/businesses/${businessId}`);
+    expect(profile.body).toMatchObject({ waitingList: true, resources: [expect.objectContaining({ paused: false })] });
+  });
+
+  it("answers 402 when a plan does not include what was asked for", async () => {
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const created = await api.post("/businesses", { ...A_BUSINESS, plan: "SOLO" }, owner.token);
+    const businessId = (created.body as { id: string }).id;
+
+    const { status, body } = await api.post(`/businesses/${businessId}/resources`, { name: "דנה" }, owner.token);
+    expect(status).toBe(402);
+    expect(body).toMatchObject({ error: { code: "NOT_ENTITLED", details: { resourceAllowance: 1 } } });
+  });
+
+  it("lets an administrator see the calendars and keep the ones agreed", async () => {
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const created = await api.post("/businesses", { ...A_BUSINESS, plan: "TEAM" }, owner.token);
+    const businessId = (created.body as { id: string }).id;
+    await api.post(`/businesses/${businessId}/resources`, { name: "דנה" }, owner.token);
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+    await api.patch(`/admin/businesses/${businessId}/subscription`, { plan: "SOLO" }, admin.token);
+
+    const view = await api.get(`/admin/businesses/${businessId}/calendars`, admin.token);
+    expect(view.body).toMatchObject({ resourceAllowance: 1, overBy: 1 });
+    const calendars = (view.body as { calendars: { id: string; upcoming: number }[] }).calendars;
+    expect(calendars).toHaveLength(2);
+
+    const kept = await api.put(
+      `/admin/businesses/${businessId}/calendars/kept`,
+      { resourceIds: [calendars[0]?.id] },
+      admin.token,
+    );
+    expect(kept.status).toBe(200);
+    expect(kept.body).toEqual([
+      expect.objectContaining({ id: calendars[0]?.id, paused: false }),
+      expect.objectContaining({ id: calendars[1]?.id, paused: true }),
+    ]);
+  });
+});

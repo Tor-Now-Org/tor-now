@@ -43,6 +43,15 @@ export const resourceRepository = (tx: Transaction): ResourceRepository => ({
     return one(rows, toResource, "Resource");
   },
 
+  async setPaused(ids, at) {
+    if (ids.length === 0) return [];
+    const rows = await tx<Row[]>`
+      update resource set paused_at = ${at === null ? null : new Date(at)}
+      where id in ${tx(ids)}
+      returning *`;
+    return rows.map(toResource);
+  },
+
   async update(id, changes) {
     const rows = await tx<Row[]>`
       update resource set

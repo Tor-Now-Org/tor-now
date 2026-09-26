@@ -17,7 +17,11 @@ import {
   type Service,
   type SlotGenerationStrategy,
   type TimeZone,
+  hasFeature,
+  isOnOffer,
+  todayIn,
 } from "@tor-now/domain";
+import { entitlementOf } from "./billing.ts";
 import { SEARCH } from "../config.ts";
 import type { Repositories } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
@@ -33,6 +37,8 @@ export type BusinessProfile = {
   readonly business: Business;
   readonly services: readonly Service[];
   readonly resources: readonly Resource[];
+  /** Whether customers may ask to hear about a freed time here (ADR 0018, 0019). */
+  readonly waitingList: boolean;
   /**
    * The times the screen draws first, for the first Service on the first
    * Resource. Present only when a date range is asked for.
@@ -71,7 +77,7 @@ const isOpenNow = async (
 
   const openPerResource = await Promise.all(
     resources
-      .filter((resource) => resource.active)
+      .filter(isOnOffer)
       .map(async (resource) => {
         const [hours, override] = await Promise.all([
           repositories.workingHours.listForResource(resource.id),
@@ -146,14 +152,23 @@ export const discoveryService = ({
       const business = await repositories.businesses.findById(businessId);
       if (business === null) throw notFound("Business", businessId);
 
-      const [services, resources, photos] = await Promise.all([
+      const [services, resources, photos, entitlement] = await Promise.all([
         repositories.services.listForBusiness(businessId, false),
         repositories.resources.listForBusiness(businessId),
         repositories.businessPhotos.listForBusiness(businessId),
+        entitlementOf(repositories, businessId, todayIn(clock.now(), business.timeZone)),
       ]);
 
-      const bookable = resources.filter((resource) => resource.active);
-      const profile = { business, services, resources: bookable, photos };
+      const bookable = resources.filter(isOnOffer);
+      const profile = {
+        business,
+        services,
+        resources: bookable,
+        photos,
+        // A customer is offered to wait only where waiting can come to
+        // something; they are never shown a Feature a Business lacks.
+        waitingList: hasFeature(entitlement, "WAITING_LIST"),
+      };
 
       const service = services[0];
       const resource = bookable[0];

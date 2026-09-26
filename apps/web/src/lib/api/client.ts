@@ -13,6 +13,7 @@ import type {
   BusinessProfileDto,
   BusinessReviewsDto,
   ReviewDto,
+  AdminCalendarsDto,
   BillingDto,
   DirectoryFilter,
   DirectoryPageDto,
@@ -838,6 +839,17 @@ export const api = {
 
   adminSubscription: (token: string, businessId: string) =>
     request<BillingDto>(`/admin/businesses/${businessId}/subscription`, { token }),
+
+  adminCalendars: (token: string, businessId: string) =>
+    request<AdminCalendarsDto>(`/admin/businesses/${businessId}/calendars`, { token }),
+
+  /** ADR 0019: keeps the calendars agreed with the owner and pauses the rest. */
+  adminKeepCalendars: (token: string, businessId: string, resourceIds: readonly string[]) =>
+    request<ResourceDto[]>(`/admin/businesses/${businessId}/calendars/kept`, {
+      method: "PUT",
+      body: { resourceIds },
+      token,
+    }),
 
   /** ADR 0020's rule: an upgrade at once, a downgrade at the renewal. */
   adminChangePlan: (token: string, businessId: string, plan: PlanName) =>

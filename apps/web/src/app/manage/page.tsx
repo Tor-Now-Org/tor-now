@@ -16,7 +16,7 @@ import {
   ClockIcon,
   PeopleIcon,
 } from "@/components/bottom-nav.tsx";
-import { BusinessPanel, type Panel } from "@/components/owner/business-panel.tsx";
+import { BusinessPanel, isPanel, type Panel } from "@/components/owner/business-panel.tsx";
 import { CalendarDay } from "@/components/owner/calendar-day.tsx";
 import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
@@ -76,7 +76,10 @@ function ManageApp() {
   } | null>(null);
   const resources =
     business !== null && loadedResources?.businessId === business.id ? loadedResources.list : NONE;
-  const [panel, setPanel] = useState<Panel>("services");
+  // A panel can be asked for in the address too — a lock elsewhere opens the
+  // plans with `tab=business&panel=billing`.
+  const requestedPanel = params.get("panel");
+  const [panel, setPanel] = useState<Panel>(isPanel(requestedPanel) ? requestedPanel : "services");
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   /**

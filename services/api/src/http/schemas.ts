@@ -418,6 +418,11 @@ export const paymentSchema = z.object({
   note: z.string().trim().max(200).nullable().default(null),
 });
 
+/** ADR 0019: the calendars that stay on offer; every other one is paused. */
+export const keptCalendarsSchema = z.object({
+  resourceIds: z.array(z.string().uuid()).min(1),
+});
+
 /** ADR 0020: an administrator moves a Business to another Plan by the owner's rule. */
 export const planChangeSchema = z.object({
   plan: z.enum(PLANS),

@@ -41,6 +41,7 @@ export const aResource = (overrides: Partial<Resource> = {}): Resource => ({
   businessId: asId("business-1"),
   name: "רן",
   active: true,
+  pausedAt: null,
   ...overrides,
 });
 

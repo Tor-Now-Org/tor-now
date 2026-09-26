@@ -1,6 +1,6 @@
 import type { Appointment } from "../model/appointment.ts";
 import type { Business, Resource, Service } from "../model/business.ts";
-import { occupiedMinutes } from "../model/business.ts";
+import { isOnOffer, occupiedMinutes } from "../model/business.ts";
 import type { ServiceId, UserId } from "../model/ids.ts";
 import { DomainError, validationFailed } from "../shared/errors.ts";
 import { hasStarted } from "./outcome.ts";
@@ -97,7 +97,7 @@ export const validateBooking = (
   if (!service.active) {
     throw validationFailed("This service is no longer offered");
   }
-  if (!resource.active) {
+  if (!isOnOffer(resource)) {
     throw validationFailed("This calendar is not accepting bookings");
   }
   if (service.businessId !== business.id || resource.businessId !== business.id) {

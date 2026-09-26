@@ -1,4 +1,11 @@
-import { formatInstant, parseLocalDate, parseLocalTime, timeZone, zonedToInstant } from "@tor-now/domain";
+import {
+  formatInstant,
+  parseLocalDate,
+  parseLocalTime,
+  timeZone,
+  zonedToInstant,
+  type Plan,
+} from "@tor-now/domain";
 import { signIn, type Harness } from "./harness.ts";
 
 /**
@@ -21,7 +28,12 @@ export const TUESDAY_AT = (time: string): string =>
  * on the Tuesday the tests book against. Registered through the real service,
  * so the audit trail and memberships it creates are the real ones.
  */
-export const anEstablishedBusiness = async (test: Harness) => {
+export const anEstablishedBusiness = async (
+  test: Harness,
+  // Team by default: most scenarios are about a shop with more than one
+  // calendar and people working in it. A test about what Solo allows says so.
+  options: { plan?: Plan } = {},
+) => {
   const owner = await signIn(test, "+972500000001", "רן");
 
   const business = await test.services.business.register(owner.actor, {
@@ -32,6 +44,7 @@ export const anEstablishedBusiness = async (test: Harness) => {
     latitude: 32.0853,
     longitude: 34.7818,
     category: "barbershop",
+    plan: options.plan ?? "TEAM",
     resourceNames: ["רן"],
     services: [
       { name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null },

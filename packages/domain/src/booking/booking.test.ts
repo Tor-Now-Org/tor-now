@@ -12,6 +12,7 @@ import {
 } from "../testing/fixtures.ts";
 import { spanOf } from "../model/appointment.ts";
 import { asId } from "../model/ids.ts";
+import { instant } from "../time/instant.ts";
 import { DomainError } from "../shared/errors.ts";
 
 const TUESDAY = "2026-09-01";
@@ -93,6 +94,24 @@ describe("validateBooking", () => {
         schedule(),
       ),
     ).toThrow(DomainError);
+  });
+
+  it("refuses a calendar its owner hid", () => {
+    expect(() =>
+      validateBooking(
+        bookingAt("09:00", { resource: aResource({ active: false }) }),
+        schedule(),
+      ),
+    ).toThrow(/not accepting bookings/);
+  });
+
+  it("refuses a paused calendar, though its owner still offers it", () => {
+    expect(() =>
+      validateBooking(
+        bookingAt("09:00", { resource: aResource({ pausedAt: instant(0) }) }),
+        schedule(),
+      ),
+    ).toThrow(/not accepting bookings/);
   });
 
   it("refuses a service belonging to another business", () => {

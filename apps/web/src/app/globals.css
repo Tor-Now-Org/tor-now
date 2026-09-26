@@ -153,6 +153,18 @@ input,select{font:inherit;color:inherit}
   background:var(--sunken);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
 .flag-tag.hot{background:var(--caution-soft);color:var(--caution);border-color:oklch(63% 0.125 65/.3)}
 
+/* A Feature the plan does not include (components/locked.tsx): one look for
+   every lock, dashed so it reads as a place something could be, not a thing. */
+.locked{display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:18px;
+  border:1px dashed oklch(52% 0.123 245 / .45);background:linear-gradient(0deg,var(--raised),var(--accent-soft))}
+.locked-head{display:flex;align-items:center;gap:10px}
+.locked-icon{width:34px;height:34px;border-radius:10px;background:var(--raised);border:1px solid var(--line);
+  display:inline-flex;align-items:center;justify-content:center;color:var(--accent-strong);flex:none}
+.locked-title{display:flex;flex-direction:column;gap:2px}
+.locked-title strong{font-family:"Rubik",sans-serif;font-size:15px;font-weight:600}
+.locked-title span{font-size:12.5px;color:var(--muted);line-height:1.5}
+.locked .quiet{min-height:44px;font-size:14.5px}
+
 /* The administrator's Filters panel (components/admin/business-filters.tsx).
    On a phone it rises from the bottom as the app's sheets do; with room to
    spare it hangs under its button, and a click anywhere else closes it. */
@@ -210,6 +222,15 @@ input,select{font:inherit;color:inherit}
 .switch input:checked + i::after{inset-inline-start:19px}
 .switch input:focus-visible + i{outline:2px solid var(--accent);outline-offset:2px}
 .fp-foot{padding:14px 18px 18px;border-top:1px solid var(--line)}
+
+/* Choosing which calendars stay (components/admin/calendar-keeper.tsx). */
+.keep-row{display:flex;align-items:center;gap:10px;min-height:54px;padding:0 16px;cursor:pointer}
+.keep-row input{width:18px;height:18px;accent-color:var(--accent);margin:0}
+.keep-row.chosen{background:var(--accent-soft)}
+.keep-row .name{flex:1;font-weight:500;display:flex;gap:8px;align-items:center}
+.keep-row .stays{display:inline-flex;align-items:center;min-height:22px;padding:0 8px;border-radius:999px;
+  font-size:11.5px;font-weight:600;background:var(--positive-soft);color:var(--positive)}
+.keep-row small{color:var(--faint);font-size:12px}
 
 /* A Plan move waiting for its date, with the one way to take it back. */
 .pending-move{display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:14px;

@@ -17,6 +17,7 @@ import {
   type Payment,
   type BillingStatus,
   type Plan,
+  type ResourceId,
   type User,
   type UserId,
 } from "@tor-now/domain";
@@ -31,7 +32,8 @@ import type {
 } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { requireAdministrator, requireOperator } from "./authorization.ts";
-import { currentVersionOf, subscriptionView, type SubscriptionView } from "./billing.ts";
+import { currentVersionOf, entitlementOf, subscriptionView, type SubscriptionView } from "./billing.ts";
+import { keepOnly, overAllowance, resumeWithinAllowance } from "./allowance.ts";
 import {
   directoryRow,
   filterDirectory,
@@ -399,7 +401,52 @@ export const adminService = (dependencies: {
           planVersionId: changed.planVersionId,
           scheduledMove: changed.scheduledMove,
         });
+        // An upgrade makes room: calendars paused for the old Allowance come
+        // back by themselves, as the owner was told they would.
+        await resumeWithinAllowance(repositories, businessId, await entitlementOf(repositories, businessId, today));
         return subscriptionView(repositories, businessId, today);
+      });
+    },
+
+    /**
+     * A Business's calendars as an administrator settles the Resource
+     * Allowance: which are on offer, which are paused, how much each has
+     * booked ahead — the number that helps choose the one that stays.
+     */
+    async calendarsOf(actor: Actor, businessId: BusinessId) {
+      requireAdministrator(actor);
+      return unitOfWork.run(actor, async ({ repositories }) => {
+        const business = await repositories.businesses.findById(businessId);
+        if (business === null) throw notFound("Business", businessId);
+        const [resources, upcoming, entitlement] = await Promise.all([
+          repositories.resources.listForBusiness(businessId),
+          repositories.appointments.upcomingCountsByResource(businessId, clock.now()),
+          entitlementOf(repositories, businessId, todayIn(clock.now(), business.timeZone)),
+        ]);
+        const kept = resources.filter((resource) => resource.active);
+        return {
+          resourceAllowance: entitlement.resourceAllowance,
+          overBy: overAllowance(kept, entitlement),
+          calendars: kept.map((resource) => ({ resource, upcoming: upcoming.get(resource.id) ?? 0 })),
+        };
+      });
+    },
+
+    /**
+     * Keeps the calendars chosen and pauses the rest (ADR 0019). Audited by the
+     * resource decorator, one entry per calendar paused.
+     */
+    async keepCalendars(actor: Actor, businessId: BusinessId, keep: readonly ResourceId[]) {
+      requireAdministrator(actor);
+      return unitOfWork.run(actor, async ({ repositories }) => {
+        const business = await repositories.businesses.findById(businessId);
+        if (business === null) throw notFound("Business", businessId);
+        return keepOnly(repositories, {
+          businessId,
+          keep,
+          entitlement: await entitlementOf(repositories, businessId, todayIn(clock.now(), business.timeZone)),
+          at: clock.now(),
+        });
       });
     },
 

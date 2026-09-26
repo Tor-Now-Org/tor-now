@@ -164,6 +164,11 @@ export const aBusinessWithOpenHours = async (options: {
   serviceName?: string;
   durationMinutes?: number;
   hours?: { start: string; end: string };
+  /**
+   * Team unless a journey is about what Solo allows: most journeys are about a
+   * shop with more than one calendar and people working in it.
+   */
+  plan?: "SOLO" | "TEAM";
 }) => {
   const { code } = await call<{ code: string }>("/auth/request-code", {
     method: "POST",
@@ -189,6 +194,7 @@ export const aBusinessWithOpenHours = async (options: {
       latitude: 32.0853,
       longitude: 34.7818,
       category: "barbershop",
+      plan: options.plan ?? "TEAM",
       resourceNames: ["יומן א"],
       services: [
         {

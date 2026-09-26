@@ -673,8 +673,12 @@ export const BookingFlow = ({
             // Offered only once a Service is chosen: what a day has free
             // depends on how long the Service takes, so waiting for "a
             // morning" is not a question until there is something to fit in it.
+            // Nor where the Business's plan has no waiting list: a customer is
+            // never offered what could not come to anything (ADR 0019).
             onWaitFor={
-              service === null ? undefined : (part) => setWaitingFor(part)
+              service === null || profile?.waitingList === false
+                ? undefined
+                : (part) => setWaitingFor(part)
             }
             waitingFor={standingParts}
           />

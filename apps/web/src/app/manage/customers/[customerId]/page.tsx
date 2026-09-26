@@ -23,6 +23,7 @@ import {
 } from "@/components/owner/appointment-sheet.tsx";
 import { PhoneActions } from "@/components/phone-actions.tsx";
 import { Button, Card, Critical, Empty, Note, Spinner } from "@/components/ui.tsx";
+import { Locked, useLockText } from "@/components/locked.tsx";
 
 /**
  * One customer, laid out as the Screens canvas draws it: the initial in a
@@ -38,6 +39,8 @@ import { Button, Card, Critical, Empty, Note, Spinner } from "@/components/ui.ts
  */
 function CustomerPage({ customerId }: { customerId: string }) {
   const copy = useCopy("owner");
+  const billingCopy = useCopy("billing");
+  const locks = useLockText();
   const { language, direction } = useLanguage();
   const router = useRouter();
   const params = useSearchParams();
@@ -147,6 +150,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
   // Soonest first for what is still to come, because that is the one being
   // asked about; most recent first for what is done, because that is the one
   // being remembered.
+  const historyShown = record.historyIncluded !== false;
   const upcoming = record.appointments
     .filter((appointment) => outcomeOfDto(appointment) === "UPCOMING")
     .sort((left, right) => left.startAt.localeCompare(right.startAt));
@@ -233,22 +237,38 @@ function CustomerPage({ customerId }: { customerId: string }) {
           </Button>
         )}
 
-        <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 11 }}>
-          <Count label={copy.since} value={earliest === undefined ? "—" : dateOnly(earliest.startAt)} />
-          <Count label={copy.total} value={record.appointments.length} />
-          <Count
-            label={copy.lateCancels}
-            value={record.lateCancellations}
-            // The one number worth catching an eye, and only when there is one.
-            tone={record.lateCancellations > 0 ? "var(--caution)" : undefined}
+        {/* Without Customer History (ADR 0019) the record still books and
+            still shows what is coming; the past, its counts and blocking — which
+            is judged from the past — become one lock. */}
+        {historyShown ? (
+          <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 11 }}>
+            <Count label={copy.since} value={earliest === undefined ? "—" : dateOnly(earliest.startAt)} />
+            <Count label={copy.total} value={record.appointments.length} />
+            <Count
+              label={copy.lateCancels}
+              value={record.lateCancellations ?? 0}
+              // The one number worth catching an eye, and only when there is one.
+              tone={(record.lateCancellations ?? 0) > 0 ? "var(--caution)" : undefined}
+            />
+            <Count label={copy.noShows} value={record.noShows ?? 0} />
+          </Card>
+        ) : (
+          <Locked
+            {...locks.feature("CUSTOMER_HISTORY")}
+            {...((business.role ?? "OWNER") === "OWNER"
+              ? {
+                  action: billingCopy.seePlans,
+                  onAction: () => router.push(`/manage?business=${businessId}&tab=business&panel=billing`),
+                }
+              : {})}
           />
-          <Count label={copy.noShows} value={record.noShows} />
-        </Card>
+        )}
 
         {/* Absent for an owner looking at their own record: they arrive here
             from the customer list by having booked, and barring yourself from
-            your own chair is not a thing the API will do. */}
-        {record.blockable !== false && (
+            your own chair is not a thing the API will do. Without the Feature a
+            block can still be lifted — only a new one is the plan's to allow. */}
+        {record.blockable !== false && (historyShown || record.blocked) && (
           <>
             <Button
               intent={record.blocked ? "quiet" : "danger"}
@@ -304,6 +324,8 @@ function CustomerPage({ customerId }: { customerId: string }) {
           </div>
         )}
 
+        {historyShown && (
+        <>
         <span style={{ fontSize: 12, color: "var(--faint)" }}>{copy.history}</span>
         {history.length === 0 ? (
           <Empty title={copy.noAppointments} body={copy.customerScopeNote} />
@@ -366,6 +388,8 @@ function CustomerPage({ customerId }: { customerId: string }) {
               </span>
             </button>
           ))
+        )}
+        </>
         )}
 
         <p className="hint" style={{ margin: 0 }}>{copy.customerScopeNote}</p>

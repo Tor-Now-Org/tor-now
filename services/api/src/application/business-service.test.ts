@@ -35,7 +35,7 @@ describe("registering a business", () => {
   });
 
   it("gives every business a subscription without being asked", async () => {
-    const shop = await anEstablishedBusiness(test);
+    const shop = await anEstablishedBusiness(test, { plan: "SOLO" });
     const billing = await test.services.business.subscription(
       shop.owner.actor,
       shop.business.id,

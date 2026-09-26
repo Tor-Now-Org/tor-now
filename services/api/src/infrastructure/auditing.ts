@@ -236,6 +236,22 @@ export const auditedResources = (
     await inner.delete(id);
     await record(context, AUDIT_ACTIONS.resourceDeleted, "Resource", id, before, null);
   },
+  async setPaused(ids, at) {
+    const after = await inner.setPaused(ids, at);
+    await Promise.all(
+      after.map((resource) =>
+        record(
+          context,
+          at === null ? AUDIT_ACTIONS.resourceResumed : AUDIT_ACTIONS.resourcePaused,
+          "Resource",
+          resource.id,
+          null,
+          resource,
+        ),
+      ),
+    );
+    return after;
+  },
 });
 
 /**

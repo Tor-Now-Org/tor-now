@@ -37,6 +37,9 @@ export const AUDIT_ACTIONS = {
   resourceCreated: "RESOURCE_CREATED",
   resourceUpdated: "RESOURCE_UPDATED",
   resourceDeleted: "RESOURCE_DELETED",
+  /** Taken out of booking, or put back, for the Resource Allowance (ADR 0019). */
+  resourcePaused: "RESOURCE_PAUSED",
+  resourceResumed: "RESOURCE_RESUMED",
   workingHoursChanged: "WORKING_HOURS_CHANGED",
   dateOverrideChanged: "DATE_OVERRIDE_CHANGED",
   blockCreated: "BLOCK_CREATED",

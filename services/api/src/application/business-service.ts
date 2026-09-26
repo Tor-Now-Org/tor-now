@@ -7,10 +7,13 @@ import {
   manages,
   mergedRanges,
   money,
+  isOnOffer,
   planThatFits,
+  requireFeature,
   requireRoomForResource,
   todayIn,
   trialEndsOn,
+  type Entitlement,
   type Plan,
   type LocalDate,
   type UserId,
@@ -40,7 +43,7 @@ import {
 } from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
 import { notificationFor } from "./notifications.ts";
-import { subscriptionView } from "./billing.ts";
+import { entitlementOf, entitlementToday, subscriptionView } from "./billing.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
 import type { PhotoStore } from "../ports/photo-store.ts";
 import type { Repositories } from "../ports/repositories.ts";
@@ -70,6 +73,8 @@ export type StaffedBusiness = {
   readonly business: Business;
   readonly role: MembershipRole;
   readonly resourceIds: readonly ResourceId[] | null;
+  /** What the Business's plan lets its staff do — which screens show a lock. */
+  readonly entitlement: Entitlement;
 };
 
 export type RegistrationInput = {
@@ -457,8 +462,13 @@ export const businessService = ({
         staffed.map(async (membership): Promise<StaffedBusiness | null> => {
           const business = await repositories.businesses.findById(membership.businessId);
           if (business === null) return null;
+          const entitlement = await entitlementOf(
+            repositories,
+            business.id,
+            todayIn(clock.now(), business.timeZone),
+          );
           if (membership.role !== "WORKER") {
-            return { business, role: membership.role, resourceIds: null };
+            return { business, role: membership.role, resourceIds: null, entitlement };
           }
           const assignments = await repositories.membershipResources.listForMembership(
             membership.id,
@@ -467,6 +477,7 @@ export const businessService = ({
             business,
             role: membership.role,
             resourceIds: assignments.map((assignment) => assignment.resourceId),
+            entitlement,
           };
         }),
       );
@@ -555,6 +566,8 @@ export const businessService = ({
   ): Promise<TeamMember> {
     return unitOfWork.run(actor, async ({ repositories }) => {
       const invitedBy = await requireOwnerOrManager(repositories, actor, businessId);
+      // Managers and workers are a Feature; whoever is on the team already stays.
+      requireFeature(await entitlementToday(repositories, businessId, clock), "TEAM_ROLES");
       requireRoleWithinReach(invitedBy, input.role);
       const resourceIds = resourcesFor(input.role, input.resourceIds);
 
@@ -928,6 +941,10 @@ export const businessService = ({
     return unitOfWork.run(actor, async ({ repositories }) => {
       await requireOwnerOrManager(repositories, actor, businessId);
       const existing = await repositories.resources.listForBusiness(businessId);
+      requireRoomForResource(
+        await entitlementToday(repositories, businessId, clock),
+        existing.filter(isOnOffer).length,
+      );
       const created = await repositories.resources.create({ businessId, name });
 
       // The oldest calendar still on offer is the business's own week as far as
@@ -958,14 +975,20 @@ export const businessService = ({
   ) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       await requireOwnerOrManager(repositories, actor, businessId);
-      await loadOwnedResource(repositories, businessId, resourceId);
+      const resource = await loadOwnedResource(repositories, businessId, resourceId);
+      // Showing a hidden calendar again is adding one, as far as the Resource
+      // Allowance is concerned (ADR 0019).
+      if (changes.active === true && !resource.active) {
+        const onOffer = (await repositories.resources.listForBusiness(businessId)).filter(isOnOffer);
+        requireRoomForResource(await entitlementToday(repositories, businessId, clock), onOffer.length);
+      }
       // Hiding is how a calendar stops being offered, so hiding the last one
       // leaves a Business nobody can book — the same end deleteResource already
       // refuses, reached by a different door.
       if (changes.active === false) {
         const stillOffered = (
           await repositories.resources.listForBusiness(businessId)
-        ).filter((resource) => resource.active && resource.id !== resourceId);
+        ).filter((resource) => isOnOffer(resource) && resource.id !== resourceId);
         if (stillOffered.length === 0) {
           throw validationFailed("A business must keep at least one calendar");
         }
@@ -998,13 +1021,14 @@ export const businessService = ({
       if (business === null) throw notFound("Business", businessId);
       await loadOwnedResource(repositories, businessId, resourceId);
       // Every Business has at least one Resource; removing the last one would
-      // leave it unbookable with no way to say so. Counted among the ones still
-      // on offer: a withdrawn calendar keeps its row, so counting rows would
-      // let the last bookable one go as long as a retired one sat behind it.
+      // leave it unbookable with no way to say so. Counted among the others
+      // still on offer: a withdrawn calendar keeps its row and a paused one
+      // takes no bookings, so neither may stand in for the last bookable one —
+      // and removing a paused calendar never touches the one that is.
       const stillOffered = (
         await repositories.resources.listForBusiness(businessId)
-      ).filter((resource) => resource.active);
-      if (stillOffered.length <= 1) {
+      ).filter((resource) => isOnOffer(resource) && resource.id !== resourceId);
+      if (stillOffered.length === 0) {
         throw validationFailed("A business must keep at least one calendar");
       }
 

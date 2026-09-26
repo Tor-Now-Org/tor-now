@@ -286,6 +286,12 @@ export type ResourceRepository = {
     changes: Patch<Pick<Resource, "name" | "active">>,
   ): Promise<Resource>;
   delete(id: ResourceId): Promise<void>;
+  /**
+   * Takes calendars out of booking while the Business is over its Resource
+   * Allowance, or puts them back (`at` null). The platform's decision, never
+   * the owner's: an update from the owner leaves it alone.
+   */
+  setPaused(ids: readonly ResourceId[], at: Instant | null): Promise<readonly Resource[]>;
 };
 
 export type ServiceRepository = {

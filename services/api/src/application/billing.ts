@@ -1,9 +1,12 @@
 import {
   entitlementFor,
+  isOnOffer,
   notFound,
   standingOf,
   subscriptionStateOn,
+  todayIn,
   type BusinessId,
+  type Clock,
   type Entitlement,
   type LocalDate,
   type Plan,
@@ -64,7 +67,7 @@ export const subscriptionView = async (
     standing: standingOf({
       subscription,
       businessActive: business.active,
-      resourcesOnOffer: resources.filter((resource) => resource.active).length,
+      resourcesOnOffer: resources.filter(isOnOffer).length,
       resourceAllowance: planVersion.terms.resourceAllowance,
       today,
     }),
@@ -99,4 +102,30 @@ export const entitlementOf = async (
     repositories.previews.list(),
   ]);
   return entitlementFor({ terms: version.terms, grants: basis.grants, previews, today });
+};
+
+/** The Entitlement as of the Business's own today — what every Feature check asks. */
+export const entitlementToday = async (
+  repositories: Repositories,
+  businessId: BusinessId,
+  clock: Clock,
+): Promise<Entitlement> => {
+  const business = await repositories.businesses.findById(businessId);
+  if (business === null) throw notFound("Business", businessId);
+  return entitlementOf(repositories, businessId, todayIn(clock.now(), business.timeZone));
+};
+
+/**
+ * Entitlements for a job that walks many Businesses: each worked out once per
+ * run, however many of its rows the job meets.
+ */
+export const entitlementsFor = (repositories: Repositories, clock: Clock) => {
+  const known = new Map<BusinessId, Promise<Entitlement>>();
+  return (businessId: BusinessId): Promise<Entitlement> => {
+    const cached = known.get(businessId);
+    if (cached !== undefined) return cached;
+    const loading = entitlementToday(repositories, businessId, clock);
+    known.set(businessId, loading);
+    return loading;
+  };
 };

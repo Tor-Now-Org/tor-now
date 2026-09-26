@@ -163,6 +163,7 @@ export const toResource = (row: Row): Resource => ({
   businessId: asId(text(row["business_id"])),
   name: text(row["name"]),
   active: bool(row["active"]),
+  pausedAt: nullableInstant(row["paused_at"]),
 });
 
 export const toService = (row: Row): Service => ({

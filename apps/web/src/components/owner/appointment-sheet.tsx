@@ -20,6 +20,7 @@ import { dayIn, formatPrice, timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { PhoneActions } from "../phone-actions.tsx";
+import { includes } from "@/lib/entitlement.ts";
 import { Button, Card, Critical, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
 
 /**
@@ -66,6 +67,8 @@ export const AppointmentSheet = ({
   const now = instant(Date.now());
   const started =
     appointment !== null && hasStarted({ startAt: parseInstant(appointment.startAt) }, now);
+  /** The hour a cancellation frees can be published only while it is still to come, and only with the waiting list. */
+  const offersFreedHour = !started && includes(business, "WAITING_LIST");
 
 
   const close = () => {
@@ -242,19 +245,22 @@ export const AppointmentSheet = ({
                   the owner cannot see the list, somebody may join between this
                   tap and the job running, and it is a decision about their
                   hour rather than a report on a queue. */}
-              {!started && (
+              {/* Without the waiting list there is nobody to publish to, so the
+                  question is not asked (ADR 0019) — no lock here: it is a side
+                  door, and a cancellation is no moment to talk about plans. */}
+              {offersFreedHour && (
                 <FreedHour publish={publish} onChoose={setPublish} />
               )}
               <Button
                 intent="danger"
                 onClick={() =>
-                  act(() => api.cancel(token, appointment.id, started ? undefined : publish))
+                  act(() => api.cancel(token, appointment.id, offersFreedHour ? publish : undefined))
                 }
                 busy={busy}
               >
-                {/* Plain once the hour has been spent: there is nothing left
-                    to publish, so the button should not claim there is. */}
-                {started
+                {/* Plain once the hour has been spent, or when there is no
+                    list to publish to: the button should not claim otherwise. */}
+                {!offersFreedHour
                   ? copy.cancelAppointment
                   : publish
                     ? copy.cancelAndPublish

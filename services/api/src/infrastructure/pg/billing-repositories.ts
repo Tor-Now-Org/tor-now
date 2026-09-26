@@ -117,7 +117,8 @@ export const subscriptionRepository = (
   async directory() {
     const rows = await tx<Row[]>`
       select to_jsonb(b) as business, to_jsonb(s) as subscription,
-             (select count(*)::int from resource r where r.business_id = b.id and r.active) as on_offer,
+             (select count(*)::int from resource r
+               where r.business_id = b.id and r.active and r.paused_at is null) as on_offer,
              owner.given_name, owner.family_name, owner.phone as owner_phone
       from business b
       join subscription s on s.business_id = b.id

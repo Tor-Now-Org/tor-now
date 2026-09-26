@@ -1,4 +1,5 @@
-import { addMinutesToInstant, formatInstant, type Clock } from "@tor-now/domain";
+import { addMinutesToInstant, formatInstant, hasFeature, type Clock } from "@tor-now/domain";
+import { entitlementsFor } from "./billing.ts";
 import { REMINDERS } from "../config.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
 import { system, type UnitOfWork } from "../ports/unit-of-work.ts";
@@ -42,7 +43,13 @@ export const reminderService = (dependencies: {
         REMINDERS.batchSize,
       );
 
+      // Reminders are a Feature. One that isn't included is still marked done
+      // below — a Business without the Feature is not owed a reminder later.
+      const entitled = entitlementsFor(session.repositories, dependencies.clock);
+      let enqueued = 0;
       for (const entry of due) {
+        if (!hasFeature(await entitled(entry.appointment.businessId), "REMINDERS")) continue;
+        enqueued += 1;
         await session.outbox.enqueue({
           businessId: entry.appointment.businessId,
           recipientPhone: entry.customerPhone,
@@ -61,7 +68,7 @@ export const reminderService = (dependencies: {
         due.map((entry) => entry.appointment.id),
       );
 
-      return { considered: due.length, enqueued: due.length };
+      return { considered: due.length, enqueued };
     });
   },
 });

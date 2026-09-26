@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { forbidden } from "@tor-now/domain";
+import { asId, forbidden } from "@tor-now/domain";
 import type { Services } from "../composition.ts";
 import {
   parseBody,
@@ -192,6 +192,7 @@ export const createApp = (services: Services) => {
       business: wire.businessOut(profile.business),
       services: profile.services.map(wire.serviceOut),
       resources: profile.resources.map(wire.resourceOut),
+      waitingList: profile.waitingList,
       photos: profile.photos.map((photo) =>
         wire.businessPhotoOut(photo, services.photos.urlFor),
       ),
@@ -915,6 +916,7 @@ const ownerRoutes = (services: Services) => {
       user: wire.userOut(record.user),
       blocked: record.blocked,
       blockable: record.blockable,
+      historyIncluded: record.historyIncluded,
       appointments: record.appointments.map(wire.appointmentOut),
       lateCancellations: record.lateCancellations,
       noShows: record.noShows,
@@ -982,6 +984,29 @@ const adminRoutes = (services: Services) => {
       idParam(context, "businessId"),
     );
     return context.json(wire.billingOut(result));
+  });
+
+  admin.get("/businesses/:businessId/calendars", async (context) => {
+    const result = await services.admin.calendarsOf(actorOf(context), idParam(context, "businessId"));
+    return context.json({
+      resourceAllowance: result.resourceAllowance,
+      overBy: result.overBy,
+      calendars: result.calendars.map(({ resource, upcoming }) => ({
+        ...wire.resourceOut(resource),
+        upcoming,
+      })),
+    });
+  });
+
+  // ADR 0019: keep the calendars agreed with the owner, pause the rest.
+  admin.put("/businesses/:businessId/calendars/kept", async (context) => {
+    const { resourceIds } = await parseBody(context, schema.keptCalendarsSchema);
+    const resources = await services.admin.keepCalendars(
+      actorOf(context),
+      idParam(context, "businessId"),
+      resourceIds.map((id) => asId<"Resource">(id)),
+    );
+    return context.json(resources.map(wire.resourceOut));
   });
 
   admin.patch("/businesses/:businessId/subscription", async (context) => {

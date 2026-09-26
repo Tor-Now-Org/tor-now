@@ -2045,6 +2045,27 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("pauses calendars and puts them back, leaving everything else about them alone", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07010");
+        const second = await repositories.resources.create({ businessId: context.business.id, name: "שני" });
+        const at = AT("2031-03-10T10:00:00.000Z");
+
+        expect(await repositories.resources.setPaused([], at)).toEqual([]);
+        const paused = await repositories.resources.setPaused([second.id], at);
+        expect(paused).toEqual([{ ...second, pausedAt: at }]);
+        expect((await repositories.resources.findById(context.resource.id))?.pausedAt).toBeNull();
+
+        // An owner's own update never lifts a pause.
+        await repositories.resources.update(second.id, { name: "שני שני" });
+        expect((await repositories.resources.findById(second.id))?.pausedAt).toBe(at);
+
+        const back = await repositories.resources.setPaused([second.id], null);
+        expect(back[0]?.pausedAt).toBeNull();
+        expect(back[0]?.name).toBe("שני שני");
+      });
+    });
+
     it("reads the default unit rates, dated and sourced", async () => {
       await withRepositories(async (repositories) => {
         const rates = await repositories.unitRates.list();

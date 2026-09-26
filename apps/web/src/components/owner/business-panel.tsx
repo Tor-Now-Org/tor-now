@@ -13,6 +13,10 @@ import type {
   ServiceDto,
 } from "@/lib/api/types.ts";
 import { BillingSection } from "./billing-section.tsx";
+import { Locked, SmallLock, useLockText } from "@/components/locked.tsx";
+import { PlanBadge } from "@/components/billing-badges.tsx";
+import { calendarsFull } from "@/lib/entitlement.ts";
+import { fillText } from "@/lib/i18n/fill.ts";
 import { formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
@@ -74,7 +78,11 @@ const LocationPicker = dynamic(
   { ssr: false },
 );
 
-export type Panel = "services" | "resources" | "photos" | "settings" | "team" | "billing";
+export const PANELS = ["services", "resources", "photos", "settings", "team", "billing"] as const;
+export type Panel = (typeof PANELS)[number];
+
+export const isPanel = (value: string | null): value is Panel =>
+  value !== null && (PANELS as readonly string[]).includes(value);
 
 const MINOR_UNITS_PER_MAJOR = 100;
 
@@ -138,6 +146,12 @@ export const BusinessPanel = ({
   // Billing is the OWNER's alone (ADR 0016) — absent role means an API
   // deployed before roles existed, where anybody staffing was an OWNER.
   const isOwner = (business.role ?? "OWNER") === "OWNER";
+  const billingCopy = useCopy("billing");
+  const locks = useLockText();
+  const onOffer = resources.filter((resource) => resource.active && resource.paused !== true).length;
+  const full = calendarsFull(business, onOffer);
+  const allowance = business.entitlement?.resourceAllowance ?? onOffer;
+  const pausedAny = resources.some((resource) => resource.active && resource.paused === true);
   // Billing, carried over from a business they own into one they only manage,
   // would be a sub-tab with no chip and nothing under it.
   const panel: Panel = requestedPanel === "billing" && !isOwner ? "services" : requestedPanel;
@@ -314,7 +328,27 @@ export const BusinessPanel = ({
 
       {panel === "resources" && (
         <>
-          <Note>{copy.resourceNote}</Note>
+          {pausedAny ? (
+            <Warning>
+              {allowance === 1
+                ? billingCopy.pausedNoteOne
+                : fillText(billingCopy.pausedNoteMany, { n: String(allowance) })}
+            </Warning>
+          ) : (
+            <Note>{copy.resourceNote}</Note>
+          )}
+          {/* Said only when there is no room left: while there is, the screen
+              is what it always was. */}
+          {full && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--muted)" }}>
+              {billing !== null && <PlanBadge plan={billing.subscription.plan} />}
+              <span>
+                {allowance === 1
+                  ? billingCopy.calendarsFullOne
+                  : fillText(billingCopy.calendarsFullMany, { n: String(allowance) })}
+              </span>
+            </div>
+          )}
           {resources.map((resource) => {
             // The last one on offer cannot be taken away by either door: a
             // business with nothing bookable has no way to say so.
@@ -328,7 +362,7 @@ export const BusinessPanel = ({
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
-                  ...(resource.active
+                  ...(resource.active && resource.paused !== true
                     ? {}
                     : { background: "var(--sunken)", borderStyle: "dashed" }),
                 }}
@@ -353,13 +387,16 @@ export const BusinessPanel = ({
                   <span
                     style={{
                       fontWeight: 500,
-                      ...(resource.active ? {} : { color: "var(--faint)" }),
+                      ...(resource.active && resource.paused !== true ? {} : { color: "var(--faint)" }),
                     }}
                   >
                     {resource.name}
                   </span>
                   <PencilMark />
                   {!resource.active && <Tag text={copy.hidden} tone="neutral" />}
+                  {resource.active && resource.paused === true && (
+                    <Tag text={billingCopy.paused} tone="caution" />
+                  )}
                 </button>
                 {/* Its hours, blocks and exceptional days live on the schedule
                     screen, which is where a calendar is actually edited. This
@@ -377,7 +414,16 @@ export const BusinessPanel = ({
                 {/* Standing is something the owner changes, not a word they
                     read — the same control the services list grew, for the
                     same reason. */}
-                {!lastOnOffer && (
+                {/* Showing a hidden calendar is adding one: with the Allowance
+                    full it is locked, and the lock below says why. */}
+                {!lastOnOffer && !resource.active && full && (
+                  <button className="chip" aria-disabled="true" disabled
+                    style={{ border: "1px solid var(--line)", color: "var(--faint)" }}>
+                    <SmallLock />
+                    {copy.showService}
+                  </button>
+                )}
+                {!lastOnOffer && (resource.active || !full) && (
                   <button
                     className="chip tap"
                     aria-pressed={!resource.active}
@@ -409,7 +455,14 @@ export const BusinessPanel = ({
               </Card>
             );
           })}
-          <Button intent="quiet" onClick={() => setNewResource("")}>{copy.add}</Button>
+          {full ? (
+            <Locked
+              {...locks.calendar(business.entitlement?.resourceAllowance ?? 1)}
+              {...(isOwner ? { action: billingCopy.seePlans, onAction: () => onPanel("billing") } : {})}
+            />
+          ) : (
+            <Button intent="quiet" onClick={() => setNewResource("")}>{copy.add}</Button>
+          )}
         </>
       )}
 
@@ -581,6 +634,7 @@ export const BusinessPanel = ({
             business={business}
             resources={resources}
             onChanged={onTeamChanged ?? (() => {})}
+            onSeePlans={isOwner ? () => onPanel("billing") : undefined}
           />
         </div>
       )}

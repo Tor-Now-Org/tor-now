@@ -34,7 +34,7 @@ describe("administrator scope", () => {
   });
 
   it("lists every business with its owner and subscription state", async () => {
-    const shop = await anEstablishedBusiness(test);
+    const shop = await anEstablishedBusiness(test, { plan: "SOLO" });
     const admin = await signIn(test, "+972500000000");
 
     const page = await test.services.admin.listBusinesses(admin.administrator);
@@ -89,7 +89,7 @@ describe("administrator scope", () => {
   });
 
   it("counts the statistics by the same five statuses the directory filters by", async () => {
-    await anEstablishedBusiness(test);
+    await anEstablishedBusiness(test, { plan: "SOLO" });
     const admin = await signIn(test, "+972500000000");
     const stats = await test.services.admin.platformStats(admin.administrator);
     expect(stats.statusCounts).toEqual({ TRIAL: 1, PAID: 0, IN_GRACE: 0, LAPSED: 0, DEACTIVATED: 0 });
@@ -157,7 +157,7 @@ describe("administrator scope", () => {
   });
 
   it("records a payment, keeping the rest of the Trial it was paid during", async () => {
-    const shop = await anEstablishedBusiness(test);
+    const shop = await anEstablishedBusiness(test, { plan: "SOLO" });
     const admin = await signIn(test, "+972500000000");
     const before = await test.services.admin.subscriptionFor(admin.administrator, shop.business.id);
     expect(before.subscription.paidThrough).toBeNull();
@@ -177,7 +177,7 @@ describe("administrator scope", () => {
   });
 
   it("upgrades a Business at once, and audits who did it", async () => {
-    const shop = await anEstablishedBusiness(test);
+    const shop = await anEstablishedBusiness(test, { plan: "SOLO" });
     const admin = await signIn(test, "+972500000000");
 
     const view = await test.services.admin.changePlan(admin.administrator, shop.business.id, "TEAM");
@@ -189,7 +189,7 @@ describe("administrator scope", () => {
   });
 
   it("downgrades a paying Business at its renewal, not before", async () => {
-    const shop = await anEstablishedBusiness(test);
+    const shop = await anEstablishedBusiness(test, { plan: "SOLO" });
     const admin = await signIn(test, "+972500000000");
     await test.services.admin.changePlan(admin.administrator, shop.business.id, "TEAM");
     await test.services.admin.recordPayment(admin.administrator, shop.business.id, {
@@ -206,7 +206,7 @@ describe("administrator scope", () => {
   });
 
   it("downgrades a Business in its Trial at once — nothing was paid to keep", async () => {
-    const shop = await anEstablishedBusiness(test);
+    const shop = await anEstablishedBusiness(test, { plan: "SOLO" });
     const admin = await signIn(test, "+972500000000");
     await test.services.admin.changePlan(admin.administrator, shop.business.id, "TEAM");
 
@@ -224,7 +224,7 @@ describe("administrator scope", () => {
   });
 
   it("counts only paid time as recurring revenue, never a Trial", async () => {
-    const shop = await anEstablishedBusiness(test);
+    const shop = await anEstablishedBusiness(test, { plan: "SOLO" });
     const admin = await signIn(test, "+972500000000");
 
     const trialling = await test.services.admin.platformStats(admin.administrator);

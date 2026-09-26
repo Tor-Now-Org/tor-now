@@ -32,6 +32,7 @@ import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } f
 import { AdminStats } from "@/components/admin-stats.tsx";
 import { BusinessDirectory } from "@/components/admin/business-directory.tsx";
 import { PlanChangeCard } from "@/components/admin/plan-change-card.tsx";
+import { CalendarKeeper } from "@/components/admin/calendar-keeper.tsx";
 import { NextDate, PlanBadge, StatusBadge } from "@/components/billing-badges.tsx";
 
 type Tab = "businesses" | "users" | "stats" | "system";
@@ -372,6 +373,13 @@ export default function AdminPage() {
                 </>
               )}
             </Card>
+
+            <CalendarKeeper
+              key={openBusiness.business.id}
+              token={token}
+              businessId={openBusiness.business.id}
+              onSettled={() => setDirectoryRefresh((count) => count + 1)}
+            />
 
             <span className="label">{copy.recordPayment}</span>
             <Field id="payment-amount" label={copy.amount} type="number" value={paymentAmount}

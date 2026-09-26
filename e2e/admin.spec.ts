@@ -110,7 +110,7 @@ test.describe("the panel itself", () => {
     const admin = await anAdministrator();
     const shop = await aBusinessWithOpenHours({
       name: `הנהלה ${Date.now()}`,
-      ownerPhone: uniquePhone(),
+      ownerPhone: uniquePhone(), plan: "SOLO",
     });
 
     await asAdministrator(page, admin.token);
@@ -147,7 +147,7 @@ test.describe("the panel itself", () => {
   test("filters in the Filters panel, and a token takes its filter back off", async ({ page }) => {
     const admin = await anAdministrator();
     const name = `סינון ${Date.now()}`;
-    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone(), plan: "SOLO" });
 
     await asAdministrator(page, admin.token);
     await findInDirectory(page, name);
@@ -186,7 +186,7 @@ test.describe("the panel itself", () => {
   test("moves a business to Team at once, and says so before the button is pressed", async ({ page }) => {
     const admin = await anAdministrator();
     const name = `שדרוג ${Date.now()}`;
-    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone(), plan: "SOLO" });
 
     await asAdministrator(page, admin.token);
     await findInDirectory(page, name);
@@ -199,6 +199,38 @@ test.describe("the panel itself", () => {
     await sheet.getByRole("button", { name: "העבר לצוות עכשיו" }).click();
 
     await expect(inDirectory(page, name).getByText("צוות")).toBeVisible({ timeout: 20_000 });
+  });
+
+  test("a business over its calendar limit is settled by choosing the one that stays", async ({ page }) => {
+    const admin = await anAdministrator();
+    const name = `מכסה ${Date.now()}`;
+    const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+    await call(`/businesses/${shop.business.id}/resources`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "כיסא שני" },
+    });
+    await call(`/admin/businesses/${shop.business.id}/subscription`, {
+      method: "PATCH",
+      token: admin.token,
+      body: { plan: "SOLO" },
+    });
+
+    await asAdministrator(page, admin.token);
+    await findInDirectory(page, name);
+    await inDirectory(page, name).getByText(name).click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText(/2 יומנים פעילים, והמסלול כולל אחד/)).toBeVisible({ timeout: 15_000 });
+    await sheet.getByRole("radio", { name: /יומן א/ }).check();
+    await sheet.getByRole("button", { name: "השהיית היומן האחר" }).click();
+
+    const calendars = await call<{ id: string; name: string; paused: boolean }[]>(
+      `/businesses/${shop.business.id}/resources`,
+      { token: shop.owner.token },
+    );
+    expect(calendars.find((calendar) => calendar.name === "כיסא שני")?.paused).toBe(true);
+    expect(calendars.find((calendar) => calendar.name === "יומן א")?.paused).toBe(false);
   });
 
   test("a state in the statistics opens the Businesses filtered to it", async ({ page }) => {
