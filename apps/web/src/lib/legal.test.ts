@@ -19,6 +19,8 @@ describe("markdownToHtml", () => {
         "",
         "Company Ltd.",
         "Address: here",
+        "",
+        "Write to us on the [support page](/support), not [here](javascript:alert).",
       ].join("\n"),
     );
     expect(html).toBe(
@@ -29,6 +31,7 @@ describe("markdownToHtml", () => {
         "<ul><li>using it &lt;only&gt; for appointments;</li><li>consent.</li></ul>",
         "<table><thead><tr><th>Provider</th><th>Where</th></tr></thead><tbody><tr><td>Supabase</td><td>EU</td></tr></tbody></table>",
         "<p>Company Ltd.<br>Address: here</p>",
+        '<p>Write to us on the <a href="/support">support page</a>, not [here](javascript:alert).</p>',
       ].join("\n"),
     );
   });

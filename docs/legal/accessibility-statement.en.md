@@ -30,7 +30,6 @@ Despite our efforts, some parts may not yet be fully accessible:
 - **Content uploaded by businesses** – photos, descriptions and service names are uploaded by the businesses themselves and may lack alternative text;
 - **Maps** – the map showing a business's location may not be accessible to screen readers. The business's address is always also shown as text;
 - **WhatsApp and SMS messages** – sent through third-party providers; their accessibility depends on your app and device;
-- [To complete: other known issues found in the accessibility review].
 
 We keep improving accessibility as part of ongoing development.
 
@@ -38,13 +37,10 @@ We keep improving accessibility as part of ongoing development.
 
 Tor Panuy is an online platform only and has no premises open to the public. **The accessibility of the physical place where the service is given, and of the service itself, is the responsibility of the business the appointment is booked with.** To ask about accessibility arrangements there, contact the business directly using the details on its page.
 
-## 6. Contacting the accessibility coordinator
+## 6. Accessibility enquiries
 
-Found an accessibility problem, or have a suggestion? We would like to hear from you. You can also ask to receive information or book an appointment another way.
+Found an accessibility problem on the site, or have a suggestion for improvement? We would be glad to hear from you and take care of it.
 
-**Accessibility coordinator:** [full name]
-**Phone:** [phone number]
-**Email:** [accessibility@example.co.il]
-**Postal address:** [registered address]
+You can contact us about accessibility through the [support page](/support), or by email: tor.panuy@gmail.com
 
-To help us handle your request, please tell us the page where you had the problem, what happened, and the browser, device and assistive technology you used (if any). We will reply within [14] business days.
+So we can handle your request efficiently, please tell us the page where you had the problem and briefly describe it. If you can, also tell us the browser, device and assistive technology you used.

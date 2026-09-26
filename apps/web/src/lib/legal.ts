@@ -25,16 +25,19 @@ export type LegalHtml = { readonly he: string; readonly en: string };
 const escape = (text: string) =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
+// Links only to our own pages or https, so a "[date]" placeholder stays text.
 const inline = (text: string) =>
-  escape(text.trim()).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  escape(text.trim())
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\(((?:\/|https:\/\/)[^)\s"]*)\)/g, '<a href="$2">$1</a>');
 
 const cells = (row: string) => row.trim().replace(/^\||\|$/g, "").split("|").map(inline);
 
 /**
  * Just the Markdown these documents use: headings, paragraphs (a single line
- * break kept as one), bullet lists, pipe tables and bold.
+ * break kept as one), bullet lists, pipe tables, bold and links.
  * ponytail: a hand-rolled subset, not a Markdown library — swap in one if the
- * documents start needing links, numbered lists or nesting.
+ * documents start needing numbered lists or nesting.
  */
 export const markdownToHtml = (markdown: string): string => {
   const out: string[] = [];
