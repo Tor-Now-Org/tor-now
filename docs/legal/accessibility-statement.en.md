@@ -10,9 +10,7 @@
 
 2.1. The website was built with the aim of meeting Israeli Standard IS 5568 for web content accessibility, at level AA, which is based on the W3C's WCAG 2.0 guidelines.
 
-2.2. The website was tested on current versions of Chrome, Safari and Firefox, on desktop and mobile. [To complete: the screen readers it was tested with, for example NVDA and VoiceOver.]
-
-2.3. **Last accessibility review:** [date] – [performed by / name of the certified service accessibility consultant, if one was used].
+2.2. The website was tested on current versions of Chrome, Safari and Firefox, on desktop and mobile.
 
 ## 3. Accessibility features
 
