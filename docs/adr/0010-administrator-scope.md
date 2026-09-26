@@ -4,7 +4,7 @@ Date: 2026-08-24
 
 ## Status
 
-Accepted
+Accepted. Extended by ADR 0021 (administrators edit the Catalogue).
 
 ## Context
 

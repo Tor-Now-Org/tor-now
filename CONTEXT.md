@@ -23,6 +23,13 @@ one. Working hours, breaks, blocks, overrides and appointments all belong to a
 Resource, never directly to a Business.
 _Avoid_: Staff, employee, chair, room, provider
 
+**Paused Resource**:
+A Resource taken out of booking because its Business holds more than its Resource
+Allowance. Keeps its hours and every Appointment, upcoming ones included, and
+comes back as it was once the Allowance covers it again. Unlike a withdrawn
+Resource, which its owner removed for good.
+_Avoid_: Frozen, suspended, disabled, locked calendar
+
 **User**:
 A person with an identity on the platform, identified by a verified phone number.
 Holds no relationship to any Business; a User is neither a customer nor an owner

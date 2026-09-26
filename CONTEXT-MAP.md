@@ -9,7 +9,11 @@
 
 ## Relationships
 
-- **Billing → Scheduling**: Billing deactivates a Business whose subscription has
-  lapsed beyond its grace period. Deactivation is the only channel between the two
-  contexts; Billing has no knowledge of Appointments, Services or Resources.
+- **Billing → Scheduling**: two channels, and only two.
+  - *Deactivation* — Billing deactivates a Business whose subscription has lapsed
+    beyond its grace period.
+  - *Entitlement* — Billing states which Features and what Resource Allowance a
+    Business has. Billing knows Features by name only; Scheduling decides what
+    each one means and enforces it. Billing still has no knowledge of
+    Appointments or Services, and knows Resources only as a number.
 - **Shared**: `BusinessId` only.
