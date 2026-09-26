@@ -41,6 +41,9 @@ import {
   weekFrom,
 } from "./month-model.ts";
 
+/** "1" when the grid was last folded to a week; the month is the default. */
+const WEEK_VIEW_KEY = "tor-now.calendar-week-view";
+
 /**
  * The owner's day. ADR 0003 declines to keep this live: it is fetched on open
  * and on refresh, and the hint below says so rather than letting an owner
@@ -96,7 +99,13 @@ export const CalendarDay = ({
    * month's first week when that day is in another month — and unfolding
    * opens the month the week was in, so neither way loses your place.
    */
-  const [firstOfWeek, setFirstOfWeek] = useState<string | null>(null);
+  const [firstOfWeek, setFirstOfWeek] = useState<string | null>(() => {
+    try {
+      return window.localStorage.getItem(WEEK_VIEW_KEY) === "1" ? firstOfWeekOf(date) : null;
+    } catch {
+      return null;
+    }
+  });
   const [reach, setReach] = useState<Reach>("DAY");
   /**
    * Bumped when anything on this screen changed what the answers would be.
@@ -418,6 +427,11 @@ export const CalendarDay = ({
             className="chip tap"
             aria-label={firstOfWeek === null ? copy.showWeek : copy.showMonth}
             onClick={() => {
+              try {
+                window.localStorage.setItem(WEEK_VIEW_KEY, firstOfWeek === null ? "1" : "0");
+              } catch {
+                // Without storage it simply opens on the month next time.
+              }
               if (firstOfWeek === null) {
                 setFirstOfWeek(
                   firstOfWeekOf(date.startsWith(firstOfMonth.slice(0, 8)) ? date : firstOfMonth),
