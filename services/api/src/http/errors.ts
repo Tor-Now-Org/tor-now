@@ -25,6 +25,9 @@ const STATUS_BY_CODE: Readonly<Record<DomainErrorCode, ContentfulStatusCode>> =
     OUTSIDE_BOOKING_WINDOW: 422,
     OUTSIDE_WORKING_HOURS: 422,
     BUSINESS_INACTIVE: 422,
+    // ADR 0019: the Subscription does not include it. 402 because the answer
+    // is a different Plan, not a different request.
+    NOT_ENTITLED: 402,
     VERIFICATION_FAILED: 422,
     RATE_LIMITED: 429,
   });

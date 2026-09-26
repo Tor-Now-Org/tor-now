@@ -1,8 +1,8 @@
-import type { BusinessId, PaymentId, SubscriptionId, UserId } from "../model/ids.ts";
+import type { BusinessId, PaymentId, PlanVersionId, SubscriptionId, UserId } from "../model/ids.ts";
 import type { Money } from "../model/money.ts";
 import { addDays, compareLocalDate, type LocalDate } from "../time/local-date.ts";
 import type { Instant } from "../time/instant.ts";
-import { validationFailed } from "../shared/errors.ts";
+import { isUpgrade, type PlanVersion } from "./plan.ts";
 
 /**
  * Billing concerns the platform operator and the Business owner — never the
@@ -10,30 +10,40 @@ import { validationFailed } from "../shared/errors.ts";
  */
 
 /**
- * The interval after a Subscription falls due during which the Business
+ * The interval after a paid Subscription falls due during which the Business
  * continues to operate unaffected. Fourteen days, per docs/billing/CONTEXT.md;
- * deactivation follows only once it elapses.
+ * a Trial never has one.
  */
 export const GRACE_PERIOD_DAYS = 14;
 
-export const BILLING_PERIODS = ["MONTHLY", "YEARLY"] as const;
-export type BillingPeriod = (typeof BILLING_PERIODS)[number];
+/** The first thirty days of a Subscription, given once per owner. */
+export const TRIAL_DAYS = 30;
 
-export const PLANS = ["FREE", "STANDARD"] as const;
-export type Plan = (typeof PLANS)[number];
+/** Billing is monthly only (ADR 0020); a month is thirty days. */
+export const BILLING_PERIOD_DAYS = 30;
+
+/** How long a change that takes value away waits before reaching anyone. */
+export const NOTICE_DAYS = 30;
+
+/** A move to another Plan Version, decided and waiting for its date. */
+export type ScheduledMove = {
+  readonly planVersionId: PlanVersionId;
+  readonly effectiveOn: LocalDate;
+};
 
 /**
- * A Business's standing agreement to pay the platform. Every Business has one,
- * including those on a free plan.
+ * A Business's standing agreement to pay the platform. Every Business has one
+ * from the moment it opens.
  */
 export type Subscription = {
   readonly id: SubscriptionId;
   readonly businessId: BusinessId;
-  readonly plan: Plan;
-  readonly amount: Money;
-  readonly billingPeriod: BillingPeriod;
-  /** The date the Business is paid up to, inclusive. */
-  readonly paidThrough: LocalDate;
+  readonly planVersionId: PlanVersionId;
+  /** The Trial's last day, inclusive; null when the owner had theirs already. */
+  readonly trialEndsOn: LocalDate | null;
+  /** The date paid up to, inclusive; null until the first Payment. */
+  readonly paidThrough: LocalDate | null;
+  readonly scheduledMove: ScheduledMove | null;
 };
 
 /**
@@ -52,64 +62,108 @@ export type Payment = {
   readonly recordedAt: Instant;
 };
 
-export const SUBSCRIPTION_STATES = ["CURRENT", "IN_GRACE", "LAPSED"] as const;
+export const SUBSCRIPTION_STATES = ["TRIAL", "CURRENT", "IN_GRACE", "LAPSED"] as const;
 export type SubscriptionState = (typeof SUBSCRIPTION_STATES)[number];
 
-/** The last date on which a lapsed Subscription still operates unaffected. */
-export const graceEndsOn = (subscription: Pick<Subscription, "paidThrough">): LocalDate =>
+type Standing = Pick<Subscription, "paidThrough" | "trialEndsOn">;
+
+/** The Trial a newly opened Business gets — none if its owner has had one. */
+export const trialEndsOn = (
+  openedOn: LocalDate,
+  owner: { ownerHadTrial: boolean },
+): LocalDate | null => (owner.ownerHadTrial ? null : addDays(openedOn, TRIAL_DAYS - 1));
+
+/** The last date on which a lapsed paid Subscription still operates unaffected. */
+export const graceEndsOn = (subscription: { paidThrough: LocalDate }): LocalDate =>
   addDays(subscription.paidThrough, GRACE_PERIOD_DAYS);
 
 /**
- * A free plan is never overdue — it has nothing to pay — so it is always
- * current regardless of the date it is nominally paid through.
+ * A Subscription never paid for is in its Trial or lapsed — there is no grace
+ * without a first Payment. Once paid, the paid-through date and the Grace
+ * Period decide, and the Trial no longer matters.
  */
-export const subscriptionStateOn = (
-  subscription: Pick<Subscription, "paidThrough" | "plan">,
-  today: LocalDate,
-): SubscriptionState => {
-  if (subscription.plan === "FREE") return "CURRENT";
-  if (compareLocalDate(today, subscription.paidThrough) <= 0) return "CURRENT";
-  if (compareLocalDate(today, graceEndsOn(subscription)) <= 0) return "IN_GRACE";
+export const subscriptionStateOn = (subscription: Standing, today: LocalDate): SubscriptionState => {
+  const { paidThrough, trialEndsOn: trialEnd } = subscription;
+  if (paidThrough === null) {
+    return trialEnd !== null && compareLocalDate(today, trialEnd) <= 0 ? "TRIAL" : "LAPSED";
+  }
+  if (compareLocalDate(today, paidThrough) <= 0) return "CURRENT";
+  if (compareLocalDate(today, graceEndsOn({ paidThrough })) <= 0) return "IN_GRACE";
   return "LAPSED";
 };
 
 /**
- * The single channel between Billing and Scheduling (CONTEXT-MAP.md): Billing
- * deactivates a Business whose Subscription lapsed beyond its Grace Period, and
- * knows nothing of Appointments, Services or Resources.
+ * The only channel between Billing and Scheduling besides the Entitlement
+ * (CONTEXT-MAP.md): a Business whose Subscription lapsed is deactivated.
  */
-export const shouldDeactivate = (
-  subscription: Pick<Subscription, "paidThrough" | "plan">,
-  today: LocalDate,
-): boolean => subscriptionStateOn(subscription, today) === "LAPSED";
+export const shouldDeactivate = (subscription: Standing, today: LocalDate): boolean =>
+  subscriptionStateOn(subscription, today) === "LAPSED";
 
-/**
- * Recording a Payment extends the paid-through date by one billing period.
- * Extension runs from whichever is later — the current paid-through date or the
- * payment date — so a Business that pays late is not credited for the lapse,
- * and one that pays early keeps the time it already bought.
- */
-export const applyPayment = (
-  subscription: Subscription,
-  paidOn: LocalDate,
-): Subscription => {
-  const from =
-    compareLocalDate(paidOn, subscription.paidThrough) > 0
-      ? paidOn
-      : subscription.paidThrough;
-  return { ...subscription, paidThrough: advanceOnePeriod(from, subscription.billingPeriod) };
+/** The date the next period is owed from; null when nothing was ever covered. */
+export const renewalOn = (subscription: Standing): LocalDate | null => {
+  const coveredThrough = subscription.paidThrough ?? subscription.trialEndsOn;
+  return coveredThrough === null ? null : addDays(coveredThrough, 1);
 };
 
-const DAYS_IN_PERIOD: Readonly<Record<BillingPeriod, number>> = Object.freeze({
-  MONTHLY: 30,
-  YEARLY: 365,
+/**
+ * Recording a Payment extends cover by one period, from whichever is later:
+ * what is already covered — paid time or the rest of the Trial — or the
+ * payment date. Paying late is not credited for the lapse; paying early keeps
+ * the time already bought.
+ */
+export const applyPayment = (subscription: Subscription, paidOn: LocalDate): Subscription => {
+  const covered = subscription.paidThrough ?? subscription.trialEndsOn;
+  const from = covered !== null && compareLocalDate(covered, paidOn) > 0 ? covered : paidOn;
+  return { ...subscription, paidThrough: addDays(from, BILLING_PERIOD_DAYS) };
+};
+
+/**
+ * A move the Catalogue forces takes effect at the first renewal at least
+ * NOTICE_DAYS after the Notice — never mid-period, never without warning.
+ */
+export const moveTakesEffectOn = (subscription: Standing, noticedOn: LocalDate): LocalDate => {
+  const earliest = addDays(noticedOn, NOTICE_DAYS);
+  const first = renewalOn(subscription);
+  if (first === null) return earliest;
+  let renewal = first;
+  while (compareLocalDate(renewal, earliest) < 0) renewal = addDays(renewal, BILLING_PERIOD_DAYS);
+  return renewal;
+};
+
+export const scheduleMove = (
+  subscription: Subscription,
+  planVersionId: PlanVersionId,
+  noticedOn: LocalDate,
+): Subscription => ({
+  ...subscription,
+  scheduledMove: { planVersionId, effectiveOn: moveTakesEffectOn(subscription, noticedOn) },
 });
 
-const advanceOnePeriod = (from: LocalDate, period: BillingPeriod): LocalDate => {
-  const days = DAYS_IN_PERIOD[period];
-  /* istanbul ignore next -- BillingPeriod is closed over the map above */
-  if (days === undefined) {
-    throw validationFailed(`Unknown billing period "${period}"`);
+/**
+ * The owner choosing a Plan. An upgrade applies at once; a downgrade waits for
+ * the renewal so the owner keeps what was paid for, unless nothing was.
+ *
+ * Choosing the Plan already held withdraws a pending move and nothing else —
+ * even when a newer edition of that Plan exists. Moving a Business onto a
+ * newer edition is the Catalogue's to do, behind a Notice (ADR 0020), never a
+ * side effect of a tap.
+ */
+export const changePlan = (
+  subscription: Subscription,
+  versions: { from: PlanVersion; to: PlanVersion },
+): Subscription => {
+  const { from, to } = versions;
+  if (from.plan === to.plan) return { ...subscription, scheduledMove: null };
+  const renewal = subscription.paidThrough === null ? null : renewalOn(subscription);
+  if (isUpgrade(from.terms, to.terms) || renewal === null) {
+    return { ...subscription, planVersionId: to.id, scheduledMove: null };
   }
-  return addDays(from, days);
+  return { ...subscription, scheduledMove: { planVersionId: to.id, effectiveOn: renewal } };
+};
+
+/** Carries out a scheduled move once its date has come. */
+export const applyDueMove = (subscription: Subscription, today: LocalDate): Subscription => {
+  const move = subscription.scheduledMove;
+  if (move === null || compareLocalDate(today, move.effectiveOn) < 0) return subscription;
+  return { ...subscription, planVersionId: move.planVersionId, scheduledMove: null };
 };

@@ -13,7 +13,11 @@ import type {
   BusinessProfileDto,
   BusinessReviewsDto,
   ReviewDto,
-  BusinessSummaryDto,
+  BillingDto,
+  DirectoryFilter,
+  DirectoryPageDto,
+  PlanDto,
+  PlanName,
   MonthDayDto,
   CalendarAppointmentDto,
   CalendarDayDto,
@@ -30,7 +34,6 @@ import type {
   ServiceDto,
   SessionDto,
   SubscriptionDto,
-  SubscriptionState,
   TeamMemberDto,
   UserDto,
   UserLookupDto,
@@ -109,6 +112,7 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<ApiErrorCode>([
   "OUTSIDE_BOOKING_WINDOW",
   "OUTSIDE_WORKING_HOURS",
   "BUSINESS_INACTIVE",
+  "NOT_ENTITLED",
   "VERIFICATION_FAILED",
   "RATE_LIMITED",
   "INTERNAL",
@@ -699,11 +703,7 @@ export const api = {
 
   /** What the owner owes the platform. Read-only: only an administrator writes. */
   subscription: (token: string, businessId: string) =>
-    request<{
-      subscription: SubscriptionDto;
-      payments: PaymentDto[];
-      state: SubscriptionState;
-    }>(`/businesses/${businessId}/subscription`, { token }),
+    request<BillingDto>(`/businesses/${businessId}/subscription`, { token }),
 
   listCustomers: (token: string, businessId: string) =>
     request<CustomerDto[]>(`/businesses/${businessId}/customers`, { token }),
@@ -791,10 +791,27 @@ export const api = {
 
   // --- Administrator (ADR 0010) -------------------------------------------
 
-  adminBusinesses: (token: string, query: string | null) =>
-    request<BusinessSummaryDto[]>("/admin/businesses", {
+  /**
+   * The directory, filtered on the server. Lists travel comma-separated, the
+   * same query string an administrator could bookmark.
+   */
+  adminBusinesses: (
+    token: string,
+    filter: DirectoryFilter,
+    page: { limit: number; offset: number },
+    signal?: AbortSignal,
+  ) =>
+    request<DirectoryPageDto>("/admin/businesses", {
       token,
-      query: query === null ? {} : { q: query },
+      ...(signal === undefined ? {} : { signal }),
+      query: {
+        limit: String(page.limit),
+        offset: String(page.offset),
+        ...(filter.query.trim() === "" ? {} : { q: filter.query.trim() }),
+        ...(filter.statuses.length === 0 ? {} : { status: filter.statuses.join(",") }),
+        ...(filter.plan === null ? {} : { plan: filter.plan }),
+        ...(filter.flags.length === 0 ? {} : { flag: filter.flags.join(",") }),
+      },
     }),
 
   adminSetBusinessActive: (token: string, businessId: string, active: boolean) =>
@@ -816,25 +833,17 @@ export const api = {
       token,
     }),
 
-  adminSubscription: (token: string, businessId: string) =>
-    request<{
-      subscription: SubscriptionDto;
-      payments: PaymentDto[];
-      state: SubscriptionState;
-    }>(`/admin/businesses/${businessId}/subscription`, { token }),
+  /** The Catalogue's current Plans. Public, like the pricing page. */
+  plans: () => request<PlanDto[]>("/plans"),
 
-  adminUpdateSubscription: (
-    token: string,
-    businessId: string,
-    changes: {
-      plan?: "FREE" | "STANDARD";
-      amountMinor?: number;
-      billingPeriod?: "MONTHLY" | "YEARLY";
-    },
-  ) =>
+  adminSubscription: (token: string, businessId: string) =>
+    request<BillingDto>(`/admin/businesses/${businessId}/subscription`, { token }),
+
+  /** ADR 0020's rule: an upgrade at once, a downgrade at the renewal. */
+  adminChangePlan: (token: string, businessId: string, plan: PlanName) =>
     request<SubscriptionDto>(`/admin/businesses/${businessId}/subscription`, {
       method: "PATCH",
-      body: changes,
+      body: { plan },
       token,
     }),
 

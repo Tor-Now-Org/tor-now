@@ -11,16 +11,18 @@ import {
   type BusinessPhoto,
   type DateOverride,
   type Payment,
+  type PlanVersion,
   type Resource,
   type Review,
   type Service,
-  type Subscription,
   type Customer,
   type User,
   type WorkingHours,
 } from "@tor-now/domain";
 import type { MyWaiting } from "../application/waiting-service.ts";
 import type { PlatformStats } from "../application/admin-service.ts";
+import type { SubscriptionView } from "../application/billing.ts";
+import type { DirectoryRow } from "../application/business-directory.ts";
 import type {
   StaffedBusiness,
   TeamMember,
@@ -339,14 +341,61 @@ export const teamMemberOut = (member: TeamMember) => {
   };
 };
 
-export const subscriptionOut = (subscription: Subscription) => ({
-  id: subscription.id,
-  businessId: subscription.businessId,
-  plan: subscription.plan,
-  amountMinor: subscription.amount,
-  amount: toMajorUnits(subscription.amount),
-  billingPeriod: subscription.billingPeriod,
-  paidThrough: subscription.paidThrough,
+/**
+ * A Subscription with the Plan Version it is on, as one flat record: what the
+ * owner is on, what it costs, what it gives, and what is changing.
+ */
+export const subscriptionOut = (view: SubscriptionView) => ({
+  id: view.subscription.id,
+  businessId: view.subscription.businessId,
+  plan: view.planVersion.plan,
+  planVersion: view.planVersion.number,
+  priceMinor: view.planVersion.terms.price,
+  price: toMajorUnits(view.planVersion.terms.price),
+  resourceAllowance: view.planVersion.terms.resourceAllowance,
+  features: view.planVersion.terms.features,
+  trialEndsOn: view.subscription.trialEndsOn,
+  paidThrough: view.subscription.paidThrough,
+  scheduledMove:
+    view.subscription.scheduledMove === null || view.scheduledVersion === null
+      ? null
+      : {
+          plan: view.scheduledVersion.plan,
+          planVersion: view.scheduledVersion.number,
+          effectiveOn: view.subscription.scheduledMove.effectiveOn,
+        },
+});
+
+/** One Plan as the pricing page and the plan chooser show it. */
+export const planOut = (version: PlanVersion) => ({
+  plan: version.plan,
+  planVersion: version.number,
+  priceMinor: version.terms.price,
+  price: toMajorUnits(version.terms.price),
+  resourceAllowance: version.terms.resourceAllowance,
+  features: version.terms.features,
+});
+
+/** One line of the administrator's Businesses tab. */
+export const directoryRowOut = (row: DirectoryRow) => ({
+  business: businessOut(row.business),
+  ownerName: row.owner?.name ?? null,
+  ownerPhone: row.owner?.phone ?? null,
+  plan: row.planVersion.plan,
+  planVersion: row.planVersion.number,
+  status: row.standing.status,
+  nextDate: row.standing.nextDate,
+  flags: row.standing.flags,
+});
+
+/** The owner's or administrator's billing panel. */
+export const billingOut = (result: SubscriptionView & { payments: readonly Payment[] }) => ({
+  subscription: subscriptionOut(result),
+  payments: result.payments.map(paymentOut),
+  state: result.state,
+  status: result.standing.status,
+  nextDate: result.standing.nextDate,
+  flags: result.standing.flags,
 });
 
 export const paymentOut = (payment: Payment) => ({

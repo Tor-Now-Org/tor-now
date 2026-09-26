@@ -5778,3 +5778,23 @@ test.describe("typing a number into a number", () => {
     await expect(price).toHaveValue("");
   });
 });
+
+test.describe("the billing tab", () => {
+  test("shows the owner their Trial, when it ends, and what happens then", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({ name: `ניסיון ${Date.now()}`, ownerPhone });
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await page.getByRole("button", { name: "העסק", exact: true }).click();
+    await page.getByRole("button", { name: "מנוי ותשלומים" }).click();
+
+    await expect(page.getByText("יחיד", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("ניסיון", { exact: true })).toBeVisible();
+    await expect(page.getByText("ניסיון עד", { exact: true })).toBeVisible();
+    await expect(page.getByText(/תקופת הניסיון מסתיימת/)).toBeVisible();
+    await expect(page.getByText("עדיין אין תשלומים.")).toBeVisible();
+  });
+});

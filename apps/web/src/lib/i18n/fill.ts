@@ -46,3 +46,12 @@ export const fillParts = (
   }
   return parts;
 };
+
+/** The same template as one plain string, for a label or an attribute. */
+export const fillText = (
+  template: string,
+  values: Readonly<Record<string, string>>,
+): string =>
+  fillParts(template, values)
+    .map((part) => part.text)
+    .join("");

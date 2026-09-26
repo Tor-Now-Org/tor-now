@@ -7,8 +7,13 @@ import {
   manages,
   mergedRanges,
   money,
-  subscriptionStateOn,
+  planThatFits,
+  requireRoomForResource,
   todayIn,
+  trialEndsOn,
+  type Plan,
+  type LocalDate,
+  type UserId,
   notFound,
   parseLocalDate,
   parseLocalTime,
@@ -35,6 +40,7 @@ import {
 } from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
 import { notificationFor } from "./notifications.ts";
+import { subscriptionView } from "./billing.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
 import type { PhotoStore } from "../ports/photo-store.ts";
 import type { Repositories } from "../ports/repositories.ts";
@@ -75,6 +81,11 @@ export type RegistrationInput = {
   readonly latitude: number;
   readonly longitude: number;
   readonly category: BusinessCategory;
+  /**
+   * The Plan the owner chose. Left out, the Business goes on the cheapest Plan
+   * with room for the calendars it opens with.
+   */
+  readonly plan?: Plan | undefined;
   readonly resourceNames: readonly string[];
   readonly services: readonly {
     name: string;
@@ -266,6 +277,42 @@ const setAssignments = async (
   }
 };
 
+/**
+ * A new Business's Plan and Trial. The Trial is the owner's, once (ADR 0020):
+ * whether they have had it is read here, and claimed atomically by `start`, so
+ * a second Business opened by the same owner starts with payment due.
+ */
+const startSubscription = async (
+  repositories: Repositories,
+  opening: {
+    ownerId: UserId;
+    businessId: BusinessId;
+    plan: Plan | undefined;
+    calendars: number;
+    today: LocalDate;
+  },
+): Promise<void> => {
+  const current = await repositories.planVersions.listCurrent();
+  // Unnamed, the cheapest Plan that fits — or, when none does, the roomiest,
+  // so the refusal below names the most the platform offers.
+  const version =
+    opening.plan === undefined
+      ? (planThatFits(current, opening.calendars) ??
+        [...current].sort((a, b) => b.terms.resourceAllowance - a.terms.resourceAllowance)[0])
+      : current.find((candidate) => candidate.plan === opening.plan);
+  if (version === undefined) throw notFound("Plan", opening.plan ?? "any");
+  // The calendars a Business opens with are new ones like any other.
+  requireRoomForResource(
+    { features: version.terms.features, resourceAllowance: version.terms.resourceAllowance },
+    opening.calendars - 1,
+  );
+  const ownerHadTrial = (await repositories.users.trialTakenOn(opening.ownerId)) !== null;
+  await repositories.subscriptions.start(opening.businessId, {
+    planVersionId: version.id,
+    trialEndsOn: trialEndsOn(opening.today, { ownerHadTrial }),
+  });
+};
+
 export const businessService = ({
   unitOfWork,
   clock,
@@ -300,6 +347,13 @@ export const businessService = ({
       });
 
       await repositories.memberships.create(userId, business.id, "OWNER");
+      await startSubscription(repositories, {
+        ownerId: userId,
+        businessId: business.id,
+        plan: input.plan,
+        calendars: input.resourceNames.length,
+        today: todayIn(clock.now(), business.timeZone),
+      });
 
       const resources = await Promise.all(
         input.resourceNames.map((name) =>
@@ -380,19 +434,11 @@ export const businessService = ({
   async subscription(actor: Actor, businessId: BusinessId) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       const business = await loadOwnedBusiness(repositories, actor, businessId);
-      const [subscription, payments] = await Promise.all([
-        repositories.subscriptions.findByBusiness(businessId),
+      const [view, payments] = await Promise.all([
+        subscriptionView(repositories, businessId, todayIn(clock.now(), business.timeZone)),
         repositories.payments.listForBusiness(businessId),
       ]);
-      if (subscription === null) throw notFound("Subscription", businessId);
-      return {
-        subscription,
-        payments,
-        state: subscriptionStateOn(
-          subscription,
-          todayIn(clock.now(), business.timeZone),
-        ),
-      };
+      return { ...view, payments };
     });
   },
 

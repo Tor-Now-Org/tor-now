@@ -5,16 +5,11 @@ import { REVIEW_STARS, TEXT_RULES } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type { BusinessReviewsDto, ReviewDto } from "@/lib/api/types.ts";
-import { fillParts } from "@/lib/i18n/fill.ts";
+import { fillText as fill } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useSession } from "@/lib/session.tsx";
 import { Button, Chip, Critical, MultilineField, Note } from "../ui.tsx";
-
-const fill = (template: string, values: Record<string, string>): string =>
-  fillParts(template, values)
-    .map((part) => part.text)
-    .join("");
 
 const STARS = Array.from(
   { length: REVIEW_STARS.max - REVIEW_STARS.min + 1 },

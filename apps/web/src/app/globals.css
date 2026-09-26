@@ -133,6 +133,124 @@ input,select{font:inherit;color:inherit}
   transition:background .13s ease, transform .08s ease}
 .danger:hover{background:oklch(93% 0.042 22)}
 .danger:active{transform:translateY(1px)}
+/* Billing badges (components/billing-badges.tsx). A status is a filled pill
+   with a dot, a plan an outlined tag, a flag a small square-cornered tag —
+   three shapes, so they are told apart before they are read. */
+.status-badge{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding-inline:9px 10px;border-radius:999px;
+  font-size:12px;font-weight:600;white-space:nowrap}
+.status-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.s-TRIAL{background:var(--accent-soft);color:var(--accent-strong)}
+.s-PAID{background:var(--positive-soft);color:var(--positive)}
+.s-IN_GRACE{background:var(--caution-soft);color:var(--caution)}
+.s-LAPSED{background:var(--critical-soft);color:var(--critical)}
+.s-DEACTIVATED{background:var(--blocked-soft);color:var(--blocked)}
+.plan-badge{display:inline-flex;align-items:center;gap:5px;min-height:24px;padding:0 9px;border-radius:8px;
+  font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--raised);white-space:nowrap}
+.plan-badge::before{content:"";width:8px;height:8px;border-radius:2px}
+.plan-badge small{font-weight:400;color:var(--faint)}
+.p-SOLO::before{background:var(--lane-1)} .p-TEAM::before{background:var(--lane-2)}
+.flag-tag{display:inline-flex;align-items:center;min-height:20px;padding:0 7px;border-radius:6px;font-size:11px;font-weight:600;
+  background:var(--sunken);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+.flag-tag.hot{background:var(--caution-soft);color:var(--caution);border-color:oklch(63% 0.125 65/.3)}
+
+/* The administrator's Filters panel (components/admin/business-filters.tsx).
+   On a phone it rises from the bottom as the app's sheets do; with room to
+   spare it hangs under its button, and a click anywhere else closes it. */
+.filters-anchor{position:relative}
+.filters-btn{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 16px;border-radius:14px;
+  border:1px solid var(--line);background:var(--raised);font-size:14px;font-weight:500;white-space:nowrap;
+  transition:border-color .13s ease, background .13s ease}
+.filters-btn:hover{border-color:var(--accent)}
+.filters-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong)}
+.filters-btn .count{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--accent);color:var(--on-accent);
+  font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+.filters-scrim{position:fixed;inset:0;z-index:40;background:oklch(25% 0.055 258 / 0.35)}
+.filters-panel{position:fixed;inset-inline:0;bottom:0;z-index:41;max-height:88%;overflow-y:auto;
+  background:var(--raised);border-start-start-radius:22px;border-start-end-radius:22px;
+  padding-bottom:env(safe-area-inset-bottom);display:flex;flex-direction:column}
+.filters-panel .grabber{width:40px;height:5px;border-radius:999px;background:var(--line);margin:10px auto 0;flex:none}
+@media (min-width: 720px) {
+  .filters-scrim{background:transparent}
+  .filters-panel{position:absolute;inset-inline:auto 0;bottom:auto;top:calc(100% + 8px);width:360px;max-height:none;
+    border:1px solid var(--line);border-radius:20px;box-shadow:0 18px 40px -16px oklch(25% 0.055 258 / .35)}
+  .filters-panel .grabber{display:none}
+}
+.fp-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 6px}
+.fp-head h2{font-size:16px}
+.fp-head button{font-size:13px;font-weight:600;color:var(--accent)}
+.fp-head button:disabled{color:var(--faint);cursor:default}
+.fp-section{display:flex;flex-direction:column;gap:10px;padding:12px 18px}
+.fp-section + .fp-section{border-top:1px solid var(--line)}
+.fp-section > .label{display:flex;justify-content:space-between}
+.fp-section > .label small{font-weight:400;color:var(--faint)}
+.fp-pills{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fp-pill{display:flex;align-items:center;justify-content:flex-start;gap:8px;min-height:44px;padding:0 12px;border-radius:12px;
+  border:1px solid var(--line);background:var(--raised);font-size:13.5px;font-weight:500;text-align:start}
+.fp-pill .dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--tone)}
+.fp-pill .name{flex:1}
+.fp-pill small{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+.fp-pill[aria-pressed="true"]{border-color:var(--tone);background:var(--tone-soft);color:var(--tone)}
+.fp-pill[aria-pressed="true"] small{color:var(--tone)}
+.fp-pill:disabled{opacity:.4;cursor:default}
+.fp-seg{display:flex;background:var(--sunken);border-radius:12px;padding:3px;gap:3px}
+.fp-seg button{flex:1;min-height:38px;border-radius:9px;font-size:13.5px;font-weight:500;color:var(--muted);gap:6px}
+.fp-seg button[aria-pressed="true"]{background:var(--raised);color:var(--ink);box-shadow:0 1px 2px oklch(25% 0.055 258/.14)}
+.fp-seg small{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.fp-toggle{display:flex;align-items:center;gap:12px;min-height:44px;font-size:13.5px;cursor:pointer}
+.fp-toggle .what{flex:1;display:flex;flex-direction:column;gap:1px}
+.fp-toggle .what em{font-style:normal;font-size:11.5px;color:var(--faint)}
+.fp-toggle small{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+.fp-toggle.off{opacity:.45;cursor:default}
+.switch{position:relative;width:40px;height:24px;flex:none}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:inherit}
+.switch i{position:absolute;inset:0;border-radius:999px;background:var(--line);transition:background .15s ease}
+.switch i::after{content:"";position:absolute;top:3px;inset-inline-start:3px;width:18px;height:18px;border-radius:50%;
+  background:var(--raised);box-shadow:0 1px 2px oklch(25% 0.055 258/.25);transition:inset-inline-start .15s ease}
+.switch input:checked + i{background:var(--accent)}
+.switch input:checked + i::after{inset-inline-start:19px}
+.switch input:focus-visible + i{outline:2px solid var(--accent);outline-offset:2px}
+.fp-foot{padding:14px 18px 18px;border-top:1px solid var(--line)}
+
+/* A Plan move waiting for its date, with the one way to take it back. */
+.pending-move{display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:14px;
+  background:var(--accent-soft);color:var(--accent-strong);font-size:12.5px;line-height:1.5}
+.pending-move span{flex:1}
+.pending-move button{font-weight:600;font-size:12.5px;text-decoration:underline;text-underline-offset:3px}
+
+/* A status in the statistics' legend: a count that opens the Businesses behind it. */
+.stat-status{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 12px;border-radius:999px;
+  border:1px solid var(--line);background:var(--raised);font-size:13px;font-weight:500}
+.stat-status i{width:8px;height:8px;border-radius:50%}
+.stat-status:hover:not(:disabled){border-color:var(--accent)}
+.stat-status:disabled{opacity:.45;cursor:default}
+
+/* The directory under the filters: a table with room for one, cards without. */
+.dir-results{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:12.5px;color:var(--muted);min-height:28px}
+.dir-results strong{color:var(--ink)}
+.dir-results .sort{margin-inline-start:auto;color:var(--faint);font-size:12px}
+.dir-results .clear{color:var(--accent);font-weight:600;font-size:12.5px}
+.dir-token{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding-inline:10px 4px;border-radius:999px;
+  background:var(--accent-soft);color:var(--accent-strong);font-size:12.5px;font-weight:500}
+.dir-token .dot{width:7px;height:7px;border-radius:50%;background:var(--tone)}
+.dir-token button{width:22px;height:22px;border-radius:50%;font-size:15px;line-height:1;color:var(--accent-strong)}
+.dir-token button:hover{background:oklch(52% 0.123 245/.14)}
+.dir-table{display:none}
+.dir-cards{display:flex;flex-direction:column;gap:10px}
+.dir-card{display:flex;flex-direction:column;gap:9px;text-align:start;align-items:stretch;width:100%;padding:14px}
+.dir-card .top{display:flex;gap:8px;align-items:center}
+.dir-card .bottom{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.dir-who{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.dir-who strong{font-weight:600}
+.dir-who span{font-size:12px;color:var(--faint)}
+.dir-when{display:flex;flex-direction:column;gap:1px}
+.dir-when span{font-size:11.5px;color:var(--faint)}
+.dir-when b{font-weight:500}
+.dir-when.soon b{color:var(--caution)}
+@media (min-width: 720px) {
+  .dir-table{display:block;overflow-x:auto}
+  .dir-cards{display:none}
+}
+
 /* Compact controls stay pills; full-width actions do not. */
 .chip{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;
   border-radius:999px;font-size:13.5px;font-weight:500;

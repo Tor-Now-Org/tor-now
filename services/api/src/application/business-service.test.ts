@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { displayName, MAXIMUM_PHOTOS, needsName, parseInstant, UNNAMED } from "@tor-now/domain";
+import {
+  displayName,
+  MAXIMUM_PHOTOS,
+  needsName,
+  parseInstant,
+  UNNAMED,
+  type BusinessId,
+} from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
@@ -33,8 +40,81 @@ describe("registering a business", () => {
       shop.owner.actor,
       shop.business.id,
     );
-    expect(billing.subscription.plan).toBe("FREE");
-    expect(billing.state).toBe("CURRENT");
+    expect(billing.planVersion.plan).toBe("SOLO");
+    expect(billing.state).toBe("TRIAL");
+    expect(billing.subscription.trialEndsOn).toBe("2026-09-23");
+    expect(billing.subscription.paidThrough).toBeNull();
+    expect(test.store.audit.some((entry) => entry.action === "SUBSCRIPTION_STARTED")).toBe(true);
+  });
+
+  const opening = (overrides: Partial<Parameters<Harness["services"]["business"]["register"]>[1]> = {}) => ({
+    name: "מספרה",
+    phone: "+972500000001",
+    description: null,
+    address: "רחוב הרצל 1",
+    latitude: 32.0853,
+    longitude: 34.7818,
+    category: "barbershop" as const,
+    resourceNames: ["רן"],
+    services: [{ name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null }],
+    workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],
+    ...overrides,
+  });
+
+  const planOf = async (owner: Awaited<ReturnType<typeof signIn>>, businessId: BusinessId) =>
+    test.services.business.subscription(owner.actor, businessId);
+
+  it("puts a Business on the Plan its owner chose", async () => {
+    const owner = await signIn(test, "+972500000001");
+    const business = await test.services.business.register(owner.actor, opening({ plan: "TEAM" }));
+    const billing = await planOf(owner, business.id);
+    expect(billing.planVersion.plan).toBe("TEAM");
+    expect(billing.state).toBe("TRIAL");
+  });
+
+  it("puts a Business that names no Plan on the cheapest with room for its calendars", async () => {
+    const owner = await signIn(test, "+972500000001");
+    const business = await test.services.business.register(
+      owner.actor,
+      opening({ resourceNames: ["רן", "דנה"] }),
+    );
+    expect((await planOf(owner, business.id)).planVersion.plan).toBe("TEAM");
+  });
+
+  it("refuses more calendars than the chosen Plan allows", async () => {
+    const owner = await signIn(test, "+972500000001");
+    await expect(
+      test.services.business.register(owner.actor, opening({ plan: "SOLO", resourceNames: ["רן", "דנה"] })),
+    ).rejects.toMatchObject({ code: "NOT_ENTITLED", details: { resourceAllowance: 1 } });
+  });
+
+  it("refuses more calendars than any Plan allows", async () => {
+    const owner = await signIn(test, "+972500000001");
+    await expect(
+      test.services.business.register(
+        owner.actor,
+        opening({ resourceNames: ["א", "ב", "ג", "ד", "ה", "ו"] }),
+      ),
+    ).rejects.toMatchObject({ code: "NOT_ENTITLED", details: { resourceAllowance: 5 } });
+  });
+
+  it("gives an owner's second Business no Trial — it opens with payment due", async () => {
+    const owner = await signIn(test, "+972500000001");
+    await test.services.business.register(owner.actor, opening());
+    const second = await test.services.business.register(owner.actor, opening({ name: "סניף ב" }));
+
+    const billing = await planOf(owner, second.id);
+    expect(billing.subscription.trialEndsOn).toBeNull();
+    expect(billing.state).toBe("LAPSED");
+  });
+
+  it("keeps the Trial on the owner, not on a Business the owner later loses", async () => {
+    const owner = await signIn(test, "+972500000001");
+    await test.services.business.register(owner.actor, opening());
+    test.store.businesses = [];
+    test.store.subscriptions = [];
+    const again = await test.services.business.register(owner.actor, opening({ name: "מחדש" }));
+    expect((await planOf(owner, again.id)).subscription.trialEndsOn).toBeNull();
   });
 
   it("refuses a business with no calendar", async () => {

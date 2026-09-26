@@ -3,7 +3,12 @@ import type { UserId } from "@tor-now/domain";
 import { describeRepositoryContract } from "../../ports/repositories.contract.ts";
 import { assumeIdentity, createPool, type Transaction } from "./client.ts";
 import { appointmentRepository } from "./appointment-repository.ts";
-import { paymentRepository, subscriptionRepository } from "./billing-repositories.ts";
+import {
+  paymentRepository,
+  planVersionRepository,
+  previewRepository,
+  subscriptionRepository,
+} from "./billing-repositories.ts";
 import {
   administratorAllowlistRepository,
   businessPhotoRepository,
@@ -121,6 +126,8 @@ if (databaseUrl === undefined || databaseUrl === "") {
         appointments: recording("appointments", appointmentRepository(transaction)),
         subscriptions: recording("subscriptions", subscriptionRepository(transaction)),
         payments: recording("payments", paymentRepository(transaction)),
+        planVersions: recording("planVersions", planVersionRepository(transaction)),
+        previews: recording("previews", previewRepository(transaction)),
         administratorAllowlist: recording(
           "administratorAllowlist",
           administratorAllowlistRepository(transaction),

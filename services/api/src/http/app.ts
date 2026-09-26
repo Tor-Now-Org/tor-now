@@ -160,6 +160,11 @@ export const createApp = (services: Services) => {
   // ---------------------------------------------------------------------------
   // Discovery and availability (ADR 0011, ADR 0012)
   // ---------------------------------------------------------------------------
+  // ADR 0020: the Catalogue's current editions, for anyone deciding.
+  app.get("/plans", async (context) =>
+    context.json((await services.catalogue.currentPlans(actorOf(context))).map(wire.planOut)),
+  );
+
   app.get("/businesses/search", async (context) => {
     const { q, category, lat, lng } = parseQuery(context, schema.searchSchema);
     const results = await services.discovery.search(actorOf(context), q, {
@@ -817,11 +822,7 @@ const ownerRoutes = (services: Services) => {
       actorOf(context),
       idParam(context, "businessId"),
     );
-    return context.json({
-      subscription: wire.subscriptionOut(result.subscription),
-      payments: result.payments.map(wire.paymentOut),
-      state: result.state,
-    });
+    return context.json(wire.billingOut(result));
   });
 
   owner.get("/:businessId/users", async (context) => {
@@ -932,18 +933,17 @@ const adminRoutes = (services: Services) => {
 
   admin.get("/businesses", async (context) => {
     const page = parseQuery(context, schema.pageSchema);
-    const { q } = parseQuery(context, schema.queryTextSchema);
-    const summaries = await services.admin.listBusinesses(actorOf(context), q, page);
-    return context.json(
-      summaries.map((summary) => ({
-        business: wire.businessOut(summary.business),
-        subscription:
-          summary.subscription === null ? null : wire.subscriptionOut(summary.subscription),
-        subscriptionState: summary.subscriptionState,
-        ownerName: summary.ownerName,
-        ownerPhone: summary.ownerPhone,
-      })),
+    const { q, status, plan, flag } = parseQuery(context, schema.directoryQuerySchema);
+    const result = await services.admin.listBusinesses(
+      actorOf(context),
+      { query: q, statuses: status, plan, flags: flag },
+      page,
     );
+    return context.json({
+      rows: result.rows.map(wire.directoryRowOut),
+      total: result.total,
+      counts: result.counts,
+    });
   });
 
   admin.patch("/businesses/:businessId/active", async (context) => {
@@ -981,22 +981,14 @@ const adminRoutes = (services: Services) => {
       actorOf(context),
       idParam(context, "businessId"),
     );
-    return context.json({
-      subscription: wire.subscriptionOut(result.subscription),
-      payments: result.payments.map(wire.paymentOut),
-      state: result.state,
-    });
+    return context.json(wire.billingOut(result));
   });
 
   admin.patch("/businesses/:businessId/subscription", async (context) => {
-    const body = await parseBody(context, schema.subscriptionUpdateSchema);
+    const { plan } = await parseBody(context, schema.planChangeSchema);
     return context.json(
       wire.subscriptionOut(
-        await services.admin.updateSubscription(
-          actorOf(context),
-          idParam(context, "businessId"),
-          body,
-        ),
+        await services.admin.changePlan(actorOf(context), idParam(context, "businessId"), plan),
       ),
     );
   });

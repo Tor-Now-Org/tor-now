@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { displayName, parseLocalDate } from "@tor-now/domain";
+import { displayName, parseInstant, parseLocalDate } from "@tor-now/domain";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
 
@@ -20,7 +20,7 @@ describe("administrator scope", () => {
     const ordinary = await signIn(test, "+972500000050");
 
     await expect(
-      test.services.admin.listBusinesses(ordinary.actor, null),
+      test.services.admin.listBusinesses(ordinary.actor),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(
       test.services.admin.listUsers(ordinary.actor, null),
@@ -37,11 +37,62 @@ describe("administrator scope", () => {
     const shop = await anEstablishedBusiness(test);
     const admin = await signIn(test, "+972500000000");
 
-    const summaries = await test.services.admin.listBusinesses(admin.administrator, null);
-    const summary = summaries.find((row) => row.business.id === shop.business.id);
-    expect(summary?.ownerName).toBe("רן");
-    expect(summary?.ownerPhone).toBe("+972500000001");
-    expect(summary?.subscriptionState).toBe("CURRENT");
+    const page = await test.services.admin.listBusinesses(admin.administrator);
+    const summary = page.rows.find((row) => row.business.id === shop.business.id);
+    expect(summary?.owner).toEqual({ name: "רן", phone: "+972500000001" });
+    expect(summary?.standing).toEqual({ status: "TRIAL", nextDate: "2026-09-23", flags: [] });
+    expect(summary?.planVersion.plan).toBe("SOLO");
+    expect(page.total).toBe(1);
+  });
+
+  it("filters the directory on the server, over every Business, with a count per option", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const admin = await signIn(test, "+972500000000");
+    await test.services.admin.changePlan(admin.administrator, shop.business.id, "TEAM");
+    const other = await signIn(test, "+972500000003", "נוי");
+    await test.services.business.register(other.actor, {
+      name: "סטודיו נוי",
+      phone: "+972500000003",
+      description: null,
+      address: "רחוב הרצל 2",
+      latitude: 32.0853,
+      longitude: 34.7818,
+      category: "barbershop",
+      resourceNames: ["נוי"],
+      services: [{ name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null }],
+      workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],
+    });
+
+    const teams = await test.services.admin.listBusinesses(admin.administrator, {
+      query: null,
+      statuses: ["TRIAL"],
+      plan: "TEAM",
+      flags: [],
+    });
+    expect(teams.rows.map((row) => row.business.name)).toEqual(["מספרת רן"]);
+    expect(teams.counts.plans).toEqual({ SOLO: 1, TEAM: 1 });
+
+    const byOwner = await test.services.admin.listBusinesses(admin.administrator, {
+      query: "נוי",
+      statuses: [],
+      plan: null,
+      flags: [],
+    });
+    expect(byOwner.rows.map((row) => row.business.name)).toEqual(["סטודיו נוי"]);
+
+    const firstPage = await test.services.admin.listBusinesses(admin.administrator, undefined, {
+      limit: 1,
+      offset: 0,
+    });
+    expect(firstPage.rows).toHaveLength(1);
+    expect(firstPage.total).toBe(2);
+  });
+
+  it("counts the statistics by the same five statuses the directory filters by", async () => {
+    await anEstablishedBusiness(test);
+    const admin = await signIn(test, "+972500000000");
+    const stats = await test.services.admin.platformStats(admin.administrator);
+    expect(stats.statusCounts).toEqual({ TRIAL: 1, PAID: 0, IN_GRACE: 0, LAPSED: 0, DEACTIVATED: 0 });
   });
 
   it("deactivating removes a business from search and refuses new bookings", async () => {
@@ -105,32 +156,88 @@ describe("administrator scope", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("records a payment and moves the paid-through date with it", async () => {
+  it("records a payment, keeping the rest of the Trial it was paid during", async () => {
     const shop = await anEstablishedBusiness(test);
     const admin = await signIn(test, "+972500000000");
-
-    await test.services.admin.updateSubscription(admin.administrator, shop.business.id, {
-      plan: "STANDARD",
-      amountMinor: 9900,
-    });
-    const before = await test.services.admin.subscriptionFor(
-      admin.administrator,
-      shop.business.id,
-    );
+    const before = await test.services.admin.subscriptionFor(admin.administrator, shop.business.id);
+    expect(before.subscription.paidThrough).toBeNull();
+    expect(before.subscription.trialEndsOn).toBe("2026-09-23");
 
     await test.services.admin.recordPayment(admin.administrator, shop.business.id, {
-      amountMinor: 9900,
-      paidOn: "2026-09-30",
+      amountMinor: 4900,
+      paidOn: "2026-09-10",
       note: null,
     });
 
-    const after = await test.services.admin.subscriptionFor(
-      admin.administrator,
-      shop.business.id,
-    );
+    const after = await test.services.admin.subscriptionFor(admin.administrator, shop.business.id);
     expect(after.payments).toHaveLength(1);
-    expect(after.subscription.paidThrough > before.subscription.paidThrough).toBe(true);
+    expect(after.subscription.paidThrough).toBe("2026-10-23");
+    expect(after.state).toBe("CURRENT");
     expect(test.store.audit.some((entry) => entry.action === "PAYMENT_RECORDED")).toBe(true);
+  });
+
+  it("upgrades a Business at once, and audits who did it", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const admin = await signIn(test, "+972500000000");
+
+    const view = await test.services.admin.changePlan(admin.administrator, shop.business.id, "TEAM");
+
+    expect(view.planVersion.plan).toBe("TEAM");
+    expect(view.subscription.scheduledMove).toBeNull();
+    const entry = test.store.audit.find((candidate) => candidate.action === "SUBSCRIPTION_CHANGED");
+    expect(entry?.actorId).toBe(admin.user.id);
+  });
+
+  it("downgrades a paying Business at its renewal, not before", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const admin = await signIn(test, "+972500000000");
+    await test.services.admin.changePlan(admin.administrator, shop.business.id, "TEAM");
+    await test.services.admin.recordPayment(admin.administrator, shop.business.id, {
+      amountMinor: 8900,
+      paidOn: "2026-09-10",
+      note: null,
+    });
+
+    const view = await test.services.admin.changePlan(admin.administrator, shop.business.id, "SOLO");
+
+    expect(view.planVersion.plan).toBe("TEAM");
+    expect(view.scheduledVersion?.plan).toBe("SOLO");
+    expect(view.subscription.scheduledMove?.effectiveOn).toBe("2026-10-24");
+  });
+
+  it("downgrades a Business in its Trial at once — nothing was paid to keep", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const admin = await signIn(test, "+972500000000");
+    await test.services.admin.changePlan(admin.administrator, shop.business.id, "TEAM");
+
+    const view = await test.services.admin.changePlan(admin.administrator, shop.business.id, "SOLO");
+
+    expect(view.planVersion.plan).toBe("SOLO");
+    expect(view.subscription.scheduledMove).toBeNull();
+  });
+
+  it("refuses a plan change to anyone but an administrator", async () => {
+    const shop = await anEstablishedBusiness(test);
+    await expect(
+      test.services.admin.changePlan(shop.owner.actor, shop.business.id, "TEAM"),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("counts only paid time as recurring revenue, never a Trial", async () => {
+    const shop = await anEstablishedBusiness(test);
+    const admin = await signIn(test, "+972500000000");
+
+    const trialling = await test.services.admin.platformStats(admin.administrator);
+    expect(trialling.monthlyRecurringRevenueMinor).toBe(0);
+    expect(trialling.planCounts).toEqual({ SOLO: 1, TEAM: 0 });
+
+    await test.services.admin.recordPayment(admin.administrator, shop.business.id, {
+      amountMinor: 4900,
+      paidOn: "2026-08-25",
+      note: null,
+    });
+    const paying = await test.services.admin.platformStats(admin.administrator);
+    expect(paying.monthlyRecurringRevenueMinor).toBe(4900);
   });
 
   it("erases a person's details while keeping what refers to them", async () => {
@@ -225,34 +332,36 @@ describe("administrator scope", () => {
     expect(displayName(restored)).not.toBe("דנה");
   });
 
-  it("deactivates a business only once the grace period has elapsed", async () => {
+  it("deactivates a paying business only once the grace period has elapsed", async () => {
     const shop = await anEstablishedBusiness(test);
-    const admin = await signIn(test, "+972500000000");
-
-    await test.services.admin.updateSubscription(admin.administrator, shop.business.id, {
-      plan: "STANDARD",
-    });
+    const paidThrough = (date: string) => {
+      test.store.subscriptions = test.store.subscriptions.map((subscription) =>
+        subscription.businessId === shop.business.id
+          ? { ...subscription, trialEndsOn: null, paidThrough: parseLocalDate(date) }
+          : subscription,
+      );
+    };
 
     // Inside the grace period: nothing happens.
-    await test.services.business.update(shop.owner.actor, shop.business.id, {});
-    await test.services.admin.updateSubscription(admin.administrator, shop.business.id, {});
-    test.store.subscriptions = test.store.subscriptions.map((subscription) =>
-      subscription.businessId === shop.business.id
-        ? { ...subscription, paidThrough: parseLocalDate("2026-08-20") }
-        : subscription,
-    );
-    expect(
-      await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" }),
-    ).toEqual([]);
+    paidThrough("2026-08-20");
+    expect(await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" })).toEqual([]);
 
     // Past it: the business goes.
-    test.store.subscriptions = test.store.subscriptions.map((subscription) =>
-      subscription.businessId === shop.business.id
-        ? { ...subscription, paidThrough: parseLocalDate("2026-08-01") }
-        : subscription,
-    );
-    expect(
-      await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" }),
-    ).toEqual([shop.business.id]);
+    paidThrough("2026-08-01");
+    expect(await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" })).toEqual([
+      shop.business.id,
+    ]);
+  });
+
+  it("deactivates an unpaid Trial the day after it ends, with no grace", async () => {
+    const shop = await anEstablishedBusiness(test);
+
+    test.travelTo(parseInstant("2026-09-23T20:00:00.000Z"));
+    expect(await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" })).toEqual([]);
+
+    test.travelTo(parseInstant("2026-09-24T21:30:00.000Z"));
+    expect(await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" })).toEqual([
+      shop.business.id,
+    ]);
   });
 });

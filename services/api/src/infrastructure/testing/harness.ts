@@ -2,6 +2,7 @@ import {
   greedyWalk,
   instant,
   parseInstant,
+  parseLocalDate,
   type Clock,
   type Instant,
 } from "@tor-now/domain";
@@ -12,6 +13,7 @@ import { bookingService } from "../../application/booking-service.ts";
 import { businessService } from "../../application/business-service.ts";
 import { calendarService } from "../../application/calendar-service.ts";
 import { closureService } from "../../application/closure-service.ts";
+import { catalogueService } from "../../application/catalogue-service.ts";
 import { discoveryService } from "../../application/discovery-service.ts";
 import { reviewService } from "../../application/review-service.ts";
 import { outboxWorker } from "../../application/outbox-worker.ts";
@@ -45,7 +47,9 @@ export const FROZEN_NOW: Instant = parseInstant("2026-08-25T09:00:00.000Z");
 export type Harness = ReturnType<typeof harness>;
 
 export const harness = (options: { now?: Instant } = {}) => {
-  const store: Store = emptyStore();
+  const store: Store = emptyStore(
+    parseLocalDate(new Date(options.now ?? FROZEN_NOW).toISOString().slice(0, 10)),
+  );
 
   // Time moves, so the clock has to. A test that books ahead of the minimum
   // notice and then cancels inside the cancellation window needs both moments,
@@ -265,6 +269,7 @@ export const harness = (options: { now?: Instant } = {}) => {
         exposeCode: true,
       }),
       profile: profileService({ unitOfWork }),
+      catalogue: catalogueService({ unitOfWork }),
       discovery: discoveryService({ unitOfWork, clock, strategy: greedyWalk }),
       reviews: reviewService({ unitOfWork, clock }),
       availability,

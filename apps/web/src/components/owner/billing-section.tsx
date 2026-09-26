@@ -1,0 +1,84 @@
+"use client";
+
+import type { BillingDto } from "@/lib/api/types.ts";
+import { daysUntil } from "@/lib/billing-alert.ts";
+import { formatLocalDate, formatPrice } from "@/lib/format.ts";
+import { fillParts, fillText } from "@/lib/i18n/fill.ts";
+import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { Card, Critical, Note, Warning } from "@/components/ui.tsx";
+import { NextDate, PlanBadge, StatusBadge } from "@/components/billing-badges.tsx";
+
+/**
+ * What the owner owes the platform, read-only (ADR 0016: the OWNER's alone).
+ * The same status and date the administrator sees, said in the owner's words,
+ * with the one sentence each status needs: a Trial says when it ends, grace
+ * how long is left, a pending move when it lands.
+ */
+export const BillingSection = ({ billing, timeZone }: { billing: BillingDto; timeZone: string }) => {
+  const copy = useCopy("owner");
+  const words = useCopy("billing");
+  const { language } = useLanguage();
+  const { subscription, status, nextDate } = billing;
+  const longDate = (localDate: string) => formatLocalDate(localDate, language, { day: "numeric", month: "long" });
+
+  return (
+    <>
+      {status === "IN_GRACE" && nextDate !== null && (
+        <Warning>
+          {fillParts(copy.billingOverdue, { days: String(daysUntil(nextDate, timeZone)) }).map((part) => part.text)}
+        </Warning>
+      )}
+      {status === "LAPSED" && <Critical>{words.lapsedNote}</Critical>}
+
+      <Card style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+        <Row label={copy.plan}>
+          <PlanBadge plan={subscription.plan} />{" "}
+          <span className="tab">{formatPrice(subscription.priceMinor, language, "—")}</span>{" "}
+          <small className="hint">{words.perMonth}</small>
+        </Row>
+        <Row label={words.state}>
+          <StatusBadge status={status} />
+        </Row>
+        <Row label={words.dateLabel[status]}>
+          <NextDate status={status} date={nextDate} timeZone={timeZone} />
+        </Row>
+      </Card>
+
+      {status === "TRIAL" && nextDate !== null && (
+        <Note>{fillText(words.trialNote, { date: longDate(nextDate) })}</Note>
+      )}
+      {subscription.scheduledMove !== null && (
+        <div className="pending-move">
+          <span>
+            {fillText(words.moveNote, {
+              plan: words.plan[subscription.scheduledMove.plan],
+              date: longDate(subscription.scheduledMove.effectiveOn),
+            })}
+          </span>
+        </div>
+      )}
+
+      <span className="label">{copy.recentPayments}</span>
+      {billing.payments.length === 0 ? (
+        <p className="hint" style={{ margin: 0 }}>{words.noPayments}</p>
+      ) : (
+        billing.payments.map((payment) => (
+          <Card key={payment.id} style={{ display: "flex", gap: 10 }}>
+            <span style={{ flex: 1 }}>{formatLocalDate(payment.paidOn, language)}</span>
+            <span className="tab">{formatPrice(payment.amountMinor, language, "—")}</span>
+          </Card>
+        ))
+      )}
+      {/* The platform moves no money; a Payment records something that
+          already happened elsewhere. */}
+      <Note>{copy.billingNote}</Note>
+    </>
+  );
+};
+
+const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div style={{ display: "flex", gap: 10, alignItems: "center", minHeight: 26 }}>
+    <span className="label" style={{ flex: 1 }}>{label}</span>
+    <span style={{ fontWeight: 500, fontSize: 14.5, display: "flex", gap: 6, alignItems: "center" }}>{children}</span>
+  </div>
+);

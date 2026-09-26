@@ -12,6 +12,7 @@ import type {
   ResourceRepository,
   ReviewRepository,
   ServiceRepository,
+  SubscriptionRepository,
   UserRepository,
   WorkingHoursRepository,
 } from "../ports/repositories.ts";
@@ -237,6 +238,30 @@ export const auditedResources = (
   },
 });
 
+/**
+ * Billing terms were written without a trail until the Catalogue made them
+ * something an administrator edits routinely (ADR 0021); a changed price or
+ * plan with no author is exactly the dispute the log exists to settle.
+ */
+export const auditedSubscriptions = (
+  inner: SubscriptionRepository,
+  context: Context,
+): SubscriptionRepository => ({
+  ...inner,
+  async start(businessId, terms) {
+    const before = await inner.findByBusiness(businessId);
+    const after = await inner.start(businessId, terms);
+    await record(context, AUDIT_ACTIONS.subscriptionStarted, "Subscription", after.id, before, after);
+    return after;
+  },
+  async update(businessId, changes) {
+    const before = await inner.findByBusiness(businessId);
+    const after = await inner.update(businessId, changes);
+    await record(context, AUDIT_ACTIONS.subscriptionChanged, "Subscription", after.id, before, after);
+    return after;
+  },
+});
+
 export const auditedWorkingHours = (
   inner: WorkingHoursRepository,
   context: Context,
@@ -445,4 +470,5 @@ export const withAuditing = (
   dateOverrides: auditedDateOverrides(repositories.dateOverrides, context),
   blocks: auditedBlocks(repositories.blocks, context),
   appointments: auditedAppointments(repositories.appointments, context),
+  subscriptions: auditedSubscriptions(repositories.subscriptions, context),
 });

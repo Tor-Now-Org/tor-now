@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillParts } from "./fill.ts";
+import { fillParts, fillText } from "./fill.ts";
 
 const said = (template: string, values: Record<string, string>) =>
   fillParts(template, values)
@@ -53,5 +53,15 @@ describe("filling a sentence without flattening it", () => {
 
   it("fills the same placeholder everywhere it appears", () => {
     expect(said("{name} and {name}", { name: "דנה" })).toBe("דנה and דנה");
+  });
+});
+
+describe("fillText", () => {
+  it("joins the filled template into one string", () => {
+    expect(fillText("Show {n} businesses", { n: "3" })).toBe("Show 3 businesses");
+  });
+
+  it("leaves an unsupplied placeholder as written", () => {
+    expect(fillText("Moving to {plan} on {date}", { plan: "Solo" })).toBe("Moving to Solo on {date}");
   });
 });

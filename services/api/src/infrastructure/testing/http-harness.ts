@@ -129,3 +129,20 @@ export const signInOverHttp = async (
   const session = body as { token: string; user: { id: string } };
   return { token: session.token, userId: session.user.id };
 };
+
+/**
+ * An administrator's session, as production issues one: the person is flagged
+ * and their number allowlisted (ADR 0010) before the code is verified, so the
+ * token carries the claim.
+ */
+export const signInAsAdministratorOverHttp = async (
+  api: HttpHarness,
+  phone: string,
+): Promise<{ token: string; userId: string }> => {
+  const { userId } = await signInOverHttp(api, phone, "הנהלה");
+  api.store.users = api.store.users.map((user) =>
+    user.id === userId ? { ...user, isAdministrator: true } : user,
+  );
+  api.store.allowlist = [...api.store.allowlist, { phone, note: null }];
+  return signInOverHttp(api, phone, "הנהלה");
+};

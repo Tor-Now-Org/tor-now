@@ -377,14 +377,52 @@ export type CustomerRecordDto = {
   noShows: number;
 };
 
+export type PlanName = "SOLO" | "TEAM";
+
+/** A Subscription with the Plan Version it is on, flattened as the API sends it. */
 export type SubscriptionDto = {
   id: string;
   businessId: string;
-  plan: "FREE" | "STANDARD";
-  amountMinor: number;
-  amount: number;
-  billingPeriod: "MONTHLY" | "YEARLY";
-  paidThrough: string;
+  plan: PlanName;
+  planVersion: number;
+  priceMinor: number;
+  price: number;
+  resourceAllowance: number;
+  features: string[];
+  trialEndsOn: string | null;
+  paidThrough: string | null;
+  scheduledMove: { plan: PlanName; planVersion: number; effectiveOn: string } | null;
+};
+
+/** One Plan as the Catalogue offers it to new Businesses today. */
+export type PlanDto = {
+  plan: PlanName;
+  planVersion: number;
+  priceMinor: number;
+  price: number;
+  resourceAllowance: number;
+  features: string[];
+};
+
+/** Where a Business stands: exactly one of these at a time (packages/domain billing/standing.ts). */
+export type BillingStatus = "TRIAL" | "PAID" | "IN_GRACE" | "LAPSED" | "DEACTIVATED";
+export const BILLING_STATUSES: readonly BillingStatus[] = ["TRIAL", "PAID", "IN_GRACE", "LAPSED", "DEACTIVATED"];
+
+/** Beside the status, anything asking for a look. */
+export type BillingFlag = "TRIAL_ENDING" | "MOVE_PENDING" | "OVER_ALLOWANCE";
+export const BILLING_FLAGS: readonly BillingFlag[] = ["TRIAL_ENDING", "MOVE_PENDING", "OVER_ALLOWANCE"];
+
+export type Standing = {
+  status: BillingStatus;
+  /** The date the status turns on; its meaning depends on the status. */
+  nextDate: string | null;
+  flags: BillingFlag[];
+};
+
+/** The owner's and the administrator's billing panel. */
+export type BillingDto = Standing & {
+  subscription: SubscriptionDto;
+  payments: PaymentDto[];
 };
 
 export type PaymentDto = {
@@ -397,14 +435,34 @@ export type PaymentDto = {
   recordedAt: string;
 };
 
-export type SubscriptionState = "CURRENT" | "IN_GRACE" | "LAPSED";
-
-export type BusinessSummaryDto = {
+/** One line of the administrator's Businesses tab. */
+export type DirectoryRowDto = Standing & {
   business: BusinessDto;
-  subscription: SubscriptionDto | null;
-  subscriptionState: SubscriptionState | null;
   ownerName: string | null;
   ownerPhone: string | null;
+  plan: PlanName;
+  planVersion: number;
+};
+
+export type DirectoryFilter = {
+  query: string;
+  statuses: BillingStatus[];
+  plan: PlanName | null;
+  flags: BillingFlag[];
+};
+
+export const NO_DIRECTORY_FILTER: DirectoryFilter = { query: "", statuses: [], plan: null, flags: [] };
+
+export type DirectoryPageDto = {
+  rows: DirectoryRowDto[];
+  total: number;
+  /** What each option would show, with the other groups' filters applied. */
+  counts: {
+    total: number;
+    statuses: Record<BillingStatus, number>;
+    plans: Record<PlanName, number>;
+    flags: Record<BillingFlag, number>;
+  };
 };
 
 export type MonthCountDto = { monthStart: string; count: number };
@@ -420,8 +478,8 @@ export type WeeklyAppointmentActivityDto = {
 export type BusinessVolumeDto = { businessId: string; businessName: string; count: number };
 
 export type PlatformStatsDto = {
-  businessStatusCounts: { active: number; overdue: number; inactive: number };
-  planCounts: { FREE: number; STANDARD: number };
+  statusCounts: Record<BillingStatus, number>;
+  planCounts: Record<PlanName, number>;
   monthlyRecurringRevenueMinor: number;
   totalUsers: number;
   businessSignupsByMonth: MonthCountDto[];

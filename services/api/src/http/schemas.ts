@@ -4,6 +4,9 @@ import {
   BUSINESS_CATEGORIES,
   INSTAGRAM_PATTERN,
   PHONE_PATTERN,
+  BILLING_FLAGS,
+  BILLING_STATUSES,
+  PLANS,
   REVIEW_STARS,
   TEXT_RULES,
   type TextRule,
@@ -200,6 +203,8 @@ export const registerBusinessSchema = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   category: z.enum(BUSINESS_CATEGORIES),
+  /** Left out, the Business goes on the cheapest Plan with room for its calendars. */
+  plan: z.enum(PLANS).optional(),
   resourceNames: z.array(text(TEXT_RULES.resourceName)).min(1),
   services: z
     .array(
@@ -413,10 +418,9 @@ export const paymentSchema = z.object({
   note: z.string().trim().max(200).nullable().default(null),
 });
 
-export const subscriptionUpdateSchema = z.object({
-  plan: z.enum(["FREE", "STANDARD"]).optional(),
-  amountMinor: z.number().int().min(0).optional(),
-  billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional(),
+/** ADR 0020: an administrator moves a Business to another Plan by the owner's rule. */
+export const planChangeSchema = z.object({
+  plan: z.enum(PLANS),
 });
 
 export const adminBusinessUpdateSchema = updateBusinessSchema.extend({
@@ -453,6 +457,25 @@ export const pageSchema = z.object({
 
 export const queryTextSchema = z.object({
   q: z.string().trim().min(1).nullable().catch(null).default(null),
+});
+
+/**
+ * The directory's filters, as a query string an administrator can bookmark:
+ * `?status=TRIAL,IN_GRACE&plan=TEAM&flag=TRIAL_ENDING&q=רן`. Lists are
+ * comma-separated; an unknown value is refused rather than silently ignored.
+ */
+const commaList = <T extends string>(values: readonly [T, ...T[]]) =>
+  z
+    .string()
+    .optional()
+    .transform((raw) => (raw === undefined || raw.trim() === "" ? [] : raw.split(",").map((part) => part.trim())))
+    .pipe(z.array(z.enum(values)));
+
+export const directoryQuerySchema = z.object({
+  q: z.string().trim().min(1).nullable().catch(null).default(null),
+  status: commaList(BILLING_STATUSES),
+  plan: z.enum(PLANS).nullable().default(null),
+  flag: commaList(BILLING_FLAGS),
 });
 
 export const statsQuerySchema = z.object({

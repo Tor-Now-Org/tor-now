@@ -8,15 +8,12 @@ import { CategoryAutocomplete } from "../category-autocomplete.tsx";
 import { isApiError } from "@/lib/api/errors.ts";
 import type {
   BusinessDto,
-  PaymentDto,
+  BillingDto,
   ResourceDto,
   ServiceDto,
-  SubscriptionDto,
-  SubscriptionState,
 } from "@/lib/api/types.ts";
-import { graceDaysLeft } from "@/lib/billing-alert.ts";
-import { fillParts } from "@/lib/i18n/fill.ts";
-import { formatLocalDate, formatPrice } from "@/lib/format.ts";
+import { BillingSection } from "./billing-section.tsx";
+import { formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
 import { useErrorText } from "@/lib/use-error-text.ts";
@@ -113,11 +110,7 @@ export const BusinessPanel = ({
   const errorText = useErrorText();
 
   const [services, setServices] = useState<ServiceDto[] | null>(null);
-  const [billing, setBilling] = useState<{
-    subscription: SubscriptionDto;
-    payments: PaymentDto[];
-    state: SubscriptionState;
-  } | null>(null);
+  const [billing, setBilling] = useState<BillingDto | null>(null);
   const [editing, setEditing] = useState<Partial<ServiceDto> | null>(null);
   const [newResource, setNewResource] = useState<string | null>(null);
   /** The calendar the owner has asked to remove, while they are being asked about it. */
@@ -593,31 +586,7 @@ export const BusinessPanel = ({
       )}
 
       {panel === "billing" && billing !== null && (
-        <>
-          {billing.state === "IN_GRACE" && (
-            <Warning>
-              {fillParts(copy.billingOverdue, {
-                days: String(graceDaysLeft(billing.subscription.paidThrough, business.timeZone)),
-              }).map((part) => part.text)}
-            </Warning>
-          )}
-          <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Row label={copy.plan} value={billing.subscription.plan} />
-            <Row label={copy.amount} value={formatPrice(billing.subscription.amountMinor, language, "—")} />
-            <Row label={copy.paidThrough} value={formatLocalDate(billing.subscription.paidThrough, language)} />
-            <Row label={copy.grace} value={billing.state} />
-          </Card>
-          <span className="label">{copy.recentPayments}</span>
-          {billing.payments.map((payment) => (
-            <Card key={payment.id} style={{ display: "flex", gap: 10 }}>
-              <span style={{ flex: 1 }}>{formatLocalDate(payment.paidOn, language)}</span>
-              <span className="tab">{formatPrice(payment.amountMinor, language, "—")}</span>
-            </Card>
-          ))}
-          {/* The platform moves no money; a Payment records something that
-              already happened elsewhere. */}
-          <Note>{copy.billingNote}</Note>
-        </>
+        <BillingSection billing={billing} timeZone={business.timeZone} />
       )}
 
       <Sheet open={editing !== null} onClose={() => setEditing(null)}>
@@ -796,9 +765,3 @@ export const BusinessPanel = ({
   );
 };
 
-const Row = ({ label, value }: { label: string; value: string }) => (
-  <div style={{ display: "flex", gap: 10 }}>
-    <span className="label" style={{ flex: 1 }}>{label}</span>
-    <span style={{ fontWeight: 500, fontSize: 14.5 }}>{value}</span>
-  </div>
-);

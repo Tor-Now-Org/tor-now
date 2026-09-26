@@ -97,6 +97,19 @@ least one Payment has one. Fourteen days; Deactivation follows only once it
 elapses. A Trial never has one.
 _Avoid_: Overdue window, buffer, leniency
 
+**Standing**:
+Where a Business stands with the platform at a given moment: exactly one of
+Trial, Paid, In grace, Lapsed or Deactivated. Lapsed is unpaid past the Trial or
+the Grace Period; Deactivated is switched off by an administrator for any other
+reason.
+_Avoid_: Account status, billing state, health
+
+**Flag**:
+A fact beside a Standing that asks an administrator for a look — a Trial ending
+within seven days, a move pending, more Resources on offer than the Allowance.
+Never a Standing of its own.
+_Avoid_: Alert, warning, badge
+
 **Deactivation**:
 Removing a Business from search and refusing new bookings against it, because its
 Subscription lapsed beyond the Grace Period. Never affects Appointments that

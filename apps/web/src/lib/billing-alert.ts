@@ -1,9 +1,12 @@
-import { daysBetween, graceEndsOn, parseLocalDate } from "@tor-now/domain";
+import { daysBetween, parseLocalDate } from "@tor-now/domain";
 import { localDateOf } from "@/components/owner/day-filter.ts";
 
-/** Days remaining in the Grace Period, in the Business's own timezone. */
-export const graceDaysLeft = (paidThrough: string, timeZone: string): number =>
+/**
+ * Days from the Business's own today to a billing date — a Trial's end, the
+ * last day of grace. Negative once it has passed.
+ */
+export const daysUntil = (localDate: string, timeZone: string): number =>
   daysBetween(
     parseLocalDate(localDateOf(new Date().toISOString(), timeZone)),
-    graceEndsOn({ paidThrough: parseLocalDate(paidThrough) }),
+    parseLocalDate(localDate),
   );

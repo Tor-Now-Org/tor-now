@@ -32,6 +32,12 @@ export type DomainErrorCode =
    */
   | "OVERLAPS_ANOTHER_APPOINTMENT"
   | "CONFLICT"
+  /**
+   * The Business's Subscription does not include this — a Feature it lacks, or
+   * a calendar past its Resource Allowance (ADR 0019). Its own code because the
+   * answer is an upgrade, not a retry.
+   */
+  | "NOT_ENTITLED"
   | "RATE_LIMITED"
   | "VERIFICATION_FAILED";
 

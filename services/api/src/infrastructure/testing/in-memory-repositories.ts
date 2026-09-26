@@ -4,7 +4,6 @@ import {
   DomainError,
   instant,
   isActive,
-  money,
   notFound,
   parseLocalDate,
   timeZone,
@@ -21,8 +20,10 @@ import {
   type Service,
   type Subscription,
   type User,
-  GRACE_PERIOD_DAYS,
-  addDays,
+  forbidden,
+  PLANS,
+  shouldDeactivate,
+  type PlanVersion,
   compareLocalDate,
   instantToZoned,
   dayOfWeek,
@@ -87,6 +88,13 @@ const monthlySignupCounts = (
 
 export const inMemoryRepositories = (store: Store): Repositories => {
   const nextId = store.nextId;
+  const today = (): LocalDate => parseLocalDate(new Date().toISOString().slice(0, 10));
+  const cheapestCurrentSolo = () => {
+    const newest = store.planVersions
+      .filter((version) => version.plan === "SOLO")
+      .reduce((best, version) => (version.number > best.number ? version : best));
+    return newest.id;
+  };
   const now = () => instant(Date.now());
 
   const requireUser = (id: string): User => {
@@ -161,6 +169,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
 
       async setAdministrator(id, isAdministrator) {
         return replaceUser({ ...requireUser(id), isAdministrator });
+      },
+      async trialTakenOn(id) {
+        return store.trialsTaken.find((trial) => trial.userId === id)?.on ?? null;
       },
       async list(page, query) {
         const matching = store.users.filter(
@@ -247,13 +258,15 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         // trigger; here it is the same guarantee, made in the same place.
         store.subscriptions = [
           ...store.subscriptions,
+          // The cheapest current edition, neither Trial nor payment: the
+          // registration path decides the rest, as it does against Postgres.
           {
             id: asId(nextId("subscription")),
             businessId: business.id,
-            plan: "FREE",
-            amount: money(0),
-            billingPeriod: "MONTHLY",
-            paidThrough: parseLocalDate(new Date().toISOString().slice(0, 10)),
+            planVersionId: cheapestCurrentSolo(),
+            trialEndsOn: null,
+            paidThrough: null,
+            scheduledMove: null,
           },
         ];
         return business;
@@ -1215,17 +1228,99 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
         return updated;
       },
-      async listLapsed(today) {
+      // app.start_subscription's checks, bar the one no double can make: that
+      // this is the transaction which opened the Business.
+      async start(businessId, terms) {
+        const owner = store.memberships.find(
+          (membership) => membership.businessId === businessId && membership.role === "OWNER",
+        );
+        if (owner === undefined) throw forbidden("Only the owner starts a Subscription");
+        const version = store.planVersions.find((candidate) => candidate.id === terms.planVersionId);
+        const current =
+          version !== undefined &&
+          !store.planVersions.some(
+            (other) => other.plan === version.plan && other.number > version.number,
+          );
+        if (!current) throw new DomainError("CONFLICT", "A new Business joins a current Plan Version");
+        if (terms.trialEndsOn !== null) {
+          if (store.trialsTaken.some((trial) => trial.userId === owner.userId)) {
+            throw new DomainError("CONFLICT", "This owner has had their Trial");
+          }
+          store.trialsTaken = [...store.trialsTaken, { userId: owner.userId, on: today() }];
+        }
+        return this.update(businessId, {
+          planVersionId: terms.planVersionId,
+          trialEndsOn: terms.trialEndsOn,
+        });
+      },
+      async listLapsed(on) {
         return store.subscriptions.filter((subscription) => {
-          if (subscription.plan === "FREE") return false;
           const business = store.businesses.find(
             (candidate) => candidate.id === subscription.businessId,
           );
-          if (business === undefined || !business.active) return false;
-          return (
-            compareLocalDate(today, addDays(subscription.paidThrough, GRACE_PERIOD_DAYS)) > 0
-          );
+          return business !== undefined && business.active && shouldDeactivate(subscription, on);
         });
+      },
+      async entitlementBasis(businessId) {
+        const subscription = store.subscriptions.find(
+          (candidate) => candidate.businessId === businessId,
+        );
+        if (subscription === undefined) return null;
+        return {
+          planVersionId: subscription.planVersionId,
+          grants: [],
+        };
+      },
+      async directory() {
+        return [...store.businesses]
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .flatMap((business) => {
+            const subscription = store.subscriptions.find(
+              (candidate) => candidate.businessId === business.id,
+            );
+            if (subscription === undefined) return [];
+            const ownership = store.memberships
+              .filter((membership) => membership.businessId === business.id && membership.role === "OWNER")
+              .sort((a, b) => a.createdAt - b.createdAt)[0];
+            const owner = store.users.find((user) => user.id === ownership?.userId);
+            return [
+              {
+                business,
+                subscription,
+                resourcesOnOffer: store.resources.filter(
+                  (resource) => resource.businessId === business.id && resource.active,
+                ).length,
+                owner: owner === undefined ? null : { name: displayName(owner), phone: owner.phone },
+              },
+            ];
+          });
+      },
+    },
+
+    planVersions: {
+      async findById(id) {
+        return store.planVersions.find((version) => version.id === id) ?? null;
+      },
+      async listCurrent() {
+        return PLANS.flatMap((plan) => {
+          const editions = store.planVersions.filter((version) => version.plan === plan);
+          const newest = editions.reduce<PlanVersion | null>(
+            (best, version) => (best === null || version.number > best.number ? version : best),
+            null,
+          );
+          return newest === null ? [] : [newest];
+        });
+      },
+      async listAll() {
+        return [...store.planVersions].sort(
+          (a, b) => a.plan.localeCompare(b.plan) || a.number - b.number,
+        );
+      },
+    },
+
+    previews: {
+      async list() {
+        return [...store.previews].sort((a, b) => a.feature.localeCompare(b.feature));
       },
     },
 

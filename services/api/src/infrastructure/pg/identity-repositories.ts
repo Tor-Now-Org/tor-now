@@ -23,6 +23,7 @@ import {
   toLocalDate,
   toMembership,
   toMembershipResource,
+  nullableLocalDate,
   toReview,
   toUser,
   type Row,
@@ -95,6 +96,11 @@ export const userRepository = (tx: Transaction): UserRepository => ({
       update app_user set is_administrator = ${isAdministrator}
       where id = ${id} returning *`;
     return one(rows, toUser, "User");
+  },
+
+  async trialTakenOn(id) {
+    const rows = await tx<Row[]>`select trial_taken_on from app_user where id = ${id}`;
+    return nullableLocalDate(rows[0]?.["trial_taken_on"]);
   },
 
   async list(page: Page, query) {

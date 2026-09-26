@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   httpHarness,
+  signInAsAdministratorOverHttp,
   signInOverHttp,
   type HttpHarness,
 } from "../infrastructure/testing/http-harness.ts";
@@ -507,5 +508,72 @@ describe("business photos over HTTP", () => {
         )
       ).status,
     ).toBe(400);
+  });
+});
+
+describe("the administrator's directory", () => {
+  let api: HttpHarness;
+
+  beforeEach(() => {
+    api = httpHarness();
+  });
+
+  it("filters by comma-separated statuses and answers with typed rows and counts", async () => {
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    await api.post("/businesses", A_BUSINESS, owner.token);
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+
+    const { status, body } = await api.get("/admin/businesses?status=TRIAL,IN_GRACE&plan=SOLO", admin.token);
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({
+      total: 1,
+      rows: [
+        {
+          business: { name: "מספרת רן" },
+          ownerName: "רן",
+          plan: "SOLO",
+          status: "TRIAL",
+          nextDate: "2026-09-23",
+          flags: [],
+        },
+      ],
+      counts: { total: 1, statuses: { TRIAL: 1 }, plans: { SOLO: 1, TEAM: 0 } },
+    });
+  });
+
+  it("refuses a status it does not know rather than ignoring it", async () => {
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+    const { status, body } = await api.get("/admin/businesses?status=TRIAL,FREE", admin.token);
+    expect(status).toBe(400);
+    expect(body).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
+  });
+
+  it("moves a Business to another plan", async () => {
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const created = await api.post("/businesses", A_BUSINESS, owner.token);
+    const businessId = (created.body as { id: string }).id;
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+
+    const { status, body } = await api.patch(
+      `/admin/businesses/${businessId}/subscription`,
+      { plan: "TEAM" },
+      admin.token,
+    );
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ plan: "TEAM", resourceAllowance: 5, scheduledMove: null });
+  });
+});
+
+describe("the catalogue", () => {
+  it("tells anyone, signed in or not, what each Plan offers today", async () => {
+    const api = httpHarness();
+    const { status, body } = await api.get("/plans");
+    expect(status).toBe(200);
+    expect(body).toEqual([
+      expect.objectContaining({ plan: "SOLO", planVersion: 1, priceMinor: 4900, price: 49, resourceAllowance: 1 }),
+      expect.objectContaining({ plan: "TEAM", planVersion: 1, priceMinor: 8900, price: 89, resourceAllowance: 5 }),
+    ]);
   });
 });

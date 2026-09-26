@@ -1,22 +1,18 @@
 "use client";
 
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
-import type { PlatformStatsDto } from "@/lib/api/types.ts";
+import { BILLING_STATUSES, type BillingStatus, type PlatformStatsDto } from "@/lib/api/types.ts";
+import { STATUS_TONE } from "@/components/billing-badges.tsx";
 import { formatLocalDate } from "@/lib/format.ts";
-import type { Language } from "@/lib/i18n/index.tsx";
+import { useCopy, type Language } from "@/lib/i18n/index.tsx";
 import { Card, Note } from "@/components/ui.tsx";
 
 type AdminStatsCopy = {
   totalUsers: string;
   totalUsersHint: string;
   businessStatus: string;
-  active: string;
-  overdue: string;
-  inactive: string;
   planMix: string;
   planMixHint: string;
-  free: string;
-  standard: string;
   signups: string;
   signupsHint: string;
   businesses: string;
@@ -250,49 +246,47 @@ const StackedBars = ({
   );
 };
 
-const StatusDonutRow = ({
-  active,
-  overdue,
-  inactive,
-  labels,
+/**
+ * The five statuses the Businesses tab filters by, as one bar. Each entry of
+ * the legend opens that tab filtered to it, so a number here is one tap from
+ * the Businesses behind it.
+ */
+const StatusBar = ({
+  counts,
+  onShow,
 }: {
-  active: number;
-  overdue: number;
-  inactive: number;
-  labels: { active: string; overdue: string; inactive: string };
+  counts: PlatformStatsDto["statusCounts"];
+  onShow: (status: BillingStatus) => void;
 }) => {
-  const total = Math.max(1, active + overdue + inactive);
-  const segments = [
-    { value: active, color: "var(--positive)", label: labels.active },
-    { value: overdue, color: "var(--caution)", label: labels.overdue },
-    { value: inactive, color: "var(--critical)", label: labels.inactive },
-  ];
+  const billing = useCopy("billing");
+  const total = Math.max(1, BILLING_STATUSES.reduce((sum, status) => sum + counts[status], 0));
+  const segments = BILLING_STATUSES.filter((status) => counts[status] > 0);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", height: 10, borderRadius: 999 }}>
-        {segments.map((segment, index) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", height: 10, borderRadius: 999, overflow: "hidden", background: "var(--sunken)" }}>
+        {segments.map((status) => (
           <div
-            key={segment.label}
+            key={status}
             className="tip"
-            data-tip={`${segment.label}: ${segment.value}`}
+            data-tip={`${billing.status[status]}: ${counts[status]}`}
             tabIndex={0}
-            style={{
-              width: `${(segment.value / total) * 100}%`,
-              background: segment.color,
-              borderStartStartRadius: index === 0 ? 999 : 0,
-              borderEndStartRadius: index === 0 ? 999 : 0,
-              borderStartEndRadius: index === segments.length - 1 ? 999 : 0,
-              borderEndEndRadius: index === segments.length - 1 ? 999 : 0,
-            }}
+            style={{ width: `${(counts[status] / total) * 100}%`, background: STATUS_TONE[status].ink }}
           />
         ))}
       </div>
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 13 }}>
-        {segments.map((segment) => (
-          <span key={segment.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 9, height: 9, borderRadius: 999, background: segment.color, display: "inline-block" }} />
-            {segment.label}: <strong>{segment.value}</strong>
-          </span>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {BILLING_STATUSES.map((status) => (
+          <button
+            key={status}
+            type="button"
+            className="stat-status"
+            disabled={counts[status] === 0}
+            onClick={() => onShow(status)}
+          >
+            <i style={{ background: STATUS_TONE[status].ink }} />
+            {billing.status[status]}
+            <strong className="tab">{counts[status]}</strong>
+          </button>
         ))}
       </div>
     </div>
@@ -303,11 +297,15 @@ export const AdminStats = ({
   stats,
   copy,
   language,
+  onShowStatus,
 }: {
   stats: PlatformStatsDto;
   copy: AdminStatsCopy;
   language: Language;
+  /** Opens the Businesses tab filtered to one status. */
+  onShowStatus: (status: BillingStatus) => void;
 }) => {
+  const billing = useCopy("billing");
   const weekLabel = (weekStart: string) => formatLocalDate(weekStart, language, { day: "numeric", month: "numeric" });
   const monthLabel = (monthStart: string) => formatLocalDate(monthStart, language, { month: "short" });
   const activityWeeks = stats.appointmentActivityByWeek.map((week) => weekLabel(week.weekStart));
@@ -318,10 +316,7 @@ export const AdminStats = ({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <Heading label={copy.businessStatus} />
-        <StatusDonutRow
-          {...stats.businessStatusCounts}
-          labels={{ active: copy.active, overdue: copy.overdue, inactive: copy.inactive }}
-        />
+        <StatusBar counts={stats.statusCounts} onShow={onShowStatus} />
       </Card>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -336,8 +331,8 @@ export const AdminStats = ({
             {copy.planMix} <InfoTip text={copy.planMixHint} />
           </span>
           <span style={{ fontSize: 15 }}>
-            {copy.free} <strong>{stats.planCounts.FREE}</strong> · {copy.standard}{" "}
-            <strong>{stats.planCounts.STANDARD}</strong>
+            {billing.plan.SOLO} <strong className="tab">{stats.planCounts.SOLO}</strong> · {billing.plan.TEAM}{" "}
+            <strong className="tab">{stats.planCounts.TEAM}</strong>
           </span>
         </Card>
       </div>

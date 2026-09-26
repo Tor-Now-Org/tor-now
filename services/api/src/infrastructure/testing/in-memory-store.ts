@@ -6,7 +6,10 @@ import type {
   DateOverride,
   Membership,
   MembershipResource,
+  LocalDate,
   Payment,
+  PlanVersion,
+  Preview,
   Resource,
   Review,
   Service,
@@ -14,6 +17,7 @@ import type {
   User,
   WorkingHours,
 } from "@tor-now/domain";
+import { addDays, asId, money, parseLocalDate, planTerms } from "@tor-now/domain";
 import type { AuditEntry } from "../../ports/audit.ts";
 import type { WaitingEntry, WaitingRecheck } from "../../ports/repositories.ts";
 import type { OutboundMessage } from "../../ports/notifier.ts";
@@ -48,6 +52,10 @@ export type Store = {
   appointments: Appointment[];
   subscriptions: Subscription[];
   payments: Payment[];
+  planVersions: PlanVersion[];
+  previews: Preview[];
+  /** app_user.trial_taken_on, kept beside the User as the database keeps it. */
+  trialsTaken: { userId: string; on: LocalDate }[];
   allowlist: { phone: string; note: string | null }[];
   waitingEntries: WaitingEntry[];
   waitingRechecks: (WaitingRecheck & { createdAt: number })[];
@@ -64,7 +72,10 @@ export type Store = {
   verificationCodes: VerificationCodeRecord[];
 };
 
-export const emptyStore = (): Store => ({
+/** `today` is the day the Catalogue was seeded, as the migration's current_date. */
+export const emptyStore = (
+  today: LocalDate = parseLocalDate(new Date().toISOString().slice(0, 10)),
+): Store => ({
   nextId: identifiers(),
   users: [],
   businesses: [],
@@ -80,12 +91,40 @@ export const emptyStore = (): Store => ({
   appointments: [],
   subscriptions: [],
   payments: [],
+  ...initialCatalogue(today),
+  trialsTaken: [],
   allowlist: [],
   waitingEntries: [],
   waitingRechecks: [],
   audit: [],
   outbox: [],
   verificationCodes: [],
+});
+
+/**
+ * The Catalogue the plans_and_entitlements migration seeds, so a test starts
+ * from the same Plans and Preview the first deploy does.
+ */
+const initialCatalogue = (today: LocalDate): Pick<Store, "planVersions" | "previews"> => ({
+  planVersions: [
+    {
+      id: asId("00005010-0000-4000-8000-000000000001"),
+      plan: "SOLO",
+      number: 1,
+      terms: planTerms({ features: ["REMINDERS"], resourceAllowance: 1, price: money(4900) }),
+    },
+    {
+      id: asId("00007ea0-0000-4000-8000-000000000001"),
+      plan: "TEAM",
+      number: 1,
+      terms: planTerms({
+        features: ["REMINDERS", "CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES"],
+        resourceAllowance: 5,
+        price: money(8900),
+      }),
+    },
+  ],
+  previews: [{ feature: "WAITING_LIST", endsOn: addDays(today, 59) }],
 });
 
 /**

@@ -12,6 +12,7 @@ import {
   parseLocalDate,
   timeZone,
   type Instant,
+  type LocalDate,
   type PhotoSlot,
   type UserId,
 } from "@tor-now/domain";
@@ -1915,38 +1916,158 @@ export const describeRepositoryContract = (
 
     // --- Billing --------------------------------------------------------
 
-    it("gives every new business a subscription", async () => {
+    it("gives every new business a subscription on Solo, with neither Trial nor payment", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "07001");
-        const subscription = await repositories.subscriptions.findByBusiness(
-          context.business.id,
-        );
-        expect(subscription).not.toBeNull();
+        const subscription = await repositories.subscriptions.findByBusiness(context.business.id);
+        const version =
+          subscription === null ? null : await repositories.planVersions.findById(subscription.planVersionId);
+        expect(version?.plan).toBe("SOLO");
+        expect(subscription?.trialEndsOn).toBeNull();
+        expect(subscription?.paidThrough).toBeNull();
+        expect(subscription?.scheduledMove).toBeNull();
       });
     });
 
-    it("lists a subscription as lapsed only past its grace period", async () => {
+    it("seeds the Catalogue: the current edition of each Plan, and the waiting-list Preview", async () => {
+      await withRepositories(async (repositories) => {
+        const current = await repositories.planVersions.listCurrent();
+        const byPlan = Object.fromEntries(current.map((version) => [version.plan, version]));
+        expect(byPlan["SOLO"]?.terms).toEqual({
+          features: ["REMINDERS"],
+          resourceAllowance: 1,
+          price: 4900,
+        });
+        expect(byPlan["TEAM"]?.terms).toEqual({
+          features: ["REMINDERS", "CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES"],
+          resourceAllowance: 5,
+          price: 8900,
+        });
+        expect((await repositories.previews.list()).map((preview) => preview.feature)).toEqual([
+          "WAITING_LIST",
+        ]);
+      });
+    });
+
+    it("starts a new Business's Plan and Trial, and claims its owner's one Trial", async () => {
+      await withRepositories(async (repositories, actAs) => {
+        const context = await aBookableBusiness(repositories, "07003");
+        const team = (await repositories.planVersions.listCurrent()).find(
+          (version) => version.plan === "TEAM",
+        );
+        if (team === undefined) throw new Error("No current Team edition");
+        expect(await repositories.users.trialTakenOn(context.owner.id)).toBeNull();
+
+        await actAs(context.owner.id);
+        const trialEndsOn = addDays(parseLocalDate(new Date().toISOString().slice(0, 10)), 29);
+        const started = await repositories.subscriptions.start(context.business.id, {
+          planVersionId: team.id,
+          trialEndsOn,
+        });
+
+        expect(started.planVersionId).toBe(team.id);
+        expect(started.trialEndsOn).toBe(trialEndsOn);
+        expect(await repositories.users.trialTakenOn(context.owner.id)).not.toBeNull();
+
+        // The owner's Trial is spent: a second one is refused, whatever the Business.
+        await expect(
+          repositories.subscriptions.start(context.business.id, {
+            planVersionId: team.id,
+            trialEndsOn,
+          }),
+        ).rejects.toMatchObject({ code: "CONFLICT" });
+      });
+    });
+
+    it("gives the Entitlement's inputs to anyone acting on the Business", async () => {
+      await withRepositories(async (repositories, actAs) => {
+        const context = await aBookableBusiness(repositories, "07004");
+        const stranger = await repositories.users.create({
+          phone: "+972500007005",
+          givenName: "לקוחה",
+          familyName: null,
+          birthDate: null,
+        });
+        await actAs(stranger.id);
+        const basis = await repositories.subscriptions.entitlementBasis(context.business.id);
+        expect(basis?.grants).toEqual([]);
+        expect(basis?.planVersionId).toBeDefined();
+      });
+    });
+
+    it("sets and clears a scheduled move as one", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07006");
+        const [solo] = await repositories.planVersions.listCurrent();
+        if (solo === undefined) throw new Error("No current edition");
+        const effectiveOn = parseLocalDate("2026-11-01");
+
+        const scheduled = await repositories.subscriptions.update(context.business.id, {
+          scheduledMove: { planVersionId: solo.id, effectiveOn },
+          paidThrough: parseLocalDate("2026-10-31"),
+        });
+        expect(scheduled.scheduledMove).toEqual({ planVersionId: solo.id, effectiveOn });
+
+        const cleared = await repositories.subscriptions.update(context.business.id, {
+          scheduledMove: null,
+        });
+        expect(cleared.scheduledMove).toBeNull();
+        // A change that does not mention a column leaves it alone.
+        expect(cleared.paidThrough).toBe("2026-10-31");
+      });
+    });
+
+    it("lists every edition of every Plan, old ones included", async () => {
+      await withRepositories(async (repositories) => {
+        const all = await repositories.planVersions.listAll();
+        const current = await repositories.planVersions.listCurrent();
+        expect(all.length).toBeGreaterThanOrEqual(current.length);
+        for (const version of current) expect(all.map((candidate) => candidate.id)).toContain(version.id);
+      });
+    });
+
+    it("reads the directory: each Business with its Subscription, calendars on offer and first owner", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07008");
+        const retired = await repositories.resources.create({ businessId: context.business.id, name: "ישן" });
+        await repositories.resources.update(retired.id, { active: false });
+
+        const entry = (await repositories.subscriptions.directory()).find(
+          (candidate) => candidate.business.id === context.business.id,
+        );
+
+        expect(entry?.business.name).toBe(context.business.name);
+        expect(entry?.subscription.businessId).toBe(context.business.id);
+        expect(entry?.subscription.paidThrough).toBeNull();
+        // The withdrawn calendar is not on offer.
+        expect(entry?.resourcesOnOffer).toBe(1);
+        expect(entry?.owner).toEqual({ name: "בעלים", phone: "+972500007008" });
+      });
+    });
+
+    it("lists a paid subscription as lapsed only past its grace period", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "07002");
         const paidThrough = parseLocalDate("2026-09-01");
-        await repositories.subscriptions.update(context.business.id, {
-          plan: "STANDARD",
-          paidThrough,
-        });
+        await repositories.subscriptions.update(context.business.id, { paidThrough });
 
-        const inGrace = addDays(paidThrough, 10);
-        const lapsed = addDays(paidThrough, 20);
+        const lapsedIds = async (today: LocalDate) =>
+          (await repositories.subscriptions.listLapsed(today)).map((subscription) => subscription.businessId);
+        expect(await lapsedIds(addDays(paidThrough, 14))).not.toContain(context.business.id);
+        expect(await lapsedIds(addDays(paidThrough, 15))).toContain(context.business.id);
+      });
+    });
 
-        expect(
-          (await repositories.subscriptions.listLapsed(inGrace)).map(
-            (subscription) => subscription.businessId,
-          ),
-        ).not.toContain(context.business.id);
-        expect(
-          (await repositories.subscriptions.listLapsed(lapsed)).map(
-            (subscription) => subscription.businessId,
-          ),
-        ).toContain(context.business.id);
+    it("lists an unpaid Trial as lapsed the day after it ends, with no grace", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07007");
+        const trialEndsOn = parseLocalDate("2026-09-30");
+        await repositories.subscriptions.update(context.business.id, { trialEndsOn });
+
+        const lapsedIds = async (today: LocalDate) =>
+          (await repositories.subscriptions.listLapsed(today)).map((subscription) => subscription.businessId);
+        expect(await lapsedIds(trialEndsOn)).not.toContain(context.business.id);
+        expect(await lapsedIds(addDays(trialEndsOn, 1))).toContain(context.business.id);
       });
     });
 

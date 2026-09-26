@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import type { BusinessDto, ResourceDto } from "@/lib/api/types.ts";
-import { graceDaysLeft } from "@/lib/billing-alert.ts";
+import { daysUntil } from "@/lib/billing-alert.ts";
 import { staffRole } from "@/lib/roles.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
@@ -160,8 +160,8 @@ function ManageApp() {
     try {
       const billing = await api.subscription(token, business.id);
       setGraceDays(
-        billing.state === "IN_GRACE"
-          ? graceDaysLeft(billing.subscription.paidThrough, business.timeZone)
+        billing.status === "IN_GRACE" && billing.nextDate !== null
+          ? daysUntil(billing.nextDate, business.timeZone)
           : null,
       );
     } catch {

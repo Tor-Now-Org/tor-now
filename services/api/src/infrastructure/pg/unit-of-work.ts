@@ -13,7 +13,12 @@ import {
   userRepository,
 } from "./identity-repositories.ts";
 import { appointmentRepository } from "./appointment-repository.ts";
-import { paymentRepository, subscriptionRepository } from "./billing-repositories.ts";
+import {
+  paymentRepository,
+  planVersionRepository,
+  previewRepository,
+  subscriptionRepository,
+} from "./billing-repositories.ts";
 import { outbox } from "./outbox.ts";
 import {
   blockRepository,
@@ -42,6 +47,8 @@ const repositoriesOn = (tx: Transaction): Repositories => ({
   appointments: appointmentRepository(tx),
   subscriptions: subscriptionRepository(tx),
   payments: paymentRepository(tx),
+  planVersions: planVersionRepository(tx),
+  previews: previewRepository(tx),
   administratorAllowlist: administratorAllowlistRepository(tx),
   waitingEntries: waitingEntryRepository(tx),
   waitingRechecks: waitingRecheckRepository(tx),

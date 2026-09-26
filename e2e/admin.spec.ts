@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
   call,
@@ -45,6 +45,30 @@ const anAdministrator = async (): Promise<{ token: string; phone: string }> => {
   return { token: elevated.token, phone };
 };
 
+const SEARCH = "חיפוש לפי שם עסק, בעלים או טלפון";
+
+const asAdministrator = async (page: Page, token: string): Promise<void> => {
+  await page.addInitScript(
+    ([key, value]) => window.localStorage.setItem(key as string, value as string),
+    ["tor-now.session", token],
+  );
+  await page.goto("/admin");
+  await ready(page);
+};
+
+/**
+ * The suite's database holds every Business any run has made, so a journey
+ * finds its own the way an administrator would: by typing its name.
+ */
+const findInDirectory = async (page: Page, name: string): Promise<void> => {
+  await page.getByPlaceholder(SEARCH).fill(name);
+  await expect(inDirectory(page, name)).toBeVisible({ timeout: 20_000 });
+};
+
+/** A Business's line in the directory: a table row on a desktop, a card on a phone. */
+const inDirectory = (page: Page, name: string) =>
+  page.locator(".dir-table tbody tr, .dir-card").filter({ hasText: name }).filter({ visible: true });
+
 test.describe("who may reach the panel", () => {
   test("an ordinary session is shown the door, not the data", async ({ page }) => {
     const phone = uniquePhone();
@@ -82,50 +106,111 @@ test.describe("who may reach the panel", () => {
 });
 
 test.describe("the panel itself", () => {
-  test("lists businesses with their owner and state", async ({ page }) => {
+  test("lists businesses with their owner, plan and state", async ({ page }) => {
     const admin = await anAdministrator();
     const shop = await aBusinessWithOpenHours({
       name: `הנהלה ${Date.now()}`,
       ownerPhone: uniquePhone(),
     });
 
-    await page.addInitScript(
-      ([key, token]) => window.localStorage.setItem(key as string, token as string),
-      ["tor-now.session", admin.token],
-    );
-    await page.goto("/admin");
-    await ready(page);
+    await asAdministrator(page, admin.token);
+    await findInDirectory(page, shop.business.name);
 
-    await expect(page.getByText(shop.business.name)).toBeVisible({ timeout: 20_000 });
+    const entry = inDirectory(page, shop.business.name);
+    await expect(entry.getByText("יחיד")).toBeVisible();
+    await expect(entry.getByText("ניסיון", { exact: true })).toBeVisible();
+    await expect(entry.getByText("ניסיון עד")).toBeVisible();
   });
 
-  test("deactivating a business removes it from search", async ({ page }) => {
+  test("deactivating a business removes it from search and shows it deactivated", async ({ page }) => {
     const admin = await anAdministrator();
     const name = `להשבתה ${Date.now()}`;
     await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
 
-    await page.addInitScript(
-      ([key, token]) => window.localStorage.setItem(key as string, token as string),
-      ["tor-now.session", admin.token],
-    );
-    await page.goto("/admin");
-    await ready(page);
+    await asAdministrator(page, admin.token);
+    await findInDirectory(page, name);
 
-    await page.getByText(name).click();
+    await inDirectory(page, name).getByText(name).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByText(/לעולם לא מבטלת תורים קיימים/)).toBeVisible();
     await page.getByRole("button", { name: "השבתת העסק" }).click();
 
-    // On this business's own row, not anywhere on the page: "מושבת" is also one
-    // of the options in the status filter, and .first() was finding that —
-    // an assertion that passed before the button was ever pressed.
-    const row = page.getByRole("row", { name });
-    await expect(row.getByText("מושבת")).toBeVisible({ timeout: 20_000 });
+    // Switched off while it owes nothing: deactivated by an administrator, not lapsed.
+    await expect(inDirectory(page, name).getByText("מושבת")).toBeVisible({ timeout: 20_000 });
 
     const found = await call<{ name: string }[]>(
       `/businesses/search?q=${encodeURIComponent(name.slice(0, 6))}`,
     );
     expect(found.some((business) => business.name === name)).toBe(false);
+  });
+
+  test("filters in the Filters panel, and a token takes its filter back off", async ({ page }) => {
+    const admin = await anAdministrator();
+    const name = `סינון ${Date.now()}`;
+    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+
+    await asAdministrator(page, admin.token);
+    await findInDirectory(page, name);
+
+    await page.getByRole("button", { name: "מסננים", exact: true }).click();
+    const panel = page.getByRole("dialog", { name: "מסננים" });
+    await expect(panel).toBeVisible();
+
+    // An option with nothing behind it cannot be chosen: with this search,
+    // nothing is paid for yet.
+    await expect(panel.getByRole("button", { name: /משולם/ })).toBeDisabled();
+
+    await panel.getByRole("button", { name: /ניסיון/ }).click();
+    await expect(panel.getByRole("button", { name: /ניסיון/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(inDirectory(page, name)).toBeVisible({ timeout: 15_000 });
+
+    // Team: this Business is on Solo, so it leaves the list — and the panel
+    // says so on its last button before it is closed.
+    await panel.getByRole("button", { name: /^צוות/ }).click();
+    await expect(panel.getByRole("button", { name: "אין עסקים מתאימים" })).toBeDisabled({ timeout: 15_000 });
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^מסננים\s*2$/ })).toBeVisible();
+    await expect(inDirectory(page, name)).toHaveCount(0);
+
+    // Taking the Team token off brings it back; the Trial choice stays.
+    await page.getByRole("button", { name: "הסרה צוות" }).click();
+    await expect(inDirectory(page, name)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /^מסננים\s*1$/ })).toBeVisible();
+
+    await page.getByRole("button", { name: "ניקוי מסננים" }).click();
+    await expect(page.getByPlaceholder(SEARCH)).toHaveValue("");
+    await expect(page.getByRole("button", { name: /^מסננים$/ })).toBeVisible();
+  });
+
+  test("moves a business to Team at once, and says so before the button is pressed", async ({ page }) => {
+    const admin = await anAdministrator();
+    const name = `שדרוג ${Date.now()}`;
+    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
+
+    await asAdministrator(page, admin.token);
+    await findInDirectory(page, name);
+    await inDirectory(page, name).getByText(name).click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("העברה למסלול")).toBeVisible({ timeout: 15_000 });
+    await sheet.getByRole("button", { name: /^צוות/ }).click();
+    await expect(sheet.getByText(/השדרוג חל מיד/)).toBeVisible();
+    await sheet.getByRole("button", { name: "העבר לצוות עכשיו" }).click();
+
+    await expect(inDirectory(page, name).getByText("צוות")).toBeVisible({ timeout: 20_000 });
+  });
+
+  test("a state in the statistics opens the Businesses filtered to it", async ({ page }) => {
+    const admin = await anAdministrator();
+    await aBusinessWithOpenHours({ name: `סטטיסטיקה ${Date.now()}`, ownerPhone: uniquePhone() });
+
+    await asAdministrator(page, admin.token);
+    await page.getByRole("button", { name: "סטטיסטיקה" }).click();
+    await page.locator(".stat-status", { hasText: "ניסיון" }).click();
+
+    await expect(page.getByRole("button", { name: "הסרה ניסיון" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /^מסננים\s*1$/ })).toBeVisible();
   });
 
   test("opening a customer record writes it to the audit log", async ({ page }) => {

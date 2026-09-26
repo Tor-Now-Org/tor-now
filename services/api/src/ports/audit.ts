@@ -67,6 +67,13 @@ export const AUDIT_ACTIONS = {
   administratorRevoked: "ADMINISTRATOR_REVOKED",
   allowlistChanged: "ADMINISTRATOR_ALLOWLIST_CHANGED",
   paymentRecorded: "PAYMENT_RECORDED",
+  /** A new Business's Plan and Trial, as its owner started them (ADR 0020). */
+  subscriptionStarted: "SUBSCRIPTION_STARTED",
+  /**
+   * Any later change to what a Subscription is on or paid through — by an
+   * administrator, or by the job carrying out a scheduled move.
+   */
+  subscriptionChanged: "SUBSCRIPTION_CHANGED",
   /**
    * ADR 0006: administrator reads of a customer record are audited as well as
    * writes. An unlogged read on the service_role path would be undetectable,

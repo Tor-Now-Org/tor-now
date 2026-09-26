@@ -1,14 +1,13 @@
 import {
   applyPayment,
+  changePlan,
   forbidden,
-  displayName,
   instant,
   money,
   notFound,
   parseLocalDate,
   validationFailed,
   shouldDeactivate,
-  subscriptionStateOn,
   todayIn,
   timeZone,
   type Business,
@@ -16,9 +15,8 @@ import {
   type Clock,
   type Patch,
   type Payment,
+  type BillingStatus,
   type Plan,
-  type Subscription,
-  type SubscriptionState,
   type User,
   type UserId,
 } from "@tor-now/domain";
@@ -28,10 +26,20 @@ import type {
   BusinessVolume,
   MonthCount,
   Page,
+  Repositories,
   WeeklyAppointmentActivity,
 } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { requireAdministrator, requireOperator } from "./authorization.ts";
+import { currentVersionOf, subscriptionView, type SubscriptionView } from "./billing.ts";
+import {
+  directoryRow,
+  filterDirectory,
+  NO_FILTER,
+  type DirectoryCounts,
+  type DirectoryFilter,
+  type DirectoryRow,
+} from "./business-directory.ts";
 
 /**
  * ADR 0010 fixes exactly what an administrator may do: read the list of
@@ -54,12 +62,9 @@ import { requireAdministrator, requireOperator } from "./authorization.ts";
  * one Business at a time. Only counted differently.
  */
 export type PlatformStats = {
-  readonly businessStatusCounts: {
-    readonly active: number;
-    readonly overdue: number;
-    readonly inactive: number;
-  };
-  readonly planCounts: Record<Plan, number>;
+  /** The same five statuses the Businesses tab filters by. */
+  readonly statusCounts: Readonly<Record<BillingStatus, number>>;
+  readonly planCounts: Readonly<Record<Plan, number>>;
   readonly monthlyRecurringRevenueMinor: number;
   readonly totalUsers: number;
   readonly businessSignupsByMonth: readonly MonthCount[];
@@ -68,12 +73,11 @@ export type PlatformStats = {
   readonly topBusinesses: readonly BusinessVolume[];
 };
 
-export type BusinessSummary = {
-  readonly business: Business;
-  readonly subscription: Subscription | null;
-  readonly subscriptionState: SubscriptionState | null;
-  readonly ownerName: string | null;
-  readonly ownerPhone: string | null;
+/** One page of the directory, with how many match and what each filter would show. */
+export type DirectoryPage = {
+  readonly rows: readonly DirectoryRow[];
+  readonly total: number;
+  readonly counts: DirectoryCounts;
 };
 
 export const adminService = (dependencies: {
@@ -82,37 +86,34 @@ export const adminService = (dependencies: {
 }) => {
   const { unitOfWork, clock } = dependencies;
 
+  /** Every Business, with its standing worked out against its own today. */
+  const directoryOf = async (repositories: Repositories): Promise<readonly DirectoryRow[]> => {
+    const [entries, versions] = await Promise.all([
+      repositories.subscriptions.directory(),
+      repositories.planVersions.listAll(),
+    ]);
+    const byId = new Map(versions.map((version) => [version.id, version]));
+    return entries.map((entry) => {
+      const version = byId.get(entry.subscription.planVersionId);
+      if (version === undefined) throw notFound("PlanVersion", entry.subscription.planVersionId);
+      return directoryRow(entry, version, todayIn(clock.now(), entry.business.timeZone));
+    });
+  };
+
   return {
     async listBusinesses(
       actor: Actor,
-      query: string | null,
+      filter: DirectoryFilter = NO_FILTER,
       page: Page = { limit: PAGINATION.defaultPageSize, offset: 0 },
-    ): Promise<readonly BusinessSummary[]> {
+    ): Promise<DirectoryPage> {
       requireAdministrator(actor);
       return unitOfWork.run(actor, async ({ repositories }) => {
-        const businesses = await repositories.businesses.list(page, query);
-        return Promise.all(
-          businesses.map(async (business) => {
-            const [subscription, owners] = await Promise.all([
-              repositories.subscriptions.findByBusiness(business.id),
-              repositories.memberships.listForBusiness(business.id, "OWNER"),
-            ]);
-            const firstOwner = owners[0];
-            const owner =
-              firstOwner === undefined
-                ? null
-                : await repositories.users.findById(firstOwner.userId);
-            const today = todayIn(clock.now(), business.timeZone);
-            return {
-              business,
-              subscription,
-              subscriptionState:
-                subscription === null ? null : subscriptionStateOn(subscription, today),
-              ownerName: owner === null || owner === undefined ? null : displayName(owner),
-              ownerPhone: owner === null || owner === undefined ? null : owner.phone,
-            };
-          }),
-        );
+        const result = filterDirectory(await directoryOf(repositories), filter);
+        return {
+          rows: result.rows.slice(page.offset, page.offset + page.limit),
+          total: result.rows.length,
+          counts: result.counts,
+        };
       });
     },
 
@@ -370,42 +371,36 @@ export const adminService = (dependencies: {
     async subscriptionFor(actor: Actor, businessId: BusinessId) {
       requireAdministrator(actor);
       return unitOfWork.run(actor, async ({ repositories }) => {
-        const [subscription, payments, business] = await Promise.all([
-          repositories.subscriptions.findByBusiness(businessId),
+        const business = await repositories.businesses.findById(businessId);
+        if (business === null) throw notFound("Business", businessId);
+        const [view, payments] = await Promise.all([
+          subscriptionView(repositories, businessId, todayIn(clock.now(), business.timeZone)),
           repositories.payments.listForBusiness(businessId),
-          repositories.businesses.findById(businessId),
         ]);
-        if (subscription === null || business === null) {
-          throw notFound("Subscription", businessId);
-        }
-        return {
-          subscription,
-          payments,
-          state: subscriptionStateOn(
-            subscription,
-            todayIn(clock.now(), business.timeZone),
-          ),
-        };
+        return { ...view, payments };
       });
     },
 
-    async updateSubscription(
-      actor: Actor,
-      businessId: BusinessId,
-      changes: Patch<{ plan: Subscription["plan"]; amountMinor: number; billingPeriod: Subscription["billingPeriod"] }>,
-    ): Promise<Subscription> {
+    /**
+     * Putting a Business on another Plan on its owner's behalf, by the owner's
+     * own rule (ADR 0020): an upgrade at once, a downgrade at the renewal, so
+     * nothing already paid for is taken away. Audited by the decorator.
+     */
+    async changePlan(actor: Actor, businessId: BusinessId, plan: Plan): Promise<SubscriptionView> {
       requireAdministrator(actor);
-      return unitOfWork.run(actor, ({ repositories }) =>
-        repositories.subscriptions.update(businessId, {
-          ...(changes.plan === undefined ? {} : { plan: changes.plan }),
-          ...(changes.billingPeriod === undefined
-            ? {}
-            : { billingPeriod: changes.billingPeriod }),
-          ...(changes.amountMinor === undefined
-            ? {}
-            : { amount: money(changes.amountMinor) }),
-        }),
-      );
+      return unitOfWork.run(actor, async ({ repositories }) => {
+        const business = await repositories.businesses.findById(businessId);
+        if (business === null) throw notFound("Business", businessId);
+        const today = todayIn(clock.now(), business.timeZone);
+        const view = await subscriptionView(repositories, businessId, today);
+        const target = await currentVersionOf(repositories, plan);
+        const changed = changePlan(view.subscription, { from: view.planVersion, to: target });
+        await repositories.subscriptions.update(businessId, {
+          planVersionId: changed.planVersionId,
+          scheduledMove: changed.scheduledMove,
+        });
+        return subscriptionView(repositories, businessId, today);
+      });
     },
 
     /**
@@ -422,41 +417,13 @@ export const adminService = (dependencies: {
     ): Promise<PlatformStats> {
       requireAdministrator(actor);
       return unitOfWork.run(actor, async ({ repositories }) => {
-        const businesses = await repositories.businesses.list(
-          { limit: PAGINATION.maxPageSize, offset: 0 },
-          null,
-        );
-        const subscriptions = await Promise.all(
-          businesses.map((business) => repositories.subscriptions.findByBusiness(business.id)),
-        );
-
-        const businessStatusCounts = { active: 0, overdue: 0, inactive: 0 };
-        const planCounts: Record<Plan, number> = { FREE: 0, STANDARD: 0 };
-        let monthlyRecurringRevenueMinor = 0;
-
-        businesses.forEach((business, index) => {
-          const subscription = subscriptions[index] ?? null;
-          const state =
-            subscription === null
-              ? null
-              : subscriptionStateOn(subscription, todayIn(clock.now(), business.timeZone));
-
-          // The same rule the Businesses tab uses (admin/page.tsx's
-          // `businessStatus`): deactivated wins over any billing state.
-          if (!business.active) businessStatusCounts.inactive += 1;
-          else if (state === "IN_GRACE" || state === "LAPSED") businessStatusCounts.overdue += 1;
-          else businessStatusCounts.active += 1;
-
-          if (subscription !== null) {
-            planCounts[subscription.plan] += 1;
-            if (business.active && state !== "LAPSED") {
-              monthlyRecurringRevenueMinor +=
-                subscription.billingPeriod === "YEARLY"
-                  ? Math.round(subscription.amount / 12)
-                  : subscription.amount;
-            }
-          }
-        });
+        const rows = await directoryOf(repositories);
+        const { counts } = filterDirectory(rows, NO_FILTER);
+        // A Trial owes nothing and a lapsed or deactivated Business is not being
+        // billed, so only paid time — running or in grace — is revenue.
+        const monthlyRecurringRevenueMinor = rows
+          .filter((row) => row.standing.status === "PAID" || row.standing.status === "IN_GRACE")
+          .reduce((sum, row) => sum + row.planVersion.terms.price, 0);
 
         const to = clock.now();
         const weeksFrom = instant(to - weeks * 7 * 24 * 60 * 60 * 1000);
@@ -479,8 +446,8 @@ export const adminService = (dependencies: {
         ]);
 
         return {
-          businessStatusCounts,
-          planCounts,
+          statusCounts: counts.statuses,
+          planCounts: counts.plans,
           monthlyRecurringRevenueMinor,
           totalUsers,
           businessSignupsByMonth,

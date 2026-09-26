@@ -23,6 +23,10 @@ import type {
   PartOfDay,
   Payment,
   PhotoSlot,
+  PlanVersion,
+  PlanVersionId,
+  GrantTerm,
+  Preview,
   Resource,
   ResourceId,
   Service,
@@ -104,6 +108,8 @@ export type UserRepository = {
    */
   anonymise(id: UserId): Promise<User>;
   setAdministrator(id: UserId, isAdministrator: boolean): Promise<User>;
+  /** The day this person's one Trial began, as an owner; null if never. */
+  trialTakenOn(id: UserId): Promise<LocalDate | null>;
   list(page: Page, query: string | null): Promise<readonly User[]>;
   /** Platform-wide signups by month, for the administrator's statistics tab. */
   monthlySignups(from: Instant, to: Instant): Promise<readonly MonthCount[]>;
@@ -623,14 +629,70 @@ export type AppointmentRepository = {
   ): Promise<readonly BusinessVolume[]>;
 };
 
+/** One line of the administrator's directory of Businesses. */
+export type DirectoryEntry = {
+  readonly business: Business;
+  readonly subscription: Subscription;
+  /** Calendars still offered to customers — the number a Resource Allowance limits. */
+  readonly resourcesOnOffer: number;
+  /** The earliest OWNER, as the directory names a Business by its owner. */
+  readonly owner: { readonly name: string; readonly phone: string } | null;
+};
+
+/** What an Entitlement is worked out from, as anyone acting on a Business may read it. */
+export type EntitlementBasis = {
+  readonly planVersionId: PlanVersionId;
+  readonly grants: readonly GrantTerm[];
+};
+
 export type SubscriptionRepository = {
   findByBusiness(businessId: BusinessId): Promise<Subscription | null>;
+  /**
+   * Billing's own writes — an administrator, or the scheduled job. An owner has
+   * no write access to their Subscription and reaches it only through `start`.
+   */
   update(
     businessId: BusinessId,
     changes: Patch<Omit<Subscription, "id" | "businessId">>,
   ): Promise<Subscription>;
-  /** Every Subscription whose grace period has elapsed, for the deactivation job. */
+  /**
+   * A new Business's Plan Version and Trial, set by its owner inside the
+   * transaction that opened it. Claims the owner's one Trial when there is one.
+   */
+  start(
+    businessId: BusinessId,
+    terms: { planVersionId: PlanVersionId; trialEndsOn: LocalDate | null },
+  ): Promise<Subscription>;
+  /**
+   * Subscriptions of still-active Businesses that have lapsed: a Trial over
+   * and unpaid, or paid time past its Grace Period. For the deactivation job.
+   */
   listLapsed(today: LocalDate): Promise<readonly Subscription[]>;
+  /**
+   * The inputs to a Business's Entitlement. Readable by a customer or a worker
+   * as much as the owner — every Feature check needs it — so it carries nothing
+   * the Subscription holds beyond them.
+   */
+  entitlementBasis(businessId: BusinessId): Promise<EntitlementBasis | null>;
+  /**
+   * Every Business with what the administrator filters it by, in one read. The
+   * whole platform at once: standing is worked out per Business's own today,
+   * which SQL cannot see, and the platform is small enough that one query beats
+   * one per row.
+   */
+  directory(): Promise<readonly DirectoryEntry[]>;
+};
+
+export type PlanVersionRepository = {
+  findById(id: PlanVersionId): Promise<PlanVersion | null>;
+  /** The edition of each Plan that new Businesses join: its highest-numbered. */
+  listCurrent(): Promise<readonly PlanVersion[]>;
+  /** Every edition ever published, old ones included — Subscriptions may still be on them. */
+  listAll(): Promise<readonly PlanVersion[]>;
+};
+
+export type PreviewRepository = {
+  list(): Promise<readonly Preview[]>;
 };
 
 export type PaymentRepository = {
@@ -776,6 +838,8 @@ export type Repositories = {
   readonly appointments: AppointmentRepository;
   readonly subscriptions: SubscriptionRepository;
   readonly payments: PaymentRepository;
+  readonly planVersions: PlanVersionRepository;
+  readonly previews: PreviewRepository;
   readonly administratorAllowlist: AdministratorAllowlistRepository;
   readonly waitingEntries: WaitingEntryRepository;
   readonly waitingRechecks: WaitingRecheckRepository;

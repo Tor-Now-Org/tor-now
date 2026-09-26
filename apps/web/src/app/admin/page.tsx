@@ -1,19 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type {
-  AllowlistEntryDto,
-  AppointmentDto,
-  AuditEntryDto,
-  BusinessSummaryDto,
-  PaymentDto,
-  PlatformStatsDto,
-  SubscriptionDto,
-  SubscriptionState,
-  UserDto,
+import {
+  NO_DIRECTORY_FILTER,
+  type AllowlistEntryDto,
+  type AppointmentDto,
+  type AuditEntryDto,
+  type BillingDto,
+  type BillingStatus,
+  type DirectoryFilter,
+  type DirectoryRowDto,
+  type PlanDto,
+  type PlatformStatsDto,
+  type UserDto,
 } from "@/lib/api/types.ts";
 import { formatLocalDate } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
@@ -28,6 +30,9 @@ import { SignOutButton } from "@/components/sign-out.tsx";
 import { BottomNav, BuildingIcon, ChartIcon, PeopleIcon, ShieldIcon } from "@/components/bottom-nav.tsx";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } from "@/components/ui.tsx";
 import { AdminStats } from "@/components/admin-stats.tsx";
+import { BusinessDirectory } from "@/components/admin/business-directory.tsx";
+import { PlanChangeCard } from "@/components/admin/plan-change-card.tsx";
+import { NextDate, PlanBadge, StatusBadge } from "@/components/billing-badges.tsx";
 
 type Tab = "businesses" | "users" | "stats" | "system";
 type SystemPanel = "admins" | "allowlist" | "audit";
@@ -41,6 +46,7 @@ const MINOR_UNITS_PER_MAJOR = 100;
  */
 export default function AdminPage() {
   const copy = useCopy("admin");
+  const billingCopy = useCopy("billing");
   const erasureCopy = useCopy("erasure");
   const router = useRouter();
   const { language } = useLanguage();
@@ -49,26 +55,22 @@ export default function AdminPage() {
 
   const [tab, setTab] = useState<Tab>("businesses");
   const [systemPanel, setSystemPanel] = useState<SystemPanel>("admins");
-  const [businesses, setBusinesses] = useState<BusinessSummaryDto[]>([]);
+  const [directoryFilter, setDirectoryFilter] = useState<DirectoryFilter>(NO_DIRECTORY_FILTER);
+  const [directoryRefresh, setDirectoryRefresh] = useState(0);
+  const [plans, setPlans] = useState<PlanDto[]>([]);
   const [users, setUsers] = useState<UserDto[]>([]);
   const [administrators, setAdministrators] = useState<UserDto[]>([]);
   const [allowlist, setAllowlist] = useState<AllowlistEntryDto[]>([]);
   const [audit, setAudit] = useState<AuditEntryDto[]>([]);
   const [stats, setStats] = useState<PlatformStatsDto | null>(null);
   const [query, setQuery] = useState("");
-  const [businessQuery, setBusinessQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "overdue">("all");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const problem = useFieldProblem();
-  const [openBusiness, setOpenBusiness] = useState<BusinessSummaryDto | null>(null);
-  const [billing, setBilling] = useState<{
-    subscription: SubscriptionDto;
-    payments: PaymentDto[];
-    state: SubscriptionState;
-  } | null>(null);
+  const [openBusiness, setOpenBusiness] = useState<DirectoryRowDto | null>(null);
+  const [billing, setBilling] = useState<BillingDto | null>(null);
   const [editReason, setEditReason] = useState("");
   const [edits, setEdits] = useState<{
     name: string;
@@ -76,7 +78,6 @@ export default function AdminPage() {
     address: string;
     description: string;
   } | null>(null);
-  const [plan, setPlan] = useState<{ plan: "FREE" | "STANDARD"; amount: string; billingPeriod: "MONTHLY" | "YEARLY" } | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [openUser, setOpenUser] = useState<{ user: UserDto; appointments: AppointmentDto[] } | null>(null);
   const [newAllowed, setNewAllowed] = useState<string | null>(null);
@@ -85,15 +86,15 @@ export default function AdminPage() {
   const load = useCallback(async () => {
     if (token === null) return;
     try {
-      const [b, u, a, l, g, s] = await Promise.all([
-        api.adminBusinesses(token, null),
+      const [p, u, a, l, g, s] = await Promise.all([
+        api.plans(),
         api.adminUsers(token, null),
         api.adminAdministrators(token),
         api.adminAllowlist(token),
         api.adminAudit(token),
         api.adminStats(token),
       ]);
-      setBusinesses(b);
+      setPlans(p);
       setUsers(u);
       setAdministrators(a);
       setAllowlist(l);
@@ -119,6 +120,7 @@ export default function AdminPage() {
       setErasing(null);
       setEditReason("");
       setPaymentAmount("");
+      setDirectoryRefresh((count) => count + 1);
       await load();
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
@@ -148,15 +150,25 @@ export default function AdminPage() {
     ? users
     : users.filter((candidate) => candidate.name.toLowerCase().includes(needle) || candidate.phone.includes(needle));
 
-  const businessNeedle = businessQuery.trim().toLowerCase();
-  const shownBusinesses = businesses.filter((summary) => {
-    const matchesText =
-      businessNeedle === "" ||
-      summary.business.name.toLowerCase().includes(businessNeedle) ||
-      (summary.ownerName ?? "").toLowerCase().includes(businessNeedle) ||
-      (summary.ownerPhone ?? "").includes(businessNeedle);
-    return matchesText && (statusFilter === "all" || businessStatus(summary) === statusFilter);
-  });
+  const openRow = (row: DirectoryRowDto) => {
+    setOpenBusiness(row);
+    setEdits({
+      name: row.business.name,
+      phone: row.business.phone,
+      address: row.business.address ?? "",
+      description: row.business.description ?? "",
+    });
+    setBilling(null);
+    void api
+      .adminSubscription(token, row.business.id)
+      .then(setBilling)
+      .catch(() => setBilling(null));
+  };
+
+  const showStatus = (status: BillingStatus) => {
+    setDirectoryFilter({ ...NO_DIRECTORY_FILTER, statuses: [status] });
+    setTab("businesses");
+  };
 
   return (
     <>
@@ -175,85 +187,13 @@ export default function AdminPage() {
         {error !== null && <Critical>{error}</Critical>}
 
         {tab === "businesses" && (
-          <>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <input className="field" style={{ flex: 2, minWidth: 200 }}
-                value={businessQuery} onChange={(e) => setBusinessQuery(e.target.value)}
-                placeholder={copy.searchBusiness} aria-label={copy.searchBusiness} />
-              <select className="field" style={{ flex: 1, minWidth: 140 }}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                aria-label={copy.status}>
-                <option value="all">{copy.allStatuses}</option>
-                <option value="active">{copy.active}</option>
-                <option value="overdue">{copy.overdue}</option>
-                <option value="inactive">{copy.inactive}</option>
-              </select>
-            </div>
-
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                <thead>
-                  <tr>
-                    {[copy.fName, copy.owner, copy.phone, copy.paidThrough, copy.plan, copy.status].map((head) => (
-                      <th key={head} style={{
-                        textAlign: "start", padding: "8px 10px", borderBottom: `1px solid var(--line)`,
-                        color: "var(--muted)", fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap",
-                      }}>
-                        {head}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {shownBusinesses.map((summary) => (
-                    <tr key={summary.business.id} className="tap" style={{
-                      cursor: "pointer",
-                      borderBottom: "1px solid var(--line)",
-                      ...(businessStatus(summary) === "overdue" ? { boxShadow: "inset 0 0 0 1px var(--critical)" } : {}),
-                    }}
-                      onClick={() => {
-                        setOpenBusiness(summary);
-                        setEdits({
-                          name: summary.business.name,
-                          phone: summary.business.phone,
-                          address: summary.business.address ?? "",
-                          description: summary.business.description ?? "",
-                        });
-                        setPlan(
-                          summary.subscription === null
-                            ? null
-                            : {
-                                plan: summary.subscription.plan,
-                                amount: String(summary.subscription.amount),
-                                billingPeriod: summary.subscription.billingPeriod,
-                              },
-                        );
-                        void api
-                          .adminSubscription(token, summary.business.id)
-                          .then(setBilling)
-                          .catch(() => setBilling(null));
-                      }}>
-                      <td style={{ padding: "18px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>{summary.business.name}</td>
-                      <td style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>{summary.ownerName ?? "—"}</td>
-                      <td className="tab" dir="ltr" style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>{summary.ownerPhone ?? "—"}</td>
-                      <td className="tab" style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>
-                        {summary.subscription === null ? "—" : formatPaidDate(summary.subscription.paidThrough)}
-                      </td>
-                      <td style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>{summary.subscription?.plan ?? "—"}</td>
-                      <td style={{ padding: "18px 10px", whiteSpace: "nowrap" }}>
-                        <StateTag
-                          status={businessStatus(summary)}
-                          labels={{ active: copy.active, inactive: copy.inactive, overdue: copy.overdue }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {shownBusinesses.length === 0 && <Note>{copy.noResults}</Note>}
-            </div>
-          </>
+          <BusinessDirectory
+            token={token}
+            filter={directoryFilter}
+            onFilterChange={setDirectoryFilter}
+            onOpen={openRow}
+            refreshKey={directoryRefresh}
+          />
         )}
 
         {tab === "users" && (
@@ -288,17 +228,13 @@ export default function AdminPage() {
               <AdminStats
                 stats={stats}
                 language={language}
+                onShowStatus={showStatus}
                 copy={{
                   totalUsers: copy.totalUsers,
                   totalUsersHint: copy.totalUsersHint,
                   businessStatus: copy.businessStatus,
-                  active: copy.active,
-                  overdue: copy.overdue,
-                  inactive: copy.inactive,
                   planMix: copy.planMix,
                   planMixHint: copy.planMixHint,
-                  free: copy.free,
-                  standard: copy.standard,
                   signups: copy.signups,
                   signupsHint: copy.signupsHint,
                   businesses: copy.businesses,
@@ -424,8 +360,15 @@ export default function AdminPage() {
               <Row label={copy.phone} value={openBusiness.business.phone} />
               {billing !== null && (
                 <>
-                  <Row label={copy.plan} value={billing.subscription.plan} />
-                  <Row label={copy.paidThrough} value={formatLocalDate(billing.subscription.paidThrough, language)} />
+                  <Row label={copy.plan}>
+                    <PlanBadge plan={billing.subscription.plan} version={billing.subscription.planVersion} />
+                  </Row>
+                  <Row label={copy.status}>
+                    <StatusBadge status={billing.status} />
+                  </Row>
+                  <Row label={billingCopy.dateLabel[billing.status]}>
+                    <NextDate status={billing.status} date={billing.nextDate} timeZone={openBusiness.business.timeZone} />
+                  </Row>
                 </>
               )}
             </Card>
@@ -447,68 +390,17 @@ export default function AdminPage() {
               {copy.recordPayment}
             </Button>
 
-            <span className="label">{copy.plan}</span>
-            {plan !== null && (
-              <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {(["FREE", "STANDARD"] as const).map((candidate) => (
-                    <button
-                      key={candidate}
-                      className="chip"
-                      aria-pressed={plan.plan === candidate}
-                      onClick={() => setPlan({ ...plan, plan: candidate })}
-                      style={{
-                        flex: 1,
-                        background: plan.plan === candidate ? "var(--accent)" : "var(--raised)",
-                        color: plan.plan === candidate ? "var(--on-accent)" : "var(--ink)",
-                        border: "1px solid var(--line)",
-                      }}
-                    >
-                      {candidate}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {(["MONTHLY", "YEARLY"] as const).map((candidate) => (
-                    <button
-                      key={candidate}
-                      className="chip"
-                      aria-pressed={plan.billingPeriod === candidate}
-                      onClick={() => setPlan({ ...plan, billingPeriod: candidate })}
-                      style={{
-                        flex: 1,
-                        background: plan.billingPeriod === candidate ? "var(--accent-soft)" : "var(--raised)",
-                        color: plan.billingPeriod === candidate ? "var(--accent-strong)" : "var(--muted)",
-                        border: "1px solid var(--line)",
-                      }}
-                    >
-                      {candidate}
-                    </button>
-                  ))}
-                </div>
-                <Field
-                  id="plan-amount"
-                  label={copy.amount}
-                  type="number"
-                  value={plan.amount}
-                  onChange={(event) => setPlan({ ...plan, amount: event.target.value })}
-                />
-                <Button
-                  intent="quiet"
+            {billing !== null && plans.length > 0 && (
+              <>
+                <span className="label">{copy.moveTo}</span>
+                <PlanChangeCard
+                  key={`${billing.subscription.plan}-${billing.subscription.scheduledMove?.plan ?? ""}`}
+                  billing={billing}
+                  plans={plans}
                   busy={busy}
-                  onClick={() =>
-                    act(() =>
-                      api.adminUpdateSubscription(token, openBusiness.business.id, {
-                        plan: plan.plan,
-                        billingPeriod: plan.billingPeriod,
-                        amountMinor: Math.round(Number(plan.amount) * MINOR_UNITS_PER_MAJOR),
-                      }),
-                    )
-                  }
-                >
-                  {copy.save}
-                </Button>
-              </Card>
+                  onMove={(plan) => void act(() => api.adminChangePlan(token, openBusiness.business.id, plan))}
+                />
+              </>
             )}
 
             <span className="label">{copy.editOnBehalf}</span>
@@ -668,36 +560,9 @@ export default function AdminPage() {
   );
 }
 
-const Row = ({ label, value }: { label: string; value: string }) => (
-  <div style={{ display: "flex", gap: 10 }}>
+const Row = ({ label, value, children }: { label: string; value?: string; children?: ReactNode }) => (
+  <div style={{ display: "flex", gap: 10, alignItems: "center", minHeight: 26 }}>
     <span className="label" style={{ flex: 1 }}>{label}</span>
-    <span style={{ fontSize: 14.5, fontWeight: 500 }}>{value}</span>
+    <span style={{ fontSize: 14.5, fontWeight: 500 }}>{children ?? value}</span>
   </div>
 );
-
-const formatPaidDate = (localDate: string): string => {
-  const [year, month, day] = localDate.split("-");
-  return `${day}/${month}/${year}`;
-};
-
-const businessStatus = (summary: BusinessSummaryDto): "active" | "inactive" | "overdue" =>
-  !summary.business.active
-    ? "inactive"
-    : summary.subscriptionState === "IN_GRACE" || summary.subscriptionState === "LAPSED"
-      ? "overdue"
-      : "active";
-
-const StateTag = ({
-  status,
-  labels,
-}: {
-  status: "active" | "inactive" | "overdue";
-  labels: { active: string; inactive: string; overdue: string };
-}) => {
-  const tone = status === "inactive" ? "critical" : status === "overdue" ? "caution" : "positive";
-  return (
-    <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 999, background: `var(--${tone}-soft)`, color: `var(--${tone})` }}>
-      {labels[status]}
-    </span>
-  );
-};

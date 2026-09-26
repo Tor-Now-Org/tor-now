@@ -14,6 +14,8 @@ import {
   type Membership,
   type MembershipResource,
   type Payment,
+  type PlanVersion,
+  type Preview,
   type Resource,
   type PhotoSlot,
   type Review,
@@ -23,6 +25,10 @@ import {
   type WorkingHours,
   isBusinessCategory,
   type BusinessCategory,
+  parseFeature,
+  planTerms,
+  PLANS,
+  type Plan,
 } from "@tor-now/domain";
 
 /**
@@ -75,7 +81,7 @@ export const toLocalDate = (value: unknown) => {
     value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
   return parseLocalDate(iso);
 };
-const nullableLocalDate = (value: unknown) =>
+export const nullableLocalDate = (value: unknown) =>
   value === null || value === undefined ? null : toLocalDate(value);
 
 export const toUser = (row: Row): User => ({
@@ -229,13 +235,48 @@ export const toAppointment = (row: Row): Appointment => ({
   createdAt: toInstant(row["created_at"]),
 });
 
-export const toSubscription = (row: Row): Subscription => ({
+export const toSubscription = (row: Row): Subscription => {
+  const scheduledVersion = nullableText(row["scheduled_version_id"]);
+  return {
+    id: asId(text(row["id"])),
+    businessId: asId(text(row["business_id"])),
+    planVersionId: asId(text(row["plan_version_id"])),
+    trialEndsOn: nullableLocalDate(row["trial_ends_on"]),
+    paidThrough: nullableLocalDate(row["paid_through"]),
+    scheduledMove:
+      scheduledVersion === null
+        ? null
+        : { planVersionId: asId(scheduledVersion), effectiveOn: toLocalDate(row["scheduled_on"]) },
+  };
+};
+
+const toPlan = (value: unknown): Plan => {
+  const plan = text(value);
+  if (!(PLANS as readonly string[]).includes(plan)) {
+    throw new Error(`Unknown plan in the database: ${plan}`);
+  }
+  return plan as Plan;
+};
+
+const textArray = (value: unknown): readonly string[] => {
+  if (!Array.isArray(value)) throw new Error(`Expected a text array, got ${typeof value}`);
+  return value.map(text);
+};
+
+export const toPlanVersion = (row: Row): PlanVersion => ({
   id: asId(text(row["id"])),
-  businessId: asId(text(row["business_id"])),
-  plan: text(row["plan"]) as Subscription["plan"],
-  amount: money(int(row["amount_minor"])),
-  billingPeriod: text(row["billing_period"]) as Subscription["billingPeriod"],
-  paidThrough: toLocalDate(row["paid_through"]),
+  plan: toPlan(row["plan"]),
+  number: int(row["number"]),
+  terms: planTerms({
+    features: textArray(row["features"]).map(parseFeature),
+    resourceAllowance: int(row["resource_allowance"]),
+    price: money(int(row["price_minor"])),
+  }),
+});
+
+export const toPreview = (row: Row): Preview => ({
+  feature: parseFeature(text(row["feature"])),
+  endsOn: toLocalDate(row["ends_on"]),
 });
 
 export const toPayment = (row: Row): Payment => ({
