@@ -38,9 +38,17 @@ after a Notice.
 apply to the current Plan Version at once, and are announced by Notice when they
 happen.
 
-Every Notice reaches the owner three ways: a banner in the management screen until
-acknowledged, a WhatsApp message, and, for a move, a reminder seven days before it
-applies. The management screen keeps every Notice from Billing in one place.
+Every Notice is kept in one list in the management screen, opened from a bell
+beside the account button. A Notice that needs a look — a Trial ending, a payment
+late, calendars paused, a move landing — also stands as a banner above every tab
+until the owner acknowledges it, one banner at a time. A move is reminded seven
+days before it applies, and so is the end of a Trial.
+
+Only a Notice about paying goes to WhatsApp as well: a Trial ending, a payment
+late, the Business deactivated for not paying, and a payment received. Each
+message costs the platform, and the rest is news the owner either caused or will
+see the next time they open the app. The messages share one utility template,
+BILLING_NOTICE, whose one sentence each kind fills in (amended 2026-09-27).
 
 **A new Feature whose cost or demand is unknown launches as a Preview**: offered on
 every Plan for a stated period and labelled as unplaced. Ending a Preview is a

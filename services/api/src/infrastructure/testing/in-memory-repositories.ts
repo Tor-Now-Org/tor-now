@@ -37,6 +37,7 @@ import { SEARCH } from "../../config.ts";
 import { PG_ERRORS } from "../pg/client.ts";
 import type { DailyUsageLine, Repositories, WaitingEntry } from "../../ports/repositories.ts";
 import type { Store } from "./in-memory-store.ts";
+import { inMemoryNotices } from "./in-memory-notices.ts";
 
 /**
  * The second implementation of every repository port, held in memory.
@@ -1423,6 +1424,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         return store.payments.filter((payment) => payment.businessId === businessId);
       },
     },
+
+    notices: inMemoryNotices(store),
 
     administratorAllowlist: {
       async contains(phone) {

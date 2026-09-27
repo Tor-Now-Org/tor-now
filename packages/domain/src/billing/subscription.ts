@@ -111,11 +111,16 @@ export const renewalOn = (subscription: Standing): LocalDate | null => {
  * payment date. Paying late is not credited for the lapse; paying early keeps
  * the time already bought.
  */
-export const applyPayment = (subscription: Subscription, paidOn: LocalDate): Subscription => {
+export const paidThroughAfter = (subscription: Standing, paidOn: LocalDate): LocalDate => {
   const covered = subscription.paidThrough ?? subscription.trialEndsOn;
   const from = covered !== null && compareLocalDate(covered, paidOn) > 0 ? covered : paidOn;
-  return { ...subscription, paidThrough: addDays(from, BILLING_PERIOD_DAYS) };
+  return addDays(from, BILLING_PERIOD_DAYS);
 };
+
+export const applyPayment = (subscription: Subscription, paidOn: LocalDate): Subscription => ({
+  ...subscription,
+  paidThrough: paidThroughAfter(subscription, paidOn),
+});
 
 /**
  * A move the Catalogue forces takes effect at the first renewal at least

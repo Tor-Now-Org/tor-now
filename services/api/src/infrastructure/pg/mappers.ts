@@ -13,6 +13,8 @@ import {
   type DateOverride,
   type Membership,
   type MembershipResource,
+  type Notice,
+  parseNoticeFacts,
   type Payment,
   type PlanVersion,
   type Preview,
@@ -279,6 +281,23 @@ export const toPlanVersion = (row: Row): PlanVersion => ({
 export const toPreview = (row: Row): Preview => ({
   feature: parseFeature(text(row["feature"])),
   endsOn: toLocalDate(row["ends_on"]),
+});
+
+/**
+ * A jsonb value as the object it holds. Written with a JSON-encoded string
+ * rather than `tx.json`, the driver stores a jsonb *string* instead — which
+ * the outbox did until the Notices migration, and whose rows are still there.
+ * Both read back the same.
+ */
+export const jsonOf = (value: unknown): unknown => (typeof value === "string" ? JSON.parse(value) : value);
+
+export const toNotice = (row: Row): Notice => ({
+  id: asId(text(row["id"])),
+  businessId: asId(text(row["business_id"])),
+  facts: parseNoticeFacts(jsonOf(row["facts"])),
+  createdAt: toInstant(row["created_at"]),
+  readAt: nullableInstant(row["read_at"]),
+  clearedAt: nullableInstant(row["cleared_at"]),
 });
 
 export const toPayment = (row: Row): Payment => ({

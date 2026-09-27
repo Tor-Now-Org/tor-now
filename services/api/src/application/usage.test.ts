@@ -11,6 +11,7 @@ describe("SOURCE_OF_TEMPLATE", () => {
     expect(SOURCE_OF_TEMPLATE[TEMPLATES.bookingConfirmed]).toBe("BOOKING");
     expect(SOURCE_OF_TEMPLATE[TEMPLATES.bookingReminder]).toBe("REMINDERS");
     expect(SOURCE_OF_TEMPLATE[TEMPLATES.waitingListOpening]).toBe("WAITING_LIST");
+    expect(SOURCE_OF_TEMPLATE[TEMPLATES.billingNotice]).toBe("BILLING");
   });
 });
 

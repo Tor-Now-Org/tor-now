@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addMinutesToInstant, parseInstant } from "@tor-now/domain";
 import { REMINDERS } from "../config.ts";
+import { isToCustomer } from "../ports/notifier.ts";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
 
@@ -48,12 +49,13 @@ describe("reminders", () => {
     const report = await test.services.reminders.send();
 
     expect(report.enqueued).toBe(1);
-    const reminder = test.store.outbox.find(
-      (entry) => entry.message.template === "BOOKING_REMINDER",
-    );
-    expect(reminder?.message.recipientPhone).toBe("+972500000002");
-    expect(reminder?.message.payload.customerName).toBe("דנה");
-    expect(reminder?.message.payload.serviceName).toBe(appointment.serviceName);
+    const reminder = test.store.outbox
+      .map((entry) => entry.message)
+      .filter(isToCustomer)
+      .find((message) => message.template === "BOOKING_REMINDER");
+    expect(reminder?.recipientPhone).toBe("+972500000002");
+    expect(reminder?.payload.customerName).toBe("דנה");
+    expect(reminder?.payload.serviceName).toBe(appointment.serviceName);
   });
 
   it("never reminds twice, however often the job runs", async () => {

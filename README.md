@@ -149,6 +149,7 @@ The function reads everything from its environment. Supabase injects
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_SMS_FROM` | required by the non-`LOG` transports |
 | `EXPOSE_VERIFICATION_CODE` | forces the development behaviour below on or off |
 | `CORS_ORIGINS` | comma-separated allowlist; empty reflects the caller |
+| `WEB_ORIGIN` | where the web app lives, e.g. `https://tor-panuy.vercel.app`; WhatsApp Notices link into it, and leave the link out when unset |
 
 **A deployment with no delivery channel returns the verification code in its own
 response.** That is not a convenience: with `VERIFICATION_TRANSPORT=LOG` nothing
@@ -233,7 +234,9 @@ Four cron jobs, defined in the `scheduled_work` migration and driven by
 `pg_cron`: draining the notification outbox every minute, sending reminders
 hourly, pruning the audit log nightly, and a daily billing run that carries out
 scheduled plan moves on their renewal day (pausing the calendars an owner chose
-not to keep) and deactivates businesses whose subscription lapsed. They call the Edge Function rather than writing SQL directly, because
+not to keep), deactivates businesses whose subscription lapsed, and tells owners
+what is coming (a Trial ending or a move landing within the week, a payment
+late). They call the Edge Function rather than writing SQL directly, because
 ADR 0006 makes "every write goes through a decorated repository" a standing
 constraint — a cron job reaching into the tables is exactly the ad-hoc script
 that ADR warns produces no audit trail.

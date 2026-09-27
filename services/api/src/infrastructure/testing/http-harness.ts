@@ -18,6 +18,7 @@ const testConfig: Config = {
   exposeVerificationCode: true,
   exposeInternalErrors: true,
   corsOrigins: [],
+  webOrigin: null,
   storage: null,
 };
 
@@ -47,6 +48,7 @@ export const httpHarness = () => {
     deactivateLapsedBusinesses: () =>
       test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" }),
     applyDueMoves: () => test.services.admin.applyDueMoves({ kind: "SYSTEM" }),
+    announceDueNotices: () => test.services.admin.announceDueNotices({ kind: "SYSTEM" }),
   }));
 
   const call = async (

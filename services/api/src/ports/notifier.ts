@@ -1,4 +1,4 @@
-import type { BusinessId, Instant } from "@tor-now/domain";
+import type { BusinessId, Instant, PaymentNoticeFacts } from "@tor-now/domain";
 
 /**
  * ADR 0005. All outbound messaging goes through this port, with swappable
@@ -10,10 +10,12 @@ import type { BusinessId, Instant } from "@tor-now/domain";
 /**
  * The approved templates. ADR 0005 named three and deferred reminders "until a
  * scheduler exists"; one exists now, and the fourth is that reminder. The
- * fifth is ADR 0018's waiting list.
+ * fifth is ADR 0018's waiting list; the sixth tells an owner about paying for
+ * their Subscription (ADR 0020) — the only one sent to a Business rather than
+ * a customer.
  *
  * The set stays closed on purpose: Meta bills per delivered template message
- * and approves each one, so adding a sixth is a conversation with Meta rather
+ * and approves each one, so adding a seventh is a conversation with Meta rather
  * than a line of code — and the waiting-list one is the first whose volume
  * grows with how many people are waiting rather than with what happened, which
  * is why a Business can switch it off.
@@ -24,9 +26,13 @@ export const TEMPLATES = {
   bookingRescheduled: "BOOKING_RESCHEDULED",
   bookingReminder: "BOOKING_REMINDER",
   waitingListOpening: "WAITING_LIST_OPENING",
+  billingNotice: "BILLING_NOTICE",
 } as const;
 
 export type Template = (typeof TEMPLATES)[keyof typeof TEMPLATES];
+
+/** The templates a customer receives about a booking or a wait. */
+export type CustomerTemplate = Exclude<Template, typeof TEMPLATES.billingNotice>;
 
 export type NotificationPayload = {
   readonly businessName: string;
@@ -53,13 +59,40 @@ export type NotificationPayload = {
   readonly onDate?: string;
 };
 
-export type OutboundMessage = {
+/**
+ * One sentence about the owner's Subscription, filled into a fixed frame. The
+ * facts travel rather than the sentence, so the wording is the renderer's —
+ * the same place every other template's wording lives.
+ */
+export type BillingNoticePayload = {
+  readonly businessName: string;
+  /** Only a Notice about paying goes out on WhatsApp (ADR 0020). */
+  readonly facts: PaymentNoticeFacts;
+};
+
+type Addressed = {
   /** Whose message it is — the Business its delivery is charged to. */
   readonly businessId: BusinessId;
   readonly recipientPhone: string;
-  readonly template: Template;
+};
+
+export type CustomerMessage = Addressed & {
+  readonly template: CustomerTemplate;
   readonly payload: NotificationPayload;
 };
+
+export type BillingNoticeMessage = Addressed & {
+  readonly template: typeof TEMPLATES.billingNotice;
+  readonly payload: BillingNoticePayload;
+};
+
+export type OutboundMessage = CustomerMessage | BillingNoticeMessage;
+
+export const isToCustomer = (message: OutboundMessage): message is CustomerMessage =>
+  message.template !== TEMPLATES.billingNotice;
+
+export const isBillingNotice = (message: OutboundMessage): message is BillingNoticeMessage =>
+  message.template === TEMPLATES.billingNotice;
 
 export const DELIVERY_CHANNELS = ["WHATSAPP", "SMS", "LOG"] as const;
 export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];

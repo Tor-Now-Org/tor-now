@@ -4,7 +4,8 @@ Date: 2026-08-24
 
 ## Status
 
-Accepted. What each message costs is measured as ADR 0022 describes.
+Accepted. What each message costs is measured as ADR 0022 describes. A sixth
+template, BILLING_NOTICE, tells an owner about paying (ADR 0020).
 
 ## Context
 

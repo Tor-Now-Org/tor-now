@@ -1,14 +1,21 @@
-import { TEMPLATES, type NotificationPayload, type Template } from "../../ports/notifier.ts";
+import {
+  TEMPLATES,
+  type CustomerTemplate,
+  type NotificationPayload,
+  type OutboundMessage,
+} from "../../ports/notifier.ts";
+import { billingNoticeText } from "./billing-notice-text.ts";
 
 /**
  * ADR 0005 counts the approved templates. Meta bills per delivered template
- * message, so the set is closed deliberately: adding a sixth is an approval
- * process with Meta, not a code change.
+ * message, so the set is closed deliberately: adding one is an approval
+ * process with Meta, not a code change. The sixth, to owners about paying,
+ * has its own file.
  *
  * Hebrew is the source language of the product, and a customer's WhatsApp is
  * not the place to guess at a language preference the platform does not store.
  */
-const RENDERERS: Readonly<Record<Template, (payload: NotificationPayload) => string>> =
+const RENDERERS: Readonly<Record<CustomerTemplate, (payload: NotificationPayload) => string>> =
   Object.freeze({
     [TEMPLATES.bookingConfirmed]: (payload) =>
       `שלום ${payload.customerName}, התור שלך ל${payload.serviceName} ב${payload.businessName} נקבע ל־${payload.startAt}. לביטול או שינוי: ${payload.businessPhone}`,
@@ -57,7 +64,8 @@ const PART_IN_HEBREW: Readonly<Record<string, string>> = Object.freeze({
   EVENING: "בערב",
 });
 
-export const renderTemplate = (
-  template: Template,
-  payload: NotificationPayload,
-): string => RENDERERS[template](payload);
+/** The text of a message, as its recipient reads it. */
+export const renderMessage = (message: OutboundMessage, webOrigin: string | null = null): string =>
+  message.template === TEMPLATES.billingNotice
+    ? billingNoticeText(message.payload, webOrigin)
+    : RENDERERS[message.template](message.payload);

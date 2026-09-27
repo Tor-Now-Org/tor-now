@@ -225,12 +225,15 @@ test.describe("the panel itself", () => {
     await sheet.getByRole("radio", { name: /יומן א/ }).check();
     await sheet.getByRole("button", { name: "השהיית היומן האחר" }).click();
 
-    const calendars = await call<{ id: string; name: string; paused: boolean }[]>(
-      `/businesses/${shop.business.id}/resources`,
-      { token: shop.owner.token },
-    );
-    expect(calendars.find((calendar) => calendar.name === "כיסא שני")?.paused).toBe(true);
-    expect(calendars.find((calendar) => calendar.name === "יומן א")?.paused).toBe(false);
+    // Read once the pause has landed: the click answers before the server does.
+    const pausedOf = async (calendarName: string) =>
+      (
+        await call<{ id: string; name: string; paused: boolean }[]>(`/businesses/${shop.business.id}/resources`, {
+          token: shop.owner.token,
+        })
+      ).find((calendar) => calendar.name === calendarName)?.paused;
+    await expect.poll(() => pausedOf("כיסא שני"), { timeout: 15_000 }).toBe(true);
+    expect(await pausedOf("יומן א")).toBe(false);
   });
 
   test("a state in the statistics opens the Businesses filtered to it", async ({ page }) => {

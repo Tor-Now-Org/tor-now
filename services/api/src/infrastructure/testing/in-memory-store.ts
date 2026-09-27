@@ -7,6 +7,7 @@ import type {
   Membership,
   MembershipResource,
   LocalDate,
+  Notice,
   Payment,
   UnitRate,
   UsageRecord,
@@ -54,6 +55,8 @@ export type Store = {
   appointments: Appointment[];
   subscriptions: Subscription[];
   payments: Payment[];
+  /** With the dedupe key the table keeps beside each. */
+  notices: { notice: Notice; key: string | null }[];
   planVersions: PlanVersion[];
   previews: Preview[];
   usageRecords: UsageRecord[];
@@ -95,6 +98,7 @@ export const emptyStore = (
   appointments: [],
   subscriptions: [],
   payments: [],
+  notices: [],
   ...initialCatalogue(today),
   usageRecords: [],
   // The usage_records migration's default rates.

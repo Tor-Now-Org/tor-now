@@ -16,6 +16,7 @@ import { closureService } from "../../application/closure-service.ts";
 import { catalogueService } from "../../application/catalogue-service.ts";
 import { discoveryService } from "../../application/discovery-service.ts";
 import { reviewService } from "../../application/review-service.ts";
+import { noticeService } from "../../application/notice-service.ts";
 import { outboxWorker } from "../../application/outbox-worker.ts";
 import { reminderService } from "../../application/reminder-service.ts";
 import { waitingService } from "../../application/waiting-service.ts";
@@ -289,6 +290,7 @@ export const harness = (options: { now?: Instant } = {}) => {
       booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
       business: businessService({ unitOfWork, clock, photos }),
       calendar: calendarService({ unitOfWork, clock }),
+      notices: noticeService({ unitOfWork, clock }),
       closures: closureService({ unitOfWork, clock }),
       admin,
       outboxWorker: outboxWorker({ unitOfWork, notifier, clock }),

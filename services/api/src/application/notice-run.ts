@@ -1,0 +1,45 @@
+import { noticesDue, todayIn, type Instant, type Notice, type Plan, type PlanVersionId } from "@tor-now/domain";
+import type { Session } from "../ports/unit-of-work.ts";
+import { announce } from "./notices.ts";
+
+/**
+ * The daily run's Notices (ADR 0020): a Trial ending within the week, a payment
+ * late, a move landing within the week — worked out per Business against its
+ * own today. Saying the same thing twice keeps nothing twice, so a run that
+ * repeats or follows a missed day is safe.
+ *
+ * Returns how many Notices were new.
+ */
+export const announceDue = async (
+  session: Pick<Session, "repositories" | "outbox">,
+  now: Instant,
+): Promise<number> => {
+  const { repositories } = session;
+  const [entries, versions] = await Promise.all([
+    repositories.subscriptions.directory(),
+    repositories.planVersions.listAll(),
+  ]);
+  const planOf = new Map<PlanVersionId, Plan>(versions.map((version) => [version.id, version.plan]));
+
+  const kept: (Notice | null)[] = [];
+  for (const { business, subscription } of entries) {
+    const move = subscription.scheduledMove;
+    const pausing =
+      move === null
+        ? []
+        : (await repositories.resources.listForBusiness(business.id))
+            .filter((resource) => resource.pauseOn === move.effectiveOn)
+            .map((resource) => resource.name);
+    const due = noticesDue({
+      subscription,
+      scheduledPlan: move === null ? null : (planOf.get(move.planVersionId) ?? null),
+      pausing,
+      businessActive: business.active,
+      today: todayIn(now, business.timeZone),
+    });
+    for (const facts of due) {
+      kept.push(await announce(session, { businessId: business.id, facts, at: now }));
+    }
+  }
+  return kept.filter((notice) => notice !== null).length;
+};

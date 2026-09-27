@@ -42,9 +42,11 @@ _Avoid_: Revision, edition, legacy plan
 
 **Notice**:
 A message from the platform to a Business about what its Subscription grants or
-costs — a Feature gained, a Preview ending, a move to another Plan Version.
-Whatever takes value away is announced thirty days ahead; whatever adds value is
-announced when it happens.
+costs — a Feature gained, a Preview ending, a move to another Plan Version, a
+payment due. Whatever takes value away is announced thirty days ahead; whatever
+adds value is announced when it happens. Every Notice is kept in the owner's
+list; the ones that need a look stand as a banner until acknowledged, and only
+the ones about paying also go out on WhatsApp.
 _Avoid_: Announcement, notification, warning, alert
 
 **Catalogue**:

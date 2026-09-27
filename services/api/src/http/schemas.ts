@@ -48,6 +48,9 @@ const instantSchema = z.string().datetime({ offset: true });
 
 const uuidSchema = z.string().uuid();
 
+/** An id in the address, checked before it reaches a uuid column. */
+export const noticeIdSchema = uuidSchema;
+
 export const requestCodeSchema = z.object({ phone: phoneSchema });
 
 const personName = z.object({

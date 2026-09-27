@@ -19,6 +19,10 @@ import type {
   MembershipResourceId,
   MembershipRole,
   Money,
+  Notice,
+  NoticeFacts,
+  NoticeId,
+  NoticeKind,
   OccupiedSpan,
   PartOfDay,
   Payment,
@@ -745,6 +749,31 @@ export type UnitRateRepository = {
   list(): Promise<readonly UnitRate[]>;
 };
 
+/**
+ * Notices (ADR 0020). Written by whatever act they tell of, in its transaction;
+ * read and acknowledged by the owner. What a Notice said is never rewritten —
+ * only whether it was read, and whether its banner still stands.
+ */
+export type NoticeRepository = {
+  /**
+   * Keeps a Notice, unless one with the same key is already kept for the
+   * Business — then nothing, and null, so the caller sends nothing either.
+   */
+  post(notice: {
+    businessId: BusinessId;
+    facts: NoticeFacts;
+    key: string | null;
+  }): Promise<Notice | null>;
+  /** The newest first, as many as asked for. */
+  listForBusiness(businessId: BusinessId, limit: number): Promise<readonly Notice[]>;
+  /** Ends the banners of these kinds that still stand. */
+  clear(businessId: BusinessId, kinds: readonly NoticeKind[], at: Instant): Promise<void>;
+  /** Ends one banner — the owner's "Got it" — and marks it read. */
+  acknowledge(businessId: BusinessId, id: NoticeId, at: Instant): Promise<Notice | null>;
+  /** Everything unread at the Business, read now: the owner opened the list. */
+  markAllRead(businessId: BusinessId, at: Instant): Promise<void>;
+};
+
 export type PaymentRepository = {
   create(payment: {
     subscriptionId: Subscription["id"];
@@ -888,6 +917,7 @@ export type Repositories = {
   readonly appointments: AppointmentRepository;
   readonly subscriptions: SubscriptionRepository;
   readonly payments: PaymentRepository;
+  readonly notices: NoticeRepository;
   readonly planVersions: PlanVersionRepository;
   readonly previews: PreviewRepository;
   readonly usageRecords: UsageRecordRepository;

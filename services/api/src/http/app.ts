@@ -842,6 +842,32 @@ const ownerRoutes = (services: Services) => {
     return context.json(wire.billingOut(result));
   });
 
+  // ADR 0020: what the platform told the owner, behind the bell. Reading the
+  // list and acknowledging a banner are the only changes an owner makes.
+  owner.get("/:businessId/notices", async (context) =>
+    context.json(
+      wire.noticeBoardOut(await services.notices.board(actorOf(context), idParam(context, "businessId"))),
+    ),
+  );
+
+  owner.post("/:businessId/notices/read", async (context) =>
+    context.json(
+      wire.noticeBoardOut(await services.notices.markAllRead(actorOf(context), idParam(context, "businessId"))),
+    ),
+  );
+
+  owner.post("/:businessId/notices/:noticeId/acknowledge", async (context) =>
+    context.json(
+      wire.noticeBoardOut(
+        await services.notices.acknowledge(
+          actorOf(context),
+          idParam(context, "businessId"),
+          asId<"Notice">(parse(schema.noticeIdSchema, context.req.param("noticeId"))),
+        ),
+      ),
+    ),
+  );
+
   owner.get("/:businessId/users", async (context) => {
     const members = await services.business.listUsers(
       actorOf(context),
@@ -1194,12 +1220,13 @@ const jobRoutes = (services: Services) => {
     context.json({ removed: await services.pruneAuditLog() }),
   );
 
-  // The daily billing run: scheduled Plan moves land on their renewal, then
-  // whatever has lapsed is deactivated.
+  // The daily billing run: scheduled Plan moves land on their renewal,
+  // whatever has lapsed is deactivated, and owners are told what is coming.
   jobs.post("/billing-deactivation", async (context) => {
     const moves = await services.applyDueMoves();
     const deactivated = await services.deactivateLapsedBusinesses();
-    return context.json({ moved: moves.moved, paused: moves.paused, deactivated });
+    const noticed = await services.announceDueNotices();
+    return context.json({ moved: moves.moved, paused: moves.paused, deactivated, noticed });
   });
 
   return jobs;

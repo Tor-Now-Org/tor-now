@@ -92,6 +92,13 @@ describe("loadConfig", () => {
     expect(config.corsOrigins).toEqual(["https://a.example", "https://b.example"]);
   });
 
+  it("reads where the web app lives, without a trailing slash, and nothing when unset", () => {
+    expect(loadConfig({ ...minimal, WEB_ORIGIN: "https://tor.example/" }).webOrigin).toBe("https://tor.example");
+    expect(loadConfig({ ...minimal, WEB_ORIGIN: "" }).webOrigin).toBeNull();
+    expect(loadConfig(minimal).webOrigin).toBeNull();
+    expect(() => loadConfig({ ...minimal, WEB_ORIGIN: "tor.example" })).toThrow(/WEB_ORIGIN/);
+  });
+
   it("falls back to the service role key when no JWT secret is provisioned", () => {
     const config = loadConfig({
       SUPABASE_DB_URL: "postgres://localhost/tor_now",

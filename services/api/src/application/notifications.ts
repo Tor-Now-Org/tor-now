@@ -1,5 +1,5 @@
 import { displayName, formatInstant, type Appointment } from "@tor-now/domain";
-import type { OutboundMessage } from "../ports/notifier.ts";
+import type { CustomerTemplate, OutboundMessage } from "../ports/notifier.ts";
 
 /**
  * The message an event produces, addressed and filled in.
@@ -10,7 +10,7 @@ import type { OutboundMessage } from "../ports/notifier.ts";
  * person receiving it depending on which service raised it.
  */
 export const notificationFor = (
-  template: OutboundMessage["template"],
+  template: CustomerTemplate,
   appointment: Appointment,
   business: { name: string; phone: string; timeZone: string },
   customer: { givenName: string; familyName: string | null; phone: string },

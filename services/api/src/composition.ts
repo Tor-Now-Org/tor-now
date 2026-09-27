@@ -10,6 +10,7 @@ import { closureService } from "./application/closure-service.ts";
 import { catalogueService } from "./application/catalogue-service.ts";
 import { discoveryService } from "./application/discovery-service.ts";
 import { reviewService } from "./application/review-service.ts";
+import { noticeService } from "./application/notice-service.ts";
 import { outboxWorker } from "./application/outbox-worker.ts";
 import { reminderService } from "./application/reminder-service.ts";
 import { waitingService } from "./application/waiting-service.ts";
@@ -52,9 +53,9 @@ export type Services = ReturnType<typeof compose>["services"];
  */
 const notifierFor = (config: Config): Notifier => {
   if (config.notificationTransport === "LOG" || config.twilio === null) {
-    return logNotifier();
+    return logNotifier(undefined, config.webOrigin);
   }
-  return twilioNotifier(config.twilio);
+  return twilioNotifier(config.twilio, config.webOrigin);
 };
 
 const verificationSenderFor = (config: Config): VerificationSender => {
@@ -118,6 +119,7 @@ export const compose = (
     booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
     business: businessService({ unitOfWork, clock, photos }),
     calendar: calendarService({ unitOfWork, clock }),
+    notices: noticeService({ unitOfWork, clock }),
     closures: closureService({ unitOfWork, clock }),
     admin,
 
@@ -128,6 +130,7 @@ export const compose = (
     pruneAuditLog: () => pruneAuditLog(sql),
     deactivateLapsedBusinesses: () => admin.deactivateLapsedBusinesses(system()),
     applyDueMoves: () => admin.applyDueMoves(system()),
+    announceDueNotices: () => admin.announceDueNotices(system()),
   };
 
   return { services, sql, config };

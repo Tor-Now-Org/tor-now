@@ -1,6 +1,6 @@
 import type { DeliveryChannel, Notifier } from "../../ports/notifier.ts";
 import { smsSegments } from "@tor-now/domain";
-import { renderTemplate } from "./templates.ts";
+import { renderMessage } from "./templates.ts";
 
 export type TwilioCredentials = {
   readonly accountSid: string;
@@ -42,9 +42,12 @@ const sendVia = async (
  * which has no credentials — selecting it without them fails at boot rather
  * than at the first message.
  */
-export const twilioNotifier = (credentials: TwilioCredentials): Notifier => ({
+export const twilioNotifier = (
+  credentials: TwilioCredentials,
+  webOrigin: string | null = null,
+): Notifier => ({
   async deliver(message) {
-    const body = renderTemplate(message.template, message.payload);
+    const body = renderMessage(message, webOrigin);
     const attempts: { channel: DeliveryChannel; from: string; to: string }[] = [
       {
         channel: "WHATSAPP",

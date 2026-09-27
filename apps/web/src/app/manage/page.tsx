@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import type { BusinessDto, ResourceDto } from "@/lib/api/types.ts";
-import { daysUntil } from "@/lib/billing-alert.ts";
 import { staffRole } from "@/lib/roles.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
@@ -30,7 +29,14 @@ import {
   rememberManaged,
 } from "@/lib/last-managed.ts";
 import { Button, Empty, Sheet, Spinner } from "@/components/ui.tsx";
-import { fillParts } from "@/lib/i18n/fill.ts";
+import { BUSINESS_DEFAULTS } from "@tor-now/domain";
+import { useNotices } from "@/lib/use-notices.ts";
+import {
+  NoticeBanner,
+  NoticeBell,
+  NoticeSheet,
+  useNoticeContext,
+} from "@/components/owner/notices.tsx";
 
 const TABS = ["day", "schedule", "business", "customers"] as const;
 type Tab = (typeof TABS)[number];
@@ -153,30 +159,26 @@ function ManageApp() {
     };
   }, [loadResources]);
 
-  /** Days left in the Grace Period, shown once per app open. Billing is the
-   * OWNER's alone (ADR 0016) — the same rule the billing panel applies. */
-  const [graceDays, setGraceDays] = useState<number | null>(null);
-
-  const loadGraceAlert = useCallback(async () => {
-    if (token === null || business === null || !business.active) return setGraceDays(null);
-    if ((business.role ?? "OWNER") !== "OWNER") return setGraceDays(null);
-    try {
-      const billing = await api.subscription(token, business.id);
-      setGraceDays(
-        billing.status === "IN_GRACE" && billing.nextDate !== null
-          ? daysUntil(billing.nextDate, business.timeZone)
-          : null,
-      );
-    } catch {
-      // A reminder is a courtesy, not a gate — a failed read shows nothing
-      // rather than breaking the app the owner came here to use.
-      setGraceDays(null);
-    }
-  }, [token, business]);
-
-  useEffect(() => {
-    void loadGraceAlert();
-  }, [loadGraceAlert]);
+  // ADR 0020: what the platform told the owner — a bell, one banner, a list.
+  // Billing is the OWNER's alone (ADR 0016); for anybody else there is none.
+  const notices = useNotices(token, business);
+  const noticeContext = useNoticeContext(business?.timeZone ?? BUSINESS_DEFAULTS.timeZone);
+  const [noticesOpen, setNoticesOpen] = useState(false);
+  /** What was unread when the list opened, so reading it does not reshuffle it. */
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(() => new Set());
+  const openNotices = () => {
+    setFresh(new Set((notices.board?.notices ?? []).filter((notice) => !notice.read).map((notice) => notice.id)));
+    setNoticesOpen(true);
+    void notices.markAllRead();
+  };
+  // Every action a Notice offers — how to pay, the plans, cancelling a move —
+  // is on the billing panel.
+  const openBilling = () => {
+    setNoticesOpen(false);
+    setEditingCalendar(null);
+    setPanel("billing");
+    setTab("business");
+  };
 
   // The chrome stays while the answer is fetched. Replacing the whole page
   // with a spinner is what made crossing over look like a reload: the header
@@ -248,6 +250,7 @@ function ManageApp() {
   // A WORKER reaching a tab they may not have — an old link, a role changed
   // under them — sees their calendar rather than an empty screen.
   const shown: Tab = manages || tab === "day" || tab === "schedule" ? tab : "day";
+  const banner = notices.banner;
 
   return (
     <>
@@ -263,16 +266,28 @@ function ManageApp() {
         }
         trailing={
           user !== null ? (
-            <AccountButton
-              initial={user.name.trim().charAt(0) || "?"}
-              onClick={() => setDrawerOpen(true)}
-              label={copy.account}
-            />
+            <>
+              {notices.board !== null && <NoticeBell unread={notices.unread} onOpen={openNotices} />}
+              <AccountButton
+                initial={user.name.trim().charAt(0) || "?"}
+                onClick={() => setDrawerOpen(true)}
+                label={copy.account}
+              />
+            </>
           ) : undefined
         }
       />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0 }}>
+        {banner !== null && (
+          <NoticeBanner
+            notice={banner.notice}
+            othersUnread={banner.othersUnread}
+            context={noticeContext}
+            onGotIt={() => void notices.acknowledge(banner.notice.id)}
+            onAction={openBilling}
+          />
+        )}
         {shown === "day" && (
           <CalendarDay token={token} business={business} resources={resources} />
         )}
@@ -333,17 +348,14 @@ function ManageApp() {
         ]}
       />
 
-      <Sheet open={graceDays !== null} onClose={() => setGraceDays(null)} labelledBy="grace-alert-title">
-        {graceDays !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 id="grace-alert-title" style={{ fontSize: 19 }}>{copy.graceAlertTitle}</h2>
-            <p style={{ margin: 0 }}>
-              {fillParts(copy.billingOverdue, { days: String(graceDays) }).map((part) => part.text)}
-            </p>
-            <Button onClick={() => setGraceDays(null)}>{copy.graceAlertClose}</Button>
-          </div>
-        )}
-      </Sheet>
+      <NoticeSheet
+        open={noticesOpen}
+        onClose={() => setNoticesOpen(false)}
+        notices={notices.board?.notices ?? []}
+        fresh={fresh}
+        context={noticeContext}
+        onAction={openBilling}
+      />
 
       <AccountDrawer
         open={drawerOpen}

@@ -2137,6 +2137,7 @@ export const describeRepositoryContract = (
           { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", quantity: 1, occurredAt: nextDay },
           { businessId: shop, source: "WAITING_LIST", unit: "SMS_SEGMENT", quantity: 2, occurredAt: morning },
           { businessId: null, source: "SIGN_IN", unit: "WHATSAPP_AUTHENTICATION", quantity: 1, occurredAt: morning },
+          { businessId: shop, source: "BILLING", unit: "WHATSAPP_UTILITY", quantity: 1, occurredAt: morning },
           { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", quantity: 1, occurredAt: outside },
         ]);
 
@@ -2147,10 +2148,102 @@ export const describeRepositoryContract = (
 
         expect(summary).toEqual([
           { businessId: null, source: "SIGN_IN", unit: "WHATSAPP_AUTHENTICATION", day: "2031-03-10", quantity: 1 },
+          { businessId: shop, source: "BILLING", unit: "WHATSAPP_UTILITY", day: "2031-03-10", quantity: 1 },
           { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", day: "2031-03-10", quantity: 2 },
           { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", day: "2031-03-11", quantity: 1 },
           { businessId: shop, source: "WAITING_LIST", unit: "SMS_SEGMENT", day: "2031-03-10", quantity: 2 },
         ]);
+      });
+    });
+
+    // --- Notices: ADR 0020 ---------------------------------------------
+
+    it("keeps a Notice once per key, and lists the newest first", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07020");
+        const shop = context.business.id;
+        const ending = { kind: "TRIAL_ENDING", trialEndsOn: parseLocalDate("2031-03-20") } as const;
+
+        const first = await repositories.notices.post({ businessId: shop, facts: ending, key: "TRIAL_ENDING:2031-03-20" });
+        expect(first).toMatchObject({ businessId: shop, facts: ending, readAt: null, clearedAt: null });
+        // The daily run seeing the same thing tomorrow keeps nothing more.
+        expect(await repositories.notices.post({ businessId: shop, facts: ending, key: "TRIAL_ENDING:2031-03-20" })).toBeNull();
+
+        const paid = { kind: "PAYMENT_RECORDED", paidThrough: parseLocalDate("2031-04-20") } as const;
+        // An event has no key, and two of them are two Notices.
+        await repositories.notices.post({ businessId: shop, facts: paid, key: null });
+        const last = await repositories.notices.post({ businessId: shop, facts: paid, key: null });
+
+        const listed = await repositories.notices.listForBusiness(shop, 10);
+        expect(listed.map((notice) => notice.facts.kind)).toEqual(["PAYMENT_RECORDED", "PAYMENT_RECORDED", "TRIAL_ENDING"]);
+        expect(listed[0]?.id).toBe(last?.id);
+        expect(await repositories.notices.listForBusiness(shop, 1)).toHaveLength(1);
+      });
+    });
+
+    it("clears standing banners by kind, acknowledges one, and reads the rest", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07021");
+        const other = await aBookableBusiness(repositories, "07022");
+        const shop = context.business.id;
+        const at = AT("2031-03-10T10:00:00.000Z");
+        const later = AT("2031-03-11T10:00:00.000Z");
+        const late = { kind: "PAYMENT_LATE", graceEndsOn: parseLocalDate("2031-03-24") } as const;
+        const paused = { kind: "CALENDARS_PAUSED", names: ["שני"], resourceAllowance: 1 } as const;
+
+        const lateNotice = await repositories.notices.post({ businessId: shop, facts: late, key: "a" });
+        const pausedNotice = await repositories.notices.post({ businessId: shop, facts: paused, key: null });
+        const elsewhere = await repositories.notices.post({ businessId: other.business.id, facts: late, key: "a" });
+        if (lateNotice === null || pausedNotice === null || elsewhere === null) throw new Error("Not kept");
+
+        await repositories.notices.clear(shop, [], at);
+        await repositories.notices.clear(shop, ["PAYMENT_LATE"], at);
+        await repositories.notices.clear(shop, ["PAYMENT_LATE"], later);
+        const byId = async (businessId: typeof shop) =>
+          new Map((await repositories.notices.listForBusiness(businessId, 10)).map((notice) => [notice.id, notice]));
+        expect((await byId(shop)).get(lateNotice.id)?.clearedAt).toBe(at);
+        expect((await byId(shop)).get(pausedNotice.id)?.clearedAt).toBeNull();
+        expect((await byId(other.business.id)).get(elsewhere.id)?.clearedAt).toBeNull();
+
+        const acknowledged = await repositories.notices.acknowledge(shop, pausedNotice.id, at);
+        expect(acknowledged).toMatchObject({ clearedAt: at, readAt: at, facts: paused });
+        // Somebody else's Notice is not acknowledged from here.
+        expect(await repositories.notices.acknowledge(shop, elsewhere.id, at)).toBeNull();
+
+        await repositories.notices.markAllRead(shop, later);
+        const read = await byId(shop);
+        expect(read.get(lateNotice.id)?.readAt).toBe(later);
+        expect(read.get(pausedNotice.id)?.readAt).toBe(at);
+        expect((await byId(other.business.id)).get(elsewhere.id)?.readAt).toBeNull();
+      });
+    });
+
+    it("lets an owner keep a Notice of their own act, and read and acknowledge their own", async () => {
+      await withRepositories(async (repositories, actAs) => {
+        const context = await aBookableBusiness(repositories, "07023");
+        const shop = context.business.id;
+        await actAs(context.owner.id);
+
+        const changed = await repositories.notices.post({
+          businessId: shop,
+          facts: {
+            kind: "PLAN_CHANGED",
+            plan: "TEAM",
+            by: "OWNER",
+            priceMinor: 8900,
+            resourceAllowance: 5,
+            gained: ["CUSTOMER_HISTORY"],
+            lost: [],
+          },
+          key: null,
+        });
+        expect(changed?.facts.kind).toBe("PLAN_CHANGED");
+        const at = AT("2031-03-10T10:00:00.000Z");
+        await repositories.notices.markAllRead(shop, at);
+        const listed = await repositories.notices.listForBusiness(shop, 10);
+        expect(listed.map((notice) => notice.readAt)).toEqual([at]);
+        if (changed === null) throw new Error("Not kept");
+        expect((await repositories.notices.acknowledge(shop, changed.id, at))?.clearedAt).toBe(at);
       });
     });
 

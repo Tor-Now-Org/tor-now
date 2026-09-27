@@ -52,11 +52,29 @@ describe.skipIf(databaseUrl === undefined || databaseUrl === "")("the outbox (po
       const mine = claimed.find((entry) => entry.message.recipientPhone === "+972500009902");
       expect(mine?.message.businessId).toBe(business.id);
       expect(mine?.message.template).toBe("BOOKING_CONFIRMED");
+      // Kept as the object it is, so the worker can fill the template from it.
+      expect(mine?.message.payload).toMatchObject({ customerName: "דנה", serviceName: "תספורת" });
+      const [stored] = await tx<{ type: string }[]>`
+        select jsonb_typeof(payload) as type from notification_outbox where id = ${mine?.id ?? ""}`;
+      expect(stored?.type).toBe("object");
 
       await box.markSent(mine?.id ?? "", "WHATSAPP");
       const [row] = await tx<{ status: string; delivered_via: string }[]>`
         select status, delivered_via from notification_outbox where id = ${mine?.id ?? ""}`;
       expect(row).toEqual({ status: "SENT", delivered_via: "WHATSAPP" });
+    });
+  });
+
+  it("reads a payload written as a JSON string, as rows before the fix were", async () => {
+    await inRolledBackTransaction(async (tx) => {
+      const payload = JSON.stringify({ customerName: "נוי", serviceName: "צבע" });
+      await tx`
+        insert into notification_outbox (recipient_phone, template, payload)
+        values ('+972500009903', 'BOOKING_CONFIRMED', to_jsonb(${payload}::text))`;
+
+      const claimed = await outbox(tx).claimPending(100);
+      const legacy = claimed.find((entry) => entry.message.recipientPhone === "+972500009903");
+      expect(legacy?.message.payload).toMatchObject({ customerName: "נוי", serviceName: "צבע" });
     });
   });
 });

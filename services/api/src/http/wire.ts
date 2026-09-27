@@ -18,10 +18,13 @@ import {
   type Customer,
   type User,
   type WorkingHours,
+  isStanding,
+  noticeTone,
 } from "@tor-now/domain";
 import type { MyWaiting } from "../application/waiting-service.ts";
 import type { PlatformStats } from "../application/admin-service.ts";
 import type { SubscriptionView } from "../application/billing.ts";
+import type { NoticeBoard } from "../application/notice-service.ts";
 import type { DirectoryRow } from "../application/business-directory.ts";
 import type {
   StaffedBusiness,
@@ -404,6 +407,23 @@ export const billingOut = (result: SubscriptionView & { payments: readonly Payme
   status: result.standing.status,
   nextDate: result.standing.nextDate,
   flags: result.standing.flags,
+});
+
+/**
+ * The owner's Notices and which one stands as the banner. A Notice goes out as
+ * its facts: the words are the web's, in the owner's own language.
+ */
+export const noticeBoardOut = (board: NoticeBoard) => ({
+  notices: board.notices.map((notice) => ({
+    id: notice.id,
+    kind: notice.facts.kind,
+    tone: noticeTone(notice.facts.kind),
+    facts: notice.facts,
+    createdAt: formatInstant(notice.createdAt),
+    read: notice.readAt !== null,
+    standing: isStanding(notice),
+  })),
+  banner: board.banner,
 });
 
 export const paymentOut = (payment: Payment) => ({

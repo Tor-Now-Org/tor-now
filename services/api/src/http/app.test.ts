@@ -653,3 +653,52 @@ describe("an owner's own plan", () => {
     expect(job.body).toMatchObject({ moved: [], paused: [], deactivated: [] });
   });
 });
+
+describe("an owner's Notices", () => {
+  it("lists them with the one banner, reads them, and acknowledges it — and only for the owner", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const created = await api.post("/businesses", { ...A_BUSINESS, plan: "TEAM" }, owner.token);
+    const businessId = (created.body as { id: string }).id;
+
+    const board = await api.get(`/businesses/${businessId}/notices`, owner.token);
+    expect(board.status).toBe(200);
+    const notices = (board.body as { notices: { id: string }[] }).notices;
+    expect(board.body).toEqual({
+      notices: [
+        {
+          id: notices[0]?.id,
+          kind: "TRIAL_STARTED",
+          tone: "good",
+          facts: { kind: "TRIAL_STARTED", plan: "TEAM", trialEndsOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+          createdAt: expect.any(String),
+          read: false,
+          standing: true,
+        },
+      ],
+      banner: { noticeId: notices[0]?.id, othersUnread: 0 },
+    });
+
+    const read = await api.post(`/businesses/${businessId}/notices/read`, undefined, owner.token);
+    expect(read.body).toMatchObject({ notices: [{ read: true, standing: true }] });
+
+    const acknowledged = await api.post(
+      `/businesses/${businessId}/notices/${notices[0]?.id}/acknowledge`,
+      undefined,
+      owner.token,
+    );
+    expect(acknowledged.body).toMatchObject({ notices: [{ standing: false }], banner: null });
+
+    const stranger = await signInOverHttp(api, "+972500000077", "זר");
+    expect((await api.get(`/businesses/${businessId}/notices`, stranger.token)).status).toBe(403);
+    expect((await api.post(`/businesses/${businessId}/notices/not-an-id/acknowledge`, undefined, owner.token)).status).toBe(
+      400,
+    );
+  });
+
+  it("are told by the daily job, which reports how many were new", async () => {
+    const api = httpHarness();
+    const job = await api.post("/jobs/billing-deactivation", undefined, api.jobSecret);
+    expect(job.body).toMatchObject({ noticed: 0 });
+  });
+});

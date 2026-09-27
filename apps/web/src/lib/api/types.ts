@@ -1,4 +1,4 @@
-import type { BusinessCategory } from "@tor-now/domain";
+import type { BusinessCategory, NoticeFacts, NoticeTone } from "@tor-now/domain";
 
 /**
  * The wire shapes, mirroring services/api/src/http/wire.ts. Kept as a hand
@@ -466,6 +466,26 @@ export type Standing = {
 export type BillingDto = Standing & {
   subscription: SubscriptionDto;
   payments: PaymentDto[];
+};
+
+/**
+ * One Notice (ADR 0020) as the API sends it: what happened, as facts the web
+ * words in the owner's own language, and whether its banner still stands.
+ */
+export type NoticeDto = {
+  id: string;
+  kind: NoticeFacts["kind"];
+  tone: NoticeTone;
+  facts: NoticeFacts;
+  createdAt: string;
+  read: boolean;
+  standing: boolean;
+};
+
+/** The owner's Notices, newest first, and the one banner to show. */
+export type NoticeBoardDto = {
+  notices: NoticeDto[];
+  banner: { noticeId: string; othersUnread: number } | null;
 };
 
 export type PaymentDto = {

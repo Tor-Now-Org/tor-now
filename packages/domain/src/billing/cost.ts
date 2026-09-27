@@ -36,10 +36,11 @@ export const COST_UNITS = ["WHATSAPP_UTILITY", "WHATSAPP_AUTHENTICATION", "SMS_S
 export type CostUnit = (typeof COST_UNITS)[number];
 
 /**
- * What caused a usage: a Feature, or one of the two things every Business has —
- * the messages that make a booking a booking, and signing in.
+ * What caused a usage: a Feature, or one of the things every Business has —
+ * the messages that make a booking a booking, signing in, and the platform
+ * telling an owner about paying for it.
  */
-export type CostSource = "BOOKING" | "SIGN_IN" | Feature;
+export type CostSource = "BOOKING" | "SIGN_IN" | "BILLING" | Feature;
 
 /** One billable thing that happened. Holds no price. */
 export type UsageRecord = {

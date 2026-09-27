@@ -27,6 +27,7 @@ import {
   serviceRepository,
   workingHoursRepository,
 } from "./scheduling-repositories.ts";
+import { noticeRepository } from "./notice-repository.ts";
 import {
   waitingEntryRepository,
   waitingRecheckRepository,
@@ -128,6 +129,7 @@ if (databaseUrl === undefined || databaseUrl === "") {
         appointments: recording("appointments", appointmentRepository(transaction)),
         subscriptions: recording("subscriptions", subscriptionRepository(transaction)),
         payments: recording("payments", paymentRepository(transaction)),
+        notices: recording("notices", noticeRepository(transaction)),
         planVersions: recording("planVersions", planVersionRepository(transaction)),
         previews: recording("previews", previewRepository(transaction)),
         usageRecords: recording("usageRecords", usageRecordRepository(transaction)),

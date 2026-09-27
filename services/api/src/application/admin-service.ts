@@ -1,9 +1,9 @@
 import {
-  applyPayment,
   forbidden,
   instant,
   money,
   notFound,
+  paidThroughAfter,
   parseLocalDate,
   validationFailed,
   shouldDeactivate,
@@ -34,6 +34,8 @@ import { requireAdministrator, requireOperator } from "./authorization.ts";
 import { entitlementOf, subscriptionView, type SubscriptionView } from "./billing.ts";
 import { keepOnly, overAllowance } from "./allowance.ts";
 import { applyDueMoves, movePlan } from "./plan-move.ts";
+import { announce } from "./notices.ts";
+import { announceDue } from "./notice-run.ts";
 import {
   directoryRow,
   filterDirectory,
@@ -352,9 +354,15 @@ export const adminService = (dependencies: {
 
         // Recording a Payment is what extends the paid-through date; the two
         // are one act, so they commit together.
-        const extended = applyPayment(subscription, paidOn);
-        await repositories.subscriptions.update(businessId, {
-          paidThrough: extended.paidThrough,
+        const paidThrough = paidThroughAfter(subscription, paidOn);
+        await repositories.subscriptions.update(businessId, { paidThrough });
+
+        // Told to the owner on WhatsApp too, and ending whatever banner said
+        // a payment was due.
+        await announce(session, {
+          businessId,
+          facts: { kind: "PAYMENT_RECORDED", paidThrough },
+          at: clock.now(),
         });
 
         await session.audit.append({
@@ -363,7 +371,7 @@ export const adminService = (dependencies: {
           entityType: "Payment",
           entityId: payment.id,
           before: subscription,
-          after: { payment, paidThrough: extended.paidThrough },
+          after: { payment, paidThrough },
         });
 
         return payment;
@@ -542,7 +550,8 @@ export const adminService = (dependencies: {
       // Cron calls this with no human behind it, which is the normal case; an
       // administrator may also run it by hand.
       requireOperator(actor);
-      return unitOfWork.run(actor, async ({ repositories }) => {
+      return unitOfWork.run(actor, async (session) => {
+        const { repositories } = session;
         const today = parseLocalDate(new Date(clock.now()).toISOString().slice(0, 10));
         const lapsed = await repositories.subscriptions.listLapsed(today);
         const deactivated = await Promise.all(
@@ -550,11 +559,26 @@ export const adminService = (dependencies: {
             .filter((subscription) => shouldDeactivate(subscription, today))
             .map(async (subscription) => {
               await repositories.businesses.setActive(subscription.businessId, false);
+              await announce(session, {
+                businessId: subscription.businessId,
+                facts: { kind: "DEACTIVATED", on: today },
+                at: clock.now(),
+              });
               return subscription.businessId;
             }),
         );
         return deactivated;
       });
+    },
+
+    /**
+     * The daily run's Notices: what is coming within the week, and what is
+     * late. Run after the day's moves and deactivations, so it speaks of what
+     * is left standing.
+     */
+    async announceDueNotices(actor: Actor): Promise<number> {
+      requireOperator(actor);
+      return unitOfWork.run(actor, (session) => announceDue(session, clock.now()));
     },
   };
 };

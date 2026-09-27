@@ -20,6 +20,7 @@ export const SOURCE_OF_TEMPLATE: Readonly<Record<Template, CostSource>> = Object
   [TEMPLATES.bookingRescheduled]: "BOOKING",
   [TEMPLATES.bookingReminder]: "REMINDERS",
   [TEMPLATES.waitingListOpening]: "WAITING_LIST",
+  [TEMPLATES.billingNotice]: "BILLING",
 });
 
 /**

@@ -281,4 +281,4 @@ const toCostUnit = (value: string): CostUnit => {
 };
 
 const toCostSource = (value: string): CostSource =>
-  value === "BOOKING" || value === "SIGN_IN" ? value : parseFeature(value);
+  value === "BOOKING" || value === "SIGN_IN" || value === "BILLING" ? value : parseFeature(value);

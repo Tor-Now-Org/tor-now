@@ -15,6 +15,7 @@ import type {
   ReviewDto,
   AdminCalendarsDto,
   BillingDto,
+  NoticeBoardDto,
   DirectoryFilter,
   DirectoryPageDto,
   CatalogueDto,
@@ -844,6 +845,20 @@ export const api = {
     request<BillingDto>(`/businesses/${businessId}/subscription/plan`, {
       method: "PUT",
       body: keep === undefined ? { plan } : { plan, keep },
+      token,
+    }),
+
+  notices: (token: string, businessId: string) =>
+    request<NoticeBoardDto>(`/businesses/${businessId}/notices`, { token }),
+
+  /** The owner opened the list: everything in it is read. */
+  readNotices: (token: string, businessId: string) =>
+    request<NoticeBoardDto>(`/businesses/${businessId}/notices/read`, { method: "POST", token }),
+
+  /** "Got it" on the banner. */
+  acknowledgeNotice: (token: string, businessId: string, noticeId: string) =>
+    request<NoticeBoardDto>(`/businesses/${businessId}/notices/${noticeId}/acknowledge`, {
+      method: "POST",
       token,
     }),
 

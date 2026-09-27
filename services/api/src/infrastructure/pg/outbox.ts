@@ -1,13 +1,8 @@
 import { asId, instant } from "@tor-now/domain";
 import { OUTBOX } from "../../config.ts";
-import type {
-  NotificationPayload,
-  Outbox,
-  OutboxEntry,
-  Template,
-} from "../../ports/notifier.ts";
+import type { OutboundMessage, Outbox, OutboxEntry } from "../../ports/notifier.ts";
 import type { Transaction } from "./client.ts";
-import type { Row } from "./mappers.ts";
+import { jsonOf, type Row } from "./mappers.ts";
 
 /**
  * ADR 0005: the row is written in the transaction that caused it, so a
@@ -21,7 +16,7 @@ export const outbox = (tx: Transaction): Outbox => ({
         ${message.businessId},
         ${message.recipientPhone},
         ${message.template},
-        ${JSON.stringify(message.payload)}::jsonb)`;
+        ${tx.json(message.payload)})`;
   },
 
   /**
@@ -40,12 +35,14 @@ export const outbox = (tx: Transaction): Outbox => ({
       id: String(row["id"]),
       attempts: Number(row["attempts"]),
       createdAt: instant(new Date(row["created_at"] as string).getTime()),
+      // The template names what shape the payload has; both were written
+      // together by `enqueue`, from one typed message.
       message: {
         businessId: asId(String(row["business_id"])),
         recipientPhone: String(row["recipient_phone"]),
-        template: String(row["template"]) as Template,
-        payload: row["payload"] as NotificationPayload,
-      },
+        template: String(row["template"]),
+        payload: jsonOf(row["payload"]),
+      } as OutboundMessage,
     }));
   },
 

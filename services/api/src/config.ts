@@ -82,6 +82,14 @@ export const OUTBOX = Object.freeze({
   retryAfterMinutes: [1, 5, 15, 60] as const,
 });
 
+/**
+ * ADR 0020's Notices. The list behind the bell is a record of what the owner
+ * was told, not an archive to page through: a few months of news fits.
+ */
+export const NOTICES = Object.freeze({
+  listLimit: 50,
+});
+
 /** ADR 0006: audit rows are retained for one year. */
 export const AUDIT_RETENTION_DAYS = 365;
 
@@ -142,6 +150,17 @@ const schema = z.object({
   exposeInternalErrors: z.boolean(),
   corsOrigins: z.array(z.string()).default([]),
   /**
+   * Where the web app lives, so a message can link into it. Null leaves the
+   * link out: a message pointing at the wrong deployment is worse than one
+   * that points nowhere.
+   */
+  webOrigin: z
+    .string()
+    .url()
+    .transform((origin) => origin.replace(/\/+$/, ""))
+    .nullable()
+    .default(null),
+  /**
    * Where photo bytes go. Null on a deployment with no Supabase behind it,
    * where the function serves them itself — see the photo store port.
    */
@@ -163,6 +182,7 @@ const ENVIRONMENT_VARIABLE: Readonly<Record<string, string>> = Object.freeze({
   exposeVerificationCode: "EXPOSE_VERIFICATION_CODE",
   exposeInternalErrors: "EXPOSE_INTERNAL_ERRORS",
   corsOrigins: "CORS_ORIGINS",
+  webOrigin: "WEB_ORIGIN",
   storage: "SUPABASE_URL",
 });
 
@@ -259,6 +279,7 @@ export const loadConfig = (env: Environment): Config => {
       .split(",")
       .map((origin) => origin.trim())
       .filter((origin) => origin.length > 0),
+    webOrigin: env["WEB_ORIGIN"] === undefined || env["WEB_ORIGIN"] === "" ? null : env["WEB_ORIGIN"],
   });
 
   if (!parsed.success) {

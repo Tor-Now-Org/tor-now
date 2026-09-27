@@ -67,6 +67,29 @@ export const makeAdministrator = async (phone: string): Promise<void> => {
     on conflict (phone) do nothing`;
 };
 
+/**
+ * The month a Business paid for ran out two days ago, as time going by would
+ * leave it: in its Grace Period, owing the next month. Written directly for the
+ * same reason `movedIntoThePast` is — a test cannot wait thirty days.
+ */
+export const paymentFellDue = async (businessId: string): Promise<void> => {
+  const sql = database();
+  await sql`
+    update subscription
+    set trial_ends_on = null, paid_through = current_date - 2
+    where business_id = ${businessId}`;
+};
+
+/**
+ * The daily billing run, called the way Supabase Cron calls it: with the
+ * credential both sides read from the database.
+ */
+export const runTheDailyBillingJob = async (): Promise<{ noticed: number }> => {
+  const [row] = await database()<{ secret: string | null }[]>`select app.job_secret() as secret`;
+  if (row?.secret === null || row?.secret === undefined) throw new Error("The database has no job credential");
+  return call<{ noticed: number }>("/jobs/billing-deactivation", { method: "POST", token: row.secret });
+};
+
 /** A phone number nobody else in the run will use. */
 export const uniquePhone = (): string =>
   `+9725${String(Math.floor(Math.random() * 100_000_000)).padStart(8, "0")}`;

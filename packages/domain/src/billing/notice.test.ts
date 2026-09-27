@@ -1,0 +1,259 @@
+import { describe, expect, it } from "vitest";
+import { asId } from "../model/ids.ts";
+import { instant } from "../time/instant.ts";
+import { parseLocalDate } from "../time/local-date.ts";
+import {
+  bannerOf,
+  goesToWhatsApp,
+  isAboutPaying,
+  isStanding,
+  NOTICE_KINDS,
+  noticeKey,
+  noticesCleared,
+  noticesDue,
+  noticeTone,
+  parseNoticeFacts,
+  standsAsBanner,
+  type Notice,
+  type NoticeFacts,
+} from "./notice.ts";
+
+const day = parseLocalDate;
+const today = day("2026-10-19");
+
+let sequence = 0;
+const aNotice = (facts: NoticeFacts, overrides: Partial<Notice> = {}): Notice => {
+  sequence += 1;
+  return {
+    id: asId(`notice-${sequence}`),
+    businessId: asId("business"),
+    facts,
+    createdAt: instant(1_000_000 + sequence),
+    readAt: null,
+    clearedAt: null,
+    ...overrides,
+  };
+};
+
+describe("what goes to WhatsApp", () => {
+  it("is exactly what is about paying", () => {
+    expect(NOTICE_KINDS.filter(goesToWhatsApp)).toEqual([
+      "TRIAL_ENDING",
+      "PAYMENT_LATE",
+      "DEACTIVATED",
+      "PAYMENT_RECORDED",
+    ]);
+  });
+
+  it("narrows a Notice's facts to one about paying", () => {
+    expect(isAboutPaying({ kind: "PAYMENT_LATE", graceEndsOn: day("2026-11-07") })).toBe(true);
+    expect(isAboutPaying({ kind: "CALENDARS_RESUMED", names: [] })).toBe(false);
+  });
+});
+
+describe("how each kind is drawn", () => {
+  it("stands as a banner only when it needs a look", () => {
+    expect(NOTICE_KINDS.filter((kind) => !standsAsBanner(kind))).toEqual([
+      "PAYMENT_RECORDED",
+      "PLAN_CHANGED",
+      "MOVE_SCHEDULED",
+    ]);
+  });
+
+  it("is critical only when the business left search", () => {
+    expect(NOTICE_KINDS.filter((kind) => noticeTone(kind) === "critical")).toEqual(["DEACTIVATED"]);
+  });
+
+  it("lets a payment settle every standing Notice about paying", () => {
+    expect(noticesCleared("PAYMENT_RECORDED")).toEqual([
+      "TRIAL_STARTED",
+      "TRIAL_ENDING",
+      "PAYMENT_LATE",
+      "DEACTIVATED",
+    ]);
+    expect(noticesCleared("CALENDARS_RESUMED")).toEqual(["CALENDARS_PAUSED"]);
+    expect(noticesCleared("MOVE_APPLIED")).toEqual(["MOVE_SOON"]);
+  });
+});
+
+describe("noticeKey", () => {
+  it("makes a situation seen again the same Notice", () => {
+    expect(noticeKey({ kind: "TRIAL_ENDING", trialEndsOn: day("2026-10-26") })).toBe(
+      "TRIAL_ENDING:2026-10-26",
+    );
+    expect(noticeKey({ kind: "PAYMENT_LATE", graceEndsOn: day("2026-11-07") })).toBe(
+      "PAYMENT_LATE:2026-11-07",
+    );
+    expect(noticeKey({ kind: "DEACTIVATED", on: today })).toBe("DEACTIVATED:2026-10-19");
+    expect(noticeKey({ kind: "MOVE_SOON", plan: "SOLO", effectiveOn: day("2026-10-24"), pausing: [] })).toBe(
+      "MOVE_SOON:SOLO:2026-10-24",
+    );
+  });
+
+  it("gives a Trial one start, whatever its dates", () => {
+    expect(noticeKey({ kind: "TRIAL_STARTED", plan: "TEAM", trialEndsOn: day("2026-10-26") })).toBe(
+      "TRIAL_STARTED",
+    );
+  });
+
+  it("gives an event none, because it happens once by its nature", () => {
+    expect(noticeKey({ kind: "PAYMENT_RECORDED", paidThrough: day("2026-11-23") })).toBeNull();
+    expect(noticeKey({ kind: "CALENDARS_RESUMED", names: ["דנה"] })).toBeNull();
+  });
+});
+
+describe("bannerOf", () => {
+  it("shows nothing when nothing stands", () => {
+    expect(bannerOf([])).toBeNull();
+    expect(bannerOf([aNotice({ kind: "PAYMENT_RECORDED", paidThrough: today })])).toBeNull();
+    expect(
+      bannerOf([aNotice({ kind: "TRIAL_ENDING", trialEndsOn: today }, { clearedAt: instant(5) })]),
+    ).toBeNull();
+  });
+
+  it("shows what costs the most to miss, and counts the other unread ones", () => {
+    const started = aNotice({ kind: "TRIAL_STARTED", plan: "TEAM", trialEndsOn: today });
+    const ending = aNotice({ kind: "TRIAL_ENDING", trialEndsOn: today });
+    const paused = aNotice({ kind: "CALENDARS_PAUSED", names: ["דנה"], resourceAllowance: 1 });
+    const read = aNotice({ kind: "PLAN_CHANGED", plan: "SOLO", by: "OWNER", priceMinor: 4900, resourceAllowance: 1, gained: [], lost: [] }, { readAt: instant(9) });
+
+    const banner = bannerOf([started, paused, ending, read]);
+
+    expect(banner?.notice.id).toBe(ending.id);
+    expect(banner?.othersUnread).toBe(2);
+  });
+
+  it("shows the newer of two of a kind", () => {
+    const older = aNotice({ kind: "CALENDARS_RESUMED", names: ["דנה"] });
+    const newer = aNotice({ kind: "CALENDARS_RESUMED", names: ["יוסי"] });
+    expect(bannerOf([older, newer])?.notice.id).toBe(newer.id);
+  });
+
+  it("stops standing once cleared, while staying in the list", () => {
+    const notice = aNotice({ kind: "DEACTIVATED", on: today });
+    expect(isStanding(notice)).toBe(true);
+    expect(isStanding({ ...notice, clearedAt: instant(1) })).toBe(false);
+  });
+});
+
+describe("noticesDue", () => {
+  const input = (overrides: Partial<Parameters<typeof noticesDue>[0]> = {}) => ({
+    subscription: { trialEndsOn: null, paidThrough: day("2026-11-01"), scheduledMove: null },
+    scheduledPlan: null,
+    pausing: [],
+    businessActive: true,
+    today,
+    ...overrides,
+  });
+
+  it("says nothing about a paid Business with nothing coming", () => {
+    expect(noticesDue(input())).toEqual([]);
+  });
+
+  it("warns of a Trial's end a week ahead, and on each day after until it ends", () => {
+    const ending = (trialEndsOn: string) =>
+      noticesDue(input({ subscription: { trialEndsOn: day(trialEndsOn), paidThrough: null, scheduledMove: null } }));
+    expect(ending("2026-10-27")).toEqual([]);
+    expect(ending("2026-10-26")).toEqual([{ kind: "TRIAL_ENDING", trialEndsOn: "2026-10-26" }]);
+    expect(ending("2026-10-19")).toEqual([{ kind: "TRIAL_ENDING", trialEndsOn: "2026-10-19" }]);
+    // Over and unpaid: the Business is deactivated, which says so itself.
+    expect(ending("2026-10-18")).toEqual([]);
+  });
+
+  it("says a payment is late through the Grace Period, dated by its last day", () => {
+    const late = noticesDue(
+      input({ subscription: { trialEndsOn: null, paidThrough: day("2026-10-18"), scheduledMove: null } }),
+    );
+    expect(late).toEqual([{ kind: "PAYMENT_LATE", graceEndsOn: "2026-11-01" }]);
+  });
+
+  it("warns of a scheduled move a week ahead, but not on its own day", () => {
+    const moving = (effectiveOn: string) =>
+      noticesDue(
+        input({
+          subscription: {
+            trialEndsOn: null,
+            paidThrough: day("2026-11-01"),
+            scheduledMove: { planVersionId: asId("solo"), effectiveOn: day(effectiveOn) },
+          },
+          scheduledPlan: "SOLO",
+          pausing: ["דנה"],
+        }),
+      );
+    expect(moving("2026-10-27")).toEqual([]);
+    expect(moving("2026-10-26")).toEqual([
+      { kind: "MOVE_SOON", plan: "SOLO", effectiveOn: "2026-10-26", pausing: ["דנה"] },
+    ]);
+    expect(moving("2026-10-19")).toEqual([]);
+  });
+
+  it("says nothing to a Business that is switched off", () => {
+    expect(
+      noticesDue(
+        input({
+          businessActive: false,
+          subscription: { trialEndsOn: null, paidThrough: day("2026-10-18"), scheduledMove: null },
+        }),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("parseNoticeFacts", () => {
+  const every: readonly NoticeFacts[] = [
+    { kind: "TRIAL_STARTED", plan: "TEAM", trialEndsOn: day("2026-10-26") },
+    { kind: "TRIAL_ENDING", trialEndsOn: day("2026-10-26") },
+    { kind: "PAYMENT_LATE", graceEndsOn: day("2026-11-07") },
+    { kind: "DEACTIVATED", on: today },
+    { kind: "PAYMENT_RECORDED", paidThrough: day("2026-11-23") },
+    {
+      kind: "PLAN_CHANGED",
+      plan: "TEAM",
+      by: "ADMINISTRATOR",
+      priceMinor: 8900,
+      resourceAllowance: 5,
+      gained: ["CUSTOMER_HISTORY", "TEAM_ROLES"],
+      lost: [],
+    },
+    { kind: "MOVE_SCHEDULED", plan: "SOLO", by: "OWNER", effectiveOn: day("2026-10-24"), pausing: ["דנה", "יוסי"] },
+    { kind: "MOVE_SOON", plan: "SOLO", effectiveOn: day("2026-10-24"), pausing: [] },
+    { kind: "MOVE_APPLIED", plan: "SOLO", paused: ["דנה"] },
+    { kind: "CALENDARS_PAUSED", names: ["דנה"], resourceAllowance: 1 },
+    { kind: "CALENDARS_RESUMED", names: ["דנה"] },
+  ];
+
+  it("reads back every kind exactly as it was written", () => {
+    expect(every.map((facts) => facts.kind)).toEqual(NOTICE_KINDS);
+    for (const facts of every) {
+      expect(parseNoticeFacts(JSON.parse(JSON.stringify(facts)))).toEqual(facts);
+    }
+  });
+
+  it("refuses what it cannot read, saying what is wrong", () => {
+    expect(() => parseNoticeFacts(null)).toThrow(/not an object/);
+    expect(() => parseNoticeFacts({ kind: "SOMETHING" })).toThrow(/Unknown kind/);
+    expect(() => parseNoticeFacts({ kind: "TRIAL_ENDING" })).toThrow(/missing "trialEndsOn"/);
+    expect(() => parseNoticeFacts({ kind: "TRIAL_ENDING", trialEndsOn: 5 })).toThrow(/not text/);
+    expect(() => parseNoticeFacts({ kind: "TRIAL_STARTED", plan: "GOLD", trialEndsOn: "2026-10-26" })).toThrow(
+      /Unknown plan/,
+    );
+    expect(() =>
+      parseNoticeFacts({ kind: "MOVE_SCHEDULED", plan: "SOLO", by: "ROBOT", effectiveOn: "2026-10-24", pausing: [] }),
+    ).toThrow(/Unknown mover/);
+    expect(() => parseNoticeFacts({ kind: "CALENDARS_RESUMED", names: [1] })).toThrow(/list of names/);
+    expect(() => parseNoticeFacts({ kind: "CALENDARS_PAUSED", names: [], resourceAllowance: -1 })).toThrow(
+      /not a count/,
+    );
+    expect(() =>
+      parseNoticeFacts({
+        kind: "PLAN_CHANGED",
+        plan: "TEAM",
+        by: "OWNER",
+        priceMinor: 8900,
+        resourceAllowance: 5,
+        gained: ["TELEPORTING"],
+        lost: [],
+      }),
+    ).toThrow(/Unknown feature/);
+  });
+});

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { asId, smsSegments } from "@tor-now/domain";
-import { TEMPLATES, type OutboundMessage } from "../../ports/notifier.ts";
+import { asId, parseLocalDate, smsSegments } from "@tor-now/domain";
+import { TEMPLATES, type BillingNoticeMessage, type OutboundMessage } from "../../ports/notifier.ts";
 import { logNotifier } from "./log-notifier.ts";
+import { renderMessage } from "./templates.ts";
 import { twilioNotifier } from "./twilio-notifier.ts";
 
 /**
@@ -43,6 +44,42 @@ describe("the log notifier", () => {
     expect(lines[0]).toContain("דנה");
     expect(lines[0]).toContain("תספורת");
     expect(lines[0]).toContain("+972501234567");
+  });
+});
+
+describe("the billing Notice", () => {
+  const aNotice = (facts: BillingNoticeMessage["payload"]["facts"]): BillingNoticeMessage => ({
+    businessId: asId("business-1"),
+    recipientPhone: "+972501234567",
+    template: TEMPLATES.billingNotice,
+    payload: { businessName: "מספרת רן", facts },
+  });
+
+  const rendered = (message: OutboundMessage, webOrigin: string | null = "https://tor.example") =>
+    renderMessage(message, webOrigin);
+
+  it("fills one sentence per kind into the frame, dates in words, with a link into the app", () => {
+    const text = rendered(aNotice({ kind: "TRIAL_ENDING", trialEndsOn: parseLocalDate("2026-10-26") }));
+    expect(text).toContain("עדכון על המנוי של מספרת רן: תקופת הניסיון נגמרת ב־26 באוקטובר.");
+    expect(text).toContain("לפרטים באפליקציה: https://tor.example/manage?tab=business&panel=billing");
+  });
+
+  it("says each thing about paying in its own words", () => {
+    expect(rendered(aNotice({ kind: "PAYMENT_LATE", graceEndsOn: parseLocalDate("2026-11-07") }))).toContain(
+      "התשלום על המנוי באיחור. העסק נשאר בחיפוש עד 7 בנובמבר",
+    );
+    expect(rendered(aNotice({ kind: "DEACTIVATED", on: parseLocalDate("2026-11-08") }))).toContain(
+      "העסק הוסר מהחיפוש. תורים שכבר נקבעו לא נפגעו",
+    );
+    expect(rendered(aNotice({ kind: "PAYMENT_RECORDED", paidThrough: parseLocalDate("2026-11-23") }))).toContain(
+      "התשלום התקבל, והמנוי שולם עד 23 בנובמבר. תודה!",
+    );
+  });
+
+  it("leaves the link out when the deployment does not know where the app lives", () => {
+    expect(rendered(aNotice({ kind: "DEACTIVATED", on: parseLocalDate("2026-11-08") }), null)).not.toContain(
+      "לפרטים באפליקציה",
+    );
   });
 });
 

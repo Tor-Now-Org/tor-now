@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseInstant } from "@tor-now/domain";
+import { isToCustomer } from "../ports/notifier.ts";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness, TUESDAY, TUESDAY_AT } from "../infrastructure/testing/scenarios.ts";
 
@@ -183,6 +184,7 @@ describe("waiting for a time", () => {
 
       expect(openings()).toHaveLength(1);
       const message = openings()[0]!.message;
+      if (!isToCustomer(message)) throw new Error("Not a customer's message");
       expect(message.recipientPhone).toBe("+972500000003");
       expect(message.payload.partOfDay).toBe("MORNING");
       expect(message.payload.resourceName).toBe("רן");

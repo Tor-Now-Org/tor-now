@@ -15,6 +15,7 @@ import {
   trialEndsOn,
   type Entitlement,
   type Plan,
+  type Instant,
   type LocalDate,
   type UserId,
   notFound,
@@ -45,6 +46,7 @@ import { PHOTOS } from "../config.ts";
 import { notificationFor } from "./notifications.ts";
 import { entitlementOf, entitlementToday, subscriptionView } from "./billing.ts";
 import { movePlan } from "./plan-move.ts";
+import { tell } from "./notices.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
 import type { PhotoStore } from "../ports/photo-store.ts";
 import type { Repositories } from "../ports/repositories.ts";
@@ -296,6 +298,7 @@ const startSubscription = async (
     plan: Plan | undefined;
     calendars: number;
     today: LocalDate;
+    now: Instant;
   },
 ): Promise<void> => {
   const current = await repositories.planVersions.listCurrent();
@@ -313,10 +316,19 @@ const startSubscription = async (
     opening.calendars - 1,
   );
   const ownerHadTrial = (await repositories.users.trialTakenOn(opening.ownerId)) !== null;
+  const trialEnd = trialEndsOn(opening.today, { ownerHadTrial });
   await repositories.subscriptions.start(opening.businessId, {
     planVersionId: version.id,
-    trialEndsOn: trialEndsOn(opening.today, { ownerHadTrial }),
+    trialEndsOn: trialEnd,
   });
+  // The first thing the owner is told: how long they have before paying.
+  if (trialEnd !== null) {
+    await tell(repositories, {
+      businessId: opening.businessId,
+      facts: { kind: "TRIAL_STARTED", plan: version.plan, trialEndsOn: trialEnd },
+      at: opening.now,
+    });
+  }
 };
 
 export const businessService = ({
@@ -359,6 +371,7 @@ export const businessService = ({
         plan: input.plan,
         calendars: input.resourceNames.length,
         today: todayIn(clock.now(), business.timeZone),
+        now: clock.now(),
       });
 
       const resources = await Promise.all(
