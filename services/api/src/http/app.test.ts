@@ -702,3 +702,78 @@ describe("an owner's Notices", () => {
     expect(job.body).toMatchObject({ noticed: 0 });
   });
 });
+
+describe("the Catalogue editor over HTTP", () => {
+  it("corrects a rate and lists it, dated and sourced", async () => {
+    const api = httpHarness();
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+
+    const saved = await api.put(
+      "/admin/catalogue/rates",
+      { unit: "SMS_SEGMENT", effectiveFrom: "2026-08-01", microShekels: 900_000, source: "Twilio invoice, August" },
+      admin.token,
+    );
+    expect(saved.status).toBe(200);
+    expect(saved.body).toContainEqual(
+      expect.objectContaining({ unit: "SMS_SEGMENT", effectiveFrom: "2026-08-01", microShekels: 900_000, source: "Twilio invoice, August" }),
+    );
+
+    const refused = await api.put(
+      "/admin/catalogue/rates",
+      { unit: "SMS_SEGMENT", effectiveFrom: "2026-08-01", microShekels: 900_000, source: "" },
+      admin.token,
+    );
+    expect(refused.status).toBe(400);
+  });
+
+  it("grants, extends and ends Features, and the billing panel lists where each comes from", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const created = await api.post("/businesses", { ...A_BUSINESS, plan: "SOLO" }, owner.token);
+    const businessId = (created.body as { id: string }).id;
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+
+    const granted = await api.post(
+      `/admin/businesses/${businessId}/grants`,
+      { features: ["TEAM_ROLES", "CUSTOMER_HISTORY"], endsOn: "2026-11-23", reason: "פיילוט" },
+      admin.token,
+    );
+    expect(granted.status).toBe(200);
+    const features = (granted.body as { features: { feature: string; source: string; grant: { id: string } | null }[] })
+      .features;
+    expect(features.map(({ feature, source }) => `${feature}:${source}`)).toEqual([
+      "REMINDERS:PLAN",
+      "CUSTOMER_HISTORY:GRANT",
+      "CUSTOMER_BLOCKING:NONE",
+      "TEAM_ROLES:GRANT",
+      "WAITING_LIST:PREVIEW",
+    ]);
+    const grantId = features.find((source) => source.feature === "TEAM_ROLES")?.grant?.id ?? "";
+
+    const extended = await api.patch(
+      `/admin/businesses/${businessId}/grants/${grantId}`,
+      { endsOn: "2026-12-23", reason: "עוד חודש" },
+      admin.token,
+    );
+    expect(extended.body).toMatchObject({ features: expect.arrayContaining([expect.objectContaining({ feature: "TEAM_ROLES", endsOn: "2026-12-23" })]) });
+
+    const ended = await api.post(`/admin/businesses/${businessId}/grants/${grantId}/end`, undefined, admin.token);
+    expect(ended.body).toMatchObject({ features: expect.arrayContaining([expect.objectContaining({ feature: "TEAM_ROLES", source: "NONE" })]) });
+
+    // The owner sees where each comes from, never why it was given.
+    const billing = await api.get(`/businesses/${businessId}/subscription`, owner.token);
+    expect((billing.body as { features: unknown[] }).features).toContainEqual({
+      feature: "CUSTOMER_HISTORY",
+      source: "GRANT",
+      endsOn: "2026-11-23",
+      grant: null,
+    });
+
+    expect((await api.post(`/admin/businesses/${businessId}/grants/nope/end`, undefined, admin.token)).status).toBe(400);
+    expect(
+      (await api.post(`/admin/businesses/${businessId}/grants`, { features: [], endsOn: "2026-11-23", reason: "x" }, admin.token))
+        .status,
+    ).toBe(400);
+    expect((await api.get("/admin/catalogue/rates", owner.token)).status).toBe(403);
+  });
+});

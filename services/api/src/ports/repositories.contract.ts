@@ -7,6 +7,7 @@ import {
   formatInstant,
   localTime,
   isActive,
+  microShekels,
   money,
   parseInstant,
   parseLocalDate,
@@ -2119,6 +2120,95 @@ export const describeRepositoryContract = (
           { unit: "WHATSAPP_UTILITY", effectiveFrom: "2026-09-01", perUnit: 19_610 },
         ]);
         for (const rate of rates) expect(rate.source).toMatch(/^Default/);
+      });
+    });
+
+    it("replaces a rate for the same unit and day, keeps others, and says who checked it", async () => {
+      await withRepositories(async (repositories) => {
+        const admin = await repositories.users.create({
+          phone: "+972500007031",
+          givenName: "שקד",
+          familyName: "מנס",
+          birthDate: null,
+        });
+        const september = parseLocalDate("2026-09-01");
+        const fifteenth = parseLocalDate("2026-09-15");
+
+        const corrected = await repositories.unitRates.set(
+          { unit: "WHATSAPP_UTILITY", effectiveFrom: september, perUnit: microShekels(20_300), source: "חשבונית ספטמבר" },
+          admin.id,
+        );
+        expect(corrected).toMatchObject({ perUnit: 20_300, source: "חשבונית ספטמבר", checkedBy: "שקד מנס" });
+        await repositories.unitRates.set(
+          { unit: "WHATSAPP_UTILITY", effectiveFrom: fifteenth, perUnit: microShekels(21_000), source: "חשבונית, שורה 4" },
+          admin.id,
+        );
+
+        const utility = (await repositories.unitRates.list()).filter((rate) => rate.unit === "WHATSAPP_UTILITY");
+        expect(utility.map(({ effectiveFrom, perUnit }) => ({ effectiveFrom, perUnit }))).toEqual([
+          { effectiveFrom: "2026-09-01", perUnit: 20_300 },
+          { effectiveFrom: "2026-09-15", perUnit: 21_000 },
+        ]);
+        const sms = (await repositories.unitRates.list()).find((rate) => rate.unit === "SMS_SEGMENT");
+        expect(sms?.checkedBy).toBeNull();
+      });
+    });
+
+    it("gives a Grant, finds it with who gave it, lists what still runs, and moves its end", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07032");
+        const other = await aBookableBusiness(repositories, "07033");
+        const admin = await repositories.users.create({
+          phone: "+972500007034",
+          givenName: "הנהלה",
+          familyName: null,
+          birthDate: null,
+        });
+        const shop = context.business.id;
+
+        const history = await repositories.grants.create({
+          businessId: shop,
+          feature: "CUSTOMER_HISTORY",
+          reason: "פיילוט",
+          endsOn: parseLocalDate("2031-03-20"),
+          grantedBy: admin.id,
+        });
+        expect(history).toMatchObject({ businessId: shop, feature: "CUSTOMER_HISTORY", reason: "פיילוט", grantedByName: "הנהלה" });
+        const blocking = await repositories.grants.create({
+          businessId: shop,
+          feature: "CUSTOMER_BLOCKING",
+          reason: "הטרדות",
+          endsOn: parseLocalDate("2031-03-10"),
+          grantedBy: admin.id,
+        });
+        await repositories.grants.create({
+          businessId: other.business.id,
+          feature: "TEAM_ROLES",
+          reason: "אחר",
+          endsOn: parseLocalDate("2031-03-01"),
+          grantedBy: admin.id,
+        });
+
+        expect(await repositories.grants.findById(history.id)).toEqual(history);
+        expect((await repositories.grants.listForBusiness(shop)).map((grant) => grant.feature)).toEqual([
+          "CUSTOMER_HISTORY",
+          "CUSTOMER_BLOCKING",
+        ]);
+        const running = (await repositories.grants.listRunning(parseLocalDate("2031-03-05"))).map((grant) => grant.id);
+        expect(running).toContain(history.id);
+        expect(running).toContain(blocking.id);
+        expect((await repositories.grants.listRunning(parseLocalDate("2031-03-11"))).map((grant) => grant.id)).not.toContain(
+          blocking.id,
+        );
+
+        const extended = await repositories.grants.update(blocking.id, {
+          endsOn: parseLocalDate("2031-04-10"),
+          reason: "עוד חודש",
+        });
+        expect(extended).toMatchObject({ endsOn: "2031-04-10", reason: "עוד חודש", grantedByName: "הנהלה" });
+        // What the Entitlement reads sees it too.
+        const basis = await repositories.subscriptions.entitlementBasis(shop);
+        expect(basis?.grants).toContainEqual({ feature: "CUSTOMER_BLOCKING", endsOn: "2031-04-10" });
       });
     });
 

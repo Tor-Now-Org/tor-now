@@ -27,7 +27,10 @@ import { PhoneField } from "@/components/phone-field.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
-import { BottomNav, BuildingIcon, ChartIcon, PeopleIcon, ShieldIcon } from "@/components/bottom-nav.tsx";
+import { BottomNav, BuildingIcon, ChartIcon, PeopleIcon, ShieldIcon, TagIcon } from "@/components/bottom-nav.tsx";
+import { FeaturesCard } from "@/components/admin/features-card.tsx";
+import { RatesPanel } from "@/components/admin/rates-panel.tsx";
+import { localDateOf } from "@/components/owner/day-filter.ts";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } from "@/components/ui.tsx";
 import { AdminStats } from "@/components/admin-stats.tsx";
 import { BusinessDirectory } from "@/components/admin/business-directory.tsx";
@@ -35,7 +38,7 @@ import { PlanChangeCard } from "@/components/admin/plan-change-card.tsx";
 import { CalendarKeeper } from "@/components/admin/calendar-keeper.tsx";
 import { NextDate, PlanBadge, StatusBadge } from "@/components/billing-badges.tsx";
 
-type Tab = "businesses" | "users" | "stats" | "system";
+type Tab = "businesses" | "users" | "catalogue" | "stats" | "system";
 type SystemPanel = "admins" | "allowlist" | "audit";
 
 const MINOR_UNITS_PER_MAJOR = 100;
@@ -48,6 +51,7 @@ const MINOR_UNITS_PER_MAJOR = 100;
 export default function AdminPage() {
   const copy = useCopy("admin");
   const billingCopy = useCopy("billing");
+  const catalogueCopy = useCopy("catalogue");
   const erasureCopy = useCopy("erasure");
   const router = useRouter();
   const { language } = useLanguage();
@@ -252,6 +256,8 @@ export default function AdminPage() {
             )
         )}
 
+        {tab === "catalogue" && <RatesPanel token={token} />}
+
         {tab === "system" && (
           <>
             <div style={{ display: "flex", gap: 6 }}>
@@ -333,6 +339,7 @@ export default function AdminPage() {
         items={[
           { id: "businesses", label: copy.businesses, icon: <BuildingIcon /> },
           { id: "users", label: copy.users, icon: <PeopleIcon /> },
+          { id: "catalogue", label: catalogueCopy.tab, icon: <TagIcon /> },
           { id: "stats", label: copy.stats, icon: <ChartIcon /> },
           { id: "system", label: copy.system, icon: <ShieldIcon /> },
         ]}
@@ -371,6 +378,19 @@ export default function AdminPage() {
                 </>
               )}
             </Card>
+
+            {billing?.features !== undefined && (
+              <FeaturesCard
+                key={`features-${openBusiness.business.id}`}
+                token={token}
+                businessId={openBusiness.business.id}
+                businessName={openBusiness.business.name}
+                features={billing.features}
+                plans={plans}
+                today={localDateOf(new Date().toISOString(), openBusiness.business.timeZone)}
+                onChanged={(features) => setBilling((current) => (current === null ? current : { ...current, features }))}
+              />
+            )}
 
             <CalendarKeeper
               key={openBusiness.business.id}

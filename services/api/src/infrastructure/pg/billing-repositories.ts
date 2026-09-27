@@ -17,6 +17,7 @@ import type {
   PlanVersionRepository,
   PreviewRepository,
   SubscriptionRepository,
+  UnitRateEntry,
   UnitRateRepository,
   UsageRecordRepository,
 } from "../../ports/repositories.ts";
@@ -28,6 +29,7 @@ import {
   toPayment,
   toPlanVersion,
   toPreview,
+  toInstant,
   toSubscription,
   type Row,
 } from "./mappers.ts";
@@ -259,17 +261,50 @@ export const usageRecordRepository = (tx: Transaction): UsageRecordRepository =>
   },
 });
 
+const toUnitRateEntry = (row: Row): UnitRateEntry => ({
+  unit: toCostUnit(text(row["unit"])),
+  effectiveFrom: toLocalDate(row["effective_from"]),
+  perUnit: microShekels(Number(row["micro_shekels"])),
+  source: text(row["source"]),
+  checkedBy:
+    row["given_name"] === null || row["given_name"] === undefined
+      ? null
+      : displayName({
+          givenName: text(row["given_name"]),
+          familyName: row["family_name"] === null ? null : text(row["family_name"]),
+        }),
+  enteredAt: toInstant(row["entered_at"]),
+});
+
 export const unitRateRepository = (tx: Transaction): UnitRateRepository => ({
   async list() {
     const rows = await tx<Row[]>`
-      select unit, effective_from, micro_shekels, source
-      from unit_rate order by unit, effective_from`;
-    return rows.map((row) => ({
-      unit: toCostUnit(text(row["unit"])),
-      effectiveFrom: toLocalDate(row["effective_from"]),
-      perUnit: microShekels(Number(row["micro_shekels"])),
-      source: text(row["source"]),
-    }));
+      select r.unit, r.effective_from, r.micro_shekels, r.source, r.entered_at,
+             u.given_name, u.family_name
+      from unit_rate r
+      left join app_user u on u.id = r.checked_by
+      order by r.unit, r.effective_from`;
+    return rows.map(toUnitRateEntry);
+  },
+
+  async set(rate, checkedBy) {
+    await tx`
+      insert into unit_rate (unit, effective_from, micro_shekels, source, checked_by)
+      values (${rate.unit}, ${rate.effectiveFrom}, ${rate.perUnit}, ${rate.source}, ${checkedBy})
+      on conflict (unit, effective_from) do update
+      set micro_shekels = excluded.micro_shekels,
+          source = excluded.source,
+          checked_by = excluded.checked_by,
+          entered_at = now()`;
+    const rows = await tx<Row[]>`
+      select r.unit, r.effective_from, r.micro_shekels, r.source, r.entered_at,
+             u.given_name, u.family_name
+      from unit_rate r
+      left join app_user u on u.id = r.checked_by
+      where r.unit = ${rate.unit} and r.effective_from = ${rate.effectiveFrom}`;
+    const row = rows[0];
+    if (row === undefined) throw notFound("UnitRate", `${rate.unit}:${rate.effectiveFrom}`);
+    return toUnitRateEntry(row);
   },
 });
 

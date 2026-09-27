@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import type { NoticeKind, NoticeTone } from "@tor-now/domain";
 import type { NoticeDto } from "@/lib/api/types.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
@@ -8,53 +7,12 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { noticeDay, noticeText, type NoticeAction, type NoticeContext } from "@/lib/notice-text.ts";
 import { localDateOf } from "@/components/owner/day-filter.ts";
 import { Button, Sheet } from "@/components/ui.tsx";
+import { BILLING_ICONS as ICONS, iconSvg as svg } from "@/components/billing-icons.tsx";
 
 /**
  * The owner's Notices on screen (ADR 0020): a bell beside the account button,
  * one banner above whatever tab is open, and the list the bell opens.
  */
-
-const svg = (children: ReactNode, size = 17) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    {children}
-  </svg>
-);
-
-const ICONS = {
-  clock: svg(
-    <>
-      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="2" />
-      <path d="M12 7.5V12l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </>,
-  ),
-  alert: svg(
-    <>
-      <path d="M12 4l9 16H3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M12 10v4M12 17.2v.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </>,
-  ),
-  swap: svg(
-    <path
-      d="M5 8h13l-3-3M19 16H6l3 3"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />,
-  ),
-  check: svg(
-    <path d="M5 12l5 5 9-10" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />,
-  ),
-  pause: svg(<path d="M9 6v12M15 6v12" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />),
-  spark: svg(
-    <path
-      d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />,
-  ),
-};
 
 const ICON_OF: Readonly<Record<NoticeKind, keyof typeof ICONS>> = {
   TRIAL_STARTED: "spark",
@@ -68,6 +26,10 @@ const ICON_OF: Readonly<Record<NoticeKind, keyof typeof ICONS>> = {
   MOVE_APPLIED: "swap",
   CALENDARS_PAUSED: "pause",
   CALENDARS_RESUMED: "check",
+  FEATURES_GRANTED: "gift",
+  GRANT_EXTENDED: "gift",
+  GRANT_ENDING: "clock",
+  GRANT_ENDED: "gift",
 };
 
 /** A banner has no green: good news reads in the calm blue, and only warnings are warm. */

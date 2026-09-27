@@ -1,7 +1,7 @@
 import type { BusinessId } from "../model/ids.ts";
 import { validationFailed } from "../shared/errors.ts";
 import type { Instant } from "../time/instant.ts";
-import { compareLocalDate, type LocalDate } from "../time/local-date.ts";
+import { addDays, compareLocalDate, type LocalDate } from "../time/local-date.ts";
 import type { Feature } from "./feature.ts";
 
 /**
@@ -62,6 +62,32 @@ export type UnitRate = {
   readonly perUnit: MicroShekels;
   /** Where the figure was checked: a rate card's address, an invoice. */
   readonly source: string;
+};
+
+/** How long the evidence for a rate may be: an address, or an invoice line. */
+export const RATE_SOURCE_LENGTH = { min: 3, max: 500 } as const;
+
+/** How far ahead a rate may be entered: a price already announced, not a guess. */
+export const MAX_RATE_DAYS_AHEAD = 365;
+
+/**
+ * A rate as an administrator enters it (ADR 0022): a unit, a day it applies
+ * from — the past is allowed, since an invoice arrives after its month — a
+ * price, and where the figure came from. Returns it with the source trimmed.
+ */
+export const checkUnitRate = (rate: UnitRate, today: LocalDate): UnitRate => {
+  if (!(COST_UNITS as readonly string[]).includes(rate.unit)) {
+    throw validationFailed(`Unknown unit "${rate.unit}"`, { field: "unit" });
+  }
+  microShekels(rate.perUnit);
+  if (compareLocalDate(rate.effectiveFrom, addDays(today, MAX_RATE_DAYS_AHEAD)) > 0) {
+    throw validationFailed("A rate starts at most a year ahead", { field: "effectiveFrom" });
+  }
+  const source = rate.source.trim();
+  if (source.length < RATE_SOURCE_LENGTH.min || source.length > RATE_SOURCE_LENGTH.max) {
+    throw validationFailed("A rate says where its figure came from", { field: "source" });
+  }
+  return { ...rate, source };
 };
 
 export const costOf = (perUnit: MicroShekels, quantity: number): MicroShekels => {

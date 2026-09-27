@@ -9,7 +9,8 @@ import type {
   LocalDate,
   Notice,
   Payment,
-  UnitRate,
+  Grant,
+  Instant,
   UsageRecord,
   PlanVersion,
   Preview,
@@ -20,9 +21,9 @@ import type {
   User,
   WorkingHours,
 } from "@tor-now/domain";
-import { addDays, asId, microShekels, money, parseLocalDate, planTerms } from "@tor-now/domain";
+import { addDays, asId, instant, microShekels, money, parseLocalDate, planTerms } from "@tor-now/domain";
 import type { AuditEntry } from "../../ports/audit.ts";
-import type { WaitingEntry, WaitingRecheck } from "../../ports/repositories.ts";
+import type { UnitRateEntry, WaitingEntry, WaitingRecheck } from "../../ports/repositories.ts";
 import type { OutboundMessage } from "../../ports/notifier.ts";
 import type { VerificationCodeRecord } from "../../ports/verification.ts";
 
@@ -60,7 +61,8 @@ export type Store = {
   planVersions: PlanVersion[];
   previews: Preview[];
   usageRecords: UsageRecord[];
-  unitRates: UnitRate[];
+  unitRates: UnitRateEntry[];
+  grants: (Grant & { createdAt: Instant })[];
   /** app_user.trial_taken_on, kept beside the User as the database keeps it. */
   trialsTaken: { userId: string; on: LocalDate }[];
   allowlist: { phone: string; note: string | null }[];
@@ -107,7 +109,10 @@ export const emptyStore = (
     effectiveFrom: parseLocalDate("2026-09-01"),
     perUnit: microShekels(unit === "SMS_SEGMENT" ? 952_750 : 19_610),
     source: "Default",
+    checkedBy: null,
+    enteredAt: instant(0),
   })),
+  grants: [],
   trialsTaken: [],
   allowlist: [],
   waitingEntries: [],

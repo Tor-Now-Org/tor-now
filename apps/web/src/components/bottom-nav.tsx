@@ -91,6 +91,14 @@ export const ShieldIcon = () => (
   </svg>
 );
 
+/** The Catalogue: what the platform sells and what it pays. */
+export const TagIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" {...stroke} stroke="currentColor">
+    <path d="M3.5 12.2V5a1.5 1.5 0 0 1 1.5-1.5h7.2l8.3 8.3a1.5 1.5 0 0 1 0 2.1l-7.1 7.1a1.5 1.5 0 0 1-2.1 0z" />
+    <circle cx="8.2" cy="8.2" r="1.3" />
+  </svg>
+);
+
 export const ChartIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" {...stroke} stroke="currentColor">
     <path d="M4 20V10M11 20V4M18 20v-7" />

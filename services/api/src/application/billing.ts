@@ -1,5 +1,6 @@
 import {
   entitlementFor,
+  featureSources,
   isOnOffer,
   notFound,
   standingOf,
@@ -8,6 +9,7 @@ import {
   type BusinessId,
   type Clock,
   type Entitlement,
+  type FeatureSource,
   type LocalDate,
   type Plan,
   type PlanVersion,
@@ -72,6 +74,22 @@ export const subscriptionView = async (
       today,
     }),
   };
+};
+
+/**
+ * Every Feature of a Business and where it comes from, as its owner sees it:
+ * the Grants' days, never their reasons — those stay with the administrator.
+ */
+export const ownerFeatures = async (
+  repositories: Repositories,
+  view: SubscriptionView,
+  today: LocalDate,
+): Promise<readonly FeatureSource[]> => {
+  const [basis, previews] = await Promise.all([
+    repositories.subscriptions.entitlementBasis(view.subscription.businessId),
+    repositories.previews.list(),
+  ]);
+  return featureSources({ terms: view.planVersion.terms, grants: basis?.grants ?? [], previews, today });
 };
 
 /** The edition of a Plan that new Businesses join. */

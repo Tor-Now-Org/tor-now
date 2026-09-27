@@ -38,6 +38,7 @@ import { PG_ERRORS } from "../pg/client.ts";
 import type { DailyUsageLine, Repositories, WaitingEntry } from "../../ports/repositories.ts";
 import type { Store } from "./in-memory-store.ts";
 import { inMemoryNotices } from "./in-memory-notices.ts";
+import { inMemoryGrants, inMemoryUnitRates } from "./in-memory-catalogue.ts";
 
 /**
  * The second implementation of every repository port, held in memory.
@@ -1313,7 +1314,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         if (subscription === undefined) return null;
         return {
           planVersionId: subscription.planVersionId,
-          grants: [],
+          grants: store.grants
+            .filter((grant) => grant.businessId === businessId)
+            .map(({ feature, endsOn }) => ({ feature, endsOn })),
         };
       },
       async directory() {
@@ -1391,13 +1394,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       },
     },
 
-    unitRates: {
-      async list() {
-        return [...store.unitRates].sort(
-          (a, b) => a.unit.localeCompare(b.unit) || a.effectiveFrom.localeCompare(b.effectiveFrom),
-        );
-      },
-    },
+    unitRates: inMemoryUnitRates(store),
+    grants: inMemoryGrants(store),
 
     previews: {
       async list() {

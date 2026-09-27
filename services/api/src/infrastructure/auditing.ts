@@ -13,6 +13,8 @@ import type {
   ReviewRepository,
   ServiceRepository,
   SubscriptionRepository,
+  GrantRepository,
+  UnitRateRepository,
   UserRepository,
   WorkingHoursRepository,
 } from "../ports/repositories.ts";
@@ -474,6 +476,34 @@ export const auditedUsers = (
   },
 });
 
+export const auditedGrants = (inner: GrantRepository, context: Context): GrantRepository => ({
+  ...inner,
+  async create(grant) {
+    const created = await inner.create(grant);
+    await record(context, AUDIT_ACTIONS.grantGiven, "Grant", created.id, null, created);
+    return created;
+  },
+  async update(id, changes) {
+    const before = await inner.findById(id);
+    const after = await inner.update(id, changes);
+    await record(context, AUDIT_ACTIONS.grantChanged, "Grant", id, before, after);
+    return after;
+  },
+});
+
+export const auditedUnitRates = (inner: UnitRateRepository, context: Context): UnitRateRepository => ({
+  ...inner,
+  async set(rate, checkedBy) {
+    const before =
+      (await inner.list()).find(
+        (existing) => existing.unit === rate.unit && existing.effectiveFrom === rate.effectiveFrom,
+      ) ?? null;
+    const after = await inner.set(rate, checkedBy);
+    await record(context, AUDIT_ACTIONS.unitRateSet, "UnitRate", `${rate.unit}:${rate.effectiveFrom}`, before, after);
+    return after;
+  },
+});
+
 /** Applied where repositories are wired, which is the only place that knows. */
 export const withAuditing = (
   repositories: Repositories,
@@ -493,4 +523,6 @@ export const withAuditing = (
   blocks: auditedBlocks(repositories.blocks, context),
   appointments: auditedAppointments(repositories.appointments, context),
   subscriptions: auditedSubscriptions(repositories.subscriptions, context),
+  grants: auditedGrants(repositories.grants, context),
+  unitRates: auditedUnitRates(repositories.unitRates, context),
 });

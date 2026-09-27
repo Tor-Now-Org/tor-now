@@ -6,7 +6,10 @@ import {
   PHONE_PATTERN,
   BILLING_FLAGS,
   BILLING_STATUSES,
+  COST_UNITS,
+  FEATURES,
   PLANS,
+  RATE_SOURCE_LENGTH,
   REVIEW_STARS,
   TEXT_RULES,
   type TextRule,
@@ -432,6 +435,26 @@ export const planChangeSchema = z.object({
   /** The calendars that stay, when the new Plan has room for fewer. */
   keep: z.array(z.string().uuid()).optional(),
 });
+
+/** ADR 0022: an administrator's figure for one unit of messaging, from a day. */
+export const unitRateSchema = z.object({
+  unit: z.enum(COST_UNITS),
+  effectiveFrom: localDateSchema,
+  microShekels: z.number().int().min(0).max(100_000_000),
+  source: z.string().trim().min(RATE_SOURCE_LENGTH.min).max(RATE_SOURCE_LENGTH.max),
+});
+
+/** ADR 0021: several Features given at once, with one end and one reason. */
+export const grantSchema = z.object({
+  features: z.array(z.enum(FEATURES)).min(1).max(FEATURES.length),
+  endsOn: localDateSchema,
+  reason: z.string().trim().min(TEXT_RULES.auditReason.min).max(TEXT_RULES.auditReason.max),
+});
+
+export const grantExtensionSchema = grantSchema.omit({ features: true });
+
+/** An id in the address, checked before it reaches a uuid column. */
+export const grantIdSchema = uuidSchema;
 
 export const adminBusinessUpdateSchema = updateBusinessSchema.extend({
   /** ADR 0010: an edit on the owner's behalf records why it was made. */

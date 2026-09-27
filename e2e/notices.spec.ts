@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
   call,
+  makeAdministrator,
   paymentFellDue,
   ready,
   runTheDailyBillingJob,
@@ -86,5 +87,36 @@ test.describe("notices", () => {
     await expect(page.getByRole("button", { name: "העסק", exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(page.locator(".notice-bell")).toHaveCount(0);
     await expect(banner(page)).toHaveCount(0);
+  });
+
+  test("an owner given Features is told once, and sees where each comes from", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({ name: `קיבלו ${Date.now()}`, ownerPhone, plan: "SOLO" });
+    const adminPhone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", { method: "POST", body: { phone: adminPhone } });
+    await call("/auth/verify", { method: "POST", body: { phone: adminPhone, code, name: { givenName: "הנהלה", familyName: null } } });
+    await makeAdministrator(adminPhone);
+    const again = await call<{ code: string }>("/auth/request-code", { method: "POST", body: { phone: adminPhone } });
+    const admin = await call<{ token: string }>("/auth/verify", { method: "POST", body: { phone: adminPhone, code: again.code } });
+    const endsOn = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    await call(`/admin/businesses/${shop.business.id}/grants`, {
+      method: "POST",
+      token: admin.token,
+      body: { features: ["CUSTOMER_HISTORY", "CUSTOMER_BLOCKING"], endsOn, reason: "פיילוט" },
+    });
+
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await expect(banner(page).getByText("קיבלתם 2 פיצ'רים")).toBeVisible({ timeout: 15_000 });
+    await banner(page).getByRole("button", { name: "מה כלול אצלכם" }).click();
+
+    const included = page.locator(".card", { has: page.locator(".feature-row.compact") });
+    await expect(included.locator(".feature-row", { hasText: "תזכורות" }).getByText("במסלול")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(included.locator(".feature-row", { hasText: "היסטוריית לקוח" }).getByText(/קיבלתם · עד/)).toBeVisible();
+    await expect(included.locator(".feature-row", { hasText: "מנהלים ועובדים" }).getByText("במסלול צוות")).toBeVisible();
   });
 });

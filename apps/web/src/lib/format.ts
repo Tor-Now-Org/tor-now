@@ -168,6 +168,35 @@ export const formatPrice = (
   }).format(minorUnits / MINOR_UNITS_PER_MAJOR);
 };
 
+/** A message costs a fraction of an agora: rates keep four decimals of a shekel. */
+const RATE_DECIMALS = 4;
+const MICRO_PER_SHEKEL = 1_000_000;
+
+/** What one unit of messaging costs, to the fourth decimal: "₪0.0196". */
+export const formatRate = (microShekels: number, language: Language): string =>
+  new Intl.NumberFormat(LOCALE[language], {
+    style: "currency",
+    currency: "ILS",
+    minimumFractionDigits: RATE_DECIMALS,
+    maximumFractionDigits: RATE_DECIMALS,
+  }).format(microShekels / MICRO_PER_SHEKEL);
+
+/**
+ * A rate as an administrator types it, in shekels, as whole micro-shekels —
+ * read digit by digit, since 0.0203 × 1,000,000 in floating point is not
+ * 20,300. Null for anything that is not a price with at most four decimals.
+ */
+export const microShekelsOf = (typed: string): number | null => {
+  const match = /^(\d{1,4})(?:\.(\d{1,4}))?$/.exec(typed.trim());
+  if (match === null) return null;
+  const whole = Number(match[1]);
+  const fraction = Number((match[2] ?? "").padEnd(6, "0"));
+  return whole * MICRO_PER_SHEKEL + fraction;
+};
+
+/** A rate back in the form it is typed: "0.0203". */
+export const shekelsOf = (microShekels: number): string => (microShekels / MICRO_PER_SHEKEL).toFixed(RATE_DECIMALS);
+
 export const formatDuration = (minutes: number, minutesLabel: string): string =>
   `${minutes} ${minutesLabel}`;
 

@@ -15,7 +15,11 @@ import type {
   ReviewDto,
   AdminCalendarsDto,
   BillingDto,
+  CostUnitName,
+  FeatureName,
+  FeatureSourceDto,
   NoticeBoardDto,
+  UnitRateDto,
   DirectoryFilter,
   DirectoryPageDto,
   CatalogueDto,
@@ -858,6 +862,43 @@ export const api = {
   /** "Got it" on the banner. */
   acknowledgeNotice: (token: string, businessId: string, noticeId: string) =>
     request<NoticeBoardDto>(`/businesses/${businessId}/notices/${noticeId}/acknowledge`, {
+      method: "POST",
+      token,
+    }),
+
+  adminRates: (token: string) => request<UnitRateDto[]>("/admin/catalogue/rates", { token }),
+
+  adminSetRate: (
+    token: string,
+    rate: { unit: CostUnitName; effectiveFrom: string; microShekels: number; source: string },
+  ) => request<UnitRateDto[]>("/admin/catalogue/rates", { method: "PUT", body: rate, token }),
+
+  /** Several Features at once, with one end and one reason. */
+  adminGrant: (
+    token: string,
+    businessId: string,
+    grant: { features: FeatureName[]; endsOn: string; reason: string },
+  ) =>
+    request<{ features: FeatureSourceDto[] }>(`/admin/businesses/${businessId}/grants`, {
+      method: "POST",
+      body: grant,
+      token,
+    }),
+
+  adminExtendGrant: (
+    token: string,
+    businessId: string,
+    grantId: string,
+    extension: { endsOn: string; reason: string },
+  ) =>
+    request<{ features: FeatureSourceDto[] }>(`/admin/businesses/${businessId}/grants/${grantId}`, {
+      method: "PATCH",
+      body: extension,
+      token,
+    }),
+
+  adminEndGrant: (token: string, businessId: string, grantId: string) =>
+    request<{ features: FeatureSourceDto[] }>(`/admin/businesses/${businessId}/grants/${grantId}/end`, {
       method: "POST",
       token,
     }),

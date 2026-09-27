@@ -73,7 +73,7 @@ const photoSlot = (value: number): PhotoSlot => {
   if (value === 0 || value === 1 || value === 2 || value === 3) return value;
   throw new Error(`A photo slot must be 0..3, got ${value}`);
 };
-const toInstant = (value: unknown) => instant(new Date(value as string).getTime());
+export const toInstant = (value: unknown) => instant(new Date(value as string).getTime());
 const nullableInstant = (value: unknown) =>
   value === null || value === undefined ? null : toInstant(value);
 

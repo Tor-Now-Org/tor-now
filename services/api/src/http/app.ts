@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { asId, forbidden } from "@tor-now/domain";
+import { asId, forbidden, microShekels, parseLocalDate } from "@tor-now/domain";
 import type { Services } from "../composition.ts";
 import {
   parseBody,
@@ -1063,6 +1063,62 @@ const adminRoutes = (services: Services) => {
         ),
       ),
     );
+  });
+
+  // ADR 0021: Grants — Features given to one Business, for a reason, until a day.
+  admin.post("/businesses/:businessId/grants", async (context) => {
+    const body = await parseBody(context, schema.grantSchema);
+    return context.json(
+      wire.featuresOut(
+        await services.catalogueAdmin.grantFeatures(actorOf(context), idParam(context, "businessId"), {
+          features: body.features,
+          endsOn: parseLocalDate(body.endsOn),
+          reason: body.reason,
+        }),
+      ),
+    );
+  });
+
+  admin.patch("/businesses/:businessId/grants/:grantId", async (context) => {
+    const body = await parseBody(context, schema.grantExtensionSchema);
+    return context.json(
+      wire.featuresOut(
+        await services.catalogueAdmin.extendGrant(
+          actorOf(context),
+          idParam(context, "businessId"),
+          asId<"Grant">(parse(schema.grantIdSchema, context.req.param("grantId"))),
+          { endsOn: parseLocalDate(body.endsOn), reason: body.reason },
+        ),
+      ),
+    );
+  });
+
+  admin.post("/businesses/:businessId/grants/:grantId/end", async (context) =>
+    context.json(
+      wire.featuresOut(
+        await services.catalogueAdmin.endGrant(
+          actorOf(context),
+          idParam(context, "businessId"),
+          asId<"Grant">(parse(schema.grantIdSchema, context.req.param("grantId"))),
+        ),
+      ),
+    ),
+  );
+
+  // ADR 0022: what each unit of messaging cost from a day, and the evidence.
+  admin.get("/catalogue/rates", async (context) =>
+    context.json((await services.catalogueAdmin.rates(actorOf(context))).map(wire.unitRateOut)),
+  );
+
+  admin.put("/catalogue/rates", async (context) => {
+    const body = await parseBody(context, schema.unitRateSchema);
+    const rates = await services.catalogueAdmin.setRate(actorOf(context), {
+      unit: body.unit,
+      effectiveFrom: parseLocalDate(body.effectiveFrom),
+      perUnit: microShekels(body.microShekels),
+      source: body.source,
+    });
+    return context.json(rates.map(wire.unitRateOut));
   });
 
   admin.post("/businesses/:businessId/payments", async (context) => {

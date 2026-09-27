@@ -12,7 +12,7 @@ import { localDateOf } from "@/components/owner/day-filter.ts";
  * the language come in, nothing is read from the clock.
  */
 
-export type NoticeAction = "PAY" | "PLANS" | "CANCEL_MOVE";
+export type NoticeAction = "PAY" | "PLANS" | "CANCEL_MOVE" | "INCLUDED";
 
 export type NoticeText = {
   readonly title: string;
@@ -57,6 +57,8 @@ export const noticeText = (facts: NoticeFacts, context: NoticeContext): NoticeTe
   const plan = (value: PlanName) => billing.plan[value];
   const features = (list: readonly FeatureName[]) =>
     namesOf(list.map((feature) => billing.featureLine[feature]), language);
+  /** Short names, for a title or a list of what was given. */
+  const named = (list: readonly FeatureName[]) => namesOf(list.map((feature) => billing.featureName[feature]), language);
 
   switch (facts.kind) {
     case "TRIAL_STARTED":
@@ -155,6 +157,38 @@ export const noticeText = (facts: NoticeFacts, context: NoticeContext): NoticeTe
         action: null,
       };
     }
+    case "FEATURES_GRANTED":
+      return {
+        title:
+          facts.features.length === 1
+            ? fillText(words.grantedTitleOne, { feature: named(facts.features) })
+            : fillText(words.grantedTitleMany, { n: String(facts.features.length) }),
+        body: fillText(words.grantedBody, { list: named(facts.features), date: date(facts.endsOn) }),
+        action: "INCLUDED",
+      };
+    case "GRANT_EXTENDED":
+      return {
+        title: fillText(words.extendedTitle, { feature: named([facts.feature]) }),
+        body: fillText(words.extendedBody, { date: date(facts.endsOn) }),
+        action: null,
+      };
+    case "GRANT_ENDING": {
+      const when = whenOf(facts.endsOn, context) ?? date(facts.endsOn);
+      return {
+        title:
+          facts.features.length === 1
+            ? fillText(words.grantEndingTitleOne, { feature: named(facts.features), when })
+            : fillText(words.grantEndingTitleMany, { n: String(facts.features.length), when }),
+        body: fillText(words.grantEndingBody, { list: named(facts.features), date: date(facts.endsOn) }),
+        action: "PLANS",
+      };
+    }
+    case "GRANT_ENDED":
+      return {
+        title: fillText(words.grantEndedTitle, { feature: named([facts.feature]) }),
+        body: words.grantEndedBody,
+        action: "PLANS",
+      };
   }
 };
 

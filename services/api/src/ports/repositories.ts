@@ -33,6 +33,8 @@ import type {
   CostUnit,
   UnitRate,
   UsageRecord,
+  Grant,
+  GrantId,
   GrantTerm,
   Preview,
   Resource,
@@ -744,9 +746,46 @@ export type UsageRecordRepository = {
   summarise(from: Instant, to: Instant): Promise<readonly DailyUsageLine[]>;
 };
 
+/** A rate as the Catalogue shows it: who checked the figure, and when it was entered. */
+export type UnitRateEntry = UnitRate & {
+  /** The administrator's name; null for a default the platform shipped with. */
+  readonly checkedBy: string | null;
+  readonly enteredAt: Instant;
+};
+
 export type UnitRateRepository = {
   /** Every rate ever entered, past ones included, oldest first per unit. */
-  list(): Promise<readonly UnitRate[]>;
+  list(): Promise<readonly UnitRateEntry[]>;
+  /**
+   * An administrator's figure for a unit from a day. A rate for that unit and
+   * day already there is replaced; every other rate, and every Usage Record,
+   * stays as it is (ADR 0022).
+   */
+  set(rate: UnitRate, checkedBy: UserId): Promise<UnitRateEntry>;
+};
+
+/** A Grant as the administrator sees it: who gave it, and when. */
+export type GrantEntry = Grant & {
+  readonly grantedByName: string | null;
+  readonly createdAt: Instant;
+};
+
+/**
+ * Grants (ADR 0021). Written by administrators only; an owner reads what they
+ * have through the Entitlement, never a Grant's reason.
+ */
+export type GrantRepository = {
+  create(grant: Omit<Grant, "id">): Promise<GrantEntry>;
+  findById(id: GrantId): Promise<GrantEntry | null>;
+  /** Every Grant the Business ever had, the latest ending first. */
+  listForBusiness(businessId: BusinessId): Promise<readonly GrantEntry[]>;
+  /**
+   * Grants at every Business still running on `onOrAfter`, for the daily run.
+   * Each Business's own today decides, so the caller asks from a day early.
+   */
+  listRunning(onOrAfter: LocalDate): Promise<readonly Grant[]>;
+  /** A new end and the reason for it — extending, or ending now. */
+  update(id: GrantId, changes: { endsOn: LocalDate; reason: string }): Promise<GrantEntry>;
 };
 
 /**
@@ -918,6 +957,7 @@ export type Repositories = {
   readonly subscriptions: SubscriptionRepository;
   readonly payments: PaymentRepository;
   readonly notices: NoticeRepository;
+  readonly grants: GrantRepository;
   readonly planVersions: PlanVersionRepository;
   readonly previews: PreviewRepository;
   readonly usageRecords: UsageRecordRepository;

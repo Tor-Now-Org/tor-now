@@ -35,3 +35,4 @@ export * from "./billing/subscription.ts";
 export * from "./billing/standing.ts";
 export * from "./billing/cost.ts";
 export * from "./billing/notice.ts";
+export * from "./billing/grant.ts";

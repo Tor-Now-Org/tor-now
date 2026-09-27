@@ -2,7 +2,8 @@ import type { BusinessId, NoticeId } from "../model/ids.ts";
 import { validationFailed } from "../shared/errors.ts";
 import type { Instant } from "../time/instant.ts";
 import { daysBetween, parseLocalDate, type LocalDate } from "../time/local-date.ts";
-import { parseFeature, type Feature } from "./feature.ts";
+import type { GrantTerm } from "./entitlement.ts";
+import { FEATURES, parseFeature, type Feature } from "./feature.ts";
 import { PLANS, type Plan } from "./plan.ts";
 import { graceEndsOn, subscriptionStateOn, type Subscription } from "./subscription.ts";
 
@@ -30,6 +31,10 @@ export const NOTICE_KINDS = [
   "MOVE_APPLIED",
   "CALENDARS_PAUSED",
   "CALENDARS_RESUMED",
+  "FEATURES_GRANTED",
+  "GRANT_EXTENDED",
+  "GRANT_ENDING",
+  "GRANT_ENDED",
 ] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 
@@ -68,7 +73,12 @@ export type NoticeFacts =
     }
   | { readonly kind: "MOVE_APPLIED"; readonly plan: Plan; readonly paused: readonly string[] }
   | { readonly kind: "CALENDARS_PAUSED"; readonly names: readonly string[]; readonly resourceAllowance: number }
-  | { readonly kind: "CALENDARS_RESUMED"; readonly names: readonly string[] };
+  | { readonly kind: "CALENDARS_RESUMED"; readonly names: readonly string[] }
+  /** Given together, so told together: one Notice however many Features. */
+  | { readonly kind: "FEATURES_GRANTED"; readonly features: readonly Feature[]; readonly endsOn: LocalDate }
+  | { readonly kind: "GRANT_EXTENDED"; readonly feature: Feature; readonly endsOn: LocalDate }
+  | { readonly kind: "GRANT_ENDING"; readonly features: readonly Feature[]; readonly endsOn: LocalDate }
+  | { readonly kind: "GRANT_ENDED"; readonly feature: Feature };
 
 export type Notice = {
   readonly id: NoticeId;
@@ -115,6 +125,10 @@ const RULES: Readonly<Record<NoticeKind, KindRule>> = Object.freeze({
   MOVE_APPLIED: { tone: "info", banner: true, clears: ["MOVE_SOON"] },
   CALENDARS_PAUSED: { tone: "caution", banner: true, clears: ["CALENDARS_RESUMED"] },
   CALENDARS_RESUMED: { tone: "good", banner: true, clears: ["CALENDARS_PAUSED"] },
+  FEATURES_GRANTED: { tone: "good", banner: true, clears: [] },
+  GRANT_EXTENDED: { tone: "good", banner: false, clears: ["GRANT_ENDING"] },
+  GRANT_ENDING: { tone: "caution", banner: true, clears: [] },
+  GRANT_ENDED: { tone: "caution", banner: true, clears: ["FEATURES_GRANTED", "GRANT_ENDING"] },
 });
 
 export const noticeTone = (kind: NoticeKind): NoticeTone => RULES[kind].tone;
@@ -150,6 +164,8 @@ export const noticeKey = (facts: NoticeFacts): string | null => {
       return `DEACTIVATED:${facts.on}`;
     case "MOVE_SOON":
       return `MOVE_SOON:${facts.plan}:${facts.effectiveOn}`;
+    case "GRANT_ENDING":
+      return `GRANT_ENDING:${facts.endsOn}:${[...facts.features].sort().join(",")}`;
     default:
       return null;
   }
@@ -161,9 +177,12 @@ const BANNER_ORDER: readonly NoticeKind[] = [
   "PAYMENT_LATE",
   "TRIAL_ENDING",
   "MOVE_SOON",
+  "GRANT_ENDING",
   "CALENDARS_PAUSED",
+  "GRANT_ENDED",
   "MOVE_APPLIED",
   "CALENDARS_RESUMED",
+  "FEATURES_GRANTED",
   "TRIAL_STARTED",
 ];
 
@@ -200,6 +219,8 @@ export const noticesDue = (input: {
   readonly scheduledPlan: Plan | null;
   /** The calendars marked to pause with the scheduled move. */
   readonly pausing: readonly string[];
+  /** The Business's Grants; those ending within the week are announced. */
+  readonly grants: readonly GrantTerm[];
   readonly businessActive: boolean;
   readonly today: LocalDate;
 }): readonly NoticeFacts[] => {
@@ -225,6 +246,15 @@ export const noticesDue = (input: {
       effectiveOn: move.effectiveOn,
       pausing: input.pausing,
     });
+  }
+  // One reminder per day Grants end, naming everything that ends that day.
+  const ending = input.grants.filter((grant) => within(grant.endsOn, 0));
+  const days = [...new Set(ending.map((grant) => grant.endsOn))].sort();
+  for (const endsOn of days) {
+    const features = FEATURES.filter((feature) =>
+      ending.some((grant) => grant.endsOn === endsOn && grant.feature === feature),
+    );
+    due.push({ kind: "GRANT_ENDING", features, endsOn });
   }
   return due;
 };
@@ -322,6 +352,13 @@ export const parseNoticeFacts = (value: unknown): NoticeFacts => {
       return { kind, names: textsOf(facts, "names"), resourceAllowance: countOf(facts, "resourceAllowance") };
     case "CALENDARS_RESUMED":
       return { kind, names: textsOf(facts, "names") };
+    case "FEATURES_GRANTED":
+    case "GRANT_ENDING":
+      return { kind, features: featuresOf(facts, "features"), endsOn: dateOf(facts, "endsOn") };
+    case "GRANT_EXTENDED":
+      return { kind, feature: parseFeature(textOf(facts, "feature")), endsOn: dateOf(facts, "endsOn") };
+    case "GRANT_ENDED":
+      return { kind, feature: parseFeature(textOf(facts, "feature")) };
     default:
       throw validationFailed(`Unknown kind of Notice "${kind}"`);
   }

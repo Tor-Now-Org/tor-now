@@ -1,9 +1,9 @@
-import { noticesDue, todayIn, type Instant, type Notice, type Plan, type PlanVersionId } from "@tor-now/domain";
+import { addDays, noticesDue, timeZone, todayIn, type Instant, type Notice, type Plan, type PlanVersionId } from "@tor-now/domain";
 import type { Session } from "../ports/unit-of-work.ts";
 import { announce } from "./notices.ts";
 
 /**
- * The daily run's Notices (ADR 0020): a Trial ending within the week, a payment
+ * The daily run's Notices (ADR 0020): a Trial or a Grant ending within the week, a payment
  * late, a move landing within the week — worked out per Business against its
  * own today. Saying the same thing twice keeps nothing twice, so a run that
  * repeats or follows a missed day is safe.
@@ -15,9 +15,11 @@ export const announceDue = async (
   now: Instant,
 ): Promise<number> => {
   const { repositories } = session;
-  const [entries, versions] = await Promise.all([
+  // A day early: each Business's own today decides which Grants still run.
+  const [entries, versions, grants] = await Promise.all([
     repositories.subscriptions.directory(),
     repositories.planVersions.listAll(),
+    repositories.grants.listRunning(addDays(todayIn(now, timeZone("UTC")), -1)),
   ]);
   const planOf = new Map<PlanVersionId, Plan>(versions.map((version) => [version.id, version.plan]));
 
@@ -34,6 +36,7 @@ export const announceDue = async (
       subscription,
       scheduledPlan: move === null ? null : (planOf.get(move.planVersionId) ?? null),
       pausing,
+      grants: grants.filter((grant) => grant.businessId === business.id),
       businessActive: business.active,
       today: todayIn(now, business.timeZone),
     });

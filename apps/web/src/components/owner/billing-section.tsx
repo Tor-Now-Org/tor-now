@@ -8,6 +8,9 @@ import { fillParts, fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { Card, Critical, Note, Warning } from "@/components/ui.tsx";
 import { NextDate, PlanBadge, StatusBadge } from "@/components/billing-badges.tsx";
+import { IncludedFeatures } from "./included-features.tsx";
+import { localDateOf } from "./day-filter.ts";
+import { usePlans } from "@/lib/use-plans.ts";
 
 /**
  * What the owner owes the platform, read-only (ADR 0016: the OWNER's alone).
@@ -32,6 +35,7 @@ export const BillingSection = ({
   const words = useCopy("billing");
   const { language } = useLanguage();
   const { subscription, status, nextDate } = billing;
+  const plans = usePlans();
   const longDate = (localDate: string) => formatLocalDate(localDate, language, { day: "numeric", month: "long" });
 
   return (
@@ -56,6 +60,14 @@ export const BillingSection = ({
           <NextDate status={status} date={nextDate} timeZone={timeZone} />
         </Row>
       </Card>
+
+      {billing.features !== undefined && (
+        <IncludedFeatures
+          features={billing.features}
+          plans={plans}
+          today={localDateOf(new Date().toISOString(), timeZone)}
+        />
+      )}
 
       {status === "TRIAL" && nextDate !== null && (
         <Note>{fillText(words.trialNote, { date: longDate(nextDate) })}</Note>

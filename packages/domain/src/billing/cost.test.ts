@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkUnitRate,
   costOf,
   microShekels,
   MICRO_SHEKELS_PER_AGORA,
@@ -118,5 +119,25 @@ describe("smsSegments", () => {
 
   it("is one segment even when empty, because a message is still sent", () => {
     expect(smsSegments("")).toBe(1);
+  });
+});
+
+describe("checkUnitRate", () => {
+  const today = parseLocalDate("2026-09-27");
+  const rate = {
+    unit: "WHATSAPP_UTILITY" as const,
+    effectiveFrom: parseLocalDate("2026-09-01"),
+    perUnit: microShekels(20_300),
+    source: "  Twilio invoice, September, line 7 ",
+  };
+
+  it("takes a past day, and keeps the source trimmed", () => {
+    expect(checkUnitRate(rate, today)).toEqual({ ...rate, source: "Twilio invoice, September, line 7" });
+  });
+
+  it("refuses no source, a day more than a year ahead, and an unknown unit", () => {
+    expect(() => checkUnitRate({ ...rate, source: " x " }, today)).toThrow(/came from/);
+    expect(() => checkUnitRate({ ...rate, effectiveFrom: parseLocalDate("2027-09-28") }, today)).toThrow(/a year/);
+    expect(() => checkUnitRate({ ...rate, unit: "FAX" as never }, today)).toThrow(/Unknown unit/);
   });
 });

@@ -108,6 +108,43 @@ describe("noticeText", () => {
   });
 });
 
+describe("noticeText — Grants", () => {
+  it("names one Feature given, and counts several", () => {
+    expect(text({ kind: "FEATURES_GRANTED", features: ["TEAM_ROLES"], endsOn: day("2026-12-26") })).toEqual({
+      title: "You received Managers and workers",
+      body: "Managers and workers, until 26 December, at no extra cost.",
+      action: "INCLUDED",
+    });
+    const several = text(
+      { kind: "FEATURES_GRANTED", features: ["CUSTOMER_HISTORY", "CUSTOMER_BLOCKING"], endsOn: day("2026-12-26") },
+      "he",
+    );
+    expect(several.title).toBe("קיבלתם 2 פיצ'רים");
+    expect(several.body).toBe("היסטוריית לקוח וחסימת לקוחות, עד 26 בדצמבר, בלי תשלום נוסף.");
+  });
+
+  it("says when Grants end, relative to today, and points at the plans", () => {
+    const ending = text({ kind: "GRANT_ENDING", features: ["TEAM_ROLES", "CUSTOMER_HISTORY"], endsOn: day("2026-10-26") });
+    expect(ending.title).toBe("2 Features end in 7 days");
+    expect(ending.action).toBe("PLANS");
+    expect(text({ kind: "GRANT_ENDING", features: ["TEAM_ROLES"], endsOn: day("2026-10-20") }).title).toBe(
+      "Managers and workers ends tomorrow",
+    );
+  });
+
+  it("tells of an extension quietly, and of an early end with the way back", () => {
+    expect(text({ kind: "GRANT_EXTENDED", feature: "WAITING_LIST", endsOn: day("2026-11-01") })).toEqual({
+      title: "Waiting list was extended",
+      body: "Now until 1 November, at no extra cost.",
+      action: null,
+    });
+    expect(text({ kind: "GRANT_ENDED", feature: "TEAM_ROLES" }, "he")).toMatchObject({
+      title: "מנהלים ועובדים הסתיים",
+      action: "PLANS",
+    });
+  });
+});
+
 describe("noticeDay", () => {
   const at = (createdAt: string, today = "2026-10-19") =>
     noticeDay({ createdAt }, { ...context("en", today), timeZone: "Asia/Jerusalem" });

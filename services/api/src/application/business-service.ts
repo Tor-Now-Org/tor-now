@@ -44,7 +44,7 @@ import {
 } from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
 import { notificationFor } from "./notifications.ts";
-import { entitlementOf, entitlementToday, subscriptionView } from "./billing.ts";
+import { entitlementOf, entitlementToday, ownerFeatures, subscriptionView } from "./billing.ts";
 import { movePlan } from "./plan-move.ts";
 import { tell } from "./notices.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
@@ -472,18 +472,23 @@ export const businessService = ({
         today,
         now: clock.now(),
       });
-      return { ...view, payments: await repositories.payments.listForBusiness(businessId) };
+      return {
+        ...view,
+        payments: await repositories.payments.listForBusiness(businessId),
+        features: await ownerFeatures(repositories, view, today),
+      };
     });
   },
 
   async subscription(actor: Actor, businessId: BusinessId) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       const business = await loadOwnedBusiness(repositories, actor, businessId);
+      const today = todayIn(clock.now(), business.timeZone);
       const [view, payments] = await Promise.all([
-        subscriptionView(repositories, businessId, todayIn(clock.now(), business.timeZone)),
+        subscriptionView(repositories, businessId, today),
         repositories.payments.listForBusiness(businessId),
       ]);
-      return { ...view, payments };
+      return { ...view, payments, features: await ownerFeatures(repositories, view, today) };
     });
   },
 

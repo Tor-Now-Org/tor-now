@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countdownTo, dayIn } from "./format.ts";
+import { countdownTo, dayIn, formatRate, microShekelsOf, shekelsOf } from "./format.ts";
 
 const JERUSALEM = "Asia/Jerusalem";
 
@@ -46,5 +46,26 @@ describe("how far off an appointment is", () => {
 
   it("says it in the reader's language", () => {
     expect(countdownTo("2026-09-17T14:00:00Z", "he", NOW)).toContain("4");
+  });
+});
+
+describe("rates", () => {
+  it("reads a typed price exactly, to four decimals", () => {
+    expect(microShekelsOf("0.0203")).toBe(20_300);
+    expect(microShekelsOf(" 0.9528 ")).toBe(952_800);
+    expect(microShekelsOf("1")).toBe(1_000_000);
+    expect(microShekelsOf("0.1")).toBe(100_000);
+  });
+
+  it("refuses more decimals, words, and negatives", () => {
+    expect(microShekelsOf("0.02031")).toBeNull();
+    expect(microShekelsOf("abc")).toBeNull();
+    expect(microShekelsOf("-1")).toBeNull();
+    expect(microShekelsOf("")).toBeNull();
+  });
+
+  it("shows a rate to four decimals, and gives it back as typed", () => {
+    expect(formatRate(19_610, "en")).toBe("₪0.0196");
+    expect(shekelsOf(20_300)).toBe("0.0203");
   });
 });

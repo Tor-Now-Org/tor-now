@@ -291,3 +291,68 @@ test.describe("the panel itself", () => {
     await expect(page.getByText(/אי אפשר לערוך או למחוק/)).toBeVisible();
   });
 });
+
+test.describe("the Catalogue", () => {
+  test("an administrator corrects a message rate, and it reads as checked by them", async ({ page }) => {
+    const admin = await anAdministrator();
+    await asAdministrator(page, admin.token);
+    await page.getByRole("button", { name: "מחירון" }).click();
+
+    // The suite shares one database, so this rate may have been corrected
+    // already by another run; the journey only asks that the correction lands.
+    const card = page.locator(".rate-card", { hasText: "וואטסאפ — קוד כניסה" });
+    await card.getByRole("button", { name: "תיקון התעריף" }).click({ timeout: 15_000 });
+
+    const sheet = page.getByRole("dialog", { name: /תעריף חדש/ });
+    await sheet.getByLabel("מחיר להודעה (₪)").fill("0.02031");
+    await expect(sheet.getByText("מחיר בשקלים, עד ארבע ספרות אחרי הנקודה")).toBeVisible();
+    await sheet.getByLabel("מחיר להודעה (₪)").fill("0.0203");
+    await sheet.getByLabel("מקור").fill("חשבונית Twilio לספטמבר, שורה 7");
+    await sheet.getByRole("button", { name: "שמירת התעריף" }).click();
+
+    await expect(card.getByText(/נבדק · הנהלה/)).toBeVisible({ timeout: 15_000 });
+    await expect(card.getByText("מקור: חשבונית Twilio לספטמבר, שורה 7")).toBeVisible();
+    await expect(card.getByRole("button", { name: /היסטוריה/ })).toBeVisible();
+  });
+
+  test("Features are granted several at once, extended and ended from the Business sheet", async ({ page }) => {
+    const admin = await anAdministrator();
+    const name = `הענקות ${Date.now()}`;
+    await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone(), plan: "SOLO" });
+
+    await asAdministrator(page, admin.token);
+    await findInDirectory(page, name);
+    await inDirectory(page, name).getByText(name).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.locator(".feature-row", { hasText: "תזכורות" }).getByText("במסלול")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await sheet.getByRole("button", { name: "הענקת פיצ'רים" }).click();
+    const grant = page.getByRole("dialog", { name: /הענקת פיצ'רים —/ });
+    // What the Business has some other way cannot be chosen.
+    await expect(grant.getByRole("checkbox", { name: /תזכורות/ })).toBeDisabled();
+    await grant.getByRole("checkbox", { name: /היסטוריית לקוח/ }).check();
+    await grant.getByRole("checkbox", { name: /חסימת לקוחות/ }).check();
+    await grant.getByRole("button", { name: "30 יום" }).click();
+    await grant.getByLabel("סיבה").fill("פיילוט: עוברים ממערכת אחרת");
+    await grant.getByRole("button", { name: "הענקת 2 פיצ'רים" }).click();
+
+    await expect(sheet.getByText("פיצ'רים · 2 הוענקו")).toBeVisible({ timeout: 15_000 });
+    const history = sheet.locator(".feature-row", { hasText: "היסטוריית לקוח" });
+    await expect(history.getByText(/״פיילוט: עוברים ממערכת אחרת״/)).toBeVisible();
+
+    await history.getByRole("button", { name: "הארכה" }).click();
+    const extend = page.getByRole("dialog", { name: /הארכת היסטוריית לקוח/ });
+    await extend.getByRole("button", { name: "60 יום" }).click();
+    await extend.getByLabel("סיבה").fill("עוד חודשיים");
+    await extend.getByRole("button", { name: /הארכה עד/ }).click();
+    await expect(history.getByText(/״עוד חודשיים״/)).toBeVisible({ timeout: 15_000 });
+
+    const blocking = sheet.locator(".feature-row", { hasText: "חסימת לקוחות" });
+    await blocking.getByRole("button", { name: "סיום" }).click();
+    await blocking.getByRole("button", { name: "כן, לסיים" }).click();
+    await expect(blocking.getByText("לא כלול")).toBeVisible({ timeout: 15_000 });
+    await expect(sheet.getByText("פיצ'רים · 1 הוענקו")).toBeVisible();
+  });
+});

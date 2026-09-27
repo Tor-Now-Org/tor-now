@@ -35,6 +35,7 @@ import { entitlementOf, subscriptionView, type SubscriptionView } from "./billin
 import { keepOnly, overAllowance } from "./allowance.ts";
 import { applyDueMoves, movePlan } from "./plan-move.ts";
 import { announce } from "./notices.ts";
+import { featuresWithGrants } from "./catalogue-admin.ts";
 import { announceDue } from "./notice-run.ts";
 import {
   directoryRow,
@@ -383,11 +384,13 @@ export const adminService = (dependencies: {
       return unitOfWork.run(actor, async ({ repositories }) => {
         const business = await repositories.businesses.findById(businessId);
         if (business === null) throw notFound("Business", businessId);
-        const [view, payments] = await Promise.all([
-          subscriptionView(repositories, businessId, todayIn(clock.now(), business.timeZone)),
+        const today = todayIn(clock.now(), business.timeZone);
+        const [view, payments, features] = await Promise.all([
+          subscriptionView(repositories, businessId, today),
           repositories.payments.listForBusiness(businessId),
+          featuresWithGrants(repositories, businessId, today),
         ]);
-        return { ...view, payments };
+        return { ...view, payments, features };
       });
     },
 

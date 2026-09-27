@@ -44,3 +44,21 @@ customer; at worst they cost the platform, and they are audited.
   Anything meant to last becomes a Plan Version.
 - The list of Features is still code (ADR 0019). An administrator can place,
   price and withdraw Features, but cannot invent one.
+
+## Grants and Unit Rates in practice (2026-09-27)
+
+- **One list of Features per Business.** The administrator's Business sheet and
+  the owner's subscription card show every Feature with where it comes from —
+  the Plan, a Grant, a Preview, or nowhere — so the two never disagree.
+- **Several at once.** Granting takes any number of Features with one end date
+  and one reason; each becomes its own Grant, so each can be extended or ended
+  alone. Only a Feature the Business has no other way can be granted.
+- **At most a year ahead**, and ending early is allowed. Ending a Grant makes
+  yesterday its last day: new use stops today, and nothing made with it is
+  touched (ADR 0019).
+- **The owner is told in the app only** — given (one Notice however many
+  Features), extended, a reminder a week before the end, ended early. None of it
+  is about paying, so none of it goes to WhatsApp (ADR 0020).
+- **A Unit Rate entered for a unit and day that already has one replaces it.**
+  The audit log keeps the earlier figure; Usage Records are never rewritten
+  (ADR 0022).

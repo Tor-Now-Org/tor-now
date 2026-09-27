@@ -466,6 +466,34 @@ export type Standing = {
 export type BillingDto = Standing & {
   subscription: SubscriptionDto;
   payments: PaymentDto[];
+  /** Every Feature and where the Business has it from. Absent from an older API. */
+  features?: FeatureSourceDto[];
+};
+
+export type FeatureSourceKind = "PLAN" | "GRANT" | "PREVIEW" | "NONE";
+
+/**
+ * One Feature and where a Business has it from (ADR 0021). The Grant's details
+ * reach an administrator only; an owner's list says the day and nothing more.
+ */
+export type FeatureSourceDto = {
+  feature: FeatureName;
+  source: FeatureSourceKind;
+  endsOn: string | null;
+  grant: { id: string; reason: string; grantedBy: string | null; grantedAt: string } | null;
+};
+
+export type CostUnitName = "WHATSAPP_UTILITY" | "WHATSAPP_AUTHENTICATION" | "SMS_SEGMENT";
+
+/** What one unit of messaging cost from a day, and the evidence (ADR 0022). */
+export type UnitRateDto = {
+  unit: CostUnitName;
+  effectiveFrom: string;
+  microShekels: number;
+  source: string;
+  /** Null for a default the platform shipped with, nobody has checked. */
+  checkedBy: string | null;
+  enteredAt: string;
 };
 
 /**

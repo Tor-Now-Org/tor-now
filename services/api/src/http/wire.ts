@@ -20,11 +20,14 @@ import {
   type WorkingHours,
   isStanding,
   noticeTone,
+  type FeatureSource,
+  type GrantTerm,
 } from "@tor-now/domain";
 import type { MyWaiting } from "../application/waiting-service.ts";
 import type { PlatformStats } from "../application/admin-service.ts";
 import type { SubscriptionView } from "../application/billing.ts";
 import type { NoticeBoard } from "../application/notice-service.ts";
+import type { GrantEntry, UnitRateEntry } from "../ports/repositories.ts";
 import type { DirectoryRow } from "../application/business-directory.ts";
 import type {
   StaffedBusiness,
@@ -399,14 +402,54 @@ export const directoryRowOut = (row: DirectoryRow) => ({
   flags: row.standing.flags,
 });
 
+/**
+ * One Feature and where the Business has it from. The Grant's details go only
+ * to an administrator: the owner's list is built from the Entitlement, which
+ * carries no reason.
+ */
+export const featureOut = (source: FeatureSource<GrantTerm | GrantEntry>) => ({
+  feature: source.feature,
+  source: source.source,
+  endsOn: source.endsOn,
+  grant:
+    source.grant !== null && "id" in source.grant
+      ? {
+          id: source.grant.id,
+          reason: source.grant.reason,
+          grantedBy: source.grant.grantedByName,
+          grantedAt: formatInstant(source.grant.createdAt),
+        }
+      : null,
+});
+
+export const featuresOut = (sources: readonly FeatureSource<GrantTerm | GrantEntry>[]) => ({
+  features: sources.map(featureOut),
+});
+
+/** A Unit Rate as the Catalogue tab shows it. */
+export const unitRateOut = (rate: UnitRateEntry) => ({
+  unit: rate.unit,
+  effectiveFrom: rate.effectiveFrom,
+  microShekels: rate.perUnit,
+  source: rate.source,
+  checkedBy: rate.checkedBy,
+  enteredAt: formatInstant(rate.enteredAt),
+});
+
 /** The owner's or administrator's billing panel. */
-export const billingOut = (result: SubscriptionView & { payments: readonly Payment[] }) => ({
+export const billingOut = (
+  result: SubscriptionView & {
+    payments: readonly Payment[];
+    features?: readonly FeatureSource<GrantTerm | GrantEntry>[];
+  },
+) => ({
   subscription: subscriptionOut(result),
   payments: result.payments.map(paymentOut),
   state: result.state,
   status: result.standing.status,
   nextDate: result.standing.nextDate,
   flags: result.standing.flags,
+  ...(result.features === undefined ? {} : { features: result.features.map(featureOut) }),
 });
 
 /**

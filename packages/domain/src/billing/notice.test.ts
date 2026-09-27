@@ -57,6 +57,7 @@ describe("how each kind is drawn", () => {
       "PAYMENT_RECORDED",
       "PLAN_CHANGED",
       "MOVE_SCHEDULED",
+      "GRANT_EXTENDED",
     ]);
   });
 
@@ -141,6 +142,7 @@ describe("noticesDue", () => {
     subscription: { trialEndsOn: null, paidThrough: day("2026-11-01"), scheduledMove: null },
     scheduledPlan: null,
     pausing: [],
+    grants: [],
     businessActive: true,
     today,
     ...overrides,
@@ -187,6 +189,25 @@ describe("noticesDue", () => {
     expect(moving("2026-10-19")).toEqual([]);
   });
 
+  it("reminds a week ahead of Grants ending, once per day they end, naming all of them", () => {
+    const due = noticesDue(
+      input({
+        grants: [
+          { feature: "TEAM_ROLES", endsOn: day("2026-10-26") },
+          { feature: "CUSTOMER_HISTORY", endsOn: day("2026-10-26") },
+          { feature: "CUSTOMER_BLOCKING", endsOn: day("2026-10-20") },
+          { feature: "WAITING_LIST", endsOn: day("2026-10-27") },
+          { feature: "REMINDERS", endsOn: day("2026-10-18") },
+        ],
+      }),
+    );
+    expect(due).toEqual([
+      { kind: "GRANT_ENDING", features: ["CUSTOMER_BLOCKING"], endsOn: "2026-10-20" },
+      { kind: "GRANT_ENDING", features: ["CUSTOMER_HISTORY", "TEAM_ROLES"], endsOn: "2026-10-26" },
+    ]);
+    expect(noticeKey(due[1] as NoticeFacts)).toBe("GRANT_ENDING:2026-10-26:CUSTOMER_HISTORY,TEAM_ROLES");
+  });
+
   it("says nothing to a Business that is switched off", () => {
     expect(
       noticesDue(
@@ -220,6 +241,10 @@ describe("parseNoticeFacts", () => {
     { kind: "MOVE_APPLIED", plan: "SOLO", paused: ["דנה"] },
     { kind: "CALENDARS_PAUSED", names: ["דנה"], resourceAllowance: 1 },
     { kind: "CALENDARS_RESUMED", names: ["דנה"] },
+    { kind: "FEATURES_GRANTED", features: ["CUSTOMER_HISTORY", "CUSTOMER_BLOCKING"], endsOn: day("2026-12-26") },
+    { kind: "GRANT_EXTENDED", feature: "TEAM_ROLES", endsOn: day("2026-11-01") },
+    { kind: "GRANT_ENDING", features: ["TEAM_ROLES"], endsOn: day("2026-10-02") },
+    { kind: "GRANT_ENDED", feature: "TEAM_ROLES" },
   ];
 
   it("reads back every kind exactly as it was written", () => {

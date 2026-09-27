@@ -50,6 +50,13 @@ message costs the platform, and the rest is news the owner either caused or will
 see the next time they open the app. The messages share one utility template,
 BILLING_NOTICE, whose one sentence each kind fills in (amended 2026-09-27).
 
+A change to the Catalogue that takes value away goes to WhatsApp as well as the
+app, whatever it takes: a Feature lost is as much a change to what the owner
+pays for as a higher price. Cancelling such a change during its thirty days
+means it never happened: every Business moves back to the edition it left,
+including any that joined the new edition in the meantime — for them the move
+back only gives value, so it applies at once (amended 2026-09-27).
+
 **A new Feature whose cost or demand is unknown launches as a Preview**: offered on
 every Plan for a stated period and labelled as unplaced. Ending a Preview is a
 change that takes value away for Plans that do not keep it.
