@@ -292,6 +292,10 @@ export type ResourceRepository = {
    * the owner's: an update from the owner leaves it alone.
    */
   setPaused(ids: readonly ResourceId[], at: Instant | null): Promise<readonly Resource[]>;
+  /** Marks calendars to pause on a day (a scheduled move), or clears the mark. */
+  setPauseOn(ids: readonly ResourceId[], on: LocalDate | null): Promise<void>;
+  /** Calendars whose day to pause has come, across every Business — for the daily job. */
+  listDueToPause(today: LocalDate): Promise<readonly Resource[]>;
 };
 
 export type ServiceRepository = {
@@ -669,6 +673,17 @@ export type SubscriptionRepository = {
    * A new Business's Plan Version and Trial, set by its owner inside the
    * transaction that opened it. Claims the owner's one Trial when there is one.
    */
+  /**
+   * The owner's own change of Plan, through the one narrow door they have
+   * (app.owner_sets_plan): a current edition, a move scheduled to one, or a
+   * move withdrawn.
+   */
+  setPlanAsOwner(
+    businessId: BusinessId,
+    terms: Pick<Subscription, "planVersionId" | "scheduledMove">,
+  ): Promise<Subscription>;
+  /** Subscriptions whose scheduled move falls due on or before `today`. */
+  listDueMoves(today: LocalDate): Promise<readonly Subscription[]>;
   start(
     businessId: BusinessId,
     terms: { planVersionId: PlanVersionId; trialEndsOn: LocalDate | null },

@@ -69,8 +69,12 @@ test.describe("opening a business", () => {
     await signInDirectly(page, phone, "בעלים חדש");
     const name = `עסק חדש ${Date.now()}`;
 
-    await page.goto("/onboarding");
+    // The plan is chosen once, on the pricing page, and the wizard opens on it.
+    await page.goto("/pricing");
     await ready(page);
+    await page.getByRole("button", { name: "מתחילים בצוות" }).click();
+    await expect(page).toHaveURL(/\/onboarding\?plan=TEAM/, { timeout: 15_000 });
+    await expect(page.getByText(/מסלול: צוות · 30 יום ניסיון/)).toBeVisible();
 
     // 1 — details
     await expect(page.getByText("פרטי העסק")).toBeVisible();
@@ -2259,7 +2263,7 @@ test.describe("photos", () => {
     await signInDirectly(page, phone, "בעלים עם תמונות");
     const name = `עסק מצולם ${Date.now()}`;
 
-    await page.goto("/onboarding");
+    await page.goto("/onboarding?plan=SOLO");
     await ready(page);
 
     await page.getByLabel("שם העסק").fill(name);
@@ -5871,5 +5875,83 @@ test.describe("what Solo locks", () => {
     await expect(page.getByRole("button", { name: "חסימת הלקוח" })).toHaveCount(0);
     // What is coming is not history: it stays.
     await expect(page.getByText("התורים הקרובים")).toBeVisible();
+  });
+});
+
+test.describe("choosing a plan", () => {
+  test("opening the wizard with no plan sends the owner to choose one first", async ({ page }) => {
+    await signInDirectly(page, uniquePhone(), "בעלים");
+    await page.goto("/onboarding");
+    await expect(page).toHaveURL(/\/pricing/, { timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "מתחילים ביחיד" })).toBeVisible();
+    // The Trial the server gives, not a number written on the page.
+    await expect(page.getByText("30 יום ניסיון, בלי כרטיס אשראי")).toBeVisible();
+  });
+
+  test("a second calendar on Solo is one tap from Team, without leaving the wizard", async ({ page }) => {
+    const phone = uniquePhone();
+    await stubAddressSearch(page);
+    await signInDirectly(page, phone, "בעלים");
+    await page.goto("/onboarding?plan=SOLO");
+    await ready(page);
+    await page.getByLabel("שם העסק").fill(`שני יומנים ${Date.now()}`);
+    await page.getByLabel("טלפון").fill(asTyped(phone));
+    await pickAnAddress(page, "הרצל 1");
+    await pickACategory(page);
+    await page.getByRole("button", { name: "המשך" }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
+
+    await page.getByLabel("שם היומן").fill("ראשי");
+    const lock = page.getByRole("group", { name: "יומן נוסף זמין במסלול צוות" });
+    await expect(lock).toBeVisible();
+    await lock.getByRole("button", { name: "לעבור לצוות" }).click();
+
+    await expect(page.getByText(/מסלול: צוות/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "הוספה", exact: true })).toBeVisible();
+    await expect(page.getByLabel("שם היומן")).toHaveValue("ראשי");
+  });
+
+  const openBilling = async (page: Page, businessId: string) => {
+    await page.goto(`/manage?business=${businessId}&tab=business&panel=billing`);
+    await ready(page);
+    await expect(page.getByText("המסלולים")).toBeVisible({ timeout: 15_000 });
+  };
+
+  test("an owner upgrades from the billing tab, and is told when it applies first", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({ name: `שדרוג בעלים ${Date.now()}`, ownerPhone, plan: "SOLO" });
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await openBilling(page, shop.business.id);
+
+    await page.getByRole("radio", { name: /צוות/ }).check();
+    await expect(page.getByText(/השדרוג חל מיד/)).toBeVisible();
+    await page.getByRole("button", { name: "עוברים לצוות עכשיו" }).click();
+
+    await expect(page.locator(".plan-choice.on").getByText("המסלול שלכם")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("an owner moving to Solo chooses which calendar stays, and the other pauses", async ({ page }) => {
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({ name: `הורדה ${Date.now()}`, ownerPhone });
+    await call(`/businesses/${shop.business.id}/resources`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "כיסא שני" },
+    });
+    await signInDirectly(page, ownerPhone, "בעלים");
+    await openBilling(page, shop.business.id);
+
+    await page.getByRole("radio", { name: /יחיד/ }).check();
+    await expect(page.getByText(/איזה יומן נשאר/)).toBeVisible();
+    // Among the calendars, not the plans: "יומן אחד" on the Solo card reads alike.
+    await page.locator(".keep-row", { hasText: "יומן א" }).getByRole("radio").check();
+    await page.getByRole("button", { name: "עוברים ליחיד עכשיו" }).click();
+
+    await expect(page.locator(".plan-choice.on").getByText("המסלול שלכם")).toBeVisible({ timeout: 15_000 });
+    const calendars = await call<{ name: string; paused: boolean }[]>(
+      `/businesses/${shop.business.id}/resources`,
+      { token: shop.owner.token },
+    );
+    expect(calendars.find((calendar) => calendar.name === "כיסא שני")?.paused).toBe(true);
   });
 });

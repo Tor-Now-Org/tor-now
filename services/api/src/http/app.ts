@@ -161,9 +161,13 @@ export const createApp = (services: Services) => {
   // Discovery and availability (ADR 0011, ADR 0012)
   // ---------------------------------------------------------------------------
   // ADR 0020: the Catalogue's current editions, for anyone deciding.
-  app.get("/plans", async (context) =>
-    context.json((await services.catalogue.currentPlans(actorOf(context))).map(wire.planOut)),
-  );
+  app.get("/plans", async (context) => {
+    const catalogue = await services.catalogue.current(actorOf(context));
+    return context.json({
+      plans: catalogue.plans.map(wire.planOut),
+      previews: catalogue.previews.map((preview) => ({ feature: preview.feature, endsOn: preview.endsOn })),
+    });
+  });
 
   app.get("/businesses/search", async (context) => {
     const { q, category, lat, lng } = parseQuery(context, schema.searchSchema);
@@ -818,6 +822,18 @@ const ownerRoutes = (services: Services) => {
 
   // ADR: Billing → Scheduling is one-way; an owner reads what they owe and
   // records nothing, which is why there is no matching write here.
+  // ADR 0020: the owner's own change of Plan — the one billing write they make.
+  owner.put("/:businessId/subscription/plan", async (context) => {
+    const { plan, keep } = await parseBody(context, schema.planChangeSchema);
+    const result = await services.business.changePlan(
+      actorOf(context),
+      idParam(context, "businessId"),
+      plan,
+      keep?.map((id) => asId<"Resource">(id)),
+    );
+    return context.json(wire.billingOut(result));
+  });
+
   owner.get("/:businessId/subscription", async (context) => {
     const result = await services.business.subscription(
       actorOf(context),
@@ -1010,10 +1026,15 @@ const adminRoutes = (services: Services) => {
   });
 
   admin.patch("/businesses/:businessId/subscription", async (context) => {
-    const { plan } = await parseBody(context, schema.planChangeSchema);
+    const { plan, keep } = await parseBody(context, schema.planChangeSchema);
     return context.json(
       wire.subscriptionOut(
-        await services.admin.changePlan(actorOf(context), idParam(context, "businessId"), plan),
+        await services.admin.changePlan(
+          actorOf(context),
+          idParam(context, "businessId"),
+          plan,
+          keep?.map((id) => asId<"Resource">(id)),
+        ),
       ),
     );
   });
@@ -1173,9 +1194,13 @@ const jobRoutes = (services: Services) => {
     context.json({ removed: await services.pruneAuditLog() }),
   );
 
-  jobs.post("/billing-deactivation", async (context) =>
-    context.json({ deactivated: await services.deactivateLapsedBusinesses() }),
-  );
+  // The daily billing run: scheduled Plan moves land on their renewal, then
+  // whatever has lapsed is deactivated.
+  jobs.post("/billing-deactivation", async (context) => {
+    const moves = await services.applyDueMoves();
+    const deactivated = await services.deactivateLapsedBusinesses();
+    return context.json({ moved: moves.moved, paused: moves.paused, deactivated });
+  });
 
   return jobs;
 };

@@ -6,7 +6,7 @@ import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { Button, Card, Chip } from "@/components/ui.tsx";
-import { outcomeOf } from "./plan-change.ts";
+import { outcomeOf } from "@/lib/plan-outcome.ts";
 
 /**
  * Moving a Business to another Plan on its owner's behalf. The line under the

@@ -1,6 +1,7 @@
 "use client";
 
-import type { BillingDto } from "@/lib/api/types.ts";
+import type { BillingDto, ResourceDto } from "@/lib/api/types.ts";
+import { PlanChooser } from "./plan-chooser.tsx";
 import { daysUntil } from "@/lib/billing-alert.ts";
 import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { fillParts, fillText } from "@/lib/i18n/fill.ts";
@@ -14,7 +15,19 @@ import { NextDate, PlanBadge, StatusBadge } from "@/components/billing-badges.ts
  * with the one sentence each status needs: a Trial says when it ends, grace
  * how long is left, a pending move when it lands.
  */
-export const BillingSection = ({ billing, timeZone }: { billing: BillingDto; timeZone: string }) => {
+export const BillingSection = ({
+  token,
+  billing,
+  timeZone,
+  resources,
+  onChanged,
+}: {
+  token: string;
+  billing: BillingDto;
+  timeZone: string;
+  resources: readonly ResourceDto[];
+  onChanged: (billing: BillingDto) => void;
+}) => {
   const copy = useCopy("owner");
   const words = useCopy("billing");
   const { language } = useLanguage();
@@ -47,16 +60,14 @@ export const BillingSection = ({ billing, timeZone }: { billing: BillingDto; tim
       {status === "TRIAL" && nextDate !== null && (
         <Note>{fillText(words.trialNote, { date: longDate(nextDate) })}</Note>
       )}
-      {subscription.scheduledMove !== null && (
-        <div className="pending-move">
-          <span>
-            {fillText(words.moveNote, {
-              plan: words.plan[subscription.scheduledMove.plan],
-              date: longDate(subscription.scheduledMove.effectiveOn),
-            })}
-          </span>
-        </div>
-      )}
+      <PlanChooser
+        key={`${subscription.plan}-${subscription.scheduledMove?.effectiveOn ?? ""}`}
+        token={token}
+        businessId={subscription.businessId}
+        billing={billing}
+        resources={resources}
+        onChanged={onChanged}
+      />
 
       <span className="label">{copy.recentPayments}</span>
       {billing.payments.length === 0 ? (

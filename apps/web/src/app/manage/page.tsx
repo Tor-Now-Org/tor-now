@@ -219,7 +219,7 @@ function ManageApp() {
           <Empty
             title={copy.usingAs}
             body={copy.oneIdentity}
-            action={<Button onClick={() => router.push("/onboarding")}>{copy.manage}</Button>}
+            action={<Button onClick={() => router.push("/pricing")}>{copy.manage}</Button>}
           />
         </main>
       </>

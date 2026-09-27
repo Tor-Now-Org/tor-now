@@ -44,6 +44,7 @@ import {
 import { PHOTOS } from "../config.ts";
 import { notificationFor } from "./notifications.ts";
 import { entitlementOf, entitlementToday, subscriptionView } from "./billing.ts";
+import { movePlan } from "./plan-move.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
 import type { PhotoStore } from "../ports/photo-store.ts";
 import type { Repositories } from "../ports/repositories.ts";
@@ -436,6 +437,32 @@ export const businessService = ({
    * changes a plan, which is why `subscription` has no write policy for an
    * owner and this method offers none.
    */
+  /**
+   * The owner choosing another Plan (ADR 0020) — the one billing write an owner
+   * makes. Moving to a Plan with room for fewer calendars names those that
+   * stay; the rest pause on the day the move applies.
+   */
+  async changePlan(
+    actor: Actor,
+    businessId: BusinessId,
+    plan: Plan,
+    keep: readonly ResourceId[] | undefined,
+  ) {
+    return unitOfWork.run(actor, async ({ repositories }) => {
+      const business = await loadOwnedBusiness(repositories, actor, businessId);
+      const today = todayIn(clock.now(), business.timeZone);
+      const view = await movePlan(repositories, {
+        businessId,
+        plan,
+        keep,
+        by: "OWNER",
+        today,
+        now: clock.now(),
+      });
+      return { ...view, payments: await repositories.payments.listForBusiness(businessId) };
+    });
+  },
+
   async subscription(actor: Actor, businessId: BusinessId) {
     return unitOfWork.run(actor, async ({ repositories }) => {
       const business = await loadOwnedBusiness(repositories, actor, businessId);

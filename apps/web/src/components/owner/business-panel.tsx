@@ -640,7 +640,18 @@ export const BusinessPanel = ({
       )}
 
       {panel === "billing" && billing !== null && (
-        <BillingSection billing={billing} timeZone={business.timeZone} />
+        <BillingSection
+          token={token}
+          billing={billing}
+          timeZone={business.timeZone}
+          resources={resources}
+          onChanged={(changed) => {
+            setBilling(changed);
+            // A plan change can pause, mark or bring back calendars, and
+            // changes what is locked: the business and its calendars both.
+            onChanged("everything");
+          }}
+        />
       )}
 
       <Sheet open={editing !== null} onClose={() => setEditing(null)}>

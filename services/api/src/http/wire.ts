@@ -123,6 +123,8 @@ export const resourceOut = (resource: Resource) => ({
   active: resource.active,
   /** Taken out of booking for the Resource Allowance; still the owner's. */
   paused: resource.pausedAt !== null,
+  /** The day it pauses, when a move to a smaller Plan is scheduled. */
+  pausesOn: resource.pauseOn,
 });
 
 export const workingHoursOut = (hours: WorkingHours) => ({

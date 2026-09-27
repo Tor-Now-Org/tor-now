@@ -426,6 +426,8 @@ export const keptCalendarsSchema = z.object({
 /** ADR 0020: an administrator moves a Business to another Plan by the owner's rule. */
 export const planChangeSchema = z.object({
   plan: z.enum(PLANS),
+  /** The calendars that stay, when the new Plan has room for fewer. */
+  keep: z.array(z.string().uuid()).optional(),
 });
 
 export const adminBusinessUpdateSchema = updateBusinessSchema.extend({

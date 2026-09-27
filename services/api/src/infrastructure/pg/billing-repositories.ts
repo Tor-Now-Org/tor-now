@@ -68,6 +68,35 @@ export const subscriptionRepository = (
     return toSubscription(row);
   },
 
+  async setPlanAsOwner(businessId, terms) {
+    try {
+      await tx`
+        select app.owner_sets_plan(
+          ${businessId},
+          ${terms.planVersionId},
+          ${terms.scheduledMove?.planVersionId ?? null},
+          ${terms.scheduledMove?.effectiveOn ?? null})`;
+    } catch (error) {
+      const code = errorCodeOf(error);
+      if (code === INSUFFICIENT_PRIVILEGE) throw forbidden("Only the owner changes the plan");
+      if (code === PG_ERRORS.checkViolation) {
+        throw new DomainError("CONFLICT", error instanceof Error ? error.message : "The plan could not be changed");
+      }
+      throw error;
+    }
+    const rows = await tx<Row[]>`select * from subscription where business_id = ${businessId}`;
+    const row = rows[0];
+    if (row === undefined) throw notFound("Subscription", businessId);
+    return toSubscription(row);
+  },
+
+  async listDueMoves(today) {
+    const rows = await tx<Row[]>`
+      select * from subscription
+      where scheduled_on is not null and scheduled_on <= ${today}::date`;
+    return rows.map(toSubscription);
+  },
+
   async start(businessId, terms) {
     try {
       await tx`select app.start_subscription(${businessId}, ${terms.planVersionId}, ${terms.trialEndsOn})`;

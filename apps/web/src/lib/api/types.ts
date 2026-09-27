@@ -93,6 +93,8 @@ export type ResourceDto = {
    * from an older API, which never paused anything.
    */
   paused?: boolean;
+  /** The day it pauses, when its owner scheduled a move to a smaller Plan. */
+  pausesOn?: string | null;
 };
 
 export type BusinessProfileDto = {
@@ -428,6 +430,12 @@ export type SubscriptionDto = {
   paidThrough: string | null;
   scheduledMove: { plan: PlanName; planVersion: number; effectiveOn: string } | null;
 };
+
+/** A Feature on every Plan for now, until its Preview ends. */
+export type PreviewDto = { feature: FeatureName; endsOn: string };
+
+/** The Catalogue as anyone may read it: the Plans, and what is in Preview. */
+export type CatalogueDto = { plans: PlanDto[]; previews: PreviewDto[] };
 
 /** One Plan as the Catalogue offers it to new Businesses today. */
 export type PlanDto = {

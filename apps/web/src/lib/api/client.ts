@@ -17,7 +17,7 @@ import type {
   BillingDto,
   DirectoryFilter,
   DirectoryPageDto,
-  PlanDto,
+  CatalogueDto,
   PlanName,
   MonthDayDto,
   CalendarAppointmentDto,
@@ -399,6 +399,8 @@ export const api = {
       latitude: number;
       longitude: number;
       category: string;
+      /** Chosen on the pricing page; a Business opens on it with its Trial. */
+      plan?: PlanName;
       resourceNames: string[];
       services: {
         name: string;
@@ -834,8 +836,16 @@ export const api = {
       token,
     }),
 
-  /** The Catalogue's current Plans. Public, like the pricing page. */
-  plans: () => request<PlanDto[]>("/plans"),
+  /** The Catalogue's current Plans and Previews. Public, like the pricing page. */
+  catalogue: () => request<CatalogueDto>("/plans"),
+
+  /** ADR 0020: the owner's own change of Plan; `keep` when it has room for fewer calendars. */
+  changeMyPlan: (token: string, businessId: string, plan: PlanName, keep?: readonly string[]) =>
+    request<BillingDto>(`/businesses/${businessId}/subscription/plan`, {
+      method: "PUT",
+      body: keep === undefined ? { plan } : { plan, keep },
+      token,
+    }),
 
   adminSubscription: (token: string, businessId: string) =>
     request<BillingDto>(`/admin/businesses/${businessId}/subscription`, { token }),

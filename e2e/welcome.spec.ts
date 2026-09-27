@@ -133,7 +133,7 @@ test.describe("the welcome page", () => {
   test("quotes the price the rest of the product quotes", async ({ page }) => {
     await page.goto("/welcome");
     await ready(page);
-    // Read from lib/plans.ts, so the front door and the pricing page cannot
+    // Both read the Catalogue, so the front door and the pricing page cannot
     // drift into disagreeing about what this costs.
     const pricing = page.locator("#pricing");
     await expect(pricing.getByText(/₪\d+/)).toBeVisible();

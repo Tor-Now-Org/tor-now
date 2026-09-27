@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlanDto, SubscriptionDto } from "@/lib/api/types.ts";
-import { outcomeOf } from "./plan-change.ts";
+import { outcomeOf } from "./plan-outcome.ts";
 
 const solo: PlanDto = { plan: "SOLO", planVersion: 1, priceMinor: 4900, price: 49, resourceAllowance: 1, features: ["REMINDERS"] };
 const team: PlanDto = {

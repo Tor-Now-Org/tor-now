@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
@@ -10,7 +10,7 @@ import { useSession } from "@/lib/session.tsx";
 import { staffRole } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
-import { TEXT_RULES, type BusinessCategory } from "@tor-now/domain";
+import { TEXT_RULES, TRIAL_DAYS, type BusinessCategory } from "@tor-now/domain";
 import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
 import { AddressAutocomplete } from "@/components/owner/address-autocomplete.tsx";
 import { CategoryAutocomplete } from "@/components/category-autocomplete.tsx";
@@ -30,9 +30,14 @@ import {
   type DayHours,
 } from "@/components/owner/weekly-hours.tsx";
 import { weekIsUsable } from "@/components/owner/usual-week.ts";
-import { Button, Card, Critical, Field, Spinner } from "@/components/ui.tsx";
+import { Button, Card, Critical, Field, Sheet, Spinner, Warning } from "@/components/ui.tsx";
+import { Locked, useLockText } from "@/components/locked.tsx";
+import { PlanChoice } from "@/components/plan-choice.tsx";
+import { cheapestRoomierThan } from "@/lib/entitlement.ts";
+import { fillText } from "@/lib/i18n/fill.ts";
+import { usePlans } from "@/lib/use-plans.ts";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
-import type { BusinessDto } from "@/lib/api/types.ts";
+import type { BusinessDto, PlanName } from "@/lib/api/types.ts";
 
 // Leaflet reaches for `window`, so the map can only render on the client.
 const LocationPicker = dynamic(
@@ -69,8 +74,23 @@ type DraftService = {
   bufferMinutes: number | null;
 };
 
+// useSearchParams needs a Suspense boundary for static rendering.
 export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <OnboardingWizard />
+    </Suspense>
+  );
+}
+
+const isPlanName = (value: string | null): value is PlanName => value === "SOLO" || value === "TEAM";
+
+function OnboardingWizard() {
   const copy = useCopy("onboarding");
+  const billingCopy = useCopy("billing");
+  const params = useSearchParams();
+  const plans = usePlans();
+  const locks = useLockText();
   const { language } = useLanguage();
   // Signing in is one flow with one set of words, wherever it is reached from.
   const signInCopy = useCopy("signIn");
@@ -112,8 +132,17 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
+  // The plan is chosen once, on the pricing page, and arrives in the address.
+  // Without one there is nothing to open a Business on, so the owner is sent
+  // to choose it — never asked a second time here.
+  const requestedPlan = params.get("plan");
+  const [plan, setPlan] = useState<PlanName | null>(isPlanName(requestedPlan) ? requestedPlan : null);
+  const [choosingPlan, setChoosingPlan] = useState(false);
+  useEffect(() => {
+    if (plan === null) router.replace("/pricing");
+  }, [plan, router]);
 
-  if (loading) return <Spinner />;
+  if (loading || plan === null) return <Spinner />;
 
   // Registering a business needs an identity; it is the same sign-in as
   // everything else, so it happens here rather than sending anyone away.
@@ -150,6 +179,11 @@ export default function OnboardingPage() {
   }
 
   const index = STEPS.indexOf(step);
+  const chosen = plans.find((candidate) => candidate.plan === plan) ?? null;
+  const named = resources.filter((resource) => resource.trim().length > 0).length;
+  // Unknown until the Catalogue answers, and nothing is locked on a guess.
+  const allowance = chosen?.resourceAllowance ?? Number.POSITIVE_INFINITY;
+  const roomier = cheapestRoomierThan(plans, chosen?.resourceAllowance ?? 0);
 
   const canContinue =
     step === "details"
@@ -164,6 +198,7 @@ export default function OnboardingPage() {
         ? true
         : step === "resources"
         ? resources.some((resource) => resource.trim().length > 0) &&
+          named <= allowance &&
           !blocking(
             ...resources
               .filter((resource) => resource.trim().length > 0)
@@ -193,6 +228,7 @@ export default function OnboardingPage() {
         longitude,
         category,
         description: description.trim() === "" ? null : description.trim(),
+        plan,
         resourceNames: resources.map((r) => r.trim()).filter((r) => r.length > 0),
         services: services
           .filter((service) => service.name.trim().length > 0)
@@ -305,6 +341,16 @@ export default function OnboardingPage() {
         <span className="label">
           {copy.stepOf} {index + 1} {copy.of} {STEPS.length}
         </span>
+
+        <div className="plan-line">
+          <span>
+            {fillText(billingCopy.planLine, {
+              plan: billingCopy.plan[plan],
+              days: String(TRIAL_DAYS),
+            })}
+          </span>
+          <button type="button" onClick={() => setChoosingPlan(true)}>{billingCopy.change}</button>
+        </div>
 
         {step === "details" && (
           <>
@@ -431,9 +477,31 @@ export default function OnboardingPage() {
                 )}
               </Card>
             ))}
-            <Button intent="quiet" onClick={() => setResources([...resources, ""])}>
-              {copy.addBtn}
-            </Button>
+            {named > allowance && (
+              <Warning>
+                {fillText(copy.tooManyCalendars, {
+                  plan: billingCopy.plan[plan],
+                  n: String(allowance),
+                })}
+              </Warning>
+            )}
+            {/* A calendar past what the plan holds is the lock — with the plan
+                that has room one tap away, and nothing typed lost. */}
+            {resources.length >= allowance ? (
+              <Locked
+                {...locks.calendar(allowance)}
+                {...(roomier === null
+                  ? {}
+                  : {
+                      action: fillText(copy.switchTo, { plan: billingCopy.plan[roomier.plan] }),
+                      onAction: () => setPlan(roomier.plan),
+                    })}
+              />
+            ) : (
+              <Button intent="quiet" onClick={() => setResources([...resources, ""])}>
+                {copy.addBtn}
+              </Button>
+            )}
           </>
         )}
 
@@ -541,6 +609,13 @@ export default function OnboardingPage() {
           {step === "hours" ? copy.finish : copy.next}
         </Button>
       </main>
+      <Sheet open={choosingPlan} onClose={() => setChoosingPlan(false)} labelledBy="plan-sheet-title">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <h2 id="plan-sheet-title" style={{ fontSize: 19 }}>{billingCopy.plansHeading}</h2>
+          <PlanChoice plans={plans} chosen={plan} name="wizard-plan" onChoose={setPlan} />
+          <Button onClick={() => setChoosingPlan(false)}>{billingCopy.choose}</Button>
+        </div>
+      </Sheet>
       {accountDrawer}
     </>
   );

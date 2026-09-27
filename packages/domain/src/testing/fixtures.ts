@@ -42,6 +42,7 @@ export const aResource = (overrides: Partial<Resource> = {}): Resource => ({
   name: "רן",
   active: true,
   pausedAt: null,
+  pauseOn: null,
   ...overrides,
 });
 

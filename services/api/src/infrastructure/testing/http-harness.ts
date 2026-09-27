@@ -46,6 +46,7 @@ export const httpHarness = () => {
     pruneAuditLog: () => Promise.resolve(0),
     deactivateLapsedBusinesses: () =>
       test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" }),
+    applyDueMoves: () => test.services.admin.applyDueMoves({ kind: "SYSTEM" }),
   }));
 
   const call = async (

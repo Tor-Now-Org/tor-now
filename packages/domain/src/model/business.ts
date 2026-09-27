@@ -1,5 +1,6 @@
 import type { Instant } from "../time/instant.ts";
 import type { BusinessCategory } from "./business-category.ts";
+import type { LocalDate } from "../time/local-date.ts";
 import type { LocalTime } from "../time/local-time.ts";
 import type { TimeZone } from "../time/zone.ts";
 import type { BusinessId, BusinessPhotoId, ResourceId, ServiceId } from "./ids.ts";
@@ -94,6 +95,11 @@ export type Resource = {
    * comes back as it was once the Allowance covers it again.
    */
   readonly pausedAt: Instant | null;
+  /**
+   * The day it will pause, when its owner has scheduled a move to a Plan with
+   * room for fewer calendars and chose not to keep this one.
+   */
+  readonly pauseOn: LocalDate | null;
 };
 
 /**

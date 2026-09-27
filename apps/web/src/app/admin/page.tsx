@@ -13,7 +13,6 @@ import {
   type BillingStatus,
   type DirectoryFilter,
   type DirectoryRowDto,
-  type PlanDto,
   type PlatformStatsDto,
   type UserDto,
 } from "@/lib/api/types.ts";
@@ -21,6 +20,7 @@ import { formatLocalDate } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
 import { useSession } from "@/lib/session.tsx";
+import { usePlans } from "@/lib/use-plans.ts";
 import { useFieldProblem } from "@/lib/use-field-problem.ts";
 import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "@/components/phone-field.tsx";
@@ -58,7 +58,7 @@ export default function AdminPage() {
   const [systemPanel, setSystemPanel] = useState<SystemPanel>("admins");
   const [directoryFilter, setDirectoryFilter] = useState<DirectoryFilter>(NO_DIRECTORY_FILTER);
   const [directoryRefresh, setDirectoryRefresh] = useState(0);
-  const [plans, setPlans] = useState<PlanDto[]>([]);
+  const plans = usePlans();
   const [users, setUsers] = useState<UserDto[]>([]);
   const [administrators, setAdministrators] = useState<UserDto[]>([]);
   const [allowlist, setAllowlist] = useState<AllowlistEntryDto[]>([]);
@@ -87,15 +87,13 @@ export default function AdminPage() {
   const load = useCallback(async () => {
     if (token === null) return;
     try {
-      const [p, u, a, l, g, s] = await Promise.all([
-        api.plans(),
+      const [u, a, l, g, s] = await Promise.all([
         api.adminUsers(token, null),
         api.adminAdministrators(token),
         api.adminAllowlist(token),
         api.adminAudit(token),
         api.adminStats(token),
       ]);
-      setPlans(p);
       setUsers(u);
       setAdministrators(a);
       setAllowlist(l);

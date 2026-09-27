@@ -127,6 +127,7 @@ export const compose = (
     measureDatabase: () => measureDatabase(sql),
     pruneAuditLog: () => pruneAuditLog(sql),
     deactivateLapsedBusinesses: () => admin.deactivateLapsedBusinesses(system()),
+    applyDueMoves: () => admin.applyDueMoves(system()),
   };
 
   return { services, sql, config };

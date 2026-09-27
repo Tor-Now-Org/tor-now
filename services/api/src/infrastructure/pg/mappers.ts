@@ -164,6 +164,7 @@ export const toResource = (row: Row): Resource => ({
   name: text(row["name"]),
   active: bool(row["active"]),
   pausedAt: nullableInstant(row["paused_at"]),
+  pauseOn: nullableLocalDate(row["pause_on"]),
 });
 
 export const toService = (row: Row): Service => ({

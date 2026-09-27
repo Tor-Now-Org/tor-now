@@ -571,10 +571,13 @@ describe("the catalogue", () => {
     const api = httpHarness();
     const { status, body } = await api.get("/plans");
     expect(status).toBe(200);
-    expect(body).toEqual([
-      expect.objectContaining({ plan: "SOLO", planVersion: 1, priceMinor: 4900, price: 49, resourceAllowance: 1 }),
-      expect.objectContaining({ plan: "TEAM", planVersion: 1, priceMinor: 8900, price: 89, resourceAllowance: 5 }),
-    ]);
+    expect(body).toEqual({
+      plans: [
+        expect.objectContaining({ plan: "SOLO", planVersion: 1, priceMinor: 4900, price: 49, resourceAllowance: 1 }),
+        expect.objectContaining({ plan: "TEAM", planVersion: 1, priceMinor: 8900, price: 89, resourceAllowance: 5 }),
+      ],
+      previews: [{ feature: "WAITING_LIST", endsOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }],
+    });
   });
 });
 
@@ -632,5 +635,21 @@ describe("the plan, where the screens need it", () => {
       expect.objectContaining({ id: calendars[0]?.id, paused: false }),
       expect.objectContaining({ id: calendars[1]?.id, paused: true }),
     ]);
+  });
+});
+
+describe("an owner's own plan", () => {
+  it("changes over HTTP, and the daily job reports what it moved", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const created = await api.post("/businesses", { ...A_BUSINESS, plan: "SOLO" }, owner.token);
+    const businessId = (created.body as { id: string }).id;
+
+    const { status, body } = await api.put(`/businesses/${businessId}/subscription/plan`, { plan: "TEAM" }, owner.token);
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ subscription: { plan: "TEAM" }, status: "TRIAL" });
+
+    const job = await api.post("/jobs/billing-deactivation", undefined, api.jobSecret);
+    expect(job.body).toMatchObject({ moved: [], paused: [], deactivated: [] });
   });
 });

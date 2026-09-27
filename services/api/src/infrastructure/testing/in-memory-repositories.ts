@@ -640,9 +640,20 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           name,
           active: true,
           pausedAt: null,
+          pauseOn: null,
         };
         store.resources = [...store.resources, resource];
         return resource;
+      },
+      async setPauseOn(ids, on) {
+        store.resources = store.resources.map((resource) =>
+          ids.includes(resource.id) ? { ...resource, pauseOn: on } : resource,
+        );
+      },
+      async listDueToPause(today) {
+        return store.resources.filter(
+          (resource) => resource.pauseOn !== null && compareLocalDate(resource.pauseOn, today) <= 0,
+        );
       },
       async setPaused(ids, at) {
         store.resources = store.resources.map((resource) =>
@@ -1235,6 +1246,31 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           subscription.businessId === businessId ? updated : subscription,
         );
         return updated;
+      },
+      async setPlanAsOwner(businessId, terms) {
+        const subscription = store.subscriptions.find((candidate) => candidate.businessId === businessId);
+        if (subscription === undefined) throw notFound("Subscription", businessId);
+        const current = (id: PlanVersion["id"]) => {
+          const version = store.planVersions.find((candidate) => candidate.id === id);
+          return (
+            version !== undefined &&
+            !store.planVersions.some((other) => other.plan === version.plan && other.number > version.number)
+          );
+        };
+        if (terms.planVersionId !== subscription.planVersionId && !current(terms.planVersionId)) {
+          throw new DomainError("CONFLICT", "A Plan is changed to its current edition");
+        }
+        if (terms.scheduledMove !== null && !current(terms.scheduledMove.planVersionId)) {
+          throw new DomainError("CONFLICT", "A move is scheduled to a current edition");
+        }
+        return this.update(businessId, terms);
+      },
+      async listDueMoves(today) {
+        return store.subscriptions.filter(
+          (subscription) =>
+            subscription.scheduledMove !== null &&
+            compareLocalDate(subscription.scheduledMove.effectiveOn, today) <= 0,
+        );
       },
       // app.start_subscription's checks, bar the one no double can make: that
       // this is the transaction which opened the Business.

@@ -2,30 +2,40 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api/client.ts";
-import type { PlanDto } from "@/lib/api/types.ts";
+import type { CatalogueDto, PlanDto } from "@/lib/api/types.ts";
 
 /**
- * The Catalogue's current Plans, fetched once per page load and shared: every
- * lock on a screen names a Plan and its price, and asking once per lock would
- * be a request for each. A failed read leaves the list empty, and a lock with
- * no Plan to name still says what is missing.
+ * The Catalogue, fetched once per page load and shared: every lock names a Plan
+ * and its price, and the pricing page, the wizard and the billing tab all
+ * read the same Plans — asking once per reader would be a request each. A
+ * failed read leaves it empty, and nothing that draws it breaks for that.
  */
-let shared: Promise<PlanDto[]> | null = null;
+const EMPTY: CatalogueDto = { plans: [], previews: [] };
+let shared: Promise<CatalogueDto> | null = null;
 
-export const usePlans = (): readonly PlanDto[] => {
-  const [plans, setPlans] = useState<readonly PlanDto[]>([]);
+export const useCatalogue = (): CatalogueDto => {
+  const [catalogue, setCatalogue] = useState<CatalogueDto>(EMPTY);
   useEffect(() => {
     let live = true;
-    shared ??= api.plans().catch(() => {
+    shared ??= api.catalogue().catch(() => {
       shared = null;
-      return [];
+      return EMPTY;
     });
     void shared.then((loaded) => {
-      if (live) setPlans(loaded);
+      if (live) setCatalogue(loaded);
     });
     return () => {
       live = false;
     };
   }, []);
-  return plans;
+  return catalogue;
 };
+
+/** The current Plans, cheapest first. */
+export const usePlans = (): readonly PlanDto[] => {
+  const { plans } = useCatalogue();
+  return [...plans].sort((a, b) => a.priceMinor - b.priceMinor);
+};
+
+/** What the cheapest Plan costs a month, in whole shekels — null until known. */
+export const useFromPrice = (): number | null => usePlans()[0]?.price ?? null;

@@ -2,10 +2,14 @@
 
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { useCopy } from "@/lib/i18n/index.tsx";
-import { SOLO_PRICE, TEAM_PRICE } from "@/lib/plans.ts";
+import { TRIAL_DAYS } from "@tor-now/domain";
+import type { PlanDto, PreviewDto } from "@/lib/api/types.ts";
+import { formatLocalDate } from "@/lib/format.ts";
+import { fillText } from "@/lib/i18n/fill.ts";
+import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { useCatalogue } from "@/lib/use-plans.ts";
 import { AppHeader } from "@/components/app-header.tsx";
-import { Button, Card } from "@/components/ui.tsx";
+import { Button, Card, Spinner } from "@/components/ui.tsx";
 
 /**
  * What opening a Business costs.
@@ -16,9 +20,14 @@ import { Button, Card } from "@/components/ui.tsx";
  * the way in. Nothing here is behind a session — the person weighing it up may
  * not have one yet.
  *
- * ponytail: the plans are drawn, not charged for. A Subscription exists the day
- * a trial has to end; until then this page is the whole of the commercial side.
+ * Every line is read from the Catalogue — price, calendars, Features — so what
+ * an administrator changes there is what this page says (ADR 0021). It is also
+ * the one place a plan is chosen: every way into opening a Business comes
+ * through here, and the wizard starts on the plan picked.
  */
+
+/** The plan drawn as the one being offered. Marketing's call, not the Catalogue's. */
+const RECOMMENDED = "TEAM";
 
 const Check = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
@@ -32,10 +41,27 @@ const Check = () => (
   </svg>
 );
 
-const Feature = ({ children }: { children: ReactNode }) => (
+type Line = { readonly text: string; readonly tag?: string };
+
+const Feature = ({ line }: { line: Line }) => (
   <li style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5 }}>
     <Check />
-    <span>{children}</span>
+    <span style={{ flex: 1 }}>{line.text}</span>
+    {line.tag !== undefined && (
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          padding: "1px 7px",
+          borderRadius: 999,
+          background: "var(--caution-soft)",
+          color: "var(--caution)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {line.tag}
+      </span>
+    )}
   </li>
 );
 
@@ -54,7 +80,7 @@ const Plan = ({
   perMonth: string;
   /** The recommended plan says so, and is drawn as the one being offered. */
   badge?: string;
-  features: readonly string[];
+  features: readonly Line[];
   action: ReactNode;
 }) => (
   <Card
@@ -110,8 +136,8 @@ const Plan = ({
         borderBlockStart: "1px solid var(--line)",
       }}
     >
-      {features.map((feature) => (
-        <Feature key={feature}>{feature}</Feature>
+      {features.map((line) => (
+        <Feature key={line.text} line={line} />
       ))}
     </ul>
 
@@ -121,8 +147,30 @@ const Plan = ({
 
 export default function PricingPage() {
   const copy = useCopy("pricing");
+  const billing = useCopy("billing");
+  const { language } = useLanguage();
   const router = useRouter();
-  const start = () => router.push("/onboarding");
+  const { plans, previews } = useCatalogue();
+
+  const linesOf = (plan: PlanDto): Line[] => [
+    {
+      text:
+        plan.resourceAllowance === 1
+          ? billing.oneCalendar
+          : fillText(billing.upToCalendars, { n: String(plan.resourceAllowance) }),
+    },
+    { text: copy.unlimited },
+    { text: copy.businessPage },
+    ...plan.features
+      .filter((feature) => !previews.some((preview) => preview.feature === feature))
+      .map((feature) => ({ text: billing.featureLine[feature as keyof typeof billing.featureLine] })),
+    ...previews.map((preview: PreviewDto) => ({
+      text: billing.featureLine[preview.feature],
+      tag: fillText(copy.inPreview, {
+        date: formatLocalDate(preview.endsOn, language, { day: "numeric", month: "short" }),
+      }),
+    })),
+  ];
 
   return (
     <>
@@ -156,7 +204,7 @@ export default function PricingPage() {
               color: "var(--accent-strong)",
             }}
           >
-            {copy.trialBadge}
+            {fillText(copy.trialBadge, { days: String(TRIAL_DAYS) })}
           </span>
           <h1 style={{ fontSize: 26, lineHeight: 1.25 }}>{copy.headline}</h1>
           <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: "var(--muted)" }}>
@@ -164,28 +212,31 @@ export default function PricingPage() {
           </p>
         </section>
 
-        <Plan
-          name={copy.soloName}
-          hint={copy.soloHint}
-          price={SOLO_PRICE}
-          perMonth={copy.perMonth}
-          features={[copy.soloFeature1, copy.soloFeature2, copy.soloFeature3]}
-          action={
-            <Button intent="quiet" onClick={start}>
-              {copy.start}
-            </Button>
-          }
-        />
-
-        <Plan
-          name={copy.teamName}
-          hint={copy.teamHint}
-          price={TEAM_PRICE}
-          perMonth={copy.perMonth}
-          badge={copy.teamBadge}
-          features={[copy.teamFeature1, copy.teamFeature2, copy.teamFeature3]}
-          action={<Button onClick={start}>{copy.start}</Button>}
-        />
+        {plans.length === 0 && <Spinner />}
+        {[...plans]
+          .sort((a, b) => a.priceMinor - b.priceMinor)
+          .map((plan) => {
+            const recommended = plan.plan === RECOMMENDED;
+            return (
+              <Plan
+                key={plan.plan}
+                name={billing.plan[plan.plan]}
+                hint={plan.plan === "SOLO" ? copy.soloHint : copy.teamHint}
+                price={plan.price}
+                perMonth={copy.perMonth}
+                {...(recommended ? { badge: copy.teamBadge } : {})}
+                features={linesOf(plan)}
+                action={
+                  <Button
+                    intent={recommended ? "primary" : "quiet"}
+                    onClick={() => router.push(`/onboarding?plan=${plan.plan}`)}
+                  >
+                    {fillText(copy.startOn, { plan: billing.plan[plan.plan] })}
+                  </Button>
+                }
+              />
+            );
+          })}
 
         <div
           style={{

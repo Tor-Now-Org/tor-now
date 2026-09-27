@@ -231,8 +231,9 @@ the first `.py` file the day one appears.
 
 Four cron jobs, defined in the `scheduled_work` migration and driven by
 `pg_cron`: draining the notification outbox every minute, sending reminders
-hourly, pruning the audit log nightly, and deactivating businesses whose
-subscription lapsed past its grace period. They call the Edge Function rather than writing SQL directly, because
+hourly, pruning the audit log nightly, and a daily billing run that carries out
+scheduled plan moves on their renewal day (pausing the calendars an owner chose
+not to keep) and deactivates businesses whose subscription lapsed. They call the Edge Function rather than writing SQL directly, because
 ADR 0006 makes "every write goes through a decorated repository" a standing
 constraint — a cron job reaching into the tables is exactly the ad-hoc script
 that ADR warns produces no audit trail.

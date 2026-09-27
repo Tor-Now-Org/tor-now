@@ -4,7 +4,9 @@ import type { CSSProperties } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCopy } from "@/lib/i18n/index.tsx";
-import { SOLO_PRICE } from "@/lib/plans.ts";
+import { TRIAL_DAYS } from "@tor-now/domain";
+import { fillText } from "@/lib/i18n/fill.ts";
+import { useFromPrice } from "@/lib/use-plans.ts";
 import { BuildingIcon } from "./bottom-nav.tsx";
 import { Button } from "./ui.tsx";
 
@@ -44,6 +46,9 @@ const MARK: CSSProperties = {
 export const OwnerPitch = () => {
   const copy = useCopy("customer");
   const router = useRouter();
+  // The Catalogue's cheapest Plan, not a figure written here: a price quoted
+  // from two places is a price that will disagree with itself.
+  const price = useFromPrice();
 
   return (
     <div
@@ -64,20 +69,22 @@ export const OwnerPitch = () => {
           <span style={{ fontWeight: 600, fontSize: 15 }}>{copy.openBusiness}</span>
           <span className="hint">{copy.pitchSameSignIn}</span>
         </span>
-        <span
-          className="tab"
-          style={{
-            flexShrink: 0,
-            fontSize: 12,
-            fontWeight: 600,
-            padding: "3px 9px",
-            borderRadius: 999,
-            background: "var(--raised)",
-            color: "var(--accent-strong)",
-          }}
-        >
-          {copy.pitchFrom.replace("{price}", String(SOLO_PRICE))}
-        </span>
+        {price !== null && (
+          <span
+            className="tab"
+            style={{
+              flexShrink: 0,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: "3px 9px",
+              borderRadius: 999,
+              background: "var(--raised)",
+              color: "var(--accent-strong)",
+            }}
+          >
+            {fillText(copy.pitchFrom, { price: String(price) })}
+          </span>
+        )}
       </div>
 
       <Button onClick={() => router.push("/pricing")}>{copy.pitchAction}</Button>
@@ -154,7 +161,7 @@ export const DismissableOwnerPitch = () => {
 
       <Button onClick={() => router.push("/pricing")}>{copy.pitchAction}</Button>
       <span style={{ textAlign: "center", fontSize: 12, color: "var(--muted)" }}>
-        {copy.pitchFootnote}
+        {fillText(copy.pitchFootnote, { days: String(TRIAL_DAYS) })}
       </span>
     </div>
   );

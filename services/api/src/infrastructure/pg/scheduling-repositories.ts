@@ -52,6 +52,18 @@ export const resourceRepository = (tx: Transaction): ResourceRepository => ({
     return rows.map(toResource);
   },
 
+  async setPauseOn(ids, on) {
+    if (ids.length === 0) return;
+    await tx`update resource set pause_on = ${on} where id in ${tx(ids)}`;
+  },
+
+  async listDueToPause(today) {
+    const rows = await tx<Row[]>`
+      select * from resource where pause_on is not null and pause_on <= ${today}::date
+      order by business_id, created_at`;
+    return rows.map(toResource);
+  },
+
   async update(id, changes) {
     const rows = await tx<Row[]>`
       update resource set

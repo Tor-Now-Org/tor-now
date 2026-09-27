@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Logo } from "@/components/logo.tsx";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import type { Language } from "@/lib/i18n/dictionaries.ts";
-import { SOLO_PRICE } from "@/lib/plans.ts";
+import { useFromPrice } from "@/lib/use-plans.ts";
 import { SUPPORT, whatsappLink } from "@/lib/support.ts";
 
 /**
@@ -75,6 +75,7 @@ const HERO_MS = 3600;
 
 export default function Welcome() {
   const copy = useCopy("landing");
+  const fromPrice = useFromPrice();
   const { language, toggleLanguage } = useLanguage();
   const SHOT = screens(language);
   const [hero, setHero] = useState(0);
@@ -199,7 +200,7 @@ export default function Welcome() {
             }))}
           />
           <div className="lp-actions" style={{ marginBlockStart: 36 }}>
-            <Link className="lp-btn lp-glow lp-lg" href="/onboarding">
+            <Link className="lp-btn lp-glow lp-lg" href="/pricing">
               {copy.oCta}
             </Link>
             <a className="lp-btn lp-ghost lp-lg" href="#contact">
@@ -232,14 +233,16 @@ export default function Welcome() {
         <span className="lp-kicker">{copy.kPricing}</span>
         <h2 className="lp-h2">{copy.pTitle}</h2>
         <p className="lp-sub">{copy.pSub}</p>
-        {/* The number lives in lib/plans.ts, where the drawer and the pricing
-            page also read it — a price quoted from two literals is a price
-            that will disagree with itself. */}
-        <div className="lp-price">
-          <span className="lp-from">{copy.pFrom}</span>
-          <b>₪{SOLO_PRICE}</b>
-          <span className="lp-from">{copy.pPer}</span>
-        </div>
+        {/* The number is the Catalogue's, as the drawer and the pricing page
+            read it — a price quoted from two places is a price that will
+            disagree with itself. */}
+        {fromPrice !== null && (
+          <div className="lp-price">
+            <span className="lp-from">{copy.pFrom}</span>
+            <b>₪{fromPrice}</b>
+            <span className="lp-from">{copy.pPer}</span>
+          </div>
+        )}
         <Link className="lp-btn lp-solid lp-lg" href="/pricing">
           {copy.pAll}
         </Link>
@@ -282,7 +285,7 @@ export default function Welcome() {
             <Link className="lp-btn lp-glow lp-lg" href="/">
               {copy.fCta1}
             </Link>
-            <Link className="lp-btn lp-ghost lp-lg" href="/onboarding">
+            <Link className="lp-btn lp-ghost lp-lg" href="/pricing">
               {copy.fCta2}
             </Link>
           </div>

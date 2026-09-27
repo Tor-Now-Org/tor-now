@@ -276,6 +276,12 @@ export const auditedSubscriptions = (
     await record(context, AUDIT_ACTIONS.subscriptionChanged, "Subscription", after.id, before, after);
     return after;
   },
+  async setPlanAsOwner(businessId, terms) {
+    const before = await inner.findByBusiness(businessId);
+    const after = await inner.setPlanAsOwner(businessId, terms);
+    await record(context, AUDIT_ACTIONS.subscriptionChanged, "Subscription", after.id, before, after);
+    return after;
+  },
 });
 
 export const auditedWorkingHours = (

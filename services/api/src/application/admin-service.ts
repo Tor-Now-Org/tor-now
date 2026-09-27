@@ -1,6 +1,5 @@
 import {
   applyPayment,
-  changePlan,
   forbidden,
   instant,
   money,
@@ -32,8 +31,9 @@ import type {
 } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { requireAdministrator, requireOperator } from "./authorization.ts";
-import { currentVersionOf, entitlementOf, subscriptionView, type SubscriptionView } from "./billing.ts";
-import { keepOnly, overAllowance, resumeWithinAllowance } from "./allowance.ts";
+import { entitlementOf, subscriptionView, type SubscriptionView } from "./billing.ts";
+import { keepOnly, overAllowance } from "./allowance.ts";
+import { applyDueMoves, movePlan } from "./plan-move.ts";
 import {
   directoryRow,
   filterDirectory,
@@ -388,23 +388,24 @@ export const adminService = (dependencies: {
      * own rule (ADR 0020): an upgrade at once, a downgrade at the renewal, so
      * nothing already paid for is taken away. Audited by the decorator.
      */
-    async changePlan(actor: Actor, businessId: BusinessId, plan: Plan): Promise<SubscriptionView> {
+    async changePlan(
+      actor: Actor,
+      businessId: BusinessId,
+      plan: Plan,
+      keep?: readonly ResourceId[],
+    ): Promise<SubscriptionView> {
       requireAdministrator(actor);
       return unitOfWork.run(actor, async ({ repositories }) => {
         const business = await repositories.businesses.findById(businessId);
         if (business === null) throw notFound("Business", businessId);
-        const today = todayIn(clock.now(), business.timeZone);
-        const view = await subscriptionView(repositories, businessId, today);
-        const target = await currentVersionOf(repositories, plan);
-        const changed = changePlan(view.subscription, { from: view.planVersion, to: target });
-        await repositories.subscriptions.update(businessId, {
-          planVersionId: changed.planVersionId,
-          scheduledMove: changed.scheduledMove,
+        return movePlan(repositories, {
+          businessId,
+          plan,
+          keep,
+          by: "ADMINISTRATOR",
+          today: todayIn(clock.now(), business.timeZone),
+          now: clock.now(),
         });
-        // An upgrade makes room: calendars paused for the old Allowance come
-        // back by themselves, as the owner was told they would.
-        await resumeWithinAllowance(repositories, businessId, await entitlementOf(repositories, businessId, today));
-        return subscriptionView(repositories, businessId, today);
       });
     },
 
@@ -521,6 +522,22 @@ export const adminService = (dependencies: {
      * Period, and knows nothing of Appointments, Services or Resources.
      * Existing Appointments are never affected.
      */
+    /**
+     * The day's scheduled Plan moves, run by the same daily job that
+     * deactivates: each moves on its renewal, and the calendars its owner chose
+     * not to keep pause that day (ADR 0020).
+     */
+    async applyDueMoves(actor: Actor) {
+      requireOperator(actor);
+      return unitOfWork.run(actor, ({ repositories }) =>
+        applyDueMoves(
+          repositories,
+          parseLocalDate(new Date(clock.now()).toISOString().slice(0, 10)),
+          clock.now(),
+        ),
+      );
+    },
+
     async deactivateLapsedBusinesses(actor: Actor): Promise<readonly BusinessId[]> {
       // Cron calls this with no human behind it, which is the normal case; an
       // administrator may also run it by hand.

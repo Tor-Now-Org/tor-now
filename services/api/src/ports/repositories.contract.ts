@@ -2066,6 +2066,50 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("marks calendars to pause on a day, and finds them when it comes", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07011");
+        const second = await repositories.resources.create({ businessId: context.business.id, name: "שני" });
+        const on = parseLocalDate("2031-03-10");
+
+        await repositories.resources.setPauseOn([], on);
+        await repositories.resources.setPauseOn([second.id], on);
+        expect((await repositories.resources.findById(second.id))?.pauseOn).toBe(on);
+
+        const ids = async (today: string) =>
+          (await repositories.resources.listDueToPause(parseLocalDate(today))).map((resource) => resource.id);
+        expect(await ids("2031-03-09")).not.toContain(second.id);
+        expect(await ids("2031-03-10")).toContain(second.id);
+
+        await repositories.resources.setPauseOn([second.id], null);
+        expect((await repositories.resources.findById(second.id))?.pauseOn).toBeNull();
+      });
+    });
+
+    it("lets an owner move their own Plan, and lists the moves that fall due", async () => {
+      await withRepositories(async (repositories, actAs) => {
+        const context = await aBookableBusiness(repositories, "07012");
+        const current = await repositories.planVersions.listCurrent();
+        const team = current.find((version) => version.plan === "TEAM");
+        const solo = current.find((version) => version.plan === "SOLO");
+        if (team === undefined || solo === undefined) throw new Error("No current editions");
+        const effectiveOn = parseLocalDate("2031-04-01");
+
+        await actAs(context.owner.id);
+        const moved = await repositories.subscriptions.setPlanAsOwner(context.business.id, {
+          planVersionId: team.id,
+          scheduledMove: { planVersionId: solo.id, effectiveOn },
+        });
+        expect(moved.planVersionId).toBe(team.id);
+        expect(moved.scheduledMove).toEqual({ planVersionId: solo.id, effectiveOn });
+
+        const due = async (today: string) =>
+          (await repositories.subscriptions.listDueMoves(parseLocalDate(today))).map((s) => s.businessId);
+        expect(await due("2031-03-31")).not.toContain(context.business.id);
+        expect(await due("2031-04-01")).toContain(context.business.id);
+      });
+    });
+
     it("reads the default unit rates, dated and sourced", async () => {
       await withRepositories(async (repositories) => {
         const rates = await repositories.unitRates.list();
