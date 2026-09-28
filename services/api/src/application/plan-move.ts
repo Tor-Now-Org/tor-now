@@ -42,7 +42,8 @@ export const movePlan = async (
   const { businessId } = input;
   const view = await subscriptionView(repositories, businessId, input.today);
   const target = await currentVersionOf(repositories, input.plan);
-  const changed = changePlan(view.subscription, { from: view.planVersion, to: target });
+  // A move onto a new edition of the Plan held is the Catalogue's, and stands.
+  const changed = changePlan(view.subscription, { from: view.planVersion, to: target, scheduled: view.scheduledVersion });
 
   const resources = await repositories.resources.listForBusiness(businessId);
   // Whatever an earlier choice marked to pause no longer stands: this move, or
@@ -135,7 +136,10 @@ const tellOfMove = async (
 ): Promise<void> => {
   const { businessId, by, from, to, at } = move;
   if (from.planVersion.plan === to.plan) {
-    if (from.subscription.scheduledMove !== null) await repositories.notices.clear(businessId, ["MOVE_SOON"], at);
+    // Only the owner's own move is withdrawn; the Catalogue's stands.
+    if (from.subscription.scheduledMove !== null && move.scheduledMove === null) {
+      await repositories.notices.clear(businessId, ["MOVE_SOON"], at);
+    }
     return;
   }
   if (move.scheduledMove !== null) {
@@ -199,17 +203,25 @@ export const applyDueMoves = async (
     const move = subscription.scheduledMove;
     /* istanbul ignore next -- listDueMoves returns only Subscriptions with a move */
     if (move === null) continue;
-    const version = await repositories.planVersions.findById(move.planVersionId);
+    const [version, previous] = await Promise.all([
+      repositories.planVersions.findById(move.planVersionId),
+      repositories.planVersions.findById(subscription.planVersionId),
+    ]);
     if (version !== null) {
       await tell(repositories, {
         businessId: subscription.businessId,
-        facts: {
-          kind: "MOVE_APPLIED",
-          plan: version.plan,
-          paused: toPause
-            .filter((resource) => resource.businessId === subscription.businessId)
-            .map((resource) => resource.name),
-        },
+        // A new edition of the Plan held is the Catalogue's change landing,
+        // not a move the owner made.
+        facts:
+          previous?.plan === version.plan
+            ? { kind: "EDITION_APPLIED", plan: version.plan }
+            : {
+                kind: "MOVE_APPLIED",
+                plan: version.plan,
+                paused: toPause
+                  .filter((resource) => resource.businessId === subscription.businessId)
+                  .map((resource) => resource.name),
+              },
         at: now,
       });
     }

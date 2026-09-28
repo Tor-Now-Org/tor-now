@@ -5,7 +5,7 @@ import { parseLocalDate } from "../time/local-date.ts";
 import {
   bannerOf,
   goesToWhatsApp,
-  isAboutPaying,
+  isSentOnWhatsApp,
   isStanding,
   NOTICE_KINDS,
   noticeKey,
@@ -42,12 +42,16 @@ describe("what goes to WhatsApp", () => {
       "PAYMENT_LATE",
       "DEACTIVATED",
       "PAYMENT_RECORDED",
+      "EDITION_ANNOUNCED",
+      "EDITION_CANCELLED",
     ]);
   });
 
-  it("narrows a Notice's facts to one about paying", () => {
-    expect(isAboutPaying({ kind: "PAYMENT_LATE", graceEndsOn: day("2026-11-07") })).toBe(true);
-    expect(isAboutPaying({ kind: "CALENDARS_RESUMED", names: [] })).toBe(false);
+  it("narrows a Notice's facts to one sent on WhatsApp", () => {
+    expect(isSentOnWhatsApp({ kind: "PAYMENT_LATE", graceEndsOn: day("2026-11-07") })).toBe(true);
+    expect(isSentOnWhatsApp({ kind: "EDITION_CANCELLED", plan: "SOLO" })).toBe(true);
+    expect(isSentOnWhatsApp({ kind: "PLAN_IMPROVED", plan: "SOLO", priceFrom: 4900, priceTo: 3900, allowanceFrom: 1, allowanceTo: 1, gained: [] })).toBe(false);
+    expect(isSentOnWhatsApp({ kind: "CALENDARS_RESUMED", names: [] })).toBe(false);
   });
 });
 
@@ -142,6 +146,7 @@ describe("noticesDue", () => {
     subscription: { trialEndsOn: null, paidThrough: day("2026-11-01"), scheduledMove: null },
     scheduledPlan: null,
     pausing: [],
+    currentPlan: "TEAM" as const,
     grants: [],
     businessActive: true,
     today,
@@ -187,6 +192,22 @@ describe("noticesDue", () => {
       { kind: "MOVE_SOON", plan: "SOLO", effectiveOn: "2026-10-26", pausing: ["דנה"] },
     ]);
     expect(moving("2026-10-19")).toEqual([]);
+  });
+
+  it("reminds of a move onto a new edition of the Plan held as the Catalogue's, not the owner's", () => {
+    const due = noticesDue(
+      input({
+        currentPlan: "SOLO",
+        scheduledPlan: "SOLO",
+        subscription: {
+          trialEndsOn: null,
+          paidThrough: day("2026-11-01"),
+          scheduledMove: { planVersionId: asId("solo-2"), effectiveOn: day("2026-10-26") },
+        },
+      }),
+    );
+    expect(due).toEqual([{ kind: "EDITION_SOON", plan: "SOLO", effectiveOn: "2026-10-26" }]);
+    expect(noticeKey(due[0] as NoticeFacts)).toBe("EDITION_SOON:SOLO:2026-10-26");
   });
 
   it("reminds a week ahead of Grants ending, once per day they end, naming all of them", () => {
@@ -245,6 +266,21 @@ describe("parseNoticeFacts", () => {
     { kind: "GRANT_EXTENDED", feature: "TEAM_ROLES", endsOn: day("2026-11-01") },
     { kind: "GRANT_ENDING", features: ["TEAM_ROLES"], endsOn: day("2026-10-02") },
     { kind: "GRANT_ENDED", feature: "TEAM_ROLES" },
+    {
+      kind: "EDITION_ANNOUNCED",
+      plan: "SOLO",
+      effectiveOn: day("2026-10-28"),
+      priceFrom: 4900,
+      priceTo: 5900,
+      allowanceFrom: 1,
+      allowanceTo: 1,
+      gained: [],
+      lost: ["REMINDERS"],
+    },
+    { kind: "EDITION_SOON", plan: "SOLO", effectiveOn: day("2026-10-28") },
+    { kind: "EDITION_APPLIED", plan: "SOLO" },
+    { kind: "EDITION_CANCELLED", plan: "SOLO" },
+    { kind: "PLAN_IMPROVED", plan: "TEAM", priceFrom: 8900, priceTo: 8900, allowanceFrom: 5, allowanceTo: 8, gained: [] },
   ];
 
   it("reads back every kind exactly as it was written", () => {

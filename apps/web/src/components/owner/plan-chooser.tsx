@@ -44,6 +44,8 @@ export const PlanChooser = ({
 
   const longDate = (date: string) => formatLocalDate(date, language, { day: "numeric", month: "long" });
   const target = plans.find((plan) => plan.plan === picked);
+  /** The edition a Catalogue change moves the Plan held onto — its current one. */
+  const editionTo = plans.find((plan) => plan.plan === current.plan);
   const outcome = target === undefined ? null : outcomeOf(current, target);
   const onOffer = resources.filter((resource) => resource.active && resource.paused !== true);
   const shrinking = target !== undefined && picked !== current.plan && target.resourceAllowance < onOffer.length;
@@ -68,7 +70,26 @@ export const PlanChooser = ({
 
   return (
     <>
-      {current.scheduledMove !== null && (
+      {current.scheduledMove !== null && current.scheduledMove.plan === current.plan && (
+        // The Catalogue's change to the Plan held (ADR 0020): told, not the
+        // owner's to withdraw.
+        <div className="pending-move">
+          <span>
+            {editionTo === undefined || editionTo.priceMinor === current.priceMinor
+              ? fillText(words.editionPendingSame, {
+                  plan: words.plan[current.plan],
+                  date: longDate(current.scheduledMove.effectiveOn),
+                })
+              : fillText(words.editionPending, {
+                  plan: words.plan[current.plan],
+                  date: longDate(current.scheduledMove.effectiveOn),
+                  to: formatPrice(editionTo.priceMinor, language, "—"),
+                  from: formatPrice(current.priceMinor, language, "—"),
+                })}
+          </span>
+        </div>
+      )}
+      {current.scheduledMove !== null && current.scheduledMove.plan !== current.plan && (
         <div className="pending-move">
           <span>
             {fillText(words.movePending, {

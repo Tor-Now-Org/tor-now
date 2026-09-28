@@ -109,4 +109,18 @@ describe("filterDirectory", () => {
     expect(counts.plans).toEqual({ SOLO: 0, TEAM: 2 });
     expect(counts.flags).toEqual({ TRIAL_ENDING: 1, MOVE_PENDING: 0, OVER_ALLOWANCE: 0 });
   });
+
+  it("finds who is on one edition of a Plan, and counts every edition in use", () => {
+    const soloV2: PlanVersion = { ...solo, id: asId("solo-2"), number: 2 };
+    const withV2 = [...rows, row("Noy", {}, { plan: soloV2 })];
+
+    expect(names(filterDirectory(withV2, { ...NO_FILTER, edition: soloV2.id }))).toEqual(["Noy"]);
+    const { counts } = filterDirectory(withV2, { ...NO_FILTER, edition: soloV2.id });
+    // Editions are counted with every other group applied but their own.
+    expect(counts.editions).toEqual([
+      { id: "solo-1", plan: "SOLO", number: 1, count: 4 },
+      { id: "solo-2", plan: "SOLO", number: 2, count: 1 },
+      { id: "team-1", plan: "TEAM", number: 1, count: 3 },
+    ]);
+  });
 });

@@ -1,12 +1,12 @@
 import {
-  isAboutPaying,
+  isSentOnWhatsApp,
   noticeKey,
   noticesCleared,
   type BusinessId,
   type Instant,
   type Notice,
   type NoticeFacts,
-  type PaymentNoticeFacts,
+  type WhatsAppNoticeFacts,
 } from "@tor-now/domain";
 import { TEMPLATES } from "../ports/notifier.ts";
 import type { Repositories } from "../ports/repositories.ts";
@@ -14,13 +14,13 @@ import type { Session } from "../ports/unit-of-work.ts";
 
 /**
  * Telling a Business about its Subscription (ADR 0020), in the transaction of
- * whatever happened. Two doors, split by type, so a Notice about paying can
- * never be kept without its WhatsApp message: `tell` has no outbox and takes
- * only news, `announce` takes anything and sends what is about paying.
+ * whatever happened. Two doors, split by type, so a Notice that goes to
+ * WhatsApp can never be kept without its message: `tell` has no outbox and
+ * takes only news, `announce` takes anything and sends what goes to WhatsApp.
  */
 
-/** Everything that is not about paying: kept in the list, never sent. */
-export type NewsFacts = Exclude<NoticeFacts, PaymentNoticeFacts>;
+/** Everything that stays in the app: kept in the list, never sent. */
+export type NewsFacts = Exclude<NoticeFacts, WhatsAppNoticeFacts>;
 
 type Telling<Facts extends NoticeFacts> = {
   readonly businessId: BusinessId;
@@ -63,7 +63,7 @@ export const announce = async (
   const notice = await keep(session.repositories, telling);
   const { facts } = telling;
   // Sent once, with the Notice it belongs to: a Notice kept already was sent then.
-  if (notice === null || !isAboutPaying(facts)) return notice;
+  if (notice === null || !isSentOnWhatsApp(facts)) return notice;
   const [business, phone] = await Promise.all([
     session.repositories.businesses.findById(telling.businessId),
     ownerPhoneOf(session.repositories, telling.businessId),

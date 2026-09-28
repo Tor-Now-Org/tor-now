@@ -22,7 +22,6 @@ import {
   type User,
   forbidden,
   isOnOffer,
-  PLANS,
   shouldDeactivate,
   type PlanVersion,
   compareLocalDate,
@@ -38,7 +37,7 @@ import { PG_ERRORS } from "../pg/client.ts";
 import type { DailyUsageLine, Repositories, WaitingEntry } from "../../ports/repositories.ts";
 import type { Store } from "./in-memory-store.ts";
 import { inMemoryNotices } from "./in-memory-notices.ts";
-import { inMemoryGrants, inMemoryUnitRates } from "./in-memory-catalogue.ts";
+import { inMemoryGrants, inMemoryPlanVersions, inMemoryUnitRates, isCurrentEdition } from "./in-memory-catalogue.ts";
 
 /**
  * The second implementation of every repository port, held in memory.
@@ -93,9 +92,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
   const nextId = store.nextId;
   const today = (): LocalDate => parseLocalDate(new Date().toISOString().slice(0, 10));
   const cheapestCurrentSolo = () => {
-    const newest = store.planVersions
-      .filter((version) => version.plan === "SOLO")
-      .reduce((best, version) => (version.number > best.number ? version : best));
+    const newest = store.planVersions.find((edition) => edition.plan === "SOLO" && isCurrentEdition(store, edition.id));
+    if (newest === undefined) throw new Error("No current Solo edition");
     return newest.id;
   };
   const now = () => instant(Date.now());
@@ -1252,13 +1250,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       async setPlanAsOwner(businessId, terms) {
         const subscription = store.subscriptions.find((candidate) => candidate.businessId === businessId);
         if (subscription === undefined) throw notFound("Subscription", businessId);
-        const current = (id: PlanVersion["id"]) => {
-          const version = store.planVersions.find((candidate) => candidate.id === id);
-          return (
-            version !== undefined &&
-            !store.planVersions.some((other) => other.plan === version.plan && other.number > version.number)
-          );
-        };
+        const current = (id: PlanVersion["id"]) => isCurrentEdition(store, id);
         if (terms.planVersionId !== subscription.planVersionId && !current(terms.planVersionId)) {
           throw new DomainError("CONFLICT", "A Plan is changed to its current edition");
         }
@@ -1281,13 +1273,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           (membership) => membership.businessId === businessId && membership.role === "OWNER",
         );
         if (owner === undefined) throw forbidden("Only the owner starts a Subscription");
-        const version = store.planVersions.find((candidate) => candidate.id === terms.planVersionId);
-        const current =
-          version !== undefined &&
-          !store.planVersions.some(
-            (other) => other.plan === version.plan && other.number > version.number,
-          );
-        if (!current) throw new DomainError("CONFLICT", "A new Business joins a current Plan Version");
+        if (!isCurrentEdition(store, terms.planVersionId)) throw new DomainError("CONFLICT", "A new Business joins a current Plan Version");
         if (terms.trialEndsOn !== null) {
           if (store.trialsTaken.some((trial) => trial.userId === owner.userId)) {
             throw new DomainError("CONFLICT", "This owner has had their Trial");
@@ -1345,26 +1331,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       },
     },
 
-    planVersions: {
-      async findById(id) {
-        return store.planVersions.find((version) => version.id === id) ?? null;
-      },
-      async listCurrent() {
-        return PLANS.flatMap((plan) => {
-          const editions = store.planVersions.filter((version) => version.plan === plan);
-          const newest = editions.reduce<PlanVersion | null>(
-            (best, version) => (best === null || version.number > best.number ? version : best),
-            null,
-          );
-          return newest === null ? [] : [newest];
-        });
-      },
-      async listAll() {
-        return [...store.planVersions].sort(
-          (a, b) => a.plan.localeCompare(b.plan) || a.number - b.number,
-        );
-      },
-    },
+    planVersions: inMemoryPlanVersions(store),
 
     usageRecords: {
       async record(records) {

@@ -483,6 +483,47 @@ export type FeatureSourceDto = {
   grant: { id: string; reason: string; grantedBy: string | null; grantedAt: string } | null;
 };
 
+/** One edition of a Plan, as the Catalogue editor shows it (ADR 0020). */
+export type PlanEditionDto = {
+  id: string;
+  plan: PlanName;
+  number: number;
+  priceMinor: number;
+  resourceAllowance: number;
+  features: FeatureName[];
+  publishedAt: string;
+  /** The first day an existing Business moves onto it; null when nobody had to. */
+  firstMoveOn: string | null;
+};
+
+export type BusinessRefDto = { id: string; name: string };
+
+/** A new edition waiting for existing Businesses to move onto it. */
+export type PendingChangeDto = {
+  edition: PlanEditionDto;
+  previous: PlanEditionDto;
+  moving: { business: BusinessRefDto; effectiveOn: string }[];
+  joined: BusinessRefDto[];
+  cancellable: boolean;
+};
+
+export type PlanViewDto = {
+  plan: PlanName;
+  current: PlanEditionDto;
+  /** Every edition anybody is on, and the current one, newest first. */
+  editions: (PlanEditionDto & { current: boolean; businesses: number })[];
+  pending: PendingChangeDto | null;
+  /** When existing Businesses would move, were a change that takes value published today. */
+  ifTakenToday: { firstMoveOn: string; lastMoveOn: string; businesses: number } | null;
+};
+
+export type PlanCatalogueDto = {
+  plans: PlanViewDto[];
+  previews: { feature: FeatureName; endsOn: string }[];
+};
+
+export type PlanChangeKind = "NONE" | "GIVES" | "TAKES";
+
 export type CostUnitName = "WHATSAPP_UTILITY" | "WHATSAPP_AUTHENTICATION" | "SMS_SEGMENT";
 
 /** What one unit of messaging cost from a day, and the evidence (ADR 0022). */
@@ -539,10 +580,15 @@ export type DirectoryFilter = {
   query: string;
   statuses: BillingStatus[];
   plan: PlanName | null;
+  /** One edition of a Plan, by its id. */
+  edition: string | null;
   flags: BillingFlag[];
 };
 
-export const NO_DIRECTORY_FILTER: DirectoryFilter = { query: "", statuses: [], plan: null, flags: [] };
+export const NO_DIRECTORY_FILTER: DirectoryFilter = { query: "", statuses: [], plan: null, edition: null, flags: [] };
+
+/** An edition some Business is on, as the directory counts it. */
+export type EditionCountDto = { id: string; plan: PlanName; number: number; count: number };
 
 export type DirectoryPageDto = {
   rows: DirectoryRowDto[];
@@ -552,6 +598,8 @@ export type DirectoryPageDto = {
     total: number;
     statuses: Record<BillingStatus, number>;
     plans: Record<PlanName, number>;
+    /** Absent from an API older than Plan editions. */
+    editions?: EditionCountDto[];
     flags: Record<BillingFlag, number>;
   };
 };

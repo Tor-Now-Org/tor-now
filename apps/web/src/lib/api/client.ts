@@ -17,6 +17,8 @@ import type {
   BillingDto,
   CostUnitName,
   FeatureName,
+  PlanCatalogueDto,
+  PlanChangeKind,
   FeatureSourceDto,
   NoticeBoardDto,
   UnitRateDto,
@@ -818,6 +820,7 @@ export const api = {
         ...(filter.query.trim() === "" ? {} : { q: filter.query.trim() }),
         ...(filter.statuses.length === 0 ? {} : { status: filter.statuses.join(",") }),
         ...(filter.plan === null ? {} : { plan: filter.plan }),
+        ...(filter.edition === null ? {} : { edition: filter.edition }),
         ...(filter.flags.length === 0 ? {} : { flag: filter.flags.join(",") }),
       },
     }),
@@ -865,6 +868,23 @@ export const api = {
       method: "POST",
       token,
     }),
+
+  adminPlans: (token: string) => request<PlanCatalogueDto>("/admin/catalogue/plans", { token }),
+
+  /** A Plan's new terms; the server decides whether they give or take. */
+  adminEditPlan: (
+    token: string,
+    plan: PlanName,
+    terms: { priceMinor: number; resourceAllowance: number; features: FeatureName[] },
+  ) =>
+    request<PlanCatalogueDto & { kind: PlanChangeKind }>(`/admin/catalogue/plans/${plan}`, {
+      method: "PUT",
+      body: terms,
+      token,
+    }),
+
+  adminCancelPlanChange: (token: string, plan: PlanName) =>
+    request<PlanCatalogueDto>(`/admin/catalogue/plans/${plan}/change/cancel`, { method: "POST", token }),
 
   adminRates: (token: string) => request<UnitRateDto[]>("/admin/catalogue/rates", { token }),
 

@@ -14,6 +14,7 @@ import {
 } from "@tor-now/domain";
 import type {
   PaymentRepository,
+  PlanEdition,
   PlanVersionRepository,
   PreviewRepository,
   SubscriptionRepository,
@@ -182,6 +183,13 @@ export const subscriptionRepository = (
   },
 });
 
+const toPlanEdition = (row: Row): PlanEdition => ({
+  ...toPlanVersion(row),
+  publishedAt: toInstant(row["created_at"]),
+  withdrawnAt: row["withdrawn_at"] === null ? null : toInstant(row["withdrawn_at"]),
+  firstMoveOn: row["first_move_on"] === null ? null : toLocalDate(row["first_move_on"]),
+});
+
 export const planVersionRepository = (tx: Transaction): PlanVersionRepository => ({
   async findById(id) {
     const rows = await tx<Row[]>`select * from plan_version where id = ${id}`;
@@ -191,13 +199,48 @@ export const planVersionRepository = (tx: Transaction): PlanVersionRepository =>
 
   async listCurrent() {
     const rows = await tx<Row[]>`
-      select distinct on (plan) * from plan_version order by plan, number desc`;
+      select distinct on (plan) * from plan_version
+      where withdrawn_at is null
+      order by plan, number desc`;
     return rows.map(toPlanVersion);
   },
 
   async listAll() {
     const rows = await tx<Row[]>`select * from plan_version order by plan, number`;
     return rows.map(toPlanVersion);
+  },
+
+  async listEditions() {
+    const rows = await tx<Row[]>`select * from plan_version order by plan, number`;
+    return rows.map(toPlanEdition);
+  },
+
+  async publish(edition) {
+    const rows = await tx<Row[]>`
+      insert into plan_version (plan, number, features, resource_allowance, price_minor, first_move_on)
+      values (${edition.plan}, ${edition.number}, ${[...edition.terms.features]}::text[],
+              ${edition.terms.resourceAllowance}, ${edition.terms.price}, ${edition.firstMoveOn})
+      returning *`;
+    const row = rows[0];
+    if (row === undefined) throw notFound("PlanVersion", `${edition.plan}:${edition.number}`);
+    return toPlanEdition(row);
+  },
+
+  async setTerms(id, terms) {
+    const rows = await tx<Row[]>`
+      update plan_version
+      set features = ${[...terms.features]}::text[],
+          resource_allowance = ${terms.resourceAllowance},
+          price_minor = ${terms.price}
+      where id = ${id}
+      returning *`;
+    const row = rows[0];
+    if (row === undefined) throw notFound("PlanVersion", id);
+    return toPlanVersion(row);
+  },
+
+  async withdraw(id, at) {
+    await tx`update plan_version set withdrawn_at = ${new Date(at)} where id = ${id}`;
   },
 });
 

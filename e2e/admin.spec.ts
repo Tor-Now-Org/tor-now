@@ -297,6 +297,7 @@ test.describe("the Catalogue", () => {
     const admin = await anAdministrator();
     await asAdministrator(page, admin.token);
     await page.getByRole("button", { name: "מחירון" }).click();
+    await page.getByRole("tab", { name: "תעריפי הודעות" }).click();
 
     // The suite shares one database, so this rate may have been corrected
     // already by another run; the journey only asks that the correction lands.
@@ -354,5 +355,69 @@ test.describe("the Catalogue", () => {
     await blocking.getByRole("button", { name: "כן, לסיים" }).click();
     await expect(blocking.getByText("לא כלול")).toBeVisible({ timeout: 15_000 });
     await expect(sheet.getByText("פיצ'רים · 1 הוענקו")).toBeVisible();
+  });
+
+  // The suite shares one database and runs one journey at a time, so a Plan
+  // change here is always undone before the journey ends.
+  test("a price rise publishes a new edition, reaches the owners, and cancelling puts it all back", async ({ page }) => {
+    const admin = await anAdministrator();
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({ name: `מחיר ${Date.now()}`, ownerPhone, plan: "SOLO" });
+
+    await asAdministrator(page, admin.token);
+    await page.getByRole("button", { name: "מחירון" }).click();
+    const solo = page.locator(".plan-card").filter({ has: page.locator(".plan-badge.p-SOLO") }).first();
+    await solo.getByRole("button", { name: "עריכת המסלול" }).click({ timeout: 15_000 });
+
+    const edit = page.getByRole("dialog", { name: /עריכת יחיד/ });
+    await edit.getByLabel("מחיר לחודש (₪)").fill("59");
+    await expect(edit.getByText(/לוקח ערך — גרסה \d+ חדשה/)).toBeVisible();
+    await edit.getByRole("button", { name: /פרסום גרסה \d+/ }).click();
+
+    await expect(solo.locator(".pending-change")).toBeVisible({ timeout: 15_000 });
+    await expect(solo.getByText(/שינוי ממתין · .*59/)).toBeVisible();
+
+    // The owner was told, in the app and on WhatsApp.
+    const board = await call<{ notices: { kind: string }[] }>(`/businesses/${shop.business.id}/notices`, {
+      token: shop.owner.token,
+    });
+    expect(board.notices.map((notice) => notice.kind)).toContain("EDITION_ANNOUNCED");
+
+    await solo.getByRole("button", { name: "ביטול השינוי" }).click();
+    const cancel = page.getByRole("dialog", { name: /ביטול השינוי ביחיד/ });
+    await expect(cancel.getByText(shop.business.name)).toBeVisible();
+    await cancel.getByRole("button", { name: /ביטול השינוי והודעה/ }).click();
+
+    await expect(solo.locator(".pending-change")).toHaveCount(0, { timeout: 15_000 });
+    await expect(solo.locator(".price")).toContainText("49");
+  });
+
+  test("an edit that only gives says it applies now, before anything is saved", async ({ page }) => {
+    const admin = await anAdministrator();
+    await asAdministrator(page, admin.token);
+    await page.getByRole("button", { name: "מחירון" }).click();
+    const team = page.locator(".plan-card").filter({ has: page.locator(".plan-badge.p-TEAM") }).first();
+    await team.getByRole("button", { name: "עריכת המסלול" }).click({ timeout: 15_000 });
+
+    const edit = page.getByRole("dialog", { name: /עריכת צוות/ });
+    await expect(edit.getByRole("button", { name: "אין שינוי" })).toBeDisabled();
+    await edit.getByRole("button", { name: "+" }).click();
+    await expect(edit.getByText("נותן ערך — חל עכשיו")).toBeVisible();
+    await expect(edit.getByRole("button", { name: "שמירה — חל עכשיו" })).toBeEnabled();
+  });
+
+  test("all plans side by side, and a count opens the Businesses on that edition", async ({ page }) => {
+    const admin = await anAdministrator();
+    await aBusinessWithOpenHours({ name: `שכבות ${Date.now()}`, ownerPhone: uniquePhone(), plan: "TEAM" });
+    await asAdministrator(page, admin.token);
+    await page.getByRole("button", { name: "מחירון" }).click();
+    await page.getByRole("button", { name: /כל המסלולים זה לצד זה/ }).click({ timeout: 15_000 });
+
+    const table = page.getByRole("dialog", { name: "כל המסלולים זה לצד זה" });
+    await expect(table.getByRole("row", { name: /מחיר/ })).toBeVisible();
+    await expect(table.getByRole("row", { name: /מנהלים ועובדים/ })).toBeVisible();
+    await table.getByRole("row", { name: /עסקים/ }).getByRole("button").last().click();
+
+    await expect(page.locator(".dir-token", { hasText: /צוות v1/ })).toBeVisible({ timeout: 15_000 });
   });
 });

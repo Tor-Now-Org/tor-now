@@ -977,10 +977,10 @@ const adminRoutes = (services: Services) => {
 
   admin.get("/businesses", async (context) => {
     const page = parseQuery(context, schema.pageSchema);
-    const { q, status, plan, flag } = parseQuery(context, schema.directoryQuerySchema);
+    const { q, status, plan, edition, flag } = parseQuery(context, schema.directoryQuerySchema);
     const result = await services.admin.listBusinesses(
       actorOf(context),
-      { query: q, statuses: status, plan, flags: flag },
+      { query: q, statuses: status, plan, edition: edition === null ? null : asId<"PlanVersion">(edition), flags: flag },
       page,
     );
     return context.json({
@@ -1101,6 +1101,29 @@ const adminRoutes = (services: Services) => {
           idParam(context, "businessId"),
           asId<"Grant">(parse(schema.grantIdSchema, context.req.param("grantId"))),
         ),
+      ),
+    ),
+  );
+
+  // ADR 0020, ADR 0021: each Plan's editions, and changing what a Plan offers.
+  admin.get("/catalogue/plans", async (context) =>
+    context.json(wire.planCatalogueOut(await services.planCatalogue.plans(actorOf(context)))),
+  );
+
+  admin.put("/catalogue/plans/:plan", async (context) => {
+    const body = await parseBody(context, schema.planEditSchema);
+    const result = await services.planCatalogue.changePlan(
+      actorOf(context),
+      parse(schema.planParamSchema, context.req.param("plan")),
+      body,
+    );
+    return context.json({ kind: result.kind, ...wire.planCatalogueOut(result) });
+  });
+
+  admin.post("/catalogue/plans/:plan/change/cancel", async (context) =>
+    context.json(
+      wire.planCatalogueOut(
+        await services.planCatalogue.cancelChange(actorOf(context), parse(schema.planParamSchema, context.req.param("plan"))),
       ),
     ),
   );

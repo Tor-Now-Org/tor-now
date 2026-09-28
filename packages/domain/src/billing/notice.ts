@@ -11,7 +11,8 @@ import { graceEndsOn, subscriptionStateOn, type Subscription } from "./subscript
  * A message from the platform to a Business about what its Subscription grants
  * or costs (docs/billing/CONTEXT.md). Every one is kept in the owner's list;
  * the ones that need a look also stand as a banner until acknowledged, and the
- * ones about paying also go out on WhatsApp (ADR 0020).
+ * ones about paying — or about a Plan changing for the worse — also go out on
+ * WhatsApp (ADR 0020).
  *
  * A Notice holds the facts of what happened, not the sentence saying so: the
  * owner reads it in their own language, and WhatsApp in Hebrew, from the same
@@ -35,6 +36,11 @@ export const NOTICE_KINDS = [
   "GRANT_EXTENDED",
   "GRANT_ENDING",
   "GRANT_ENDED",
+  "EDITION_ANNOUNCED",
+  "EDITION_SOON",
+  "EDITION_APPLIED",
+  "EDITION_CANCELLED",
+  "PLAN_IMPROVED",
 ] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 
@@ -78,7 +84,35 @@ export type NoticeFacts =
   | { readonly kind: "FEATURES_GRANTED"; readonly features: readonly Feature[]; readonly endsOn: LocalDate }
   | { readonly kind: "GRANT_EXTENDED"; readonly feature: Feature; readonly endsOn: LocalDate }
   | { readonly kind: "GRANT_ENDING"; readonly features: readonly Feature[]; readonly endsOn: LocalDate }
-  | { readonly kind: "GRANT_ENDED"; readonly feature: Feature };
+  | { readonly kind: "GRANT_ENDED"; readonly feature: Feature }
+  /**
+   * The Plan changes for the worse, from a day: what it costs and gives before
+   * and after, as the Catalogue changed it (ADR 0020).
+   */
+  | {
+      readonly kind: "EDITION_ANNOUNCED";
+      readonly plan: Plan;
+      readonly effectiveOn: LocalDate;
+      readonly priceFrom: number;
+      readonly priceTo: number;
+      readonly allowanceFrom: number;
+      readonly allowanceTo: number;
+      readonly gained: readonly Feature[];
+      readonly lost: readonly Feature[];
+    }
+  | { readonly kind: "EDITION_SOON"; readonly plan: Plan; readonly effectiveOn: LocalDate }
+  | { readonly kind: "EDITION_APPLIED"; readonly plan: Plan }
+  | { readonly kind: "EDITION_CANCELLED"; readonly plan: Plan }
+  /** The Plan got better, for everyone on it, at once. */
+  | {
+      readonly kind: "PLAN_IMPROVED";
+      readonly plan: Plan;
+      readonly priceFrom: number;
+      readonly priceTo: number;
+      readonly allowanceFrom: number;
+      readonly allowanceTo: number;
+      readonly gained: readonly Feature[];
+    };
 
 export type Notice = {
   readonly id: NoticeId;
@@ -129,22 +163,35 @@ const RULES: Readonly<Record<NoticeKind, KindRule>> = Object.freeze({
   GRANT_EXTENDED: { tone: "good", banner: false, clears: ["GRANT_ENDING"] },
   GRANT_ENDING: { tone: "caution", banner: true, clears: [] },
   GRANT_ENDED: { tone: "caution", banner: true, clears: ["FEATURES_GRANTED", "GRANT_ENDING"] },
+  EDITION_ANNOUNCED: { tone: "caution", banner: true, clears: ["EDITION_CANCELLED"] },
+  EDITION_SOON: { tone: "caution", banner: true, clears: [] },
+  EDITION_APPLIED: { tone: "info", banner: true, clears: ["EDITION_ANNOUNCED", "EDITION_SOON"] },
+  EDITION_CANCELLED: { tone: "good", banner: true, clears: ["EDITION_ANNOUNCED", "EDITION_SOON"] },
+  PLAN_IMPROVED: { tone: "good", banner: true, clears: [] },
 });
 
 export const noticeTone = (kind: NoticeKind): NoticeTone => RULES[kind].tone;
 export const standsAsBanner = (kind: NoticeKind): boolean => RULES[kind].banner;
 /**
- * What also goes to the owner on WhatsApp: only what is about paying. Each
- * message costs the platform, and the rest is news the owner either caused or
- * will see the next time they open the app.
+ * What also goes to the owner on WhatsApp: what is about paying, and a Plan
+ * changing for the worse — and its cancellation, since the change itself went
+ * out there. Each message costs the platform; the rest is news the owner
+ * either caused or will see the next time they open the app.
  */
-const ABOUT_PAYING = ["TRIAL_ENDING", "PAYMENT_LATE", "DEACTIVATED", "PAYMENT_RECORDED"] as const;
-export type PaymentNoticeFacts = Extract<NoticeFacts, { kind: (typeof ABOUT_PAYING)[number] }>;
+const SENT_ON_WHATSAPP = [
+  "TRIAL_ENDING",
+  "PAYMENT_LATE",
+  "DEACTIVATED",
+  "PAYMENT_RECORDED",
+  "EDITION_ANNOUNCED",
+  "EDITION_CANCELLED",
+] as const;
+export type WhatsAppNoticeFacts = Extract<NoticeFacts, { kind: (typeof SENT_ON_WHATSAPP)[number] }>;
 
 export const goesToWhatsApp = (kind: NoticeKind): boolean =>
-  (ABOUT_PAYING as readonly NoticeKind[]).includes(kind);
+  (SENT_ON_WHATSAPP as readonly NoticeKind[]).includes(kind);
 
-export const isAboutPaying = (facts: NoticeFacts): facts is PaymentNoticeFacts => goesToWhatsApp(facts.kind);
+export const isSentOnWhatsApp = (facts: NoticeFacts): facts is WhatsAppNoticeFacts => goesToWhatsApp(facts.kind);
 export const noticesCleared = (kind: NoticeKind): readonly NoticeKind[] => RULES[kind].clears;
 
 /**
@@ -164,6 +211,8 @@ export const noticeKey = (facts: NoticeFacts): string | null => {
       return `DEACTIVATED:${facts.on}`;
     case "MOVE_SOON":
       return `MOVE_SOON:${facts.plan}:${facts.effectiveOn}`;
+    case "EDITION_SOON":
+      return `EDITION_SOON:${facts.plan}:${facts.effectiveOn}`;
     case "GRANT_ENDING":
       return `GRANT_ENDING:${facts.endsOn}:${[...facts.features].sort().join(",")}`;
     default:
@@ -177,11 +226,16 @@ const BANNER_ORDER: readonly NoticeKind[] = [
   "PAYMENT_LATE",
   "TRIAL_ENDING",
   "MOVE_SOON",
+  "EDITION_SOON",
+  "EDITION_ANNOUNCED",
   "GRANT_ENDING",
   "CALENDARS_PAUSED",
   "GRANT_ENDED",
   "MOVE_APPLIED",
+  "EDITION_APPLIED",
+  "EDITION_CANCELLED",
   "CALENDARS_RESUMED",
+  "PLAN_IMPROVED",
   "FEATURES_GRANTED",
   "TRIAL_STARTED",
 ];
@@ -217,6 +271,8 @@ export const NOTICE_LEAD_DAYS = 7;
 export const noticesDue = (input: {
   readonly subscription: Pick<Subscription, "trialEndsOn" | "paidThrough" | "scheduledMove">;
   readonly scheduledPlan: Plan | null;
+  /** The Plan held now; a move onto a new edition of it is the Catalogue's. */
+  readonly currentPlan: Plan | null;
   /** The calendars marked to pause with the scheduled move. */
   readonly pausing: readonly string[];
   /** The Business's Grants; those ending within the week are announced. */
@@ -240,12 +296,11 @@ export const noticesDue = (input: {
   }
   const move = subscription.scheduledMove;
   if (move !== null && input.scheduledPlan !== null && within(move.effectiveOn, 1)) {
-    due.push({
-      kind: "MOVE_SOON",
-      plan: input.scheduledPlan,
-      effectiveOn: move.effectiveOn,
-      pausing: input.pausing,
-    });
+    due.push(
+      input.scheduledPlan === input.currentPlan
+        ? { kind: "EDITION_SOON", plan: input.scheduledPlan, effectiveOn: move.effectiveOn }
+        : { kind: "MOVE_SOON", plan: input.scheduledPlan, effectiveOn: move.effectiveOn, pausing: input.pausing },
+    );
   }
   // One reminder per day Grants end, naming everything that ends that day.
   const ending = input.grants.filter((grant) => within(grant.endsOn, 0));
@@ -359,6 +414,33 @@ export const parseNoticeFacts = (value: unknown): NoticeFacts => {
       return { kind, feature: parseFeature(textOf(facts, "feature")), endsOn: dateOf(facts, "endsOn") };
     case "GRANT_ENDED":
       return { kind, feature: parseFeature(textOf(facts, "feature")) };
+    case "EDITION_ANNOUNCED":
+      return {
+        kind,
+        plan: planOf(facts),
+        effectiveOn: dateOf(facts, "effectiveOn"),
+        priceFrom: countOf(facts, "priceFrom"),
+        priceTo: countOf(facts, "priceTo"),
+        allowanceFrom: countOf(facts, "allowanceFrom"),
+        allowanceTo: countOf(facts, "allowanceTo"),
+        gained: featuresOf(facts, "gained"),
+        lost: featuresOf(facts, "lost"),
+      };
+    case "EDITION_SOON":
+      return { kind, plan: planOf(facts), effectiveOn: dateOf(facts, "effectiveOn") };
+    case "EDITION_APPLIED":
+    case "EDITION_CANCELLED":
+      return { kind, plan: planOf(facts) };
+    case "PLAN_IMPROVED":
+      return {
+        kind,
+        plan: planOf(facts),
+        priceFrom: countOf(facts, "priceFrom"),
+        priceTo: countOf(facts, "priceTo"),
+        allowanceFrom: countOf(facts, "allowanceFrom"),
+        allowanceTo: countOf(facts, "allowanceTo"),
+        gained: featuresOf(facts, "gained"),
+      };
     default:
       throw validationFailed(`Unknown kind of Notice "${kind}"`);
   }

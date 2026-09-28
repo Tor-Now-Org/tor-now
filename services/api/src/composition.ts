@@ -9,6 +9,7 @@ import { calendarService } from "./application/calendar-service.ts";
 import { closureService } from "./application/closure-service.ts";
 import { catalogueService } from "./application/catalogue-service.ts";
 import { catalogueAdminService } from "./application/catalogue-admin.ts";
+import { planCatalogueService } from "./application/plan-catalogue.ts";
 import { discoveryService } from "./application/discovery-service.ts";
 import { reviewService } from "./application/review-service.ts";
 import { noticeService } from "./application/notice-service.ts";
@@ -122,6 +123,7 @@ export const compose = (
     calendar: calendarService({ unitOfWork, clock }),
     notices: noticeService({ unitOfWork, clock }),
     catalogueAdmin: catalogueAdminService({ unitOfWork, clock }),
+    planCatalogue: planCatalogueService({ unitOfWork, clock }),
     closures: closureService({ unitOfWork, clock }),
     admin,
 

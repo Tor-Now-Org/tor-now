@@ -145,6 +145,51 @@ describe("noticeText — Grants", () => {
   });
 });
 
+describe("noticeText — a Plan changing", () => {
+  it("says what changes and from when, the price first", () => {
+    const announced = text({
+      kind: "EDITION_ANNOUNCED",
+      plan: "SOLO",
+      effectiveOn: day("2026-10-28"),
+      priceFrom: 4900,
+      priceTo: 5900,
+      allowanceFrom: 1,
+      allowanceTo: 1,
+      gained: [],
+      lost: ["REMINDERS"],
+    });
+    expect(announced.title).toBe("Solo changes on 28 October");
+    expect(announced.body).toBe(
+      "The price rises from ₪49 to ₪59 a month and Reminders is no longer included, from your renewal on 28 October. Until then nothing changes.",
+    );
+    expect(announced.action).toBe("PLANS");
+  });
+
+  it("reminds relative to today, and tells of landing and of cancelling", () => {
+    expect(text({ kind: "EDITION_SOON", plan: "SOLO", effectiveOn: day("2026-10-26") }).title).toBe("Solo changes in 7 days");
+    expect(text({ kind: "EDITION_APPLIED", plan: "SOLO" }, "he").title).toBe("מסלול יחיד התעדכן");
+    expect(text({ kind: "EDITION_CANCELLED", plan: "TEAM" })).toEqual({
+      title: "The change to Team is cancelled",
+      body: "The plan stays exactly as it is.",
+      action: null,
+    });
+  });
+
+  it("says what got better, with nothing to do", () => {
+    const improved = text({
+      kind: "PLAN_IMPROVED",
+      plan: "TEAM",
+      priceFrom: 8900,
+      priceTo: 8900,
+      allowanceFrom: 5,
+      allowanceTo: 8,
+      gained: [],
+    });
+    expect(improved.title).toBe("Team got better");
+    expect(improved.body).toBe("Up to 8 calendars instead of 5. It applies already, with nothing for you to do.");
+  });
+});
+
 describe("noticeDay", () => {
   const at = (createdAt: string, today = "2026-10-19") =>
     noticeDay({ createdAt }, { ...context("en", today), timeZone: "Asia/Jerusalem" });

@@ -29,7 +29,7 @@ import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
 import { BottomNav, BuildingIcon, ChartIcon, PeopleIcon, ShieldIcon, TagIcon } from "@/components/bottom-nav.tsx";
 import { FeaturesCard } from "@/components/admin/features-card.tsx";
-import { RatesPanel } from "@/components/admin/rates-panel.tsx";
+import { CatalogueTab } from "@/components/admin/catalogue-tab.tsx";
 import { localDateOf } from "@/components/owner/day-filter.ts";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } from "@/components/ui.tsx";
 import { AdminStats } from "@/components/admin-stats.tsx";
@@ -256,7 +256,15 @@ export default function AdminPage() {
             )
         )}
 
-        {tab === "catalogue" && <RatesPanel token={token} />}
+        {tab === "catalogue" && (
+          <CatalogueTab
+            token={token}
+            onShowBusinesses={(edition) => {
+              setDirectoryFilter({ ...NO_DIRECTORY_FILTER, edition });
+              setTab("businesses");
+            }}
+          />
+        )}
 
         {tab === "system" && (
           <>

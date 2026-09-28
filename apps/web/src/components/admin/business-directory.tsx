@@ -78,12 +78,22 @@ export const BusinessDirectory = ({
 
   const tokens = tokensOf(filter);
   const searching = filter.query.trim() !== "";
-  const tokenLabel = (item: Token): string =>
-    item.kind === "status"
-      ? billing.status[item.value]
-      : item.kind === "plan"
-        ? billing.plan[item.value]
-        : billing.flag[item.value];
+  const editionLabel = (id: string): string => {
+    const edition = page?.counts.editions?.find((candidate) => candidate.id === id);
+    return edition === undefined ? "—" : `${billing.plan[edition.plan]} v${edition.number}`;
+  };
+  const tokenLabel = (item: Token): string => {
+    switch (item.kind) {
+      case "status":
+        return billing.status[item.value];
+      case "plan":
+        return billing.plan[item.value];
+      case "edition":
+        return editionLabel(item.value);
+      case "flag":
+        return billing.flag[item.value];
+    }
+  };
 
   return (
     <>

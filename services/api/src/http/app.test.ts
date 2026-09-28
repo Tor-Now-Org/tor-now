@@ -777,3 +777,38 @@ describe("the Catalogue editor over HTTP", () => {
     expect((await api.get("/admin/catalogue/rates", owner.token)).status).toBe(403);
   });
 });
+
+describe("editing Plans over HTTP", () => {
+  it("lists the Plans, publishes a change that takes, and cancels it", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    await api.post("/businesses", { ...A_BUSINESS, plan: "SOLO" }, owner.token);
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+
+    const listed = await api.get("/admin/catalogue/plans", admin.token);
+    expect(listed.status).toBe(200);
+    expect(listed.body).toMatchObject({
+      plans: [
+        { plan: "SOLO", current: { number: 1, priceMinor: 4900 }, pending: null, editions: [{ number: 1, businesses: 1, current: true }] },
+        { plan: "TEAM", current: { number: 1 } },
+      ],
+    });
+
+    const changed = await api.put(
+      "/admin/catalogue/plans/SOLO",
+      { priceMinor: 5900, resourceAllowance: 1, features: ["REMINDERS"] },
+      admin.token,
+    );
+    expect(changed.status).toBe(200);
+    expect(changed.body).toMatchObject({
+      kind: "TAKES",
+      plans: [{ plan: "SOLO", current: { number: 2, priceMinor: 5900 }, pending: { cancellable: true, joined: [] } }, {}],
+    });
+
+    const cancelled = await api.post("/admin/catalogue/plans/SOLO/change/cancel", undefined, admin.token);
+    expect(cancelled.body).toMatchObject({ plans: [{ plan: "SOLO", current: { number: 1 }, pending: null }, {}] });
+
+    expect((await api.put("/admin/catalogue/plans/GOLD", { priceMinor: 1, resourceAllowance: 1, features: [] }, admin.token)).status).toBe(400);
+    expect((await api.get("/admin/catalogue/plans", owner.token)).status).toBe(403);
+  });
+});

@@ -1,4 +1,4 @@
-import type { LocalDate } from "@tor-now/domain";
+import type { Feature, LocalDate, Plan } from "@tor-now/domain";
 import type { BillingNoticePayload } from "../../ports/notifier.ts";
 
 /**
@@ -16,6 +16,32 @@ const longDate = (date: LocalDate): string =>
     new Date(`${date}T00:00:00.000Z`),
   );
 
+const PLAN_IN_HEBREW: Readonly<Record<Plan, string>> = Object.freeze({ SOLO: "יחיד", TEAM: "צוות" });
+
+const FEATURE_IN_HEBREW: Readonly<Record<Feature, string>> = Object.freeze({
+  REMINDERS: "תזכורות",
+  CUSTOMER_HISTORY: "היסטוריית לקוח",
+  CUSTOMER_BLOCKING: "חסימת לקוחות",
+  TEAM_ROLES: "מנהלים ועובדים",
+  WAITING_LIST: "רשימת המתנה",
+});
+
+const shekels = (minor: number): string => `₪${Math.round(minor / 100)}`;
+
+const inHebrew = (names: readonly string[]): string =>
+  new Intl.ListFormat("he-IL", { type: "conjunction" }).format(names);
+
+/** What a new edition changes, the part that takes first. */
+const editionChanges = (facts: Extract<BillingNoticePayload["facts"], { kind: "EDITION_ANNOUNCED" }>): string =>
+  inHebrew([
+    ...(facts.priceTo === facts.priceFrom
+      ? []
+      : [`המחיר ${facts.priceTo > facts.priceFrom ? "עולה" : "יורד"} מ־${shekels(facts.priceFrom)} ל־${shekels(facts.priceTo)} לחודש`]),
+    ...(facts.allowanceTo === facts.allowanceFrom ? [] : [`${facts.allowanceTo} יומנים במקום ${facts.allowanceFrom}`]),
+    ...(facts.lost.length === 0 ? [] : [`${inHebrew(facts.lost.map((f) => FEATURE_IN_HEBREW[f]))} כבר לא כלול`]),
+    ...(facts.gained.length === 0 ? [] : [`נוסף ${inHebrew(facts.gained.map((f) => FEATURE_IN_HEBREW[f]))}`]),
+  ]);
+
 const summaryOf = (facts: BillingNoticePayload["facts"]): string => {
   switch (facts.kind) {
     case "TRIAL_ENDING":
@@ -26,6 +52,10 @@ const summaryOf = (facts: BillingNoticePayload["facts"]): string => {
       return "המנוי לא שולם, והעסק הוסר מהחיפוש. תורים שכבר נקבעו לא נפגעו, ואחרי התשלום הכול חוזר.";
     case "PAYMENT_RECORDED":
       return `התשלום התקבל, והמנוי שולם עד ${longDate(facts.paidThrough)}. תודה!`;
+    case "EDITION_ANNOUNCED":
+      return `מסלול ${PLAN_IN_HEBREW[facts.plan]} משתנה ב־${longDate(facts.effectiveOn)} — ${editionChanges(facts)}. עד אז הכול נשאר כמו שהוא.`;
+    case "EDITION_CANCELLED":
+      return `השינוי שהודענו עליו במסלול ${PLAN_IN_HEBREW[facts.plan]} בוטל. המסלול נשאר כמו שהוא.`;
   }
 };
 

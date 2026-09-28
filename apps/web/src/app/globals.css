@@ -1040,3 +1040,62 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
 .rate-tag{display:inline-flex;align-items:center;min-height:22px;padding:0 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap}
 .rate-tag.checked{background:var(--positive-soft);color:var(--positive)}
 .rate-tag.unchecked{background:var(--caution-soft);color:var(--caution)}
+
+/* ---------------------------------------------------------------------------
+   Editing Plans (ADR 0020, ADR 0021): the Plans panel, its sheets, and the
+   editions table.
+   --------------------------------------------------------------------------- */
+.sub-tabs{display:flex;gap:6px}
+.sub-tabs .chip{flex:1;white-space:nowrap;padding:0 10px;background:transparent;color:var(--muted);border:1px solid var(--line)}
+.sub-tabs .chip[aria-selected="true"]{background:var(--accent-soft);color:var(--accent-strong);border-color:var(--accent)}
+.all-tiers{display:flex;gap:12px;align-items:center;padding:14px 16px;text-align:start;width:100%}
+.all-tiers .source-mark{width:36px;height:36px}
+.all-tiers .what{flex:1;display:flex;flex-direction:column;gap:2px}
+.all-tiers .what strong{font-size:15px;font-weight:600}
+.all-tiers .go{color:var(--accent);font-weight:600;font-size:13px}
+.plan-card{display:flex;flex-direction:column;gap:10px;padding:16px}
+.plan-card .top{display:flex;align-items:center;gap:8px}
+.plan-card .top .hint{margin-inline-start:auto}
+.plan-card .price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.plan-card .price b{font-family:Rubik,sans-serif;font-size:23px;font-weight:600;font-variant-numeric:tabular-nums}
+.plan-card .feature-row.compact{min-height:30px;padding:3px 0}
+.plan-card .feature-row.compact .source-mark{width:22px;height:22px;border-radius:7px}
+.plan-card .feature-row.compact .what strong{font-size:13.5px}
+.plan-card .quiet{min-height:44px;font-size:14px}
+.editions-row{display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+.editions-row .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.editions-row .link{margin-inline-start:auto;font-size:13px;font-weight:600;color:var(--accent);min-height:32px;padding:0 6px}
+.edition-chip{display:inline-flex;gap:6px;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:var(--raised);font-size:12.5px;color:var(--muted)}
+.edition-chip b{color:var(--ink)}
+.edition-chip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong)}
+.pending-change{flex-direction:column;align-items:stretch;gap:6px}
+.pending-change .head{display:flex;gap:8px;align-items:center;flex:none}
+.pending-change .head .plan-badge{flex:none}
+.pending-change .head strong{font-size:13px}
+.pending-change .body{font-size:12.5px;line-height:1.55}
+.pending-change .actions{display:flex;gap:14px;flex:none}
+.pending-change .actions .end{color:var(--critical)}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper .label{flex:1}
+.stepper .quiet{width:44px;min-height:44px;padding:0;font-size:20px}
+.stepper b{min-width:28px;text-align:center;font-size:17px}
+.effect-box{display:flex;flex-direction:column;gap:8px;padding:14px 15px;border-radius:14px;border:1px solid}
+.effect-box.takes{background:var(--caution-soft);border-color:oklch(63% 0.125 65/.3)}
+.effect-box.takes strong{color:var(--caution)}
+.effect-box.gives{background:var(--positive-soft);border-color:oklch(58% 0.115 214/.3)}
+.effect-box.gives strong{color:var(--positive)}
+.effect-box strong{font-size:14px}
+.effect-box ul{margin:0;padding-inline-start:18px;display:flex;flex-direction:column;gap:4px;font-size:12.5px;line-height:1.55}
+.person-row{display:flex;gap:10px;align-items:center;padding:11px 16px;font-size:14px}
+.person-row + .person-row{border-top:1px solid var(--line)}
+.person-row span:first-child{flex:1}
+.editions-table{overflow-x:auto}
+.editions-table table{width:100%;border-collapse:collapse;font-size:13.5px}
+.editions-table th,.editions-table td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+.editions-table tbody th{text-align:start;font-weight:400;color:var(--muted);padding-inline:12px}
+.editions-table tr:last-child th,.editions-table tr:last-child td{border-bottom:0}
+.editions-table td.changed{background:var(--caution-soft);font-weight:700}
+.editions-table td.yes{color:var(--positive);font-weight:700}
+.editions-table td.no{color:var(--faint)}
+.editions-table td.preview{color:var(--accent-strong);font-size:12px}
+.editions-table .count-link{color:var(--accent);font-weight:600;min-height:32px;padding:0 8px}

@@ -27,6 +27,8 @@ import type {
   PartOfDay,
   Payment,
   PhotoSlot,
+  Plan,
+  PlanTerms,
   PlanVersion,
   PlanVersionId,
   CostSource,
@@ -714,12 +716,34 @@ export type SubscriptionRepository = {
   directory(): Promise<readonly DirectoryEntry[]>;
 };
 
+/** An edition as the Catalogue editor sees it: when it came, and whether it was withdrawn. */
+export type PlanEdition = PlanVersion & {
+  readonly publishedAt: Instant;
+  /** Set when a pending edition was cancelled; nobody is on it, and it is never current again. */
+  readonly withdrawnAt: Instant | null;
+  /** The first day an existing Business moves onto it; cancellable until then. */
+  readonly firstMoveOn: LocalDate | null;
+};
+
 export type PlanVersionRepository = {
   findById(id: PlanVersionId): Promise<PlanVersion | null>;
-  /** The edition of each Plan that new Businesses join: its highest-numbered. */
+  /** The edition of each Plan that new Businesses join: its highest-numbered, never a withdrawn one. */
   listCurrent(): Promise<readonly PlanVersion[]>;
   /** Every edition ever published, old ones included — Subscriptions may still be on them. */
   listAll(): Promise<readonly PlanVersion[]>;
+  /** Every edition, with when it was published and whether it was withdrawn, oldest first per Plan. */
+  listEditions(): Promise<readonly PlanEdition[]>;
+  /** A Plan's next edition — a change that takes value away (ADR 0020). */
+  publish(edition: {
+    plan: Plan;
+    number: number;
+    terms: PlanTerms;
+    firstMoveOn: LocalDate | null;
+  }): Promise<PlanEdition>;
+  /** What a change gives, carried onto an existing edition (ADR 0020). */
+  setTerms(id: PlanVersionId, terms: PlanTerms): Promise<PlanVersion>;
+  /** A pending edition cancelled: never current again. */
+  withdraw(id: PlanVersionId, at: Instant): Promise<void>;
 };
 
 export type PreviewRepository = {

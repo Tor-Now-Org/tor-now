@@ -14,6 +14,7 @@ import type {
   ServiceRepository,
   SubscriptionRepository,
   GrantRepository,
+  PlanVersionRepository,
   UnitRateRepository,
   UserRepository,
   WorkingHoursRepository,
@@ -491,7 +492,30 @@ export const auditedGrants = (inner: GrantRepository, context: Context): GrantRe
   },
 });
 
-export const auditedUnitRates = (inner: UnitRateRepository, context: Context): UnitRateRepository => ({
+export const auditedPlanVersions = (
+  inner: PlanVersionRepository,
+  context: Context,
+): PlanVersionRepository => ({
+  ...inner,
+  async publish(edition) {
+    const published = await inner.publish(edition);
+    await record(context, AUDIT_ACTIONS.planEditionPublished, "PlanVersion", published.id, null, published);
+    return published;
+  },
+  async setTerms(id, terms) {
+    const before = await inner.findById(id);
+    const after = await inner.setTerms(id, terms);
+    await record(context, AUDIT_ACTIONS.planTermsImproved, "PlanVersion", id, before, after);
+    return after;
+  },
+  async withdraw(id, at) {
+    const before = await inner.findById(id);
+    await inner.withdraw(id, at);
+    await record(context, AUDIT_ACTIONS.planEditionWithdrawn, "PlanVersion", id, before, { withdrawnAt: at });
+  },
+});
+
+export const auditedUnitRates =(inner: UnitRateRepository, context: Context): UnitRateRepository => ({
   ...inner,
   async set(rate, checkedBy) {
     const before =
@@ -525,4 +549,5 @@ export const withAuditing = (
   subscriptions: auditedSubscriptions(repositories.subscriptions, context),
   grants: auditedGrants(repositories.grants, context),
   unitRates: auditedUnitRates(repositories.unitRates, context),
+  planVersions: auditedPlanVersions(repositories.planVersions, context),
 });

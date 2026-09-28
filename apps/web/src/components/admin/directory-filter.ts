@@ -24,15 +24,22 @@ export const choosePlan = (filter: DirectoryFilter, plan: PlanName | null): Dire
   plan,
 });
 
+/** An edition, or all of them; choosing the one already chosen clears it. */
+export const chooseEdition = (filter: DirectoryFilter, edition: string | null): DirectoryFilter => ({
+  ...filter,
+  edition: filter.edition === edition ? null : edition,
+});
+
 /** Every choice made in the panel; the search is the field's, not the panel's. */
 export const choicesMade = (filter: DirectoryFilter): number =>
-  filter.statuses.length + (filter.plan === null ? 0 : 1) + filter.flags.length;
+  filter.statuses.length + (filter.plan === null ? 0 : 1) + (filter.edition === null ? 0 : 1) + filter.flags.length;
 
 /** Clears the panel's choices and keeps whatever was typed in the search. */
 export const resetChoices = (filter: DirectoryFilter): DirectoryFilter => ({
   ...filter,
   statuses: [],
   plan: null,
+  edition: null,
   flags: [],
 });
 
@@ -40,11 +47,13 @@ export const resetChoices = (filter: DirectoryFilter): DirectoryFilter => ({
 export type Token =
   | { readonly kind: "status"; readonly value: BillingStatus }
   | { readonly kind: "plan"; readonly value: PlanName }
+  | { readonly kind: "edition"; readonly value: string }
   | { readonly kind: "flag"; readonly value: BillingFlag };
 
 export const tokensOf = (filter: DirectoryFilter): Token[] => [
   ...filter.statuses.map((value) => ({ kind: "status" as const, value })),
   ...(filter.plan === null ? [] : [{ kind: "plan" as const, value: filter.plan }]),
+  ...(filter.edition === null ? [] : [{ kind: "edition" as const, value: filter.edition }]),
   ...filter.flags.map((value) => ({ kind: "flag" as const, value })),
 ];
 
@@ -54,6 +63,8 @@ export const withoutToken = (filter: DirectoryFilter, token: Token): DirectoryFi
       return toggleStatus(filter, token.value);
     case "plan":
       return choosePlan(filter, null);
+    case "edition":
+      return chooseEdition(filter, token.value);
     case "flag":
       return toggleFlag(filter, token.value);
   }

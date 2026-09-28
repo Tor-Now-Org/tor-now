@@ -12,7 +12,6 @@ import type {
   Grant,
   Instant,
   UsageRecord,
-  PlanVersion,
   Preview,
   Resource,
   Review,
@@ -23,7 +22,7 @@ import type {
 } from "@tor-now/domain";
 import { addDays, asId, instant, microShekels, money, parseLocalDate, planTerms } from "@tor-now/domain";
 import type { AuditEntry } from "../../ports/audit.ts";
-import type { UnitRateEntry, WaitingEntry, WaitingRecheck } from "../../ports/repositories.ts";
+import type { PlanEdition, UnitRateEntry, WaitingEntry, WaitingRecheck } from "../../ports/repositories.ts";
 import type { OutboundMessage } from "../../ports/notifier.ts";
 import type { VerificationCodeRecord } from "../../ports/verification.ts";
 
@@ -58,7 +57,7 @@ export type Store = {
   payments: Payment[];
   /** With the dedupe key the table keeps beside each. */
   notices: { notice: Notice; key: string | null }[];
-  planVersions: PlanVersion[];
+  planVersions: PlanEdition[];
   previews: Preview[];
   usageRecords: UsageRecord[];
   unitRates: UnitRateEntry[];
@@ -133,6 +132,9 @@ const initialCatalogue = (today: LocalDate): Pick<Store, "planVersions" | "previ
       plan: "SOLO",
       number: 1,
       terms: planTerms({ features: ["REMINDERS"], resourceAllowance: 1, price: money(4900) }),
+      publishedAt: instant(0),
+      withdrawnAt: null,
+      firstMoveOn: null,
     },
     {
       id: asId("00007ea0-0000-4000-8000-000000000001"),
@@ -143,6 +145,9 @@ const initialCatalogue = (today: LocalDate): Pick<Store, "planVersions" | "previ
         resourceAllowance: 5,
         price: money(8900),
       }),
+      publishedAt: instant(0),
+      withdrawnAt: null,
+      firstMoveOn: null,
     },
   ],
   previews: [{ feature: "WAITING_LIST", endsOn: addDays(today, 59) }],

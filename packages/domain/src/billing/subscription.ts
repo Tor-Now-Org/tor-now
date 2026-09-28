@@ -148,17 +148,22 @@ export const scheduleMove = (
  * The owner choosing a Plan. An upgrade applies at once; a downgrade waits for
  * the renewal so the owner keeps what was paid for, unless nothing was.
  *
- * Choosing the Plan already held withdraws a pending move and nothing else —
- * even when a newer edition of that Plan exists. Moving a Business onto a
- * newer edition is the Catalogue's to do, behind a Notice (ADR 0020), never a
- * side effect of a tap.
+ * Choosing the Plan already held withdraws a pending move of the owner's own
+ * and nothing else — even when a newer edition of that Plan exists. Moving a
+ * Business onto a newer edition is the Catalogue's to do, behind a Notice
+ * (ADR 0020), never a side effect of a tap — so a move the Catalogue
+ * scheduled, onto a new edition of the Plan held, is not the owner's to
+ * withdraw, and stands.
  */
 export const changePlan = (
   subscription: Subscription,
-  versions: { from: PlanVersion; to: PlanVersion },
+  versions: { from: PlanVersion; to: PlanVersion; scheduled?: PlanVersion | null },
 ): Subscription => {
   const { from, to } = versions;
-  if (from.plan === to.plan) return { ...subscription, scheduledMove: null };
+  if (from.plan === to.plan) {
+    const catalogueMove = versions.scheduled !== undefined && versions.scheduled !== null && versions.scheduled.plan === from.plan;
+    return catalogueMove ? subscription : { ...subscription, scheduledMove: null };
+  }
   const renewal = subscription.paidThrough === null ? null : renewalOn(subscription);
   if (isUpgrade(from.terms, to.terms) || renewal === null) {
     return { ...subscription, planVersionId: to.id, scheduledMove: null };

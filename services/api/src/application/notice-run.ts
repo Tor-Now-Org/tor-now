@@ -35,6 +35,7 @@ export const announceDue = async (
     const due = noticesDue({
       subscription,
       scheduledPlan: move === null ? null : (planOf.get(move.planVersionId) ?? null),
+      currentPlan: planOf.get(subscription.planVersionId) ?? null,
       pausing,
       grants: grants.filter((grant) => grant.businessId === business.id),
       businessActive: business.active,

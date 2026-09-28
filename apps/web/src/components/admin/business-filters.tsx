@@ -12,7 +12,7 @@ import { useCopy } from "@/lib/i18n/index.tsx";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { Button } from "@/components/ui.tsx";
 import { STATUS_TONE } from "@/components/billing-badges.tsx";
-import { choicesMade, choosePlan, resetChoices, toggleFlag, toggleStatus } from "./directory-filter.ts";
+import { chooseEdition, choicesMade, choosePlan, resetChoices, toggleFlag, toggleStatus } from "./directory-filter.ts";
 
 const FilterIcon = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -44,6 +44,7 @@ export const BusinessFilters = ({
 }) => {
   const copy = useCopy("admin");
   const billing = useCopy("billing");
+  const catalogue = useCopy("catalogue");
   const titleId = useId();
   const chosen = choicesMade(filter);
 
@@ -55,6 +56,10 @@ export const BusinessFilters = ({
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [open, onOpenChange]);
+
+  // Only worth a section once some Plan has Businesses on more than one edition.
+  const editions = counts?.editions ?? [];
+  const severalEditions = editions.some((edition) => editions.some((other) => other.plan === edition.plan && other.id !== edition.id));
 
   const planCount = (plan: PlanName | null): number =>
     counts === null
@@ -133,6 +138,33 @@ export const BusinessFilters = ({
                 ))}
               </div>
             </div>
+
+            {(severalEditions || filter.edition !== null) && (
+              <div className="fp-section">
+                <span className="label">{catalogue.edition}</span>
+                <div className="fp-seg" role="group" aria-label={catalogue.edition}>
+                  <button
+                    type="button"
+                    aria-pressed={filter.edition === null}
+                    onClick={() => onChange({ ...filter, edition: null })}
+                  >
+                    {copy.all}
+                    <small>{editions.reduce((sum, edition) => sum + edition.count, 0)}</small>
+                  </button>
+                  {editions.map((edition) => (
+                    <button
+                      key={edition.id}
+                      type="button"
+                      aria-pressed={filter.edition === edition.id}
+                      onClick={() => onChange(chooseEdition(filter, edition.id))}
+                    >
+                      {billing.plan[edition.plan]} v{edition.number}
+                      <small>{edition.count}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="fp-section">
               <span className="label">{copy.attention}</span>

@@ -2123,6 +2123,37 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("publishes a Plan's next edition, carries additions onto one, and withdraws one out of current", async () => {
+      await withRepositories(async (repositories) => {
+        const soloV1 = (await repositories.planVersions.listCurrent()).find((version) => version.plan === "SOLO");
+        if (soloV1 === undefined) throw new Error("No Solo edition");
+        const firstMoveOn = parseLocalDate("2031-04-01");
+
+        const v2 = await repositories.planVersions.publish({
+          plan: "SOLO",
+          number: soloV1.number + 1,
+          terms: { ...soloV1.terms, price: money(5900) },
+          firstMoveOn,
+        });
+        expect(v2).toMatchObject({ plan: "SOLO", number: soloV1.number + 1, withdrawnAt: null, firstMoveOn });
+        expect(v2.terms.price).toBe(5900);
+        expect((await repositories.planVersions.listCurrent()).find((version) => version.plan === "SOLO")?.id).toBe(v2.id);
+
+        const improved = await repositories.planVersions.setTerms(soloV1.id, { ...soloV1.terms, resourceAllowance: 2 });
+        expect(improved.terms.resourceAllowance).toBe(2);
+        expect((await repositories.planVersions.findById(soloV1.id))?.terms.resourceAllowance).toBe(2);
+
+        const at = AT("2031-03-10T10:00:00.000Z");
+        await repositories.planVersions.withdraw(v2.id, at);
+        expect((await repositories.planVersions.listCurrent()).find((version) => version.plan === "SOLO")?.id).toBe(soloV1.id);
+        const editions = await repositories.planVersions.listEditions();
+        expect(editions.find((edition) => edition.id === v2.id)?.withdrawnAt).toBe(at);
+        // Nobody may join a withdrawn edition, whatever the path.
+        const context = await aBookableBusiness(repositories, "07041");
+        expect((await repositories.subscriptions.findByBusiness(context.business.id))?.planVersionId).toBe(soloV1.id);
+      });
+    });
+
     it("replaces a rate for the same unit and day, keeps others, and says who checked it", async () => {
       await withRepositories(async (repositories) => {
         const admin = await repositories.users.create({

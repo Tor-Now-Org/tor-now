@@ -194,6 +194,27 @@ describe("changePlan", () => {
   });
 });
 
+describe("changePlan and the Catalogue's moves", () => {
+  const soloV2: PlanVersion = { ...solo, id: asId("solo-2"), number: 2 };
+  const moving = paid({ scheduledMove: { planVersionId: soloV2.id, effectiveOn: day("2026-10-31") } });
+
+  it("never lets an owner withdraw a move onto a new edition by choosing their Plan again", () => {
+    expect(changePlan(moving, { from: solo, to: soloV2, scheduled: soloV2 })).toBe(moving);
+  });
+
+  it("still lets an owner leave the Plan: the new edition no longer matters", () => {
+    expect(changePlan(moving, { from: solo, to: team, scheduled: soloV2 })).toMatchObject({
+      planVersionId: "team-1",
+      scheduledMove: null,
+    });
+  });
+
+  it("withdraws the owner's own move to another Plan", () => {
+    const leaving = paid({ planVersionId: team.id, scheduledMove: { planVersionId: solo.id, effectiveOn: day("2026-10-01") } });
+    expect(changePlan(leaving, { from: team, to: team, scheduled: solo }).scheduledMove).toBeNull();
+  });
+});
+
 describe("changePlan and older editions", () => {
   it("keeps a Business on its older edition when its own Plan is chosen again", () => {
     const soloV2: PlanVersion = { ...solo, id: asId("solo-2"), number: 2 };

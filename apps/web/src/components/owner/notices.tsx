@@ -30,6 +30,11 @@ const ICON_OF: Readonly<Record<NoticeKind, keyof typeof ICONS>> = {
   GRANT_EXTENDED: "gift",
   GRANT_ENDING: "clock",
   GRANT_ENDED: "gift",
+  EDITION_ANNOUNCED: "clock",
+  EDITION_SOON: "clock",
+  EDITION_APPLIED: "swap",
+  EDITION_CANCELLED: "check",
+  PLAN_IMPROVED: "spark",
 };
 
 /** A banner has no green: good news reads in the calm blue, and only warnings are warm. */

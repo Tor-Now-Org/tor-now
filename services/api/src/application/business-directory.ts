@@ -9,6 +9,7 @@ import {
   type LocalDate,
   type Plan,
   type PlanVersion,
+  type PlanVersionId,
   type Standing,
 } from "@tor-now/domain";
 import type { DirectoryEntry } from "../ports/repositories.ts";
@@ -25,6 +26,8 @@ export type DirectoryFilter = {
   /** Any of these; none means every status. */
   readonly statuses: readonly BillingStatus[];
   readonly plan: Plan | null;
+  /** One edition of a Plan — who is still on Solo v1, say. */
+  readonly edition: PlanVersionId | null;
   /** All of these must hold. */
   readonly flags: readonly BillingFlag[];
 };
@@ -33,6 +36,7 @@ export const NO_FILTER: DirectoryFilter = Object.freeze({
   query: null,
   statuses: [],
   plan: null,
+  edition: null,
   flags: [],
 });
 
@@ -50,6 +54,8 @@ export type DirectoryCounts = {
   readonly total: number;
   readonly statuses: Readonly<Record<BillingStatus, number>>;
   readonly plans: Readonly<Record<Plan, number>>;
+  /** Every edition some matching Business is on, Plan by Plan, oldest first. */
+  readonly editions: readonly { readonly id: PlanVersionId; readonly plan: Plan; readonly number: number; readonly count: number }[];
   readonly flags: Readonly<Record<BillingFlag, number>>;
 };
 
@@ -69,7 +75,7 @@ export const directoryRow = (
   }),
 });
 
-type Group = "query" | "statuses" | "plan" | "flags";
+type Group = "query" | "statuses" | "plan" | "edition" | "flags";
 
 const passes = (row: DirectoryRow, filter: DirectoryFilter, except?: Group): boolean => {
   const needle = filter.query?.trim().toLowerCase() ?? "";
@@ -83,6 +89,7 @@ const passes = (row: DirectoryRow, filter: DirectoryFilter, except?: Group): boo
       filter.statuses.length === 0 ||
       filter.statuses.includes(row.standing.status)) &&
     (except === "plan" || filter.plan === null || row.planVersion.plan === filter.plan) &&
+    (except === "edition" || filter.edition === null || row.planVersion.id === filter.edition) &&
     (except === "flags" || filter.flags.every((flag) => row.standing.flags.includes(flag)))
   );
 };
@@ -108,6 +115,20 @@ const bySoonest = (a: DirectoryRow, b: DirectoryRow): number => {
   return a.business.name.localeCompare(b.business.name);
 };
 
+const editionsIn = (rows: readonly DirectoryRow[]): DirectoryCounts["editions"] => {
+  const counted = new Map<PlanVersionId, { id: PlanVersionId; plan: Plan; number: number; count: number }>();
+  for (const { planVersion } of rows) {
+    const seen = counted.get(planVersion.id);
+    counted.set(planVersion.id, {
+      id: planVersion.id,
+      plan: planVersion.plan,
+      number: planVersion.number,
+      count: (seen?.count ?? 0) + 1,
+    });
+  }
+  return [...counted.values()].sort((a, b) => a.plan.localeCompare(b.plan) || a.number - b.number);
+};
+
 export const filterDirectory = (
   rows: readonly DirectoryRow[],
   filter: DirectoryFilter,
@@ -120,6 +141,7 @@ export const filterDirectory = (
       total: rows.length,
       statuses: tally(BILLING_STATUSES, without("statuses"), (row, status) => row.standing.status === status),
       plans: tally(PLANS, without("plan"), (row, plan) => row.planVersion.plan === plan),
+      editions: editionsIn(without("edition")),
       flags: tally(BILLING_FLAGS, without("flags"), (row, flag) => row.standing.flags.includes(flag)),
     },
   };

@@ -82,6 +82,10 @@ export const AUDIT_ACTIONS = {
   grantChanged: "GRANT_CHANGED",
   /** ADR 0022: what a unit of messaging cost from a day, as an administrator entered it. */
   unitRateSet: "UNIT_RATE_SET",
+  /** ADR 0021: a Plan's new edition, what a change gave carried onto one, or a pending one cancelled. */
+  planEditionPublished: "PLAN_EDITION_PUBLISHED",
+  planTermsImproved: "PLAN_TERMS_IMPROVED",
+  planEditionWithdrawn: "PLAN_EDITION_WITHDRAWN",
   /**
    * ADR 0006: administrator reads of a customer record are audited as well as
    * writes. An unlogged read on the service_role path would be undetectable,

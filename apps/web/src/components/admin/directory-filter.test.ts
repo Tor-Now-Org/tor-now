@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NO_DIRECTORY_FILTER, type DirectoryFilter } from "@/lib/api/types.ts";
 import {
+  chooseEdition,
   choicesMade,
   choosePlan,
   resetChoices,
@@ -14,6 +15,7 @@ const chosen: DirectoryFilter = {
   query: "רן",
   statuses: ["TRIAL", "IN_GRACE"],
   plan: "TEAM",
+  edition: null,
   flags: ["TRIAL_ENDING"],
 };
 
@@ -55,5 +57,16 @@ describe("the directory filter", () => {
     toggleFlag(chosen, "OVER_ALLOWANCE");
     resetChoices(chosen);
     expect(JSON.stringify(chosen)).toBe(before);
+  });
+
+  it("chooses one edition, a second tap on it clears it, and it counts and comes off as its own token", () => {
+    const once = chooseEdition(NO_DIRECTORY_FILTER, "solo-2");
+    expect(once.edition).toBe("solo-2");
+    expect(chooseEdition(once, "solo-2").edition).toBeNull();
+    expect(chooseEdition(once, "solo-1").edition).toBe("solo-1");
+    expect(choicesMade(once)).toBe(1);
+    expect(tokensOf(once)).toEqual([{ kind: "edition", value: "solo-2" }]);
+    expect(withoutToken(once, { kind: "edition", value: "solo-2" }).edition).toBeNull();
+    expect(resetChoices(once).edition).toBeNull();
   });
 });

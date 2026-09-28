@@ -62,3 +62,23 @@ customer; at worst they cost the platform, and they are audited.
 - **A Unit Rate entered for a unit and day that already has one replaces it.**
   The audit log keeps the earlier figure; Usage Records are never rewritten
   (ADR 0022).
+
+## Editing Plans in practice (2026-09-28)
+
+- **The editor classifies, not the administrator.** One sheet edits a Plan's
+  price, calendars and Features; the domain's own rule says, as it is typed,
+  whether the change gives value (applies to every edition at once) or takes
+  any (a new edition), and the server applies the same rule on saving.
+- **A lower price gives value**: it applies at once, and owners are told in the
+  app only.
+- **One pending change that takes value per Plan.** A second waits until the
+  first has landed or been cancelled; a change that gives can always be made,
+  and is carried onto the pending edition too.
+- **Cancellable until the first existing Business moves.** Cancelling withdraws
+  the edition — it is kept, never current again — and moves everyone back as
+  ADR 0020 says; after the first move, the way back is a new change.
+- **A move the Catalogue scheduled is not the owner's to withdraw.** Choosing
+  the Plan already held withdraws only the owner's own move.
+- **Seeing it all:** "All plans side by side" lists every edition in use with
+  what changed marked, a Plan's card compares its own editions, and the
+  Businesses list filters by edition.

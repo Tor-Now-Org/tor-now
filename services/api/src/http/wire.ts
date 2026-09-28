@@ -22,12 +22,14 @@ import {
   noticeTone,
   type FeatureSource,
   type GrantTerm,
+  type Preview,
 } from "@tor-now/domain";
 import type { MyWaiting } from "../application/waiting-service.ts";
 import type { PlatformStats } from "../application/admin-service.ts";
 import type { SubscriptionView } from "../application/billing.ts";
 import type { NoticeBoard } from "../application/notice-service.ts";
-import type { GrantEntry, UnitRateEntry } from "../ports/repositories.ts";
+import type { PlanView } from "../application/plan-catalogue.ts";
+import type { GrantEntry, PlanEdition, UnitRateEntry } from "../ports/repositories.ts";
 import type { DirectoryRow } from "../application/business-directory.ts";
 import type {
   StaffedBusiness,
@@ -424,6 +426,44 @@ export const featureOut = (source: FeatureSource<GrantTerm | GrantEntry>) => ({
 
 export const featuresOut = (sources: readonly FeatureSource<GrantTerm | GrantEntry>[]) => ({
   features: sources.map(featureOut),
+});
+
+const editionOut = (edition: PlanEdition) => ({
+  id: edition.id,
+  plan: edition.plan,
+  number: edition.number,
+  priceMinor: edition.terms.price,
+  resourceAllowance: edition.terms.resourceAllowance,
+  features: edition.terms.features,
+  publishedAt: formatInstant(edition.publishedAt),
+  firstMoveOn: edition.firstMoveOn,
+});
+
+const businessRefOut = (business: Business) => ({ id: business.id, name: business.name });
+
+/** Each Plan as the Catalogue editor shows it: its editions, and any change waiting to land. */
+export const planCatalogueOut = (result: { plans: readonly PlanView[]; previews: readonly Preview[] }) => ({
+  plans: result.plans.map((view) => ({
+    plan: view.plan,
+    current: editionOut(view.current),
+    editions: view.editions.map((entry) => ({
+      ...editionOut(entry.edition),
+      current: entry.current,
+      businesses: entry.businesses,
+    })),
+    pending:
+      view.pending === null
+        ? null
+        : {
+            edition: editionOut(view.pending.edition),
+            previous: editionOut(view.pending.previous),
+            moving: view.pending.moving.map((move) => ({ business: businessRefOut(move.business), effectiveOn: move.effectiveOn })),
+            joined: view.pending.joined.map(businessRefOut),
+            cancellable: view.pending.cancellable,
+          },
+    ifTakenToday: view.ifTakenToday,
+  })),
+  previews: result.previews.map((preview) => ({ feature: preview.feature, endsOn: preview.endsOn })),
 });
 
 /** A Unit Rate as the Catalogue tab shows it. */

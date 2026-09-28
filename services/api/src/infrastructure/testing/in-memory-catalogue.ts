@@ -1,5 +1,11 @@
-import { asId, compareLocalDate, displayName, instant, notFound } from "@tor-now/domain";
-import type { GrantEntry, GrantRepository, UnitRateRepository } from "../../ports/repositories.ts";
+import { asId, compareLocalDate, displayName, instant, notFound, PLANS, type PlanVersion, type PlanVersionId } from "@tor-now/domain";
+import type {
+  GrantEntry,
+  GrantRepository,
+  PlanEdition,
+  PlanVersionRepository,
+  UnitRateRepository,
+} from "../../ports/repositories.ts";
 import type { Store } from "./in-memory-store.ts";
 
 /**
@@ -66,6 +72,75 @@ export const inMemoryGrants = (store: Store): GrantRepository => {
       const updated = { ...grant, ...changes };
       store.grants = store.grants.map((candidate) => (candidate.id === id ? updated : candidate));
       return entryOf(updated);
+    },
+  };
+};
+
+/** An edition as everything but the Catalogue editor reads it. */
+const versionOf = ({ id, plan, number, terms }: PlanEdition): PlanVersion => ({ id, plan, number, terms });
+
+/**
+ * The edition new Businesses join, as app.is_current_version says it: the
+ * highest-numbered of its Plan that was not withdrawn.
+ */
+export const isCurrentEdition = (store: Store, id: PlanVersionId): boolean => {
+  const edition = store.planVersions.find((candidate) => candidate.id === id);
+  return (
+    edition !== undefined &&
+    edition.withdrawnAt === null &&
+    !store.planVersions.some(
+      (other) => other.plan === edition.plan && other.withdrawnAt === null && other.number > edition.number,
+    )
+  );
+};
+
+export const inMemoryPlanVersions = (store: Store): PlanVersionRepository => {
+  const byNumber = (a: PlanEdition, b: PlanEdition) => a.plan.localeCompare(b.plan) || a.number - b.number;
+  const replace = (id: PlanVersionId, change: (edition: PlanEdition) => PlanEdition): PlanEdition => {
+    const edition = store.planVersions.find((candidate) => candidate.id === id);
+    if (edition === undefined) throw notFound("PlanVersion", id);
+    const updated = change(edition);
+    store.planVersions = store.planVersions.map((candidate) => (candidate.id === id ? updated : candidate));
+    return updated;
+  };
+
+  return {
+    async findById(id) {
+      const edition = store.planVersions.find((candidate) => candidate.id === id);
+      return edition === undefined ? null : versionOf(edition);
+    },
+    async listCurrent() {
+      return PLANS.flatMap((plan) =>
+        store.planVersions.filter((edition) => edition.plan === plan && isCurrentEdition(store, edition.id)).map(versionOf),
+      );
+    },
+    async listAll() {
+      return [...store.planVersions].sort(byNumber).map(versionOf);
+    },
+    async listEditions() {
+      return [...store.planVersions].sort(byNumber);
+    },
+    async publish(edition) {
+      if (store.planVersions.some((other) => other.plan === edition.plan && other.number === edition.number)) {
+        throw new Error(`${edition.plan} already has edition ${edition.number}`);
+      }
+      const published: PlanEdition = {
+        id: asId(store.nextId("planversion")),
+        plan: edition.plan,
+        number: edition.number,
+        terms: edition.terms,
+        publishedAt: instant(Date.now()),
+        withdrawnAt: null,
+        firstMoveOn: edition.firstMoveOn,
+      };
+      store.planVersions = [...store.planVersions, published];
+      return published;
+    },
+    async setTerms(id, terms) {
+      return versionOf(replace(id, (edition) => ({ ...edition, terms })));
+    },
+    async withdraw(id, at) {
+      replace(id, (edition) => ({ ...edition, withdrawnAt: at }));
     },
   };
 };

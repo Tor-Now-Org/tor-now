@@ -67,6 +67,7 @@ describe("administrator scope", () => {
       query: null,
       statuses: ["TRIAL"],
       plan: "TEAM",
+      edition: null,
       flags: [],
     });
     expect(teams.rows.map((row) => row.business.name)).toEqual(["מספרת רן"]);
@@ -76,6 +77,7 @@ describe("administrator scope", () => {
       query: "נוי",
       statuses: [],
       plan: null,
+      edition: null,
       flags: [],
     });
     expect(byOwner.rows.map((row) => row.business.name)).toEqual(["סטודיו נוי"]);

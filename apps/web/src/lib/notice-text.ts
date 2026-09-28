@@ -51,6 +51,40 @@ const whenOf = (date: string, context: NoticeContext): string | null => {
 const calendarsOf = (allowance: number, words: Words): string =>
   allowance === 1 ? words.oneCalendar : fillText(words.upToCalendars, { n: String(allowance) });
 
+/** What a Plan's change does, as one sentence: the price, the calendars, then the Features. */
+const changesOf = (
+  facts: {
+    priceFrom: number;
+    priceTo: number;
+    allowanceFrom: number;
+    allowanceTo: number;
+    gained: readonly FeatureName[];
+    lost: readonly FeatureName[];
+  },
+  context: NoticeContext,
+  named: (list: readonly FeatureName[]) => string,
+): string => {
+  const { words, language } = context;
+  const price = (minor: number) => formatPrice(minor, language, "—");
+  const parts = [
+    ...(facts.priceTo === facts.priceFrom
+      ? []
+      : [
+          fillText(facts.priceTo > facts.priceFrom ? words.priceRises : words.priceFalls, {
+            from: price(facts.priceFrom),
+            to: price(facts.priceTo),
+          }),
+        ]),
+    ...(facts.allowanceTo === facts.allowanceFrom
+      ? []
+      : [fillText(words.calendarsChange, { from: String(facts.allowanceFrom), to: String(facts.allowanceTo) })]),
+    ...(facts.lost.length === 0 ? [] : [fillText(words.noLongerIncluded, { list: named(facts.lost) })]),
+    ...(facts.gained.length === 0 ? [] : [fillText(words.nowIncluded, { list: named(facts.gained) })]),
+  ];
+  const joined = namesOf(parts, language);
+  return joined.charAt(0).toLocaleUpperCase(language === "he" ? "he-IL" : "en-GB") + joined.slice(1);
+};
+
 export const noticeText = (facts: NoticeFacts, context: NoticeContext): NoticeText => {
   const { words, billing, language } = context;
   const date = (value: string) => formatLocalDate(value, language);
@@ -188,6 +222,38 @@ export const noticeText = (facts: NoticeFacts, context: NoticeContext): NoticeTe
         title: fillText(words.grantEndedTitle, { feature: named([facts.feature]) }),
         body: words.grantEndedBody,
         action: "PLANS",
+      };
+    case "EDITION_ANNOUNCED":
+      return {
+        title: fillText(words.editionAnnouncedTitle, { plan: plan(facts.plan), date: date(facts.effectiveOn) }),
+        body: fillText(words.editionAnnouncedBody, {
+          changes: changesOf(facts, context, named),
+          date: date(facts.effectiveOn),
+        }),
+        action: "PLANS",
+      };
+    case "EDITION_SOON":
+      return {
+        title: fillText(words.editionSoonTitle, {
+          plan: plan(facts.plan),
+          when: whenOf(facts.effectiveOn, context) ?? date(facts.effectiveOn),
+        }),
+        body: fillText(words.editionSoonBody, { date: date(facts.effectiveOn) }),
+        action: "PLANS",
+      };
+    case "EDITION_APPLIED":
+      return { title: fillText(words.editionAppliedTitle, { plan: plan(facts.plan) }), body: words.editionAppliedBody, action: "PLANS" };
+    case "EDITION_CANCELLED":
+      return {
+        title: fillText(words.editionCancelledTitle, { plan: plan(facts.plan) }),
+        body: words.editionCancelledBody,
+        action: null,
+      };
+    case "PLAN_IMPROVED":
+      return {
+        title: fillText(words.planImprovedTitle, { plan: plan(facts.plan) }),
+        body: fillText(words.planImprovedBody, { changes: changesOf({ ...facts, lost: [] }, context, named) }),
+        action: null,
       };
   }
 };

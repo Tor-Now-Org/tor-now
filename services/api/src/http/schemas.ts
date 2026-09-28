@@ -456,6 +456,16 @@ export const grantExtensionSchema = grantSchema.omit({ features: true });
 /** An id in the address, checked before it reaches a uuid column. */
 export const grantIdSchema = uuidSchema;
 
+/** A Plan named in the address. */
+export const planParamSchema = z.enum(PLANS);
+
+/** ADR 0021: a Plan's terms as the administrator edits them. The service decides what the change is. */
+export const planEditSchema = z.object({
+  priceMinor: z.number().int().min(0).max(10_000_000),
+  resourceAllowance: z.number().int().min(1).max(100),
+  features: z.array(z.enum(FEATURES)).max(FEATURES.length),
+});
+
 export const adminBusinessUpdateSchema = updateBusinessSchema.extend({
   /** ADR 0010: an edit on the owner's behalf records why it was made. */
   reason: z.string().trim().min(TEXT_RULES.auditReason.min).max(TEXT_RULES.auditReason.max),
@@ -508,6 +518,7 @@ export const directoryQuerySchema = z.object({
   q: z.string().trim().min(1).nullable().catch(null).default(null),
   status: commaList(BILLING_STATUSES),
   plan: z.enum(PLANS).nullable().default(null),
+  edition: uuidSchema.nullable().default(null),
   flag: commaList(BILLING_FLAGS),
 });
 

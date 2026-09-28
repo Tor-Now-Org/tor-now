@@ -1,4 +1,4 @@
-import type { BusinessId, Instant, PaymentNoticeFacts } from "@tor-now/domain";
+import type { BusinessId, Instant, WhatsAppNoticeFacts } from "@tor-now/domain";
 
 /**
  * ADR 0005. All outbound messaging goes through this port, with swappable
@@ -66,8 +66,8 @@ export type NotificationPayload = {
  */
 export type BillingNoticePayload = {
   readonly businessName: string;
-  /** Only a Notice about paying goes out on WhatsApp (ADR 0020). */
-  readonly facts: PaymentNoticeFacts;
+  /** Only a Notice about paying, or a Plan changing for the worse, goes out on WhatsApp (ADR 0020). */
+  readonly facts: WhatsAppNoticeFacts;
 };
 
 type Addressed = {
