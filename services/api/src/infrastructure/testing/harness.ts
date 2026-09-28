@@ -20,6 +20,8 @@ import { noticeService } from "../../application/notice-service.ts";
 import { catalogueAdminService } from "../../application/catalogue-admin.ts";
 import { planCatalogueService } from "../../application/plan-catalogue.ts";
 import { featureCatalogueService } from "../../application/feature-catalogue.ts";
+import { addonCatalogueService } from "../../application/addon-catalogue.ts";
+import { addonService } from "../../application/addon-service.ts";
 import { outboxWorker } from "../../application/outbox-worker.ts";
 import { reminderService } from "../../application/reminder-service.ts";
 import { waitingService } from "../../application/waiting-service.ts";
@@ -297,6 +299,8 @@ export const harness = (options: { now?: Instant } = {}) => {
       catalogueAdmin: catalogueAdminService({ unitOfWork, clock }),
       planCatalogue: planCatalogueService({ unitOfWork, clock }),
       featureCatalogue: featureCatalogueService({ unitOfWork, clock }),
+      addonCatalogue: addonCatalogueService({ unitOfWork, clock }),
+      addons: addonService({ unitOfWork, clock }),
       closures: closureService({ unitOfWork, clock }),
       admin,
       outboxWorker: outboxWorker({ unitOfWork, notifier, clock }),

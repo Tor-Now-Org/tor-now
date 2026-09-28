@@ -3,13 +3,12 @@
 import { useState } from "react";
 import { TEXT_RULES } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
-import { isApiError } from "@/lib/api/errors.ts";
 import type { FeatureName, FeatureSourceDto } from "@/lib/api/types.ts";
 import { formatLocalDate } from "@/lib/format.ts";
 import { daysLeft, isGrantEnd } from "@/lib/grant-length.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { useErrorText } from "@/lib/use-error-text.ts";
+import { useSubmit } from "@/lib/use-submit.ts";
 import { Button, Card, Critical, Field, Sheet } from "@/components/ui.tsx";
 import { lastDayOf, LengthPicker, type Length } from "./length-picker.tsx";
 
@@ -19,24 +18,6 @@ import { lastDayOf, LengthPicker, type Length } from "./length-picker.tsx";
  */
 
 /** Sends a change, and shows why it was refused rather than closing. */
-export const useSubmit = () => {
-  const errorText = useErrorText();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const submit = async (work: () => Promise<void>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await work();
-    } catch (cause) {
-      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return { busy, error, submit };
-};
-
 const reasonOk = (reason: string) => reason.trim().length >= TEXT_RULES.auditReason.min;
 
 export const GrantSheet = ({
@@ -72,6 +53,8 @@ export const GrantSheet = ({
     switch (source.source) {
       case "PLAN":
         return words.inPlan;
+      case "ADDON":
+        return words.countAddon;
       case "PREVIEW":
         return words.inPreview;
       case "GRANT":

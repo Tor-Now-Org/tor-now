@@ -44,6 +44,7 @@ import {
 } from "@tor-now/domain";
 import { PHOTOS } from "../config.ts";
 import { notificationFor } from "./notifications.ts";
+import { paymentBoard } from "./addon-service.ts";
 import { entitlementOf, entitlementToday, ownerFeatures, subscriptionView } from "./billing.ts";
 import { movePlan } from "./plan-move.ts";
 import { tell } from "./notices.ts";
@@ -476,6 +477,7 @@ export const businessService = ({
         ...view,
         payments: await repositories.payments.listForBusiness(businessId),
         features: await ownerFeatures(repositories, view, today),
+        board: await paymentBoard(repositories, businessId, today),
       };
     });
   },
@@ -488,7 +490,12 @@ export const businessService = ({
         subscriptionView(repositories, businessId, today),
         repositories.payments.listForBusiness(businessId),
       ]);
-      return { ...view, payments, features: await ownerFeatures(repositories, view, today) };
+      return {
+        ...view,
+        payments,
+        features: await ownerFeatures(repositories, view, today),
+        board: await paymentBoard(repositories, businessId, today),
+      };
     });
   },
 

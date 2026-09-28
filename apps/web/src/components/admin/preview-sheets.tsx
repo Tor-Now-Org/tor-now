@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { addDays, daysBetween, MAX_PREVIEW_DAYS, MIN_PREVIEW_DAYS, parseLocalDate } from "@tor-now/domain";
+import { addDays, daysBetween, MAX_ADDONS_ON_SALE, MAX_PREVIEW_DAYS, MIN_PREVIEW_DAYS, parseLocalDate } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
 import type { FeatureViewDto, PlanName } from "@/lib/api/types.ts";
-import { formatLocalDate } from "@/lib/format.ts";
+import { formatLocalDate, formatPrice } from "@/lib/format.ts";
+import { priceMinorOf } from "@/lib/plan-edit.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { Button, Card, Critical, Note, Sheet } from "@/components/ui.tsx";
-import { useSubmit } from "./grant-sheets.tsx";
+import { Button, Card, Critical, Field, Note, Sheet } from "@/components/ui.tsx";
+import { useSubmit } from "@/lib/use-submit.ts";
 import { lastDayOf, LengthPicker, type Length } from "./length-picker.tsx";
-import { EffectBox } from "./plan-edit-sheet.tsx";
+import { EffectBox } from "@/components/effect-box.tsx";
 
 /**
  * Previews from the Features tab (ADR 0020): starting one, carrying one on,
@@ -172,20 +173,29 @@ export const PreviewPlacementSheet = ({
   view,
   today,
   token,
+  onSale,
   onClose,
   onSaved,
 }: {
   view: FeatureViewDto | null;
   today: string;
   token: string;
+  /** How many Add-ons are on sale already; two is the most there can be. */
+  onSale: number;
   onClose: () => void;
   onSaved: Saved;
 }) => {
   const words = useCopy("catalogue");
   const { billing, language, list } = useNames();
   const [keep, setKeep] = useState<readonly PlanName[]>([]);
+  const [sell, setSell] = useState(false);
+  const [price, setPrice] = useState("");
   const { busy, error, submit } = useSubmit();
   if (view === null || view.preview === null) return null;
+
+  const full = onSale >= MAX_ADDONS_ON_SALE;
+  const addonPrice = sell ? priceMinorOf(price) : null;
+  const addonValid = !sell || (addonPrice !== null && addonPrice > 0);
 
   const feature = billing.featureName[view.feature];
   const earliest = addDays(parseLocalDate(today), MIN_PREVIEW_DAYS);
@@ -230,6 +240,31 @@ export const PreviewPlacementSheet = ({
             </div>
           ))}
         </Card>
+        {losing.length > 0 && (
+          // ADR 0021: those who lose it may keep it by paying for it on its own.
+          <div className="card addon-sale">
+            <label className={`fp-toggle${full ? " off" : ""}`}>
+              <span className="what">
+                {words.sellLeaving}
+                <em>{full ? words.sellFull : onSale === 0 ? words.sellFirst : words.sellSecond}</em>
+              </span>
+              <span className="switch">
+                <input type="checkbox" role="switch" checked={sell} disabled={full} onChange={() => setSell((on) => !on)} />
+                <i />
+              </span>
+            </label>
+            {sell && (
+              <Field
+                id="preview-addon-price"
+                label={words.addonPriceLabel}
+                inputMode="numeric"
+                dir="ltr"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+              />
+            )}
+          </div>
+        )}
         {keeping.length > 0 && (
           <EffectBox tone="gives" title={words.givesTitle} lines={[fillText(words.placeKeep, { plans: list(keeping), feature })]} />
         )}
@@ -240,6 +275,7 @@ export const PreviewPlacementSheet = ({
             lines={[
               words.placeLeaveTold,
               ...(endsOn === view.preview.endsOn ? [] : [fillText(words.placeMoved, { date: longDate(endsOn) })]),
+              ...(addonPrice === null ? [] : [fillText(words.placeAddonLine, { price: formatPrice(addonPrice, language, "—") })]),
             ]}
           />
         )}
@@ -249,9 +285,10 @@ export const PreviewPlacementSheet = ({
         {error !== null && <Critical>{error}</Critical>}
         <Button
           busy={busy}
+          disabled={!addonValid}
           onClick={() =>
             void submit(async () => {
-              onSaved((await api.adminPlacePreview(token, view.feature, [...keep])).features);
+              onSaved((await api.adminPlacePreview(token, view.feature, [...keep], addonPrice)).features);
               onClose();
             })
           }

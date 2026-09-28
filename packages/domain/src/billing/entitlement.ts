@@ -44,22 +44,48 @@ const runsThrough = (endsOn: LocalDate, today: LocalDate): boolean =>
 /** All an Entitlement needs of a Grant; its reason stays with the owner. */
 export type GrantTerm = Pick<Grant, "feature" | "endsOn">;
 
+/** All an Entitlement needs of an Add-on held: from when, until when. */
+export type AddonTerm = {
+  readonly feature: Feature;
+  readonly addedOn: LocalDate;
+  /** Its last day once it is ending; null while it runs on. */
+  readonly endsOn: LocalDate | null;
+};
+
+/** The Add-ons a Trial includes — every one on sale — until its last day (ADR 0021). */
+export type TrialAddons = {
+  readonly features: readonly Feature[];
+  readonly endsOn: LocalDate;
+};
+
+export const addonRuns = (addon: AddonTerm, today: LocalDate): boolean =>
+  compareLocalDate(addon.addedOn, today) <= 0 && (addon.endsOn === null || runsThrough(addon.endsOn, today));
+
+export const trialGives = (trial: TrialAddons | null, feature: Feature, today: LocalDate): boolean =>
+  trial !== null && trial.features.includes(feature) && runsThrough(trial.endsOn, today);
+
 /**
- * The Plan Version's terms, plus the Business's own Grants and every Preview
- * still running. The Grants passed in are assumed to be this Business's.
+ * The Plan Version's terms, plus the Business's own Grants and Add-ons, every
+ * Preview still running, and while a Trial lasts every Add-on on sale. The
+ * Grants and Add-ons passed in are assumed to be this Business's.
  */
 export const entitlementFor = (input: {
   terms: PlanTerms;
   grants: readonly GrantTerm[];
   previews: readonly Preview[];
+  addons: readonly AddonTerm[];
+  trialAddons: TrialAddons | null;
   today: LocalDate;
 }): Entitlement => {
+  const { today } = input;
   const held = new Set<Feature>([
     ...input.terms.features,
-    ...input.grants.filter((grant) => runsThrough(grant.endsOn, input.today)).map((grant) => grant.feature),
+    ...input.grants.filter((grant) => runsThrough(grant.endsOn, today)).map((grant) => grant.feature),
     ...input.previews
-      .filter((preview) => runsThrough(preview.endsOn, input.today))
+      .filter((preview) => runsThrough(preview.endsOn, today))
       .map((preview) => preview.feature),
+    ...input.addons.filter((addon) => addonRuns(addon, today)).map((addon) => addon.feature),
+    ...FEATURES.filter((feature) => trialGives(input.trialAddons, feature, today)),
   ]);
   return {
     features: FEATURES.filter((feature) => held.has(feature)),

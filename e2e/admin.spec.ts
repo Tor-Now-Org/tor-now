@@ -5,6 +5,7 @@ import {
   closeDatabase,
   makeAdministrator,
   ready,
+  signInDirectly,
   uniquePhone,
 } from "./support.ts";
 
@@ -478,5 +479,109 @@ test.describe("the Catalogue", () => {
 
     await expect(page.locator(".dir-token", { hasText: /מנהלים ועובדים · בהענקה/ })).toBeVisible();
     await expect(inDirectory(page, name)).toBeVisible();
+  });
+
+  // --- ADR 0021: Add-ons, and a Feature's own "which plans" ------------------
+
+  /** Nothing on sale on its own, whatever an earlier run left: the suite shares one database. */
+  const noAddonsOnSale = async (token: string): Promise<void> => {
+    const { features } = await call<{ features: { feature: string; addon?: unknown }[] }>("/admin/catalogue/features", { token });
+    for (const view of features) {
+      if (view.addon !== null && view.addon !== undefined) {
+        await call(`/admin/catalogue/features/${view.feature}/addon/stop`, { method: "POST", token });
+      }
+    }
+  };
+
+  const openFeatures = async (page: Page) => {
+    await page.getByRole("button", { name: "מחירון" }).click();
+    await page.getByRole("tab", { name: "פיצ'רים" }).click();
+  };
+
+  test("a Feature goes on sale as an Add-on, is repriced, and its sale stops", async ({ page }) => {
+    const admin = await anAdministrator();
+    await noAddonsOnSale(admin.token);
+    await asAdministrator(page, admin.token);
+    await openFeatures(page);
+
+    const blocking = page.locator(".feature-card", { hasText: "חסימת לקוחות" });
+    await blocking.getByRole("button", { name: "מכירה כתוספת" }).click({ timeout: 15_000 });
+    const sell = page.getByRole("dialog", { name: /מכירה כתוספת — חסימת לקוחות/ });
+    await sell.getByLabel("מחיר לחודש (₪)").fill("9");
+    await expect(sell.getByText(/יכולים להוסיף חסימת לקוחות/)).toBeVisible({ timeout: 15_000 });
+    await sell.getByRole("button", { name: "התחלת המכירה" }).click();
+    await expect(blocking.getByText(/ביחיד כתוספת/)).toBeVisible({ timeout: 15_000 });
+
+    await blocking.getByRole("button", { name: "שינוי מחיר" }).click();
+    const price = page.getByRole("dialog", { name: /מחיר חדש — חסימת לקוחות/ });
+    await price.getByLabel("מחיר חדש לחודש (₪)").fill("7");
+    await expect(price.getByText("נותן ערך — חל עכשיו")).toBeVisible();
+    await price.getByRole("button", { name: "שמירה — חל עכשיו" }).click();
+    await expect(blocking.getByText(/ביחיד כתוספת · .*7/)).toBeVisible({ timeout: 15_000 });
+
+    await blocking.getByRole("button", { name: "הפסקת המכירה" }).click();
+    const stop = page.getByRole("dialog", { name: /הפסקת המכירה — חסימת לקוחות/ });
+    await expect(stop.getByText("לא לוקח מאף אחד")).toBeVisible();
+    await stop.getByRole("button", { name: "הפסקת המכירה" }).click();
+    await expect(blocking.getByRole("button", { name: "מכירה כתוספת" })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("an owner keeps an Add-on after the Trial, sees the next payment, cancels it and takes it back", async ({ page }) => {
+    const admin = await anAdministrator();
+    await noAddonsOnSale(admin.token);
+    await call("/admin/catalogue/features/CUSTOMER_BLOCKING/addon", { method: "POST", token: admin.token, body: { priceMinor: 900 } });
+    const ownerPhone = uniquePhone();
+    const shop = await aBusinessWithOpenHours({ name: `תוספות ${Date.now()}`, ownerPhone, plan: "SOLO" });
+    try {
+      await signInDirectly(page, ownerPhone, "בעלים");
+      await page.goto(`/manage?business=${shop.business.id}`);
+      await ready(page);
+      await page.getByRole("button", { name: "העסק", exact: true }).click();
+      await page.getByRole("button", { name: "מנוי ותשלומים" }).click();
+
+      const row = page.locator(".addon-row", { hasText: "חסימת לקוחות" });
+      await expect(row.getByText(/כלולה בניסיון עד/)).toBeVisible({ timeout: 15_000 });
+      await row.getByRole("button", { name: "להמשיך אחרי הניסיון" }).click();
+      const add = page.getByRole("dialog", { name: "הוספת חסימת לקוחות" });
+      await expect(add.getByText("זמינה מעכשיו.")).toBeVisible();
+      await add.getByRole("button", { name: /הוספה ב־/ }).click();
+      await expect(row.getByText("פעיל")).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator(".pay-row.total")).toContainText("58");
+
+      await row.getByRole("button", { name: "ביטול" }).click();
+      const cancel = page.getByRole("dialog", { name: "ביטול חסימת לקוחות" });
+      await cancel.getByRole("button", { name: "ביטול התוספת" }).click();
+      await expect(row.getByText(/בוטלה · נשארת עד/)).toBeVisible({ timeout: 15_000 });
+      await row.getByRole("button", { name: "חידוש" }).click();
+      await expect(row.getByText("פעיל")).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await call("/admin/catalogue/features/CUSTOMER_BLOCKING/addon/stop", { method: "POST", token: admin.token }).catch(() => undefined);
+    }
+  });
+
+  test("which plans, and a Preview's end sold as an Add-on, say what they do before anything is saved", async ({ page }) => {
+    const admin = await anAdministrator();
+    await noAddonsOnSale(admin.token);
+    await asAdministrator(page, admin.token);
+    await openFeatures(page);
+
+    const history = page.locator(".feature-card", { hasText: "היסטוריית לקוח" });
+    await history.getByRole("button", { name: "באילו מסלולים" }).click({ timeout: 15_000 });
+    const which = page.getByRole("dialog", { name: /באילו מסלולים — היסטוריית לקוח/ });
+    await which.getByRole("group", { name: "יחיד" }).getByRole("button", { name: "כלול", exact: true }).click({ timeout: 15_000 });
+    await expect(which.getByText("יחיד — נותן ערך, חל עכשיו")).toBeVisible();
+    await which.getByRole("group", { name: "צוות" }).getByRole("button", { name: "לא כלול" }).click();
+    await expect(which.getByText(/צוות — לוקח ערך · גרסה \d+ חדשה/)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(which).toBeHidden();
+
+    const waiting = page.locator(".feature-card", { hasText: "רשימת המתנה" });
+    await waiting.getByRole("button", { name: "מה קורה בסוף התצוגה" }).click();
+    const place = page.getByRole("dialog", { name: /מה קורה לרשימת המתנה/ });
+    await place.getByRole("group", { name: "צוות" }).getByRole("button", { name: "נשאר במסלול" }).click();
+    await place.getByText("למכור כתוספת למי שיוצא").click();
+    await place.getByLabel("מחיר לחודש (₪)").fill("15");
+    await expect(place.getByText(/אפשר להשאיר אותו כתוספת ב־/)).toBeVisible();
+    await page.keyboard.press("Escape");
   });
 });

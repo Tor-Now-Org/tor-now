@@ -10,6 +10,8 @@ import {
 } from "./grant.ts";
 
 const day = parseLocalDate;
+/** No Add-on held, and no Trial giving them. */
+const noAddons = { addons: [], trialAddons: null } as const;
 const today = day("2026-09-27");
 const solo = { features: ["REMINDERS"] as const };
 const waitingPreview = { feature: "WAITING_LIST" as const, endsOn: day("2026-11-25") };
@@ -17,6 +19,7 @@ const waitingPreview = { feature: "WAITING_LIST" as const, endsOn: day("2026-11-
 describe("featureSources", () => {
   it("names one place each Feature comes from, the Plan first", () => {
     const sources = featureSources({
+      ...noAddons,
       terms: solo,
       grants: [
         { feature: "CUSTOMER_HISTORY", endsOn: day("2026-10-02") },
@@ -37,12 +40,36 @@ describe("featureSources", () => {
   it("carries the Grant it comes from, the longest running of several", () => {
     const short = { feature: "TEAM_ROLES" as const, endsOn: day("2026-10-01"), id: "a" };
     const long = { feature: "TEAM_ROLES" as const, endsOn: day("2026-12-01"), id: "b" };
-    const [, , , teamRoles] = featureSources({ terms: solo, grants: [short, long], previews: [], today });
+    const [, , , teamRoles] = featureSources({ ...noAddons, terms: solo, grants: [short, long], previews: [], today });
     expect(teamRoles?.grant).toBe(long);
+  });
+
+  it("puts an Add-on after the Plan and before a Grant, and a Trial's Add-ons with it", () => {
+    const sources = featureSources({
+      terms: solo,
+      grants: [{ feature: "CUSTOMER_HISTORY", endsOn: day("2026-12-31") }],
+      previews: [waitingPreview],
+      addons: [
+        { feature: "CUSTOMER_HISTORY", addedOn: day("2026-09-01"), endsOn: null },
+        { feature: "REMINDERS", addedOn: day("2026-09-01"), endsOn: null },
+        { feature: "TEAM_ROLES", addedOn: day("2026-09-01"), endsOn: day("2026-09-26") },
+      ],
+      trialAddons: { features: ["WAITING_LIST"], endsOn: day("2026-10-10") },
+      today,
+    });
+    expect(sources.map(({ feature, source, endsOn }) => ({ feature, source, endsOn }))).toEqual([
+      { feature: "REMINDERS", source: "PLAN", endsOn: null },
+      { feature: "CUSTOMER_HISTORY", source: "ADDON", endsOn: null },
+      { feature: "CUSTOMER_BLOCKING", source: "NONE", endsOn: null },
+      { feature: "TEAM_ROLES", source: "NONE", endsOn: null },
+      { feature: "WAITING_LIST", source: "ADDON", endsOn: "2026-10-10" },
+    ]);
+    expect(grantableFeatures(sources)).toEqual(["CUSTOMER_BLOCKING", "TEAM_ROLES"]);
   });
 
   it("forgets a Grant or a Preview once it has ended", () => {
     const sources = featureSources({
+      ...noAddons,
       terms: solo,
       grants: [{ feature: "TEAM_ROLES", endsOn: day("2026-09-26") }],
       previews: [{ feature: "WAITING_LIST", endsOn: day("2026-09-26") }],
@@ -53,7 +80,7 @@ describe("featureSources", () => {
 });
 
 describe("checkGrants", () => {
-  const sources = featureSources({ terms: solo, grants: [], previews: [waitingPreview], today });
+  const sources = featureSources({ ...noAddons, terms: solo, grants: [], previews: [waitingPreview], today });
   const valid = { features: ["TEAM_ROLES", "CUSTOMER_HISTORY"] as const, endsOn: day("2026-12-26"), reason: "  פיילוט  ", sources, today };
 
   it("keeps several Features in catalogue order, once each, with the reason trimmed", () => {

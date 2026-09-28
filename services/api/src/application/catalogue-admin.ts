@@ -21,6 +21,7 @@ import {
 import type { GrantEntry, Repositories, UnitRateEntry } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { requireAdministrator } from "./authorization.ts";
+import { trialAddonsOf } from "./addons.ts";
 import { subscriptionView } from "./billing.ts";
 import { tell } from "./notices.ts";
 
@@ -36,12 +37,22 @@ export const featuresWithGrants = async (
   businessId: BusinessId,
   today: LocalDate,
 ): Promise<readonly FeatureSource<GrantEntry>[]> => {
-  const [view, grants, previews] = await Promise.all([
+  const [view, grants, previews, addons, offers] = await Promise.all([
     subscriptionView(repositories, businessId, today),
     repositories.grants.listForBusiness(businessId),
     repositories.previews.list(),
+    repositories.addonHoldings.listForBusiness(businessId),
+    repositories.addonOffers.list(),
   ]);
-  return featureSources({ terms: view.planVersion.terms, grants, previews, today });
+  const { paidThrough, trialEndsOn } = view.subscription;
+  return featureSources({
+    terms: view.planVersion.terms,
+    grants,
+    previews,
+    addons,
+    trialAddons: trialAddonsOf(paidThrough === null ? trialEndsOn : null, offers),
+    today,
+  });
 };
 
 const businessToday = async (repositories: Repositories, businessId: BusinessId, clock: Clock) => {

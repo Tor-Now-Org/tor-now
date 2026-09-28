@@ -57,7 +57,16 @@ const summaryOf = (facts: BillingNoticePayload["facts"]): string => {
     case "EDITION_CANCELLED":
       return `השינוי שהודענו עליו במסלול ${PLAN_IN_HEBREW[facts.plan]} בוטל. המסלול נשאר כמו שהוא.`;
     case "PREVIEW_LEAVING":
-      return `${FEATURE_IN_HEBREW[facts.feature]} היה בתצוגה מוקדמת, והוא יוצא ממסלול ${PLAN_IN_HEBREW[facts.plan]} ב־${longDate(facts.endsOn)}. מה שכבר נעשה איתו נשאר.`;
+      return [
+        `${FEATURE_IN_HEBREW[facts.feature]} היה בתצוגה מוקדמת, והוא יוצא ממסלול ${PLAN_IN_HEBREW[facts.plan]} ב־${longDate(facts.endsOn)}. מה שכבר נעשה איתו נשאר.`,
+        ...(facts.addonPriceMinor === null
+          ? []
+          : [`אפשר להשאיר אותו כתוספת ב־${shekels(facts.addonPriceMinor)} לחודש, מדף המנוי.`]),
+      ].join(" ");
+    case "ADDON_PRICE_RISING":
+      return `המחיר של התוספת ${FEATURE_IN_HEBREW[facts.feature]} עולה מ־${shekels(facts.priceFrom)} ל־${shekels(facts.priceTo)} לחודש, מהתשלום ב־${longDate(facts.effectiveOn)}. עד אז הוא לא משתנה, ואפשר לבטל את התוספת בדף המנוי.`;
+    case "ADDON_RISE_CANCELLED":
+      return `העלאת המחיר של התוספת ${FEATURE_IN_HEBREW[facts.feature]} בוטלה. המחיר נשאר ${shekels(facts.priceMinor)} לחודש.`;
   }
 };
 

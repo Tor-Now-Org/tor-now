@@ -1,7 +1,8 @@
 "use client";
 
-import type { FeatureSourceDto, PlanDto } from "@/lib/api/types.ts";
-import { formatLocalDate } from "@/lib/format.ts";
+import type { AddonDto, FeatureSourceDto, PlanDto } from "@/lib/api/types.ts";
+import { addonTagOf } from "@/lib/addon-tag.ts";
+import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { isEndingSoon } from "@/lib/grant-length.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
@@ -9,16 +10,20 @@ import { Card } from "@/components/ui.tsx";
 import { SourceMark, SourceTag, sourceTone } from "@/components/feature-source.tsx";
 
 /**
- * What the owner has, and from where (ADR 0021): the Plan, something given
- * until a day, a Preview — and for what they don't have, the Plan that does.
+ * What the owner has, and from where (ADR 0021): the Plan, an Add-on,
+ * something given until a day, a Preview — and for what they don't have, the
+ * Plan that does.
  * The same list the administrator reads, in the owner's words.
  */
 export const IncludedFeatures = ({
   features,
+  addons = [],
   plans,
   today,
 }: {
   features: readonly FeatureSourceDto[];
+  /** What the Business holds on its own, for each Add-on line's price. */
+  addons?: readonly AddonDto[];
   plans: readonly PlanDto[];
   /** The Business's own today, as YYYY-MM-DD. */
   today: string;
@@ -33,6 +38,12 @@ export const IncludedFeatures = ({
     switch (source.source) {
       case "PLAN":
         return words.sourcePlan;
+      case "ADDON":
+        return addonTagOf(source, addons, {
+          words,
+          money: (minor) => formatPrice(minor, language, "—"),
+          shortDate,
+        });
       case "GRANT":
         return fillText(words.sourceGrant, { date: shortDate(source.endsOn ?? today) });
       case "PREVIEW":

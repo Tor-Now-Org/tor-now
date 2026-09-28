@@ -76,6 +76,19 @@ describe("the billing Notice", () => {
     );
   });
 
+  it("says an Add-on's new price and its cancellation, and what keeping a Preview's Feature costs", () => {
+    const day = parseLocalDate;
+    expect(
+      rendered(aNotice({ kind: "ADDON_PRICE_RISING", feature: "CUSTOMER_HISTORY", priceFrom: 1900, priceTo: 2400, effectiveOn: day("2026-11-27") })),
+    ).toContain("המחיר של התוספת היסטוריית לקוח עולה מ־₪19 ל־₪24 לחודש, מהתשלום ב־27 בנובמבר.");
+    expect(rendered(aNotice({ kind: "ADDON_RISE_CANCELLED", feature: "CUSTOMER_HISTORY", priceMinor: 1900 }))).toContain(
+      "העלאת המחיר של התוספת היסטוריית לקוח בוטלה. המחיר נשאר ₪19 לחודש.",
+    );
+    const leaving = { kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: day("2026-11-25") } as const;
+    expect(rendered(aNotice({ ...leaving, addonPriceMinor: 1500 }))).toContain("אפשר להשאיר אותו כתוספת ב־₪15 לחודש, מדף המנוי.");
+    expect(rendered(aNotice({ ...leaving, addonPriceMinor: null }))).not.toContain("כתוספת");
+  });
+
   it("leaves the link out when the deployment does not know where the app lives", () => {
     expect(rendered(aNotice({ kind: "DEACTIVATED", on: parseLocalDate("2026-11-08") }), null)).not.toContain(
       "לפרטים באפליקציה",

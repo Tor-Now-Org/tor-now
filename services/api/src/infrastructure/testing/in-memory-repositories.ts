@@ -36,6 +36,7 @@ import { SEARCH } from "../../config.ts";
 import { PG_ERRORS } from "../pg/client.ts";
 import type { DailyUsageLine, Repositories, WaitingEntry } from "../../ports/repositories.ts";
 import type { Store } from "./in-memory-store.ts";
+import { inMemoryAddonHoldings, inMemoryAddonOffers, inMemoryDaysOwed } from "./in-memory-addons.ts";
 import { inMemoryNotices } from "./in-memory-notices.ts";
 import {
   inMemoryGrants,
@@ -1309,7 +1310,21 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           grants: store.grants
             .filter((grant) => grant.businessId === businessId)
             .map(({ feature, endsOn }) => ({ feature, endsOn })),
+          addons: store.addonHoldings
+            .filter((holding) => holding.businessId === businessId)
+            .map(({ feature, addedOn, endsOn }) => ({ feature, addedOn, endsOn })),
+          trialEndsOn: subscription.paidThrough === null ? subscription.trialEndsOn : null,
         };
+      },
+      async plansHeld(businessId) {
+        return store.plansHeld
+          .filter((held) => held.businessId === businessId)
+          .map((held) => held.plan)
+          .sort();
+      },
+      async holdPlan(businessId, plan) {
+        if (store.plansHeld.some((held) => held.businessId === businessId && held.plan === plan)) return;
+        store.plansHeld = [...store.plansHeld, { businessId, plan }];
       },
       async directory() {
         return [...store.businesses]
@@ -1371,6 +1386,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
     grants: inMemoryGrants(store),
 
     previews: inMemoryPreviews(store),
+    addonOffers: inMemoryAddonOffers(store),
+    addonHoldings: inMemoryAddonHoldings(store),
+    daysOwed: inMemoryDaysOwed(store),
 
     payments: {
       async create(input) {

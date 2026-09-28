@@ -139,13 +139,29 @@ export const subscriptionRepository = (
     const row = rows[0];
     if (row === undefined) return null;
     const grants = row["grants"] as readonly Row[];
+    const addons = row["addons"] as readonly Row[];
     return {
       planVersionId: asId(text(row["plan_version_id"])),
       grants: grants.map((grant) => ({
         feature: parseFeature(text(grant["feature"])),
         endsOn: parseLocalDate(text(grant["endsOn"])),
       })),
+      addons: addons.map((addon) => ({
+        feature: parseFeature(text(addon["feature"])),
+        addedOn: parseLocalDate(text(addon["addedOn"])),
+        endsOn: addon["endsOn"] === null ? null : parseLocalDate(text(addon["endsOn"])),
+      })),
+      trialEndsOn: row["trial_ends_on"] === null ? null : toLocalDate(row["trial_ends_on"]),
     };
+  },
+
+  async plansHeld(businessId) {
+    const rows = await tx<Row[]>`select plan from plan_held where business_id = ${businessId} order by plan`;
+    return rows.map((row) => toPlan(row["plan"]));
+  },
+
+  async holdPlan(businessId, plan) {
+    await tx`insert into plan_held (business_id, plan) values (${businessId}, ${plan}) on conflict do nothing`;
   },
 
   async directory() {

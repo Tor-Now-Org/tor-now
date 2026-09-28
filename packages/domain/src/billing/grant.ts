@@ -1,7 +1,7 @@
 import { validationFailed } from "../shared/errors.ts";
 import { TEXT_RULES } from "../model/text.ts";
 import { addDays, compareLocalDate, type LocalDate } from "../time/local-date.ts";
-import type { GrantTerm, Preview } from "./entitlement.ts";
+import { addonRuns, trialGives, type AddonTerm, type GrantTerm, type Preview, type TrialAddons } from "./entitlement.ts";
 import { FEATURES, type Feature } from "./feature.ts";
 import type { PlanTerms } from "./plan.ts";
 
@@ -14,13 +14,17 @@ import type { PlanTerms } from "./plan.ts";
 /** How far ahead a Grant may run. Anything meant to last longer is a Plan Version. */
 export const MAX_GRANT_DAYS = 365;
 
-export const FEATURE_SOURCES = ["PLAN", "GRANT", "PREVIEW", "NONE"] as const;
+export const FEATURE_SOURCES = ["PLAN", "ADDON", "GRANT", "PREVIEW", "NONE"] as const;
 export type FeatureSourceKind = (typeof FEATURE_SOURCES)[number];
 
 export type FeatureSource<G extends GrantTerm = GrantTerm> = {
   readonly feature: Feature;
   readonly source: FeatureSourceKind;
-  /** The last day a Grant or a Preview gives it; null from the Plan, or not at all. */
+  /**
+   * The last day it is given: a Grant's or a Preview's end, a cancelled
+   * Add-on's, or the Trial's for one it includes. Null from the Plan, from an
+   * Add-on running on, or not at all.
+   */
   readonly endsOn: LocalDate | null;
   /** The Grant it comes from, when it does. */
   readonly grant: G | null;
@@ -37,17 +41,24 @@ const latest = <G extends GrantTerm>(grants: readonly G[]): G | null =>
 
 /**
  * Every Feature, each with the one place it comes from: the Plan first — a
- * Grant of something the Plan includes changes nothing — then a Grant, then a
- * Preview, else nowhere.
+ * Grant of something the Plan includes changes nothing — then an Add-on,
+ * bought or included in the Trial, then a Grant, then a Preview, else nowhere.
  */
 export const featureSources = <G extends GrantTerm>(input: {
   terms: Pick<PlanTerms, "features">;
   grants: readonly G[];
   previews: readonly Preview[];
+  addons: readonly AddonTerm[];
+  trialAddons: TrialAddons | null;
   today: LocalDate;
 }): readonly FeatureSource<G>[] =>
   FEATURES.map((feature): FeatureSource<G> => {
     if (input.terms.features.includes(feature)) return { feature, source: "PLAN", endsOn: null, grant: null };
+    const addon = input.addons.find((a) => a.feature === feature && addonRuns(a, input.today));
+    if (addon !== undefined) return { feature, source: "ADDON", endsOn: addon.endsOn, grant: null };
+    if (input.trialAddons !== null && trialGives(input.trialAddons, feature, input.today)) {
+      return { feature, source: "ADDON", endsOn: input.trialAddons.endsOn, grant: null };
+    }
     const grant = latest(input.grants.filter((g) => g.feature === feature && runsThrough(g.endsOn, input.today)));
     if (grant !== null) return { feature, source: "GRANT", endsOn: grant.endsOn, grant };
     const preview = input.previews.find((p) => p.feature === feature && runsThrough(p.endsOn, input.today));

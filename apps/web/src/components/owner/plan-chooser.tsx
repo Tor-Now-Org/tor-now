@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type { BillingDto, FeatureName, PlanDto, PlanName, ResourceDto } from "@/lib/api/types.ts";
+import type { AddonDto, BillingDto, FeatureName, PlanDto, PlanName, ResourceDto } from "@/lib/api/types.ts";
 import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { daysOf } from "@/lib/next-payment.ts";
 import { outcomeOf } from "@/lib/plan-outcome.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { usePlans } from "@/lib/use-plans.ts";
@@ -43,7 +44,9 @@ export const PlanChooser = ({
   const [error, setError] = useState<string | null>(null);
 
   const longDate = (date: string) => formatLocalDate(date, language, { day: "numeric", month: "long" });
+  const shortDate = (date: string) => formatLocalDate(date, language, { day: "numeric", month: "numeric" });
   const target = plans.find((plan) => plan.plan === picked);
+  const upgradeDaysOwed = billing.moveUpOwed?.find((owed) => owed.plan === picked);
   /** The edition a Catalogue change moves the Plan held onto — its current one. */
   const editionTo = plans.find((plan) => plan.plan === current.plan);
   const outcome = target === undefined ? null : outcomeOf(current, target);
@@ -120,7 +123,7 @@ export const PlanChooser = ({
 
       {target !== undefined && outcome !== null && outcome.kind !== "SAME" && (
         <>
-          <Difference from={current} to={target} />
+          <Difference from={current} to={target} addons={billing.addons ?? []} />
           {shrinking && (
             <>
               <Warning>
@@ -153,13 +156,28 @@ export const PlanChooser = ({
               </Card>
             </>
           )}
-          <p className="hint" style={{ margin: 0 }}>
-            {outcome.kind === "UPGRADE_NOW"
-              ? fillText(words.upgradeHint, { price: formatPrice(target.priceMinor, language, "—") })
-              : outcome.kind === "DOWNGRADE_NOW"
-                ? words.downgradeNowHint
-                : fillText(words.downgradeHint, { date: longDate(outcome.on) })}
-          </p>
+          {outcome.kind === "UPGRADE_NOW" && upgradeDaysOwed !== undefined && billing.nextPayment !== undefined ? (
+            // Moving up again to a Plan left before owes the days already paid for (ADR 0021).
+            <p className="note owed" style={{ margin: 0 }}>
+              {fillText(words.upgradeAgainHint, {
+                plan: words.plan[target.plan],
+                owed: formatPrice(upgradeDaysOwed.amountMinor, language, "—"),
+                days: String(daysOf(upgradeDaysOwed)),
+                from: shortDate(upgradeDaysOwed.from),
+                through: shortDate(upgradeDaysOwed.through),
+                date: shortDate(billing.nextPayment.on),
+                price: formatPrice(target.priceMinor, language, "—"),
+              })}
+            </p>
+          ) : (
+            <p className="hint" style={{ margin: 0 }}>
+              {outcome.kind === "UPGRADE_NOW"
+                ? fillText(words.upgradeHint, { price: formatPrice(target.priceMinor, language, "—") })
+                : outcome.kind === "DOWNGRADE_NOW"
+                  ? words.downgradeNowHint
+                  : fillText(words.downgradeHint, { date: longDate(outcome.on) })}
+            </p>
+          )}
           <Button
             intent={outcome.kind === "UPGRADE_NOW" ? "primary" : "quiet"}
             busy={busy}
@@ -177,11 +195,20 @@ export const PlanChooser = ({
   );
 };
 
-/** What moving between two Plans gives and takes, in the owner's words. */
-const Difference = ({ from, to }: { from: BillingDto["subscription"]; to: PlanDto }) => {
+/**
+ * What moving between two Plans gives and takes, in the owner's words — and
+ * which Add-ons end because the new Plan includes them.
+ */
+const Difference = ({ from, to, addons }: { from: BillingDto["subscription"]; to: PlanDto; addons: readonly AddonDto[] }) => {
   const words = useCopy("billing");
+  const { language } = useLanguage();
   const line = (feature: string) => words.featureLine[feature as FeatureName];
-  const gained = to.features.filter((feature) => !from.features.includes(feature)).map(line);
+  // What is held as an Add-on is not gained; it ends, and stops being paid for.
+  const held = addons.filter((addon) => addon.holding !== null);
+  const ending = held.filter((addon) => to.features.includes(addon.feature));
+  const gained = to.features
+    .filter((feature) => !from.features.includes(feature) && !held.some((addon) => addon.feature === feature))
+    .map(line);
   const lost = from.features.filter((feature) => !to.features.includes(feature)).map(line);
   const calendars =
     to.resourceAllowance === from.resourceAllowance
@@ -202,6 +229,16 @@ const Difference = ({ from, to }: { from: BillingDto["subscription"]; to: PlanDt
       {calendars !== null && !growing && (
         <span><b>{words.calendarsLine}</b> {calendars}</span>
       )}
+      {ending.map((addon) => (
+        <span key={addon.feature}>
+          <b>{words.addonEnds}</b>{" "}
+          {fillText(words.addonEndsLine, {
+            feature: words.featureName[addon.feature],
+            plan: words.plan[to.plan],
+            price: formatPrice(addon.priceMinor, language, "—"),
+          })}
+        </span>
+      ))}
     </div>
   );
 };

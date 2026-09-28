@@ -4,7 +4,7 @@ import { announce } from "./notices.ts";
 
 /**
  * The daily run's Notices (ADR 0020): a Trial or a Grant ending within the week, a payment
- * late, a move landing within the week — worked out per Business against its
+ * late, a move or an Add-on's new price landing within the week — worked out per Business against its
  * own today. Saying the same thing twice keeps nothing twice, so a run that
  * repeats or follows a missed day is safe.
  *
@@ -15,12 +15,14 @@ export const announceDue = async (
   now: Instant,
 ): Promise<number> => {
   const { repositories } = session;
-  // A day early: each Business's own today decides which Grants still run.
-  const [entries, versions, grants, previews] = await Promise.all([
+  // A day early: each Business's own today decides which Grants and Add-ons still run.
+  const dayEarly = addDays(todayIn(now, timeZone("UTC")), -1);
+  const [entries, versions, grants, previews, holdings] = await Promise.all([
     repositories.subscriptions.directory(),
     repositories.planVersions.listAll(),
-    repositories.grants.listRunning(addDays(todayIn(now, timeZone("UTC")), -1)),
+    repositories.grants.listRunning(dayEarly),
     repositories.previews.listEntries(),
+    repositories.addonHoldings.listRunning(dayEarly),
   ]);
   const planOf = new Map<PlanVersionId, Plan>(versions.map((version) => [version.id, version.plan]));
   const editionOf = new Map(versions.map((version) => [version.id, version]));
@@ -54,6 +56,11 @@ export const announceDue = async (
       pausing,
       grants: grants.filter((grant) => grant.businessId === business.id),
       previewsLeaving: leavingFor(subscription.planVersionId),
+      addonRises: holdings.flatMap((holding) =>
+        holding.businessId !== business.id || holding.nextPrice === null
+          ? []
+          : [{ feature: holding.feature, priceTo: holding.nextPrice.price, effectiveOn: holding.nextPrice.effectiveOn }],
+      ),
       businessActive: business.active,
       today: todayIn(now, business.timeZone),
     });

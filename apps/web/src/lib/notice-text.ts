@@ -88,6 +88,7 @@ const changesOf = (
 export const noticeText = (facts: NoticeFacts, context: NoticeContext): NoticeText => {
   const { words, billing, language } = context;
   const date = (value: string) => formatLocalDate(value, language);
+  const money = (minor: number) => formatPrice(minor, language, "—");
   const plan = (value: PlanName) => billing.plan[value];
   const features = (list: readonly FeatureName[]) =>
     namesOf(list.map((feature) => billing.featureLine[feature]), language);
@@ -274,7 +275,10 @@ export const noticeText = (facts: NoticeFacts, context: NoticeContext): NoticeTe
           plan: plan(facts.plan),
           date: date(facts.endsOn),
         }),
-        body: words.previewLeavingBody,
+        body: sentences(
+          words.previewLeavingBody,
+          facts.addonPriceMinor === null ? null : fillText(words.previewLeavingAddon, { price: money(facts.addonPriceMinor) }),
+        ),
         action: "PLANS",
       };
     case "PREVIEW_ENDING":
@@ -290,6 +294,75 @@ export const noticeText = (facts: NoticeFacts, context: NoticeContext): NoticeTe
       return {
         title: fillText(words.planImprovedTitle, { plan: plan(facts.plan) }),
         body: fillText(words.planImprovedBody, { changes: changesOf({ ...facts, lost: [] }, context, named) }),
+        action: null,
+      };
+    default:
+      return addonText(facts, context);
+  }
+};
+
+type AddonFacts = Extract<NoticeFacts, { kind: `ADDON_${string}` }>;
+
+/** An Add-on's Notices (ADR 0021): always about "the Add-on", so every Feature's name reads right in Hebrew. */
+const addonText = (facts: AddonFacts, context: NoticeContext): NoticeText => {
+  const { words, billing, language } = context;
+  const date = (value: string) => formatLocalDate(value, language);
+  const money = (minor: number) => formatPrice(minor, language, "—");
+  const feature = billing.featureName[facts.feature];
+  switch (facts.kind) {
+    case "ADDON_OFFERED":
+      return {
+        title: fillText(words.addonOfferedTitle, { feature }),
+        body: fillText(words.addonOfferedBody, { price: money(facts.priceMinor) }),
+        action: "PLANS",
+      };
+    case "ADDON_ADDED":
+      return {
+        title: fillText(facts.by === "OWNER" ? words.addonAddedTitle : words.addonAddedByUsTitle, { feature }),
+        body: sentences(
+          fillText(words.addonAddedBody, { price: money(facts.priceMinor), date: date(facts.paysFrom) }),
+          facts.owedMinor === 0 ? null : fillText(words.addonAddedOwed, { owed: money(facts.owedMinor) }),
+        ),
+        action: null,
+      };
+    case "ADDON_CANCELLED":
+      return {
+        title: fillText(facts.by === "OWNER" ? words.addonCancelledTitle : words.addonCancelledByUsTitle, { feature }),
+        body: fillText(words.addonCancelledBody, { date: date(facts.endsOn) }),
+        action: null,
+      };
+    case "ADDON_PRICE_RISING":
+      return {
+        title: fillText(words.addonRisingTitle, { feature, price: money(facts.priceTo) }),
+        body: fillText(words.addonRisingBody, { date: date(facts.effectiveOn), old: money(facts.priceFrom) }),
+        action: "PLANS",
+      };
+    case "ADDON_PRICE_SOON":
+      return {
+        title: fillText(words.addonSoonTitle, {
+          feature,
+          price: money(facts.priceTo),
+          when: whenOf(facts.effectiveOn, context) ?? date(facts.effectiveOn),
+        }),
+        body: fillText(words.addonSoonBody, { date: date(facts.effectiveOn) }),
+        action: "PLANS",
+      };
+    case "ADDON_RISE_CANCELLED":
+      return {
+        title: fillText(words.addonRiseCancelledTitle, { feature }),
+        body: fillText(words.addonRiseCancelledBody, { price: money(facts.priceMinor) }),
+        action: null,
+      };
+    case "ADDON_PRICE_LOWERED":
+      return {
+        title: fillText(words.addonLoweredTitle, { feature }),
+        body: fillText(words.addonLoweredBody, { price: money(facts.priceTo), old: money(facts.priceFrom) }),
+        action: null,
+      };
+    case "ADDON_INCLUDED":
+      return {
+        title: fillText(words.addonIncludedTitle, { feature, plan: billing.plan[facts.plan] }),
+        body: words.addonIncludedBody,
         action: null,
       };
   }

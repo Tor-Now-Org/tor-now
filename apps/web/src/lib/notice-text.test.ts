@@ -198,13 +198,53 @@ describe("noticeText — Previews", () => {
       action: "INCLUDED",
     });
     expect(text({ kind: "PREVIEW_KEPT", feature: "WAITING_LIST", plan: "TEAM" }, "he").title).toBe("רשימת המתנה נשאר אצלכם");
-    expect(text({ kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: day("2026-11-25") })).toMatchObject({
+    expect(
+      text({ kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: day("2026-11-25"), addonPriceMinor: null }),
+    ).toMatchObject({
       title: "Waiting list leaves Solo on 25 November",
       action: "PLANS",
     });
+    expect(
+      text({ kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: day("2026-11-25"), addonPriceMinor: 1500 }).body,
+    ).toContain("You can keep it as an Add-on for");
     expect(text({ kind: "PREVIEW_ENDING", feature: "WAITING_LIST", endsOn: day("2026-10-26") }).title).toBe(
       "Waiting list ends in 7 days",
     );
+  });
+});
+
+describe("an Add-on's Notices", () => {
+  it("says what it costs and from when, and whose act it was", () => {
+    const added = text({
+      kind: "ADDON_ADDED",
+      feature: "CUSTOMER_HISTORY",
+      by: "OWNER",
+      priceMinor: 1900,
+      paysFrom: day("2026-11-27"),
+      owedMinor: 950,
+    });
+    expect(added.title).toBe("You added Customer history");
+    expect(added.body).toContain("from your payment on 27 November");
+    expect(added.body).toContain("as you had it before");
+    expect(text({ kind: "ADDON_ADDED", feature: "CUSTOMER_HISTORY", by: "ADMINISTRATOR", priceMinor: 1900, paysFrom: day("2026-11-27"), owedMinor: 0 }).body).not.toContain(
+      "as you had it before",
+    );
+    expect(text({ kind: "ADDON_CANCELLED", feature: "CUSTOMER_HISTORY", by: "ADMINISTRATOR", endsOn: day("2026-11-26") }).title).toBe(
+      "We cancelled Customer history for you",
+    );
+  });
+
+  it("names the Add-on, never the Feature alone, so Hebrew agrees with it", () => {
+    expect(
+      text({ kind: "ADDON_PRICE_RISING", feature: "REMINDERS", priceFrom: 1900, priceTo: 2400, effectiveOn: day("2026-11-27") }, "he").title,
+    ).toMatch(/^התוספת תזכורות עולה ל/);
+    expect(text({ kind: "ADDON_PRICE_SOON", feature: "CUSTOMER_HISTORY", priceTo: 2400, effectiveOn: day("2026-10-26") }).title).toContain(
+      "in 7 days",
+    );
+    expect(text({ kind: "ADDON_INCLUDED", feature: "CUSTOMER_HISTORY", plan: "TEAM" }).title).toBe("Customer history is now included in Team");
+    expect(text({ kind: "ADDON_OFFERED", feature: "CUSTOMER_HISTORY", priceMinor: 1900 }).action).toBe("PLANS");
+    expect(text({ kind: "ADDON_RISE_CANCELLED", feature: "CUSTOMER_HISTORY", priceMinor: 1900 }).action).toBeNull();
+    expect(text({ kind: "ADDON_PRICE_LOWERED", feature: "CUSTOMER_HISTORY", priceFrom: 1900, priceTo: 1500 }).body).toContain("from now");
   });
 });
 

@@ -298,5 +298,68 @@ begin
     raise exception 'POLICY BROKEN: an owner can read who is waiting';
   end if;
 
+  -- --- ADR 0021: Add-ons, and the days owed --------------------------------
+  insert into addon_offer (feature, price_minor, since) values ('CUSTOMER_HISTORY', 1900, current_date);
+
+  -- What is on sale is public, as the pricing page is.
+  set local role anon;
+  select count(*) into v_seen from addon_offer where feature = 'CUSTOMER_HISTORY';
+  reset role;
+  if v_seen <> 1 then raise exception 'POLICY BROKEN: anybody cannot read what is on sale'; end if;
+
+  -- An owner adds through the door, at the price on sale, never one they name.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
+  set local role authenticated;
+  perform app.owner_adds_addon(v_biz, 'CUSTOMER_HISTORY', current_date, current_date + 30);
+  select count(*) into v_seen from addon_holding where business_id = v_biz and price_minor = 1900;
+  if v_seen <> 1 then raise exception 'POLICY BROKEN: an owner cannot add an Add-on, or read it back'; end if;
+
+  -- …and not around it.
+  v_failed := false;
+  begin
+    insert into addon_holding (business_id, feature, added_on, pays_from, price_minor)
+      values (v_biz, 'TEAM_ROLES', current_date, current_date, 1);
+  exception when insufficient_privilege or others then v_failed := true;
+  end;
+  if not v_failed then raise exception 'POLICY BROKEN: an owner wrote an Add-on at their own price'; end if;
+
+  -- Their own act owes days, which they may add and never settle.
+  insert into days_owed (business_id, kind, subject, amount_minor, from_on, through_on)
+    values (v_biz, 'ADDON_DAYS', 'CUSTOMER_HISTORY', 950, current_date, current_date + 14);
+  v_failed := false;
+  begin
+    update days_owed set amount_minor = 1 where business_id = v_biz;
+    if not found then v_failed := true; end if;
+  exception when insufficient_privilege or others then v_failed := true;
+  end;
+  if not v_failed then raise exception 'POLICY BROKEN: an owner rewrote what they owe'; end if;
+  insert into plan_held (business_id, plan) values (v_biz, 'TEAM');
+
+  -- An owner's own Add-on act is told back to them.
+  insert into notice (business_id, kind, facts)
+    values (v_biz, 'ADDON_ADDED', '{"kind":"ADDON_ADDED"}'::jsonb);
+  reset role;
+
+  -- Nobody else reads a Business's Add-ons or what it owes, or owes in its name.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_stranger)::text, true);
+  set local role authenticated;
+  select count(*) into v_seen from addon_holding where business_id = v_biz;
+  select v_seen + count(*) into v_seen from days_owed where business_id = v_biz;
+  select v_seen + count(*) into v_seen from plan_held where business_id = v_biz;
+  v_failed := false;
+  begin
+    perform app.owner_adds_addon(v_biz, 'CUSTOMER_HISTORY', current_date, current_date + 30);
+  exception when insufficient_privilege then v_failed := true;
+  end;
+  reset role;
+  if v_seen <> 0 then raise exception 'POLICY BROKEN: a stranger read another Business''s Add-ons or daysOwed'; end if;
+  if not v_failed then raise exception 'POLICY BROKEN: a stranger added an Add-on to another Business'; end if;
+
+  -- What every Feature check reads now carries the Add-ons held.
+  set local role anon;
+  select jsonb_array_length(addons) into v_seen from app.entitlement_basis(v_biz);
+  reset role;
+  if v_seen <> 1 then raise exception 'POLICY BROKEN: the Entitlement''s inputs miss the Add-on held'; end if;
+
   raise exception 'ALL_POLICIES_HELD';
 end $$;

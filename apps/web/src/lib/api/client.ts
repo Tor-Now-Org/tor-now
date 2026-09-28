@@ -887,13 +887,65 @@ export const api = {
       token,
     }),
 
-  /** Which Plans keep a Preview's Feature when it ends; decided once. */
-  adminPlacePreview: (token: string, feature: FeatureName, keepOn: PlanName[]) =>
+  /**
+   * Which Plans keep a Preview's Feature when it ends; decided once. With a
+   * price, it goes on sale on its own to the Plans that do not keep it.
+   */
+  adminPlacePreview: (token: string, feature: FeatureName, keepOn: PlanName[], addonPriceMinor: number | null = null) =>
     request<{ features: FeatureViewDto[] }>(`/admin/catalogue/features/${feature}/preview/placement`, {
       method: "POST",
-      body: { keepOn },
+      body: addonPriceMinor === null ? { keepOn } : { keepOn, addonPriceMinor },
       token,
     }),
+
+  /** ADR 0021: which Plans include a Feature, by the Plan editor's own rule. */
+  adminFeaturePlans: (token: string, feature: FeatureName, plans: PlanName[]) =>
+    request<{ features: FeatureViewDto[] }>(`/admin/catalogue/features/${feature}/plans`, {
+      method: "PUT",
+      body: { plans },
+      token,
+    }),
+
+  adminSellAddon: (token: string, feature: FeatureName, priceMinor: number) =>
+    request<{ features: FeatureViewDto[] }>(`/admin/catalogue/features/${feature}/addon`, {
+      method: "POST",
+      body: { priceMinor },
+      token,
+    }),
+
+  /** A new price; the server decides whether it gives (now) or takes (a rise, with Notice). */
+  adminAddonPrice: (token: string, feature: FeatureName, priceMinor: number) =>
+    request<{ features: FeatureViewDto[] }>(`/admin/catalogue/features/${feature}/addon`, {
+      method: "PATCH",
+      body: { priceMinor },
+      token,
+    }),
+
+  adminCancelAddonRise: (token: string, feature: FeatureName) =>
+    request<{ features: FeatureViewDto[] }>(`/admin/catalogue/features/${feature}/addon/rise/cancel`, {
+      method: "POST",
+      token,
+    }),
+
+  adminStopAddon: (token: string, feature: FeatureName) =>
+    request<{ features: FeatureViewDto[] }>(`/admin/catalogue/features/${feature}/addon/stop`, {
+      method: "POST",
+      token,
+    }),
+
+  /** ADR 0021: the owner's own Add-ons. Adding one still running after a cancellation resumes it. */
+  addMyAddon: (token: string, businessId: string, feature: FeatureName) =>
+    request<BillingDto>(`/businesses/${businessId}/addons/${feature}`, { method: "POST", token }),
+
+  cancelMyAddon: (token: string, businessId: string, feature: FeatureName) =>
+    request<BillingDto>(`/businesses/${businessId}/addons/${feature}`, { method: "DELETE", token }),
+
+  /** The same, by an administrator for an owner who phones in. */
+  adminAddAddon: (token: string, businessId: string, feature: FeatureName) =>
+    request<BillingDto>(`/admin/businesses/${businessId}/addons/${feature}`, { method: "POST", token }),
+
+  adminCancelAddon: (token: string, businessId: string, feature: FeatureName) =>
+    request<BillingDto>(`/admin/businesses/${businessId}/addons/${feature}`, { method: "DELETE", token }),
 
   adminPlans: (token: string) => request<PlanCatalogueDto>("/admin/catalogue/plans", { token }),
 

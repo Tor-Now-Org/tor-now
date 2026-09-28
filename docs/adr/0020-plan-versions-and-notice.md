@@ -72,6 +72,10 @@ to move, and every rule above would need a second case.
 - Several Plan Versions of one Plan can be live at once. The admin panel has to
   show which Subscriptions are on which.
 - Upgrades apply at once and the new price starts at the next renewal. Downgrades
-  apply at renewal. Payments are recorded by hand, so there is no proration.
+  apply at renewal. Payments are recorded by hand, so there is no proration —
+  except that moving up again to a Plan the Business left before owes the
+  difference for the days already paid for (amended 2026-09-29): otherwise
+  moving up after each payment and scheduling the move back would never pay for
+  the higher Plan. See ADR 0021 on Add-ons, which follow the same rule.
 - Fair Use is alert-only: a runaway Business costs money until an administrator
   acts. Automatic throttling was deferred as not worth its complexity yet.

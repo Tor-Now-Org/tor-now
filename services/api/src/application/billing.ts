@@ -18,6 +18,7 @@ import {
   type SubscriptionState,
 } from "@tor-now/domain";
 import type { Repositories } from "../ports/repositories.ts";
+import { trialAddonsOf } from "./addons.ts";
 
 /**
  * Billing as the rest of the application reads it. Shared because the owner's
@@ -85,11 +86,19 @@ export const ownerFeatures = async (
   view: SubscriptionView,
   today: LocalDate,
 ): Promise<readonly FeatureSource[]> => {
-  const [basis, previews] = await Promise.all([
+  const [basis, previews, offers] = await Promise.all([
     repositories.subscriptions.entitlementBasis(view.subscription.businessId),
     repositories.previews.list(),
+    repositories.addonOffers.list(),
   ]);
-  return featureSources({ terms: view.planVersion.terms, grants: basis?.grants ?? [], previews, today });
+  return featureSources({
+    terms: view.planVersion.terms,
+    grants: basis?.grants ?? [],
+    previews,
+    addons: basis?.addons ?? [],
+    trialAddons: trialAddonsOf(basis?.trialEndsOn ?? null, offers),
+    today,
+  });
 };
 
 /** The edition of a Plan that new Businesses join. */
@@ -115,11 +124,19 @@ export const entitlementOf = async (
 ): Promise<Entitlement> => {
   const basis = await repositories.subscriptions.entitlementBasis(businessId);
   if (basis === null) throw notFound("Subscription", businessId);
-  const [version, previews] = await Promise.all([
+  const [version, previews, offers] = await Promise.all([
     requireVersion(repositories, basis.planVersionId),
     repositories.previews.list(),
+    repositories.addonOffers.list(),
   ]);
-  return entitlementFor({ terms: version.terms, grants: basis.grants, previews, today });
+  return entitlementFor({
+    terms: version.terms,
+    grants: basis.grants,
+    previews,
+    addons: basis.addons,
+    trialAddons: trialAddonsOf(basis.trialEndsOn, offers),
+    today,
+  });
 };
 
 /** The Entitlement as of the Business's own today — what every Feature check asks. */

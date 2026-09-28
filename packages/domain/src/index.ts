@@ -38,3 +38,6 @@ export * from "./billing/notice.ts";
 export * from "./billing/grant.ts";
 export * from "./billing/catalogue-change.ts";
 export * from "./billing/preview.ts";
+export * from "./billing/addon.ts";
+export * from "./billing/days-owed.ts";
+export * from "./billing/next-payment.ts";

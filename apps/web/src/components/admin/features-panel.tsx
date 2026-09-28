@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { addDays, parseLocalDate } from "@tor-now/domain";
+import { addDays, MAX_ADDONS_ON_SALE, parseLocalDate } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type { DirectoryFilter, FeatureName, FeatureViewDto, PlanName } from "@/lib/api/types.ts";
@@ -12,7 +12,11 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { Critical, Note, Spinner } from "@/components/ui.tsx";
 import { BILLING_ICONS } from "@/components/billing-icons.tsx";
 import { localDateOf } from "@/components/owner/day-filter.ts";
+import { riseCancellable, risePending } from "@/lib/addon-catalogue.ts";
+import { formatPrice } from "@/lib/format.ts";
+import { AddonPriceSheet, CancelRiseSheet, SellAddonSheet, StopAddonSheet } from "./addon-sheets.tsx";
 import { PreviewExtendSheet, PreviewPlacementSheet, PreviewStartSheet } from "./preview-sheets.tsx";
+import { WhichPlansSheet } from "./which-plans-sheet.tsx";
 
 /** The Catalogue is the platform's, so its day is Israel's. */
 const PLATFORM_ZONE = "Asia/Jerusalem";
@@ -20,21 +24,21 @@ const PLATFORM_ZONE = "Asia/Jerusalem";
 /** How long before a Preview's end it has to be decided, so the Plans losing it hear in time. */
 const DECIDE_DAYS_BEFORE = 30;
 
-type Opened = { readonly sheet: "start" | "extend" | "place"; readonly feature: FeatureName } | null;
+type SheetName = "start" | "extend" | "place" | "which" | "sell" | "price" | "stop" | "rise";
+type Opened = { readonly sheet: SheetName; readonly feature: FeatureName } | null;
 
 /**
- * Every Feature (ADR 0020, ADR 0021): where it is sold, a Preview of it, and
- * who has it — each count a way into the Businesses list — and from here,
- * starting a Preview, extending one, and deciding where its Feature goes.
+ * Every Feature (ADR 0020, ADR 0021): where it is sold, a Preview of it, its
+ * sale on its own, and who has it — each count a way into the Businesses list
+ * — and from here, which Plans include it, a Preview and where its Feature
+ * goes, and selling it as an Add-on.
  */
 export const FeaturesPanel = ({
   token,
   onShowBusinesses,
-  onPlans,
 }: {
   token: string;
   onShowBusinesses: (filter: Partial<DirectoryFilter>) => void;
-  onPlans: () => void;
 }) => {
   const words = useCopy("catalogue");
   const errorText = useErrorText();
@@ -56,6 +60,7 @@ export const FeaturesPanel = ({
   const viewFor = (sheet: NonNullable<Opened>["sheet"]) =>
     opened?.sheet === sheet ? (features.find((view) => view.feature === opened.feature) ?? null) : null;
   const sheetProps = { today, token, onClose: () => setOpened(null), onSaved: setFeatures };
+  const onSale = features.filter((view) => (view.addon ?? null) !== null).length;
 
   return (
     <>
@@ -67,12 +72,17 @@ export const FeaturesPanel = ({
           today={today}
           onOpen={(sheet) => setOpened({ sheet, feature: view.feature })}
           onShowBusinesses={(featureSource) => onShowBusinesses({ feature: view.feature, featureSource })}
-          onPlans={onPlans}
+          saleFull={onSale >= MAX_ADDONS_ON_SALE}
         />
       ))}
       <PreviewStartSheet key={`start-${opened?.feature ?? ""}`} view={viewFor("start")} {...sheetProps} />
       <PreviewExtendSheet key={`extend-${opened?.feature ?? ""}`} view={viewFor("extend")} {...sheetProps} />
-      <PreviewPlacementSheet key={`place-${opened?.feature ?? ""}`} view={viewFor("place")} {...sheetProps} />
+      <PreviewPlacementSheet key={`place-${opened?.feature ?? ""}`} view={viewFor("place")} onSale={onSale} {...sheetProps} />
+      <WhichPlansSheet key={`which-${opened?.feature ?? ""}`} view={viewFor("which")} {...sheetProps} />
+      <SellAddonSheet key={`sell-${opened?.feature ?? ""}`} view={viewFor("sell")} onSale={onSale} {...sheetProps} />
+      <AddonPriceSheet key={`price-${opened?.feature ?? ""}`} view={viewFor("price")} {...sheetProps} />
+      <StopAddonSheet key={`stop-${opened?.feature ?? ""}`} view={viewFor("stop")} {...sheetProps} />
+      <CancelRiseSheet key={`rise-${opened?.feature ?? ""}`} view={viewFor("rise")} {...sheetProps} />
     </>
   );
 };
@@ -82,13 +92,14 @@ const FeatureCard = ({
   today,
   onOpen,
   onShowBusinesses,
-  onPlans,
+  saleFull,
 }: {
   view: FeatureViewDto;
   today: string;
-  onOpen: (sheet: NonNullable<Opened>["sheet"]) => void;
-  onShowBusinesses: (from: "PLAN" | "GRANT" | "PREVIEW") => void;
-  onPlans: () => void;
+  onOpen: (sheet: SheetName) => void;
+  onShowBusinesses: (from: "PLAN" | "ADDON" | "GRANT" | "PREVIEW") => void;
+  /** Two Add-ons are on sale already. */
+  saleFull: boolean;
 }) => {
   const words = useCopy("catalogue");
   const billing = useCopy("billing");
@@ -98,11 +109,21 @@ const FeatureCard = ({
     new Intl.ListFormat(language === "he" ? "he-IL" : "en-GB", { type: "conjunction" }).format(
       plans.map((plan) => billing.plan[plan]),
     );
-  const { preview, counts } = view;
-  const anyone = counts.PLAN + counts.GRANT + counts.PREVIEW > 0;
+  const { preview } = view;
+  const addon = view.addon ?? null;
+  const counts = { PLAN: view.counts.PLAN, ADDON: view.counts.ADDON ?? 0, GRANT: view.counts.GRANT, PREVIEW: view.counts.PREVIEW };
+  const anyone = counts.PLAN + counts.ADDON + counts.GRANT + counts.PREVIEW > 0;
   const lacking = view.plans.filter((plan) => !plan.included).map((plan) => plan.plan);
+  const money = (minor: number) => formatPrice(minor, language, "—");
 
   const note = (): string | null => {
+    if (addon !== null && addon.rise !== null && risePending(addon.rise, today)) {
+      return fillText(words.addonRiseNote, {
+        price: money(addon.priceMinor),
+        first: shortDate(addon.rise.firstOn),
+        last: shortDate(addon.rise.lastOn),
+      });
+    }
     if (preview === null) return null;
     if (preview.keepOn === null) {
       return fillText(words.decideBy, {
@@ -134,13 +155,19 @@ const FeatureCard = ({
               {fillText(words.previewEverywhere, { date: shortDate(preview.endsOn) })}
             </span>
           )}
+          {addon !== null && (
+            <span className="where addon">
+              {BILLING_ICONS.coin}
+              {fillText(words.whereAddon, { plans: plansList(lacking), price: money(addon.priceMinor) })}
+            </span>
+          )}
           {view.plans.map((plan) =>
             plan.included ? (
               <span key={plan.plan} className="where plan">
                 {BILLING_ICONS.check}
                 {billing.plan[plan.plan]} v{plan.number}
               </span>
-            ) : preview === null ? (
+            ) : preview === null && addon === null ? (
               <span key={plan.plan} className="where none">
                 {fillText(words.notOnPlan, { plan: billing.plan[plan.plan] })}
               </span>
@@ -152,12 +179,12 @@ const FeatureCard = ({
         <span className="label">{words.whoHasIt}</span>
         {anyone ? (
           <div className="tags">
-            {(["PLAN", "GRANT", "PREVIEW"] as const)
+            {(["PLAN", "ADDON", "GRANT", "PREVIEW"] as const)
               .filter((from) => counts[from] > 0)
               .map((from) => (
                 <button key={from} type="button" className="count" onClick={() => onShowBusinesses(from)}>
                   <b className="tab">{counts[from]}</b>
-                  {from === "PLAN" ? words.countPlan : from === "GRANT" ? words.countGrant : words.countPreview}
+                  {COUNT_WORD[from](words)}
                 </button>
               ))}
           </div>
@@ -167,6 +194,33 @@ const FeatureCard = ({
       </div>
       {said !== null && <p className="note" style={{ margin: 0 }}>{said}</p>}
       <div className="actions">
+        {/* During a Preview, deciding where it goes is the same control. */}
+        {preview === null && (
+          <button type="button" onClick={() => onOpen("which")}>
+            {words.whichPlans}
+          </button>
+        )}
+        {view.canSell === true && (
+          <button type="button" className="with-icon" onClick={() => onOpen("sell")}>
+            {BILLING_ICONS.plus}
+            {words.sellAddon}
+          </button>
+        )}
+        {addon !== null && (
+          <>
+            <button type="button" onClick={() => onOpen("price")}>
+              {words.changeAddonPrice}
+            </button>
+            {addon.rise !== null && riseCancellable(addon.rise, today) && (
+              <button type="button" onClick={() => onOpen("rise")}>
+                {words.cancelAddonRise}
+              </button>
+            )}
+            <button type="button" onClick={() => onOpen("stop")}>
+              {words.stopAddon}
+            </button>
+          </>
+        )}
         {view.canPreview && (
           <button type="button" onClick={() => onOpen("start")}>
             {words.startPreview}
@@ -182,10 +236,22 @@ const FeatureCard = ({
             {words.extendPreview}
           </button>
         )}
-        <button type="button" onClick={onPlans}>
-          {words.toPlans}
-        </button>
       </div>
+      {addon === null && view.canSell !== true && saleFull && preview === null && lacking.length > 0 && (
+        <p className="hint" style={{ margin: 0 }}>
+          {words.sellFull}
+        </p>
+      )}
     </div>
   );
+};
+
+type CatalogueWords = ReturnType<typeof useCopy<"catalogue">>;
+
+/** How each count of Businesses is said. */
+const COUNT_WORD: Readonly<Record<"PLAN" | "ADDON" | "GRANT" | "PREVIEW", (words: CatalogueWords) => string>> = {
+  PLAN: (words) => words.countPlan,
+  ADDON: (words) => words.countAddon,
+  GRANT: (words) => words.countGrant,
+  PREVIEW: (words) => words.countPreview,
 };

@@ -1,10 +1,13 @@
-import type { UserId } from "@tor-now/domain";
+import type { AddonHoldingId, BusinessId, UserId } from "@tor-now/domain";
 import { AUDIT_ACTIONS, type AuditSink } from "../ports/audit.ts";
 import type {
+  AddonHoldingRepository,
+  AddonOfferRepository,
   AppointmentRepository,
   BlockRepository,
   BusinessPhotoRepository,
   BusinessRepository,
+  DaysOwedRepository,
   DateOverrideRepository,
   MembershipRepository,
   MembershipResourceRepository,
@@ -555,6 +558,71 @@ export const auditedUnitRates = (inner: UnitRateRepository, context: Context): U
   },
 });
 
+export const auditedAddonOffers = (inner: AddonOfferRepository, context: Context): AddonOfferRepository => ({
+  ...inner,
+  async put(offer) {
+    const before = (await inner.list()).find((existing) => existing.feature === offer.feature) ?? null;
+    const after = await inner.put(offer);
+    await record(context, AUDIT_ACTIONS.addonOfferChanged, "AddonOffer", offer.feature, before, after);
+    return after;
+  },
+});
+
+export const auditedAddonHoldings = (inner: AddonHoldingRepository, context: Context): AddonHoldingRepository => {
+  const holdingOf = async (businessId: BusinessId, id: AddonHoldingId) =>
+    (await inner.listForBusiness(businessId)).find((holding) => holding.id === id) ?? null;
+  return {
+    ...inner,
+    async add(holding) {
+      const added = await inner.add(holding);
+      await record(context, AUDIT_ACTIONS.addonAdded, "AddonHolding", added.id, null, added);
+      return added;
+    },
+    async addAsOwner(holding) {
+      const added = await inner.addAsOwner(holding);
+      await record(context, AUDIT_ACTIONS.addonAdded, "AddonHolding", added.id, null, added);
+      return added;
+    },
+    async end(id, ending) {
+      const after = await inner.end(id, ending);
+      await record(context, AUDIT_ACTIONS.addonEnded, "AddonHolding", id, null, after);
+      return after;
+    },
+    async endAsOwner(businessId, id, ending) {
+      const before = await holdingOf(businessId, id);
+      const after = await inner.endAsOwner(businessId, id, ending);
+      await record(context, AUDIT_ACTIONS.addonEnded, "AddonHolding", id, before, after);
+      return after;
+    },
+    async resume(id) {
+      const after = await inner.resume(id);
+      await record(context, AUDIT_ACTIONS.addonResumed, "AddonHolding", id, null, after);
+      return after;
+    },
+    async resumeAsOwner(businessId, id) {
+      const before = await holdingOf(businessId, id);
+      const after = await inner.resumeAsOwner(businessId, id);
+      await record(context, AUDIT_ACTIONS.addonResumed, "AddonHolding", id, before, after);
+      return after;
+    },
+    async setPrices(changes) {
+      await inner.setPrices(changes);
+      for (const change of changes) {
+        await record(context, AUDIT_ACTIONS.addonPricesSet, "AddonHolding", change.id, null, change);
+      }
+    },
+  };
+};
+
+export const auditedDaysOwed = (inner: DaysOwedRepository, context: Context): DaysOwedRepository => ({
+  ...inner,
+  async add(owed) {
+    const added = await inner.add(owed);
+    await record(context, AUDIT_ACTIONS.daysOwedAdded, "DaysOwedEntry", added.id, null, added);
+    return added;
+  },
+});
+
 /** Applied where repositories are wired, which is the only place that knows. */
 export const withAuditing = (
   repositories: Repositories,
@@ -578,4 +646,7 @@ export const withAuditing = (
   unitRates: auditedUnitRates(repositories.unitRates, context),
   planVersions: auditedPlanVersions(repositories.planVersions, context),
   previews: auditedPreviews(repositories.previews, context),
+  addonOffers: auditedAddonOffers(repositories.addonOffers, context),
+  addonHoldings: auditedAddonHoldings(repositories.addonHoldings, context),
+  daysOwed: auditedDaysOwed(repositories.daysOwed, context),
 });

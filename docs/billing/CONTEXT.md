@@ -57,8 +57,19 @@ _Avoid_: Price list, pricing table, matrix
 **Add-on**:
 A Feature sold on its own, at one flat monthly price, on top of any Plan. Reserved
 for what only one Category wants or what would raise every Plan's price if
-bundled; never more than two on sale at once.
+bundled; never more than two on sale at once. The owner adds and cancels their
+own: the first time, it is theirs at once and paid from the next payment; added
+back after it ended, the Days Owed come with it. A Trial includes every Add-on
+on sale, and a Plan that comes to include one ends it.
 _Avoid_: Extra, upsell, module
+
+**Days Owed**:
+The part of a month owed before the next payment, when a Business adds back an
+Add-on it had or moves up again to a Plan it left. Counted by thirtieths of the
+monthly price, and settled by the Payment it is part of. Only the first time is
+free until the next payment, so nothing added, cancelled and added again is ever
+free twice.
+_Avoid_: Charge, proration, fee
 
 **Preview**:
 A newly launched Feature offered on every Plan for a stated period, labelled as

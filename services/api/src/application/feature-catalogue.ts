@@ -1,16 +1,21 @@
 import {
   canPreview,
+  checkAddonSale,
   checkPreviewExtension,
   checkPreviewStart,
   compareLocalDate,
   DomainError,
   extendTerms,
   FEATURES,
+  isDomainError,
+  isOnSale,
+  validationFailed,
   notFound,
   placePreview,
   stretchUndecided,
   timeZone,
   todayIn,
+  type AddonOffer,
   type Clock,
   type Feature,
   type FeatureSourceKind,
@@ -39,48 +44,77 @@ export type FeatureView = {
   readonly plans: readonly { readonly plan: Plan; readonly number: number; readonly included: boolean }[];
   /** The running Preview of it, if any. */
   readonly preview: PreviewEntry | null;
+  /** Its sale on its own, while it is on sale. */
+  readonly addon: AddonOffer | null;
   /** How many Businesses have it, by where from. */
   readonly counts: Readonly<Record<Exclude<FeatureSourceKind, "NONE">, number>>;
   readonly canPreview: boolean;
+  /** Whether it could go on sale on its own now. */
+  readonly canSell: boolean;
 };
 
 const running = (preview: PreviewEntry, today: LocalDate) => compareLocalDate(today, preview.endsOn) <= 0;
 
+/** The Catalogue is the platform's, so its day is Israel's. */
+export const catalogueToday = (clock: Clock): LocalDate => todayIn(clock.now(), PLATFORM_ZONE);
+
+const readCatalogue = async (repositories: Repositories) => {
+  const [current, previews, entries, offers] = await Promise.all([
+    repositories.planVersions.listCurrent(),
+    repositories.previews.listEntries(),
+    repositories.subscriptions.directory(),
+    repositories.addonOffers.list(),
+  ]);
+  return { current, previews, entries, offers };
+};
+
+/** Could this Feature go on sale on its own today, at some price? */
+const sellable = (feature: Feature, input: Omit<Parameters<typeof checkAddonSale>[0], "feature" | "price">): boolean => {
+  try {
+    checkAddonSale({ ...input, feature, price: 1 });
+    return true;
+  } catch (error) {
+    if (isDomainError(error)) return false;
+    throw error;
+  }
+};
+
+/** Every Feature as the Features tab shows it. */
+export const featureViews = async (repositories: Repositories, clock: Clock): Promise<readonly FeatureView[]> => {
+  const today = catalogueToday(clock);
+  const { current, previews, entries, offers } = await readCatalogue(repositories);
+  const sources = await sourcesByBusiness(repositories, entries, clock.now());
+  const runningPreviews = previews.filter((preview) => running(preview, today));
+  const previewing = runningPreviews.map((preview) => preview.feature);
+  return FEATURES.map((feature) => {
+    const counts = { PLAN: 0, ADDON: 0, GRANT: 0, PREVIEW: 0 };
+    for (const list of sources.values()) {
+      const source = list.find((candidate) => candidate.feature === feature)?.source;
+      if (source !== undefined && source !== "NONE") counts[source] += 1;
+    }
+    return {
+      feature,
+      plans: current.map((edition) => ({
+        plan: edition.plan,
+        number: edition.number,
+        included: edition.terms.features.includes(feature),
+      })),
+      preview: runningPreviews.find((preview) => preview.feature === feature) ?? null,
+      addon: offers.find((offer) => offer.feature === feature && isOnSale(offer)) ?? null,
+      counts,
+      // A Preview would give for nothing what some are paying for on its own.
+      canPreview:
+        canPreview(feature, { current, previews: runningPreviews, today }) &&
+        !offers.some((offer) => offer.feature === feature && isOnSale(offer)),
+      canSell: sellable(feature, { offers, editions: current, previewing, today }),
+    };
+  });
+};
+
 export const featureCatalogueService = ({ unitOfWork, clock }: { unitOfWork: UnitOfWork; clock: Clock }) => {
-  const today = () => todayIn(clock.now(), PLATFORM_ZONE);
-
-  const read = async (repositories: Repositories) => {
-    const [current, previews, entries] = await Promise.all([
-      repositories.planVersions.listCurrent(),
-      repositories.previews.listEntries(),
-      repositories.subscriptions.directory(),
-    ]);
-    return { current, previews, entries };
-  };
-
-  const views = async (repositories: Repositories): Promise<readonly FeatureView[]> => {
-    const { current, previews, entries } = await read(repositories);
-    const sources = await sourcesByBusiness(repositories, entries, clock.now());
-    const runningPreviews = previews.filter((preview) => running(preview, today()));
-    return FEATURES.map((feature) => {
-      const counts = { PLAN: 0, GRANT: 0, PREVIEW: 0 };
-      for (const list of sources.values()) {
-        const source = list.find((candidate) => candidate.feature === feature)?.source;
-        if (source !== undefined && source !== "NONE") counts[source] += 1;
-      }
-      return {
-        feature,
-        plans: current.map((edition) => ({
-          plan: edition.plan,
-          number: edition.number,
-          included: edition.terms.features.includes(feature),
-        })),
-        preview: runningPreviews.find((preview) => preview.feature === feature) ?? null,
-        counts,
-        canPreview: canPreview(feature, { current, previews: runningPreviews, today: today() }),
-      };
-    });
-  };
+  const today = () => catalogueToday(clock);
+  const read = readCatalogue;
+  const views = (repositories: Repositories) => featureViews(repositories, clock);
 
   /** Businesses whose own Plan does not include a Feature — those a Preview of it reaches. */
   const reachedBy = async (repositories: Repositories, entries: readonly DirectoryEntry[], feature: Feature, plans?: readonly Plan[]) => {
@@ -137,8 +171,11 @@ export const featureCatalogueService = ({ unitOfWork, clock }: { unitOfWork: Uni
     async startPreview(actor: Actor, feature: Feature, endsOn: LocalDate) {
       requireAdministrator(actor);
       return unitOfWork.run(actor, async ({ repositories }) => {
-        const { current, previews, entries } = await read(repositories);
+        const { current, previews, entries, offers } = await read(repositories);
         checkPreviewStart({ feature, endsOn, current, previews, today: today() });
+        if (offers.some((offer) => offer.feature === feature && isOnSale(offer))) {
+          throw validationFailed("A Feature sold as an Add-on is not previewed; stop the sale first", { field: "feature" });
+        }
         await repositories.previews.start(feature, endsOn);
         await tellEach(repositories, await reachedBy(repositories, entries, feature), () => ({
           kind: "PREVIEW_STARTED",
@@ -168,9 +205,10 @@ export const featureCatalogueService = ({ unitOfWork, clock }: { unitOfWork: Uni
     /**
      * Which Plans keep a Preview's Feature when it ends. Decided once: keeping
      * gives, so it applies at once and cannot be taken back without a Notice;
-     * the Plans that do not keep it are told now, on WhatsApp too.
+     * the Plans that do not keep it are told now, on WhatsApp too — and, when
+     * it goes on sale on its own for them, what it costs to keep (ADR 0021).
      */
-    async placePreview(actor: Actor, feature: Feature, keep: readonly Plan[]) {
+    async placePreview(actor: Actor, feature: Feature, keep: readonly Plan[], addonPriceMinor: number | null = null) {
       requireAdministrator(actor);
       return unitOfWork.run(actor, async (session) => {
         const { repositories } = session;
@@ -179,8 +217,28 @@ export const featureCatalogueService = ({ unitOfWork, clock }: { unitOfWork: Uni
           throw new DomainError("CONFLICT", "Where this Preview's Feature goes is decided already");
         }
         const placement = placePreview(preview, keep, today());
+        const { current, entries, offers } = await read(repositories);
+        const price =
+          addonPriceMinor === null
+            ? null
+            : checkAddonSale({
+                feature,
+                price: addonPriceMinor,
+                offers,
+                // Once placed, only the Plans that do not keep it lack it.
+                editions: current.map((edition) =>
+                  placement.keepOn.includes(edition.plan)
+                    ? { ...edition, terms: { ...edition.terms, features: [...edition.terms.features, feature] } }
+                    : edition,
+                ),
+                previewing: [feature],
+                placing: true,
+                today: today(),
+              });
         await repositories.previews.place(feature, placement, clock.now());
-        const { current, entries } = await read(repositories);
+        if (price !== null) {
+          await repositories.addonOffers.put({ feature, price, since: today(), stoppedOn: null, rise: null });
+        }
 
         const versions = await repositories.planVersions.listAll();
         const planOf = (entry: DirectoryEntry) =>
@@ -204,7 +262,7 @@ export const featureCatalogueService = ({ unitOfWork, clock }: { unitOfWork: Uni
           if (plan === undefined) continue;
           await announce(session, {
             businessId: entry.business.id,
-            facts: { kind: "PREVIEW_LEAVING", feature, plan, endsOn: placement.endsOn },
+            facts: { kind: "PREVIEW_LEAVING", feature, plan, endsOn: placement.endsOn, addonPriceMinor: price },
             at: clock.now(),
           });
         }

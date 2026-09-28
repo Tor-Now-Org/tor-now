@@ -44,7 +44,7 @@ export const CatalogueTab = ({
         <PlansPanel token={token} onShowBusinesses={(edition) => onShowBusinesses({ edition })} />
       )}
       {part === "features" && (
-        <FeaturesPanel token={token} onShowBusinesses={onShowBusinesses} onPlans={() => setPart("plans")} />
+        <FeaturesPanel token={token} onShowBusinesses={onShowBusinesses} />
       )}
       {part === "rates" && <RatesPanel token={token} />}
     </>

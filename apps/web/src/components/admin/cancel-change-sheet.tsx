@@ -10,7 +10,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { Button, Card, Critical, Sheet } from "@/components/ui.tsx";
 import { PlanBadge } from "@/components/billing-badges.tsx";
-import { EffectBox } from "./plan-edit-sheet.tsx";
+import { EffectBox } from "@/components/effect-box.tsx";
 
 /** How many Businesses the sheet names before saying how many more. */
 const SHOWN = 8;

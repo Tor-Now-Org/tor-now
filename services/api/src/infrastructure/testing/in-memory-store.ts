@@ -1,4 +1,8 @@
 import type {
+  AddonHolding,
+  AddonOffer,
+  DaysOwedEntry,
+  Plan,
   Appointment,
   Block,
   Business,
@@ -58,6 +62,11 @@ export type Store = {
   notices: { notice: Notice; key: string | null }[];
   planVersions: PlanEdition[];
   previews: PreviewEntry[];
+  addonOffers: AddonOffer[];
+  addonHoldings: AddonHolding[];
+  daysOwed: DaysOwedEntry[];
+  /** plan_held: every Plan a Business held while paying, or moved up to. */
+  plansHeld: { businessId: string; plan: Plan }[];
   usageRecords: UsageRecord[];
   unitRates: UnitRateEntry[];
   grants: (Grant & { createdAt: Instant })[];
@@ -100,6 +109,10 @@ export const emptyStore = (
   payments: [],
   notices: [],
   ...initialCatalogue(today),
+  addonOffers: [],
+  addonHoldings: [],
+  daysOwed: [],
+  plansHeld: [],
   usageRecords: [],
   // The usage_records migration's default rates.
   unitRates: (["SMS_SEGMENT", "WHATSAPP_AUTHENTICATION", "WHATSAPP_UTILITY"] as const).map((unit) => ({

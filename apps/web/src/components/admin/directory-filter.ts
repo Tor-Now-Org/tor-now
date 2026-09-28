@@ -30,12 +30,13 @@ export const chooseEdition = (filter: DirectoryFilter, edition: string | null): 
   edition: filter.edition === edition ? null : edition,
 });
 
-export const FEATURE_FROM: readonly FeatureFrom[] = ["ANY", "PLAN", "GRANT", "PREVIEW"];
+export const FEATURE_FROM: readonly FeatureFrom[] = ["ANY", "PLAN", "ADDON", "GRANT", "PREVIEW"];
 
 /** The words each source is said in, in the catalogue dictionary. */
-export const FROM_KEY: Readonly<Record<FeatureFrom, "fromAny" | "fromPlan" | "fromGrant" | "fromPreview">> = {
+export const FROM_KEY: Readonly<Record<FeatureFrom, "fromAny" | "fromPlan" | "fromAddon" | "fromGrant" | "fromPreview">> = {
   ANY: "fromAny",
   PLAN: "fromPlan",
+  ADDON: "fromAddon",
   GRANT: "fromGrant",
   PREVIEW: "fromPreview",
 };

@@ -46,6 +46,14 @@ export const NOTICE_KINDS = [
   "PREVIEW_KEPT",
   "PREVIEW_LEAVING",
   "PREVIEW_ENDING",
+  "ADDON_OFFERED",
+  "ADDON_ADDED",
+  "ADDON_CANCELLED",
+  "ADDON_PRICE_RISING",
+  "ADDON_PRICE_SOON",
+  "ADDON_RISE_CANCELLED",
+  "ADDON_PRICE_LOWERED",
+  "ADDON_INCLUDED",
 ] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 
@@ -123,9 +131,44 @@ export type NoticeFacts =
   | { readonly kind: "PREVIEW_EXTENDED"; readonly feature: Feature; readonly endsOn: LocalDate }
   /** A Preview's Feature stays, part of the Plan now. */
   | { readonly kind: "PREVIEW_KEPT"; readonly feature: Feature; readonly plan: Plan }
-  /** A Preview's Feature leaves the Plan held when the Preview ends. */
-  | { readonly kind: "PREVIEW_LEAVING"; readonly feature: Feature; readonly plan: Plan; readonly endsOn: LocalDate }
-  | { readonly kind: "PREVIEW_ENDING"; readonly feature: Feature; readonly endsOn: LocalDate };
+  /**
+   * A Preview's Feature leaves the Plan held when the Preview ends — and, when
+   * it is sold on its own from then, what it costs to keep.
+   */
+  | {
+      readonly kind: "PREVIEW_LEAVING";
+      readonly feature: Feature;
+      readonly plan: Plan;
+      readonly endsOn: LocalDate;
+      readonly addonPriceMinor: number | null;
+    }
+  | { readonly kind: "PREVIEW_ENDING"; readonly feature: Feature; readonly endsOn: LocalDate }
+  /** A Feature the Plan held lacks, now sold on its own (ADR 0021). */
+  | { readonly kind: "ADDON_OFFERED"; readonly feature: Feature; readonly priceMinor: number }
+  | {
+      readonly kind: "ADDON_ADDED";
+      readonly feature: Feature;
+      readonly by: MovedBy;
+      readonly priceMinor: number;
+      /** The first payment it is part of. */
+      readonly paysFrom: LocalDate;
+      /** The days owed before then, when it was added back; 0 the first time. */
+      readonly owedMinor: number;
+    }
+  | { readonly kind: "ADDON_CANCELLED"; readonly feature: Feature; readonly by: MovedBy; readonly endsOn: LocalDate }
+  /** An Add-on held costs more, from a renewal at least thirty days on. */
+  | {
+      readonly kind: "ADDON_PRICE_RISING";
+      readonly feature: Feature;
+      readonly priceFrom: number;
+      readonly priceTo: number;
+      readonly effectiveOn: LocalDate;
+    }
+  | { readonly kind: "ADDON_PRICE_SOON"; readonly feature: Feature; readonly priceTo: number; readonly effectiveOn: LocalDate }
+  | { readonly kind: "ADDON_RISE_CANCELLED"; readonly feature: Feature; readonly priceMinor: number }
+  | { readonly kind: "ADDON_PRICE_LOWERED"; readonly feature: Feature; readonly priceFrom: number; readonly priceTo: number }
+  /** The Plan held now gives what was an Add-on: it ends, and costs nothing more. */
+  | { readonly kind: "ADDON_INCLUDED"; readonly feature: Feature; readonly plan: Plan };
 
 export type Notice = {
   readonly id: NoticeId;
@@ -186,6 +229,14 @@ const RULES: Readonly<Record<NoticeKind, KindRule>> = Object.freeze({
   PREVIEW_KEPT: { tone: "good", banner: true, clears: ["PREVIEW_STARTED"] },
   PREVIEW_LEAVING: { tone: "caution", banner: true, clears: ["PREVIEW_STARTED"] },
   PREVIEW_ENDING: { tone: "caution", banner: true, clears: [] },
+  ADDON_OFFERED: { tone: "good", banner: true, clears: [] },
+  ADDON_ADDED: { tone: "good", banner: false, clears: [] },
+  ADDON_CANCELLED: { tone: "info", banner: false, clears: [] },
+  ADDON_PRICE_RISING: { tone: "caution", banner: true, clears: ["ADDON_RISE_CANCELLED"] },
+  ADDON_PRICE_SOON: { tone: "caution", banner: true, clears: [] },
+  ADDON_RISE_CANCELLED: { tone: "good", banner: true, clears: ["ADDON_PRICE_RISING", "ADDON_PRICE_SOON"] },
+  ADDON_PRICE_LOWERED: { tone: "good", banner: true, clears: ["ADDON_PRICE_RISING", "ADDON_PRICE_SOON"] },
+  ADDON_INCLUDED: { tone: "good", banner: true, clears: [] },
 });
 
 export const noticeTone = (kind: NoticeKind): NoticeTone => RULES[kind].tone;
@@ -204,6 +255,8 @@ const SENT_ON_WHATSAPP = [
   "EDITION_ANNOUNCED",
   "EDITION_CANCELLED",
   "PREVIEW_LEAVING",
+  "ADDON_PRICE_RISING",
+  "ADDON_RISE_CANCELLED",
 ] as const;
 export type WhatsAppNoticeFacts = Extract<NoticeFacts, { kind: (typeof SENT_ON_WHATSAPP)[number] }>;
 
@@ -234,6 +287,8 @@ export const noticeKey = (facts: NoticeFacts): string | null => {
       return `EDITION_SOON:${facts.plan}:${facts.effectiveOn}`;
     case "PREVIEW_ENDING":
       return `PREVIEW_ENDING:${facts.feature}:${facts.endsOn}`;
+    case "ADDON_PRICE_SOON":
+      return `ADDON_PRICE_SOON:${facts.feature}:${facts.effectiveOn}`;
     case "GRANT_ENDING":
       return `GRANT_ENDING:${facts.endsOn}:${[...facts.features].sort().join(",")}`;
     default:
@@ -249,6 +304,8 @@ const BANNER_ORDER: readonly NoticeKind[] = [
   "MOVE_SOON",
   "EDITION_SOON",
   "EDITION_ANNOUNCED",
+  "ADDON_PRICE_SOON",
+  "ADDON_PRICE_RISING",
   "PREVIEW_ENDING",
   "PREVIEW_LEAVING",
   "GRANT_ENDING",
@@ -257,12 +314,17 @@ const BANNER_ORDER: readonly NoticeKind[] = [
   "MOVE_APPLIED",
   "EDITION_APPLIED",
   "EDITION_CANCELLED",
+  "ADDON_RISE_CANCELLED",
   "CALENDARS_RESUMED",
   "PLAN_IMPROVED",
+  "ADDON_INCLUDED",
+  "ADDON_PRICE_LOWERED",
   "PREVIEW_KEPT",
   "FEATURES_GRANTED",
   "PREVIEW_STARTED",
   "TRIAL_STARTED",
+  // Something on sale is the least of what a Business needs to hear first.
+  "ADDON_OFFERED",
 ];
 
 export const isStanding = (notice: Notice): boolean =>
@@ -304,6 +366,8 @@ export const noticesDue = (input: {
   readonly grants: readonly GrantTerm[];
   /** Previews whose Feature leaves this Business's Plan when they end. */
   readonly previewsLeaving: readonly { readonly feature: Feature; readonly endsOn: LocalDate }[];
+  /** Rises on their way to an Add-on this Business holds. */
+  readonly addonRises: readonly { readonly feature: Feature; readonly priceTo: number; readonly effectiveOn: LocalDate }[];
   readonly businessActive: boolean;
   readonly today: LocalDate;
 }): readonly NoticeFacts[] => {
@@ -340,6 +404,11 @@ export const noticesDue = (input: {
   }
   for (const preview of input.previewsLeaving) {
     if (within(preview.endsOn, 0)) due.push({ kind: "PREVIEW_ENDING", feature: preview.feature, endsOn: preview.endsOn });
+  }
+  for (const rise of input.addonRises) {
+    if (within(rise.effectiveOn, 1)) {
+      due.push({ kind: "ADDON_PRICE_SOON", feature: rise.feature, priceTo: rise.priceTo, effectiveOn: rise.effectiveOn });
+    }
   }
   return due;
 };
@@ -395,6 +464,12 @@ const textsOf = (facts: Fields, name: string): readonly string[] => {
 };
 
 const featuresOf = (facts: Fields, name: string): readonly Feature[] => textsOf(facts, name).map(parseFeature);
+
+const featureOf = (facts: Fields): Feature => parseFeature(textOf(facts, "feature"));
+
+/** A count told only by Notices written since it was added: absent or null reads as none. */
+const optionalCountOf = (facts: Fields, name: string): number | null =>
+  facts[name] === undefined || facts[name] === null ? null : countOf(facts, name);
 
 export const parseNoticeFacts = (value: unknown): NoticeFacts => {
   if (typeof value !== "object" || value === null) throw validationFailed("A Notice's facts are not an object");
@@ -468,7 +543,42 @@ export const parseNoticeFacts = (value: unknown): NoticeFacts => {
     case "PREVIEW_KEPT":
       return { kind, feature: parseFeature(textOf(facts, "feature")), plan: planOf(facts) };
     case "PREVIEW_LEAVING":
-      return { kind, feature: parseFeature(textOf(facts, "feature")), plan: planOf(facts), endsOn: dateOf(facts, "endsOn") };
+      return {
+        kind,
+        feature: featureOf(facts),
+        plan: planOf(facts),
+        endsOn: dateOf(facts, "endsOn"),
+        addonPriceMinor: optionalCountOf(facts, "addonPriceMinor"),
+      };
+    case "ADDON_OFFERED":
+      return { kind, feature: featureOf(facts), priceMinor: countOf(facts, "priceMinor") };
+    case "ADDON_ADDED":
+      return {
+        kind,
+        feature: featureOf(facts),
+        by: byOf(facts),
+        priceMinor: countOf(facts, "priceMinor"),
+        paysFrom: dateOf(facts, "paysFrom"),
+        owedMinor: countOf(facts, "owedMinor"),
+      };
+    case "ADDON_CANCELLED":
+      return { kind, feature: featureOf(facts), by: byOf(facts), endsOn: dateOf(facts, "endsOn") };
+    case "ADDON_PRICE_RISING":
+      return {
+        kind,
+        feature: featureOf(facts),
+        priceFrom: countOf(facts, "priceFrom"),
+        priceTo: countOf(facts, "priceTo"),
+        effectiveOn: dateOf(facts, "effectiveOn"),
+      };
+    case "ADDON_PRICE_SOON":
+      return { kind, feature: featureOf(facts), priceTo: countOf(facts, "priceTo"), effectiveOn: dateOf(facts, "effectiveOn") };
+    case "ADDON_RISE_CANCELLED":
+      return { kind, feature: featureOf(facts), priceMinor: countOf(facts, "priceMinor") };
+    case "ADDON_PRICE_LOWERED":
+      return { kind, feature: featureOf(facts), priceFrom: countOf(facts, "priceFrom"), priceTo: countOf(facts, "priceTo") };
+    case "ADDON_INCLUDED":
+      return { kind, feature: featureOf(facts), plan: planOf(facts) };
     case "PLAN_IMPROVED":
       return {
         kind,

@@ -463,14 +463,53 @@ export type Standing = {
 };
 
 /** The owner's and the administrator's billing panel. */
-export type BillingDto = Standing & {
-  subscription: SubscriptionDto;
-  payments: PaymentDto[];
-  /** Every Feature and where the Business has it from. Absent from an older API. */
-  features?: FeatureSourceDto[];
+export type BillingDto = Standing &
+  Partial<PaymentBoardDto> & {
+    subscription: SubscriptionDto;
+    payments: PaymentDto[];
+    /** Every Feature and where the Business has it from. Absent from an older API. */
+    features?: FeatureSourceDto[];
+  };
+
+/** Days owed before the next payment: an Add-on added back, a Plan moved up to again. */
+export type DaysOwedDto = { amountMinor: number; from: string; through: string };
+
+/** One Add-on as the subscription page shows it (ADR 0021). */
+export type AddonDto = {
+  feature: FeatureName;
+  /** What it costs each month: the hold's own price while held, else the sale's. */
+  priceMinor: number;
+  onSale: boolean;
+  /** The hold still giving it — running on, or cancelled until `endsOn`. */
+  holding: {
+    addedOn: string;
+    paysFrom: string;
+    priceMinor: number;
+    nextPrice: { priceMinor: number; effectiveOn: string } | null;
+    endsOn: string | null;
+    ending: "CANCELLED" | "INCLUDED" | null;
+  } | null;
+  /** Held before and ended: adding it again owes the days until the next payment. */
+  hadBefore: boolean;
+  /** The Trial's last day, while the Trial includes it. */
+  inTrialUntil: string | null;
+  /** What adding it would do today; null when it cannot be added. */
+  ifAdded: { paysFrom: string; owed: DaysOwedDto | null } | null;
 };
 
-export type FeatureSourceKind = "PLAN" | "GRANT" | "PREVIEW" | "NONE";
+export type PaymentLineDto =
+  | { kind: "PLAN"; plan: PlanName; amountMinor: number }
+  | { kind: "ADDON"; feature: FeatureName; amountMinor: number }
+  | { kind: "DAYS"; owed: DaysOwedDto & { kind: "ADDON_DAYS" | "PLAN_DAYS"; subject: string }; amountMinor: number };
+
+/** What a Business pays: its Add-ons, its next payment line by line, and what moving up would owe. */
+export type PaymentBoardDto = {
+  addons: AddonDto[];
+  nextPayment: { on: string; totalMinor: number; lines: PaymentLineDto[] };
+  moveUpOwed: (DaysOwedDto & { plan: PlanName })[];
+};
+
+export type FeatureSourceKind = "PLAN" | "ADDON" | "GRANT" | "PREVIEW" | "NONE";
 
 /**
  * One Feature and where a Business has it from (ADR 0021). The Grant's details
@@ -530,8 +569,17 @@ export type FeatureViewDto = {
   plans: { plan: PlanName; number: number; included: boolean }[];
   /** The running Preview of it: when it ends, and which Plans keep it (null while undecided). */
   preview: { endsOn: string; keepOn: PlanName[] | null; decidedAt: string | null } | null;
-  counts: { PLAN: number; GRANT: number; PREVIEW: number };
+  /** Its sale on its own, while on sale (ADR 0021). Absent from an older API. */
+  addon?: {
+    priceMinor: number;
+    since: string;
+    /** A rise on its way to those who hold it. */
+    rise: { fromMinor: number; announcedOn: string; firstOn: string; lastOn: string } | null;
+  } | null;
+  counts: { PLAN: number; ADDON?: number; GRANT: number; PREVIEW: number };
   canPreview: boolean;
+  /** Whether it could go on sale on its own now. Absent from an older API. */
+  canSell?: boolean;
 };
 
 export type CostUnitName = "WHATSAPP_UTILITY" | "WHATSAPP_AUTHENTICATION" | "SMS_SEGMENT";
@@ -589,7 +637,7 @@ export type DirectoryRowDto = Standing & {
 };
 
 /** Where a Feature comes from, as the directory filter asks it. */
-export type FeatureFrom = "ANY" | "PLAN" | "GRANT" | "PREVIEW";
+export type FeatureFrom = "ANY" | "PLAN" | "ADDON" | "GRANT" | "PREVIEW";
 
 export type DirectoryFilter = {
   query: string;

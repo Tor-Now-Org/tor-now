@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type { FeatureName, FeatureSourceDto, PlanDto } from "@/lib/api/types.ts";
-import { formatLocalDate } from "@/lib/format.ts";
+import type { AddonDto, FeatureName, FeatureSourceDto, PlanDto } from "@/lib/api/types.ts";
+import { addonTagOf } from "@/lib/addon-tag.ts";
+import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { daysLeft, isEndingSoon } from "@/lib/grant-length.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
@@ -23,6 +24,7 @@ export const FeaturesCard = ({
   businessId,
   businessName,
   features,
+  addons = [],
   plans,
   today,
   onChanged,
@@ -31,6 +33,8 @@ export const FeaturesCard = ({
   businessId: string;
   businessName: string;
   features: readonly FeatureSourceDto[];
+  /** What the Business holds on its own, for each Add-on line's price. */
+  addons?: readonly AddonDto[];
   plans: readonly PlanDto[];
   /** The Business's own today, as YYYY-MM-DD. */
   today: string;
@@ -63,6 +67,12 @@ export const FeaturesCard = ({
     switch (source.source) {
       case "PLAN":
         return words.tagPlan;
+      case "ADDON":
+        return addonTagOf(source, addons, {
+          words: billing,
+          money: (minor) => formatPrice(minor, language, "—"),
+          shortDate: (date) => formatLocalDate(date, language, { day: "numeric", month: "numeric" }),
+        });
       case "PREVIEW":
         return words.tagPreview;
       case "NONE":

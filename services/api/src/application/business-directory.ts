@@ -39,7 +39,7 @@ export type DirectoryFilter = {
 };
 
 /** Where a Feature comes from, as the filter asks it: anywhere, or one source. */
-export const FEATURE_FROM = ["ANY", "PLAN", "GRANT", "PREVIEW"] as const;
+export const FEATURE_FROM = ["ANY", "PLAN", "ADDON", "GRANT", "PREVIEW"] as const;
 export type FeatureFrom = (typeof FEATURE_FROM)[number];
 
 export const NO_FILTER: DirectoryFilter = Object.freeze({

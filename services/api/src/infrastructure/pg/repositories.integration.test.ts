@@ -27,6 +27,7 @@ import {
   serviceRepository,
   workingHoursRepository,
 } from "./scheduling-repositories.ts";
+import { addonHoldingRepository, addonOfferRepository, daysOwedRepository } from "./addon-repositories.ts";
 import { grantRepository } from "./grant-repository.ts";
 import { noticeRepository } from "./notice-repository.ts";
 import {
@@ -134,6 +135,9 @@ if (databaseUrl === undefined || databaseUrl === "") {
         grants: recording("grants", grantRepository(transaction)),
         planVersions: recording("planVersions", planVersionRepository(transaction)),
         previews: recording("previews", previewRepository(transaction)),
+        addonOffers: recording("addonOffers", addonOfferRepository(transaction)),
+        addonHoldings: recording("addonHoldings", addonHoldingRepository(transaction)),
+        daysOwed: recording("daysOwed", daysOwedRepository(transaction)),
         usageRecords: recording("usageRecords", usageRecordRepository(transaction)),
         unitRates: recording("unitRates", unitRateRepository(transaction)),
         administratorAllowlist: recording(

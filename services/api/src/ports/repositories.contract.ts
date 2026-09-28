@@ -2264,6 +2264,139 @@ export const describeRepositoryContract = (
       });
     });
 
+    // --- Add-ons (ADR 0021) ----------------------------------------------
+
+    it("sells an Add-on, sends a rise on its way, stops it — and never has more than two on sale", async () => {
+      await withRepositories(async (repositories) => {
+        const since = parseLocalDate("2031-03-01");
+        const history = await repositories.addonOffers.put({
+          feature: "CUSTOMER_HISTORY",
+          price: money(1900),
+          since,
+          stoppedOn: null,
+          rise: null,
+        });
+        expect(await repositories.addonOffers.list()).toEqual([history]);
+
+        const rise = {
+          from: money(1900),
+          announcedOn: since,
+          firstOn: parseLocalDate("2031-04-01"),
+          lastOn: parseLocalDate("2031-04-20"),
+        };
+        const rising = await repositories.addonOffers.put({ ...history, price: money(2400), rise });
+        expect(rising).toEqual({ ...history, price: 2400, rise });
+
+        const stopped = await repositories.addonOffers.put({ ...rising, stoppedOn: parseLocalDate("2031-03-05") });
+        expect(stopped.stoppedOn).toBe("2031-03-05");
+        for (const feature of ["CUSTOMER_BLOCKING", "TEAM_ROLES"] as const) {
+          await repositories.addonOffers.put({ feature, price: money(900), since, stoppedOn: null, rise: null });
+        }
+        expect((await repositories.addonOffers.list()).map((offer) => offer.feature)).toEqual([
+          "CUSTOMER_BLOCKING",
+          "CUSTOMER_HISTORY",
+          "TEAM_ROLES",
+        ]);
+
+        // A third on sale is refused. Last, because a refused statement ends the transaction.
+        await expect(repositories.addonOffers.put({ ...stopped, stoppedOn: null })).rejects.toMatchObject({
+          code: "CONFLICT",
+        });
+      });
+    });
+
+    it("keeps an administrator's Add-ons and the days owed, and settles them with a payment", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "07051");
+        const shop = context.business.id;
+        const admin = await repositories.users.create({ phone: "+972500007052", givenName: "הנהלה", familyName: null, birthDate: null });
+        const addedOn = parseLocalDate("2031-03-02");
+
+        const held = await repositories.addonHoldings.add({
+          businessId: shop,
+          feature: "WAITING_LIST",
+          addedOn,
+          paysFrom: parseLocalDate("2031-04-01"),
+          price: money(1500),
+        });
+        expect(held).toMatchObject({ businessId: shop, feature: "WAITING_LIST", price: 1500, nextPrice: null, endsOn: null, ending: null });
+
+        const cancelled = await repositories.addonHoldings.end(held.id, { endsOn: parseLocalDate("2031-03-31"), ending: "CANCELLED" });
+        expect(cancelled).toMatchObject({ endsOn: "2031-03-31", ending: "CANCELLED" });
+        expect(await repositories.addonHoldings.resume(held.id)).toMatchObject({ endsOn: null, ending: null });
+
+        const nextPrice = { price: money(2000), effectiveOn: parseLocalDate("2031-05-01") };
+        await repositories.addonHoldings.setPrices([{ id: held.id, price: money(1200), nextPrice }]);
+        expect(await repositories.addonHoldings.listForBusiness(shop)).toEqual([{ ...held, price: 1200, nextPrice }]);
+        expect((await repositories.addonHoldings.listRunning(addedOn)).map((holding) => holding.id)).toContain(held.id);
+
+        // What every Feature check reads carries it, and no Trial: nothing started one.
+        const basis = await repositories.subscriptions.entitlementBasis(shop);
+        expect(basis?.addons).toEqual([{ feature: "WAITING_LIST", addedOn: "2031-03-02", endsOn: null }]);
+        expect(basis?.trialEndsOn).toBeNull();
+
+        const owed = await repositories.daysOwed.add({
+          businessId: shop,
+          kind: "PLAN_DAYS",
+          subject: "TEAM",
+          amount: money(2000),
+          from: parseLocalDate("2031-03-12"),
+          through: parseLocalDate("2031-03-26"),
+        });
+        expect(await repositories.daysOwed.listOwed(shop)).toEqual([owed]);
+        const subscription = await repositories.subscriptions.findByBusiness(shop);
+        if (subscription === null) throw new Error("No subscription");
+        const payment = await repositories.payments.create({
+          subscriptionId: subscription.id,
+          businessId: shop,
+          amount: money(6900),
+          paidOn: parseLocalDate("2031-03-27"),
+          recordedBy: admin.id,
+          note: null,
+        });
+        await repositories.daysOwed.settle(shop, payment.id);
+        expect(await repositories.daysOwed.listOwed(shop)).toEqual([]);
+      });
+    });
+
+    it("lets an owner add their own Add-on at the price on sale, cancel, resume it, and owe days", async () => {
+      await withRepositories(async (repositories, actAs) => {
+        const context = await aBookableBusiness(repositories, "07053");
+        const shop = context.business.id;
+        const addedOn = parseLocalDate("2031-03-02");
+        await repositories.addonOffers.put({ feature: "CUSTOMER_HISTORY", price: money(1900), since: addedOn, stoppedOn: null, rise: null });
+
+        await actAs(context.owner.id);
+        // Whatever price the caller names, the sale's is kept.
+        const added = await repositories.addonHoldings.addAsOwner({
+          businessId: shop,
+          feature: "CUSTOMER_HISTORY",
+          addedOn,
+          paysFrom: parseLocalDate("2031-04-01"),
+          price: money(1),
+        });
+        expect(added).toMatchObject({ feature: "CUSTOMER_HISTORY", price: 1900, ending: null });
+
+        const ending = { endsOn: parseLocalDate("2031-03-31"), ending: "CANCELLED" as const };
+        expect(await repositories.addonHoldings.endAsOwner(shop, added.id, ending)).toMatchObject(ending);
+        expect(await repositories.addonHoldings.resumeAsOwner(shop, added.id)).toMatchObject({ endsOn: null, ending: null });
+
+        const owed = await repositories.daysOwed.add({
+          businessId: shop,
+          kind: "ADDON_DAYS",
+          subject: "CUSTOMER_HISTORY",
+          amount: money(950),
+          from: parseLocalDate("2031-03-12"),
+          through: parseLocalDate("2031-03-26"),
+        });
+        expect(await repositories.daysOwed.listOwed(shop)).toEqual([owed]);
+
+        await repositories.subscriptions.holdPlan(shop, "TEAM");
+        await repositories.subscriptions.holdPlan(shop, "TEAM");
+        expect(await repositories.subscriptions.plansHeld(shop)).toEqual(["TEAM"]);
+      });
+    });
+
     it("records usage and adds it up per Business, source, unit and UTC day, within the span", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "07009");

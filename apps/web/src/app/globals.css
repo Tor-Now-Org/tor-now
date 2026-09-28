@@ -998,6 +998,7 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
 .source-mark.grant,.source-tag.grant{background:var(--positive-soft);color:var(--positive)}
 .source-mark.ending,.source-tag.ending{background:var(--caution-soft);color:var(--caution)}
 .source-mark.preview,.source-tag.preview{background:var(--accent-soft);color:var(--accent-strong)}
+.source-mark.addon,.source-tag.addon{background:var(--accent-soft);color:var(--accent-strong)}
 .source-mark.none{background:transparent;color:var(--faint);border:1px dashed var(--line)}
 .source-tag{font-size:11px;font-weight:600;padding:1px 7px;border-radius:6px;white-space:nowrap}
 .source-tag.none{background:transparent;color:var(--faint);border:1px solid var(--line)}
@@ -1103,6 +1104,25 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
 /* ---------------------------------------------------------------------------
    The Features tab and Previews (ADR 0020).
    --------------------------------------------------------------------------- */
+/* Add-ons on the subscription page (ADR 0021). */
+.addons-card{padding:0 16px}
+.addon-row{display:flex;gap:12px;align-items:center;padding:13px 0}
+.addon-row + .addon-row{border-top:1px solid var(--line)}
+.addon-row .what{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.addon-row .what strong{font-size:14.5px;font-weight:600}
+.addon-row .price{font-size:13px;color:var(--muted)}
+.addon-row .note-line{font-size:12px;font-weight:500;color:var(--accent-strong)}
+.addon-row .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
+.addon-active{display:inline-flex;align-items:center;min-height:24px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:600;background:var(--positive-soft);color:var(--positive)}
+.link-quiet{font-size:13px;font-weight:600;color:var(--muted);min-height:36px;padding:0 4px}
+.chip.addon-add{display:inline-flex;gap:5px;align-items:center;min-height:38px;padding:0 14px;border:1px solid var(--accent);color:var(--accent-strong);background:var(--accent-soft);font-weight:600}
+.chip.addon-add svg{width:14px;height:14px}
+.note.owed{background:var(--caution-soft);color:var(--ink)}
+.pay-row{display:flex;gap:10px;align-items:center;min-height:26px}
+.pay-row .label{flex:1}
+.pay-row.total{border-top:1px solid var(--line);padding-top:9px;min-height:32px}
+.pay-row.total strong{font-size:15.5px}
+
 .feature-card{display:flex;flex-direction:column;gap:10px;padding:16px}
 .feature-card .what{display:flex;flex-direction:column;gap:2px}
 .feature-card .what strong{font-size:15.5px;font-weight:600}
@@ -1113,6 +1133,7 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
 .feature-card .where svg{width:13px;height:13px}
 .feature-card .where.plan{background:var(--sunken);color:var(--muted)}
 .feature-card .where.preview{background:var(--accent-soft);color:var(--accent-strong)}
+.feature-card .where.addon{background:var(--accent-soft);color:var(--accent-strong)}
 .feature-card .where.none{border:1px solid var(--line);color:var(--faint)}
 .feature-card .count{display:inline-flex;gap:5px;align-items:baseline;min-height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:var(--raised);font-size:12.5px;color:var(--muted)}
 .feature-card .count b{color:var(--ink)}
@@ -1120,7 +1141,11 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
 .feature-card .note{padding:10px 12px}
 .feature-card .actions{display:flex;gap:14px;flex-wrap:wrap}
 .feature-card .actions button{font-size:13px;font-weight:600;color:var(--accent);min-height:36px}
+.feature-card .actions .with-icon{display:inline-flex;gap:4px;align-items:center}
+.feature-card .actions .with-icon svg{width:15px;height:15px}
+.addon-sale{display:flex;flex-direction:column;gap:10px;padding:4px 16px 14px}
 .place-row{display:flex;flex-direction:column;gap:8px;padding:12px 14px}
 .place-row + .place-row{border-top:1px solid var(--line)}
 .place-row .head{display:flex;gap:8px;align-items:center}
 .place-row .head .hint{margin-inline-start:auto}
+.place-row.changed{background:var(--accent-soft)}

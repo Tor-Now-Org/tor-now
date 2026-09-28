@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { asId, forbidden, microShekels, parseLocalDate } from "@tor-now/domain";
+import { asId, forbidden, microShekels, parseLocalDate, type BusinessId } from "@tor-now/domain";
 import type { Services } from "../composition.ts";
 import {
   parseBody,
@@ -834,6 +834,22 @@ const ownerRoutes = (services: Services) => {
     return context.json(wire.billingOut(result));
   });
 
+  // ADR 0021: the owner's own Add-ons. Adding one they cancelled and that has
+  // not ended yet simply withdraws the cancellation.
+  owner.post("/:businessId/addons/:feature", async (context) => {
+      const businessId: BusinessId = idParam(context, "businessId");
+      await services.addons.addMine(actorOf(context), businessId, parse(schema.featureParamSchema, context.req.param("feature")));
+      // The whole panel back: what the Business has and pays both changed.
+      return context.json(wire.billingOut(await services.business.subscription(actorOf(context), businessId)));
+    });
+
+  owner.delete("/:businessId/addons/:feature", async (context) => {
+      const businessId: BusinessId = idParam(context, "businessId");
+      await services.addons.cancelMine(actorOf(context), businessId, parse(schema.featureParamSchema, context.req.param("feature")));
+      // The whole panel back: what the Business has and pays both changed.
+      return context.json(wire.billingOut(await services.business.subscription(actorOf(context), businessId)));
+    });
+
   owner.get("/:businessId/subscription", async (context) => {
     const result = await services.business.subscription(
       actorOf(context),
@@ -1073,6 +1089,21 @@ const adminRoutes = (services: Services) => {
     );
   });
 
+  // ADR 0021: Add-ons for an owner who phones in — by the owner's own rules.
+  admin.post("/businesses/:businessId/addons/:feature", async (context) => {
+      const businessId: BusinessId = idParam(context, "businessId");
+      await services.addons.addFor(actorOf(context), businessId, parse(schema.featureParamSchema, context.req.param("feature")));
+      // The whole panel back: what the Business has and pays both changed.
+      return context.json(wire.billingOut(await services.admin.subscriptionFor(actorOf(context), businessId)));
+    });
+
+  admin.delete("/businesses/:businessId/addons/:feature", async (context) => {
+      const businessId: BusinessId = idParam(context, "businessId");
+      await services.addons.cancelFor(actorOf(context), businessId, parse(schema.featureParamSchema, context.req.param("feature")));
+      // The whole panel back: what the Business has and pays both changed.
+      return context.json(wire.billingOut(await services.admin.subscriptionFor(actorOf(context), businessId)));
+    });
+
   // ADR 0021: Grants — Features given to one Business, for a reason, until a day.
   admin.post("/businesses/:businessId/grants", async (context) => {
     const body = await parseBody(context, schema.grantSchema);
@@ -1168,17 +1199,78 @@ const adminRoutes = (services: Services) => {
   });
 
   admin.post("/catalogue/features/:feature/preview/placement", async (context) => {
-    const { keepOn } = await parseBody(context, schema.previewPlacementSchema);
+    const { keepOn, addonPriceMinor } = await parseBody(context, schema.previewPlacementSchema);
     return context.json(
       wire.featureViewsOut(
         await services.featureCatalogue.placePreview(
           actorOf(context),
           parse(schema.featureParamSchema, context.req.param("feature")),
           keepOn,
+          addonPriceMinor ?? null,
         ),
       ),
     );
   });
+
+  // ADR 0021: which Plans include a Feature, by the Plan editor's own rule.
+  admin.put("/catalogue/features/:feature/plans", async (context) => {
+    const { plans } = await parseBody(context, schema.featurePlansSchema);
+    return context.json(
+      wire.featureViewsOut(
+        await services.addonCatalogue.setPlans(
+          actorOf(context),
+          parse(schema.featureParamSchema, context.req.param("feature")),
+          plans,
+        ),
+      ),
+    );
+  });
+
+  // ADR 0021: a Feature sold on its own — on sale, repriced, a rise withdrawn, stopped.
+  admin.post("/catalogue/features/:feature/addon", async (context) => {
+    const { priceMinor } = await parseBody(context, schema.addonPriceSchema);
+    return context.json(
+      wire.featureViewsOut(
+        await services.addonCatalogue.sell(
+          actorOf(context),
+          parse(schema.featureParamSchema, context.req.param("feature")),
+          priceMinor,
+        ),
+      ),
+    );
+  });
+
+  admin.patch("/catalogue/features/:feature/addon", async (context) => {
+    const { priceMinor } = await parseBody(context, schema.addonPriceSchema);
+    return context.json(
+      wire.featureViewsOut(
+        await services.addonCatalogue.changePrice(
+          actorOf(context),
+          parse(schema.featureParamSchema, context.req.param("feature")),
+          priceMinor,
+        ),
+      ),
+    );
+  });
+
+  admin.post("/catalogue/features/:feature/addon/rise/cancel", async (context) =>
+    context.json(
+      wire.featureViewsOut(
+        await services.addonCatalogue.cancelRise(
+          actorOf(context),
+          parse(schema.featureParamSchema, context.req.param("feature")),
+        ),
+      ),
+    ),
+  );
+
+  admin.post("/catalogue/features/:feature/addon/stop", async (context) =>
+    context.json(
+      wire.featureViewsOut(
+        await services.addonCatalogue.stop(actorOf(context), parse(schema.featureParamSchema, context.req.param("feature"))),
+      ),
+    ),
+  );
 
   // ADR 0022: what each unit of messaging cost from a day, and the evidence.
   admin.get("/catalogue/rates", async (context) =>

@@ -1,6 +1,7 @@
 import {
   changePlan,
   compareTerms,
+  upgradeDaysOwed,
   isOnOffer,
   validationFailed,
   type BusinessId,
@@ -13,6 +14,7 @@ import {
   type Subscription,
 } from "@tor-now/domain";
 import type { Repositories } from "../ports/repositories.ts";
+import { endIncludedAddons } from "./addons.ts";
 import { resumeWithinAllowance } from "./allowance.ts";
 import { currentVersionOf, entitlementOf, subscriptionView, type SubscriptionView } from "./billing.ts";
 import { tell } from "./notices.ts";
@@ -40,8 +42,11 @@ export const movePlan = async (
   },
 ): Promise<SubscriptionView> => {
   const { businessId } = input;
-  const view = await subscriptionView(repositories, businessId, input.today);
-  const target = await currentVersionOf(repositories, input.plan);
+  const [view, target, plansHeld] = await Promise.all([
+    subscriptionView(repositories, businessId, input.today),
+    currentVersionOf(repositories, input.plan),
+    repositories.subscriptions.plansHeld(businessId),
+  ]);
   // A move onto a new edition of the Plan held is the Catalogue's, and stands.
   const changed = changePlan(view.subscription, { from: view.planVersion, to: target, scheduled: view.scheduledVersion });
 
@@ -70,6 +75,10 @@ export const movePlan = async (
     await repositories.subscriptions.update(businessId, terms);
   }
 
+  if (changed.scheduledMove === null && view.planVersion.plan !== target.plan) {
+    await movedNow(repositories, { ...input, view, target, plansHeld });
+  }
+
   await tellOfMove(repositories, {
     businessId,
     by: input.by,
@@ -89,6 +98,39 @@ export const movePlan = async (
     input.now,
   );
   return subscriptionView(repositories, businessId, input.today);
+};
+
+/**
+ * What a move that applies at once also does (ADR 0021): moving up again to a
+ * Plan left before owes the difference for the days already paid for — only
+ * the first time is paid from the next renewal — the Plan is remembered as
+ * held, and any Add-on it includes stops costing anything extra.
+ */
+const movedNow = async (
+  repositories: Repositories,
+  move: {
+    businessId: BusinessId;
+    by: "OWNER" | "ADMINISTRATOR";
+    view: SubscriptionView;
+    target: PlanVersion;
+    plansHeld: readonly Plan[];
+    today: LocalDate;
+    now: Instant;
+  },
+): Promise<void> => {
+  const { businessId, view, target, today } = move;
+  const owed = upgradeDaysOwed({ from: view.planVersion, to: target, subscription: view.subscription, plansHeld: move.plansHeld, today });
+  if (owed !== null) await repositories.daysOwed.add({ businessId, kind: "PLAN_DAYS", subject: target.plan, ...owed });
+  // A Trial is not paid time: only moves made while paying are remembered.
+  if (view.subscription.paidThrough !== null) await repositories.subscriptions.holdPlan(businessId, target.plan);
+  await endIncludedAddons(repositories, {
+    businessId,
+    plan: target.plan,
+    features: target.terms.features,
+    asOwner: move.by === "OWNER",
+    today,
+    at: move.now,
+  });
 };
 
 /**
@@ -208,6 +250,15 @@ export const applyDueMoves = async (
       repositories.planVersions.findById(subscription.planVersionId),
     ]);
     if (version !== null) {
+      if (subscription.paidThrough !== null) await repositories.subscriptions.holdPlan(subscription.businessId, version.plan);
+      await endIncludedAddons(repositories, {
+        businessId: subscription.businessId,
+        plan: version.plan,
+        features: version.terms.features,
+        asOwner: false,
+        today,
+        at: now,
+      });
       await tell(repositories, {
         businessId: subscription.businessId,
         // A new edition of the Plan held is the Catalogue's change landing,

@@ -31,6 +31,7 @@ import type {
 } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { requireAdministrator, requireOperator } from "./authorization.ts";
+import { paymentBoard } from "./addon-service.ts";
 import { entitlementOf, subscriptionView, type SubscriptionView } from "./billing.ts";
 import { keepOnly, overAllowance } from "./allowance.ts";
 import { applyDueMoves, movePlan } from "./plan-move.ts";
@@ -364,6 +365,10 @@ export const adminService = (dependencies: {
         // are one act, so they commit together.
         const paidThrough = paidThroughAfter(subscription, paidOn);
         await repositories.subscriptions.update(businessId, { paidThrough });
+        // The days owed were part of it, and the Plan it paid for is held.
+        await repositories.daysOwed.settle(businessId, payment.id);
+        const version = await repositories.planVersions.findById(subscription.planVersionId);
+        if (version !== null) await repositories.subscriptions.holdPlan(businessId, version.plan);
 
         // Told to the owner on WhatsApp too, and ending whatever banner said
         // a payment was due.
@@ -392,12 +397,13 @@ export const adminService = (dependencies: {
         const business = await repositories.businesses.findById(businessId);
         if (business === null) throw notFound("Business", businessId);
         const today = todayIn(clock.now(), business.timeZone);
-        const [view, payments, features] = await Promise.all([
+        const [view, payments, features, board] = await Promise.all([
           subscriptionView(repositories, businessId, today),
           repositories.payments.listForBusiness(businessId),
           featuresWithGrants(repositories, businessId, today),
+          paymentBoard(repositories, businessId, today),
         ]);
-        return { ...view, payments, features };
+        return { ...view, payments, features, board };
       });
     },
 

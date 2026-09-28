@@ -60,7 +60,9 @@ describe("Features and Previews", () => {
       { plan: "SOLO", number: 1, included: false },
       { plan: "TEAM", number: 1, included: true },
     ]);
-    expect(history?.counts).toEqual({ PLAN: 1, GRANT: 1, PREVIEW: 0 });
+    expect(history?.counts).toEqual({ PLAN: 1, ADDON: 0, GRANT: 1, PREVIEW: 0 });
+    expect(history?.canSell).toBe(true);
+    expect(history?.addon).toBeNull();
     expect(history?.canPreview).toBe(true);
     const waiting = features.find((view) => view.feature === "WAITING_LIST");
     expect(waiting?.preview).toMatchObject({ endsOn: "2026-10-23", placement: null });
@@ -121,7 +123,13 @@ describe("Features and Previews", () => {
       expect(kindsOf(solo)).toContain("PREVIEW_LEAVING");
       expect(whatsappKinds()).toEqual(["PREVIEW_LEAVING"]);
       const leaving = test.store.notices.find((entry) => entry.notice.facts.kind === "PREVIEW_LEAVING");
-      expect(leaving?.notice.facts).toEqual({ kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: "2026-10-23" });
+      expect(leaving?.notice.facts).toEqual({
+        kind: "PREVIEW_LEAVING",
+        feature: "WAITING_LIST",
+        plan: "SOLO",
+        endsOn: "2026-10-23",
+        addonPriceMinor: null,
+      });
     });
 
     it("moves a nearer end out to thirty days, so the Plans losing it are told in time", async () => {
@@ -176,7 +184,7 @@ describe("Features and Previews", () => {
       featureSource: "GRANT",
     });
     expect(granted.rows.map((row) => row.business.id)).toEqual([solo.business.id]);
-    expect(granted.counts.featureSources).toEqual({ ANY: 2, PLAN: 1, GRANT: 1, PREVIEW: 0 });
+    expect(granted.counts.featureSources).toEqual({ ANY: 2, PLAN: 1, ADDON: 0, GRANT: 1, PREVIEW: 0 });
     expect(granted.counts.features.WAITING_LIST).toBe(2);
   });
 

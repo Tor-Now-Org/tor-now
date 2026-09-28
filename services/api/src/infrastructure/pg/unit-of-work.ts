@@ -21,6 +21,7 @@ import {
   unitRateRepository,
   usageRecordRepository,
 } from "./billing-repositories.ts";
+import { addonHoldingRepository, addonOfferRepository, daysOwedRepository } from "./addon-repositories.ts";
 import { grantRepository } from "./grant-repository.ts";
 import { noticeRepository } from "./notice-repository.ts";
 import { outbox } from "./outbox.ts";
@@ -55,6 +56,9 @@ const repositoriesOn = (tx: Transaction): Repositories => ({
   grants: grantRepository(tx),
   planVersions: planVersionRepository(tx),
   previews: previewRepository(tx),
+  addonOffers: addonOfferRepository(tx),
+  addonHoldings: addonHoldingRepository(tx),
+  daysOwed: daysOwedRepository(tx),
   usageRecords: usageRecordRepository(tx),
   unitRates: unitRateRepository(tx),
   administratorAllowlist: administratorAllowlistRepository(tx),

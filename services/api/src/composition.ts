@@ -11,6 +11,8 @@ import { catalogueService } from "./application/catalogue-service.ts";
 import { catalogueAdminService } from "./application/catalogue-admin.ts";
 import { planCatalogueService } from "./application/plan-catalogue.ts";
 import { featureCatalogueService } from "./application/feature-catalogue.ts";
+import { addonCatalogueService } from "./application/addon-catalogue.ts";
+import { addonService } from "./application/addon-service.ts";
 import { discoveryService } from "./application/discovery-service.ts";
 import { reviewService } from "./application/review-service.ts";
 import { noticeService } from "./application/notice-service.ts";
@@ -127,6 +129,8 @@ export const compose = (
     catalogueAdmin: catalogueAdminService({ unitOfWork, clock }),
     planCatalogue: planCatalogueService({ unitOfWork, clock }),
     featureCatalogue,
+    addonCatalogue: addonCatalogueService({ unitOfWork, clock }),
+    addons: addonService({ unitOfWork, clock }),
     closures: closureService({ unitOfWork, clock }),
     admin,
 

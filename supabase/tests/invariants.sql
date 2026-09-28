@@ -180,5 +180,35 @@ begin
     raise exception 'INVARIANT BROKEN: a block was written with no decision behind it';
   end if;
 
+  -- ADR 0021: never more than two Add-ons on sale at once, however they are written.
+  insert into addon_offer (feature, price_minor, since) values ('CUSTOMER_HISTORY', 1900, current_date);
+  insert into addon_offer (feature, price_minor, since) values ('CUSTOMER_BLOCKING', 900, current_date);
+  v_failed := false;
+  begin
+    insert into addon_offer (feature, price_minor, since) values ('TEAM_ROLES', 900, current_date);
+  exception when check_violation then v_failed := true;
+  end;
+  if not v_failed then raise exception 'INVARIANT BROKEN: a third Add-on went on sale'; end if;
+
+  -- One hold of an Add-on runs at a time; a cancelled one is resumed, not held twice.
+  insert into addon_holding (business_id, feature, added_on, pays_from, price_minor)
+    values (v_biz, 'CUSTOMER_HISTORY', current_date, current_date, 1900);
+  v_failed := false;
+  begin
+    insert into addon_holding (business_id, feature, added_on, pays_from, price_minor)
+      values (v_biz, 'CUSTOMER_HISTORY', current_date, current_date, 1900);
+  exception when unique_violation then v_failed := true;
+  end;
+  if not v_failed then raise exception 'INVARIANT BROKEN: one Add-on was held twice at once'; end if;
+
+  -- A owed says what it is for: a Plan's days name a Plan, an Add-on's a Feature.
+  v_failed := false;
+  begin
+    insert into days_owed (business_id, kind, subject, amount_minor, from_on, through_on)
+      values (v_biz, 'PLAN_DAYS', 'CUSTOMER_HISTORY', 100, current_date, current_date);
+  exception when check_violation then v_failed := true;
+  end;
+  if not v_failed then raise exception 'INVARIANT BROKEN: a Plan''s days were charged for a Feature'; end if;
+
   raise exception 'ALL_INVARIANTS_HELD';
 end $$;

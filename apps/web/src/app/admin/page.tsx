@@ -13,10 +13,11 @@ import {
   type BillingStatus,
   type DirectoryFilter,
   type DirectoryRowDto,
+  type PaymentBoardDto,
   type PlatformStatsDto,
   type UserDto,
 } from "@/lib/api/types.ts";
-import { formatLocalDate } from "@/lib/format.ts";
+import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { TEXT_RULES } from "@tor-now/domain";
 import { useSession } from "@/lib/session.tsx";
@@ -29,6 +30,10 @@ import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { SignOutButton } from "@/components/sign-out.tsx";
 import { BottomNav, BuildingIcon, ChartIcon, PeopleIcon, ShieldIcon, TagIcon } from "@/components/bottom-nav.tsx";
 import { FeaturesCard } from "@/components/admin/features-card.tsx";
+import { AddonsSection } from "@/components/owner/addons-section.tsx";
+import { PaymentLines } from "@/components/payment-lines.tsx";
+import { paymentBoardOf } from "@/lib/next-payment.ts";
+import { fillText } from "@/lib/i18n/fill.ts";
 import { CatalogueTab } from "@/components/admin/catalogue-tab.tsx";
 import { localDateOf } from "@/components/owner/day-filter.ts";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } from "@/components/ui.tsx";
@@ -132,6 +137,36 @@ export default function AdminPage() {
     }
   };
 
+  const board = billing === null ? null : paymentBoardOf(billing);
+
+  /**
+   * A Business's billing, and the payment to record prefilled with what its
+   * next payment comes to, as the owner was told: the Plan, the Add-ons, and
+   * any days owed. The administrator may change it.
+   */
+  const showBilling = (loaded: BillingDto) => {
+    setBilling(loaded);
+    if (loaded.nextPayment !== undefined) setPaymentAmount(String(loaded.nextPayment.totalMinor / MINOR_UNITS_PER_MAJOR));
+  };
+
+  /** The next payment line by line, as the amount field's hint says it. */
+  const breakdownOf = (payment: PaymentBoardDto["nextPayment"]): string => {
+    const money = (minor: number) => formatPrice(minor, language, "—");
+    const shortDate = (date: string) => formatLocalDate(date, language, { day: "numeric", month: "numeric" });
+    const lines = payment.lines.map((line) =>
+      line.kind === "PLAN"
+        ? `${billingCopy.plan[line.plan]} ${money(line.amountMinor)}`
+        : line.kind === "ADDON"
+          ? `${billingCopy.featureName[line.feature]} ${money(line.amountMinor)}`
+          : fillText(billingCopy.lineDays, {
+              owed: money(line.amountMinor),
+              from: shortDate(line.owed.from),
+              through: shortDate(line.owed.through),
+            }),
+    );
+    return fillText(catalogueCopy.paymentBreakdown, { lines: lines.join(" + ") });
+  };
+
   if (loading) return <Spinner />;
 
   if (token === null || user === null || !user.isAdministrator) {
@@ -162,9 +197,10 @@ export default function AdminPage() {
       description: row.business.description ?? "",
     });
     setBilling(null);
+    setPaymentAmount("");
     void api
       .adminSubscription(token, row.business.id)
-      .then(setBilling)
+      .then(showBilling)
       .catch(() => setBilling(null));
   };
 
@@ -383,6 +419,7 @@ export default function AdminPage() {
                   <Row label={billingCopy.dateLabel[billing.status]}>
                     <NextDate status={billing.status} date={billing.nextDate} timeZone={openBusiness.business.timeZone} />
                   </Row>
+                  {board !== null && <PaymentLines payment={board.nextPayment} />}
                 </>
               )}
             </Card>
@@ -394,9 +431,19 @@ export default function AdminPage() {
                 businessId={openBusiness.business.id}
                 businessName={openBusiness.business.name}
                 features={billing.features}
+                addons={board?.addons ?? []}
                 plans={plans}
                 today={localDateOf(new Date().toISOString(), openBusiness.business.timeZone)}
                 onChanged={(features) => setBilling((current) => (current === null ? current : { ...current, features }))}
+              />
+            )}
+
+            {board !== null && (
+              // ADR 0021: for an owner who phones in, by the owner's own rules.
+              <AddonsSection
+                board={board}
+                onAdd={async (feature) => showBilling(await api.adminAddAddon(token, openBusiness.business.id, feature))}
+                onCancel={async (feature) => showBilling(await api.adminCancelAddon(token, openBusiness.business.id, feature))}
               />
             )}
 
@@ -410,6 +457,7 @@ export default function AdminPage() {
             <span className="label">{copy.recordPayment}</span>
             <Field id="payment-amount" label={copy.amount} type="number" value={paymentAmount}
               placeholder={copy.paymentNotePlaceholder}
+              {...(board === null ? {} : { hint: breakdownOf(board.nextPayment) })}
               onChange={(e) => setPaymentAmount(e.target.value)} />
             <Button busy={busy} disabled={paymentAmount.trim() === ""}
               onClick={() =>

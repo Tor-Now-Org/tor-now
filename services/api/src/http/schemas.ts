@@ -466,7 +466,17 @@ export const featureParamSchema = z.enum(FEATURES);
 export const previewEndSchema = z.object({ endsOn: localDateSchema });
 
 /** ADR 0020: which Plans keep a Preview's Feature when it ends. */
-export const previewPlacementSchema = z.object({ keepOn: z.array(z.enum(PLANS)).max(PLANS.length) });
+export const previewPlacementSchema = z.object({
+  keepOn: z.array(z.enum(PLANS)).max(PLANS.length),
+  /** ADR 0021: sold on its own, at this price, to the Plans that do not keep it. */
+  addonPriceMinor: z.number().int().min(1).max(1_000_000).nullable().optional(),
+});
+
+/** ADR 0021: an Add-on's monthly price, as it goes on sale or changes. The service decides what the change is. */
+export const addonPriceSchema = z.object({ priceMinor: z.number().int().min(1).max(1_000_000) });
+
+/** ADR 0021: which Plans include a Feature, from its own card. */
+export const featurePlansSchema = z.object({ plans: z.array(z.enum(PLANS)).max(PLANS.length) });
 
 /** ADR 0021: a Plan's terms as the administrator edits them. The service decides what the change is. */
 export const planEditSchema = z.object({

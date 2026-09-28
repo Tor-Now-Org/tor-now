@@ -101,3 +101,37 @@ customer; at worst they cost the platform, and they are audited.
 - **An undecided Preview never ends by default.** When fewer than thirty days
   remain and nobody has decided, it is carried on by thirty days, so no Plan
   loses a Feature without being told in time.
+
+## Add-ons in practice (2026-09-29)
+
+- **Selling one** is a Feature card's "sell as Add-on": one flat monthly price,
+  offered to every Plan that lacks the Feature, at most two on sale. The
+  Businesses that could buy it hear of it in the app. A Feature in Preview goes
+  on sale only as the Preview's end is decided, to the Plans losing it — and
+  anyone adding it then pays only from the renewal after the Preview ends. A
+  Feature on sale is not previewed: that would give free what some pay for.
+- **The owner adds and cancels their own**, on their subscription page, and an
+  administrator does the same for an owner who phones in, by the same rules and
+  with the same Notices. Cancelling keeps it to the end of what is paid for,
+  and can be withdrawn until then.
+- **Only the first time is free until the next payment.** Adding back an Add-on
+  the Business had before is paid from that day — the Days Owed, counted by
+  thirtieths of the price, owed with the next payment. Otherwise adding,
+  cancelling and adding again would never pay for a day. Moving up again to a
+  Plan left before follows the same rule (ADR 0020).
+- **A lower price gives**: it reaches everyone at once. **A higher one takes**:
+  each holder pays it from their first renewal at least thirty days on, told
+  now on WhatsApp too, since it is about paying; new buyers pay it at once. One
+  rise waits at a time, and it can be withdrawn until the first holder pays it.
+- **Stopping the sale takes nothing**: those who hold it keep it at their price
+  until they cancel.
+- **A Plan that comes to include it ends it** — the owner moving up, or the
+  Catalogue adding it to their Plan — and they stop paying for it. Once every
+  Plan includes it, its sale stops.
+- **What the next payment comes to is worked out, line by line** — the Plan as
+  it will be on the day, each Add-on still held then, and the Days Owed. The
+  owner sees it before agreeing to anything; the administrator records a
+  payment with it prefilled.
+- **Which plans**, on each Feature's card, places a Feature by exactly the rule
+  a Plan's own editor follows: including it gives and applies to every edition
+  now, leaving it out takes and is a new edition with thirty days' Notice.

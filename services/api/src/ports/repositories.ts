@@ -1,5 +1,12 @@
 import type {
   Patch,
+  AddonEnding,
+  AddonHolding,
+  AddonHoldingId,
+  AddonOffer,
+  AddonTerm,
+  DaysOwedEntry,
+  PaymentId,
   Appointment,
   AppointmentId,
   Block,
@@ -667,6 +674,10 @@ export type DirectoryEntry = {
 export type EntitlementBasis = {
   readonly planVersionId: PlanVersionId;
   readonly grants: readonly GrantTerm[];
+  /** Every Add-on the Business ever held; whether each still runs is the domain's to say. */
+  readonly addons: readonly AddonTerm[];
+  /** The Trial's last day while nothing is paid — a Trial includes every Add-on on sale. */
+  readonly trialEndsOn: LocalDate | null;
 };
 
 export type SubscriptionRepository = {
@@ -709,6 +720,10 @@ export type SubscriptionRepository = {
    * the Subscription holds beyond them.
    */
   entitlementBasis(businessId: BusinessId): Promise<EntitlementBasis | null>;
+  /** Every Plan the Business held while paying, or moved up to (plan_held). */
+  plansHeld(businessId: BusinessId): Promise<readonly Plan[]>;
+  /** Remembers a Plan as held; holding it again changes nothing. Owners may, for their own. */
+  holdPlan(businessId: BusinessId, plan: Plan): Promise<void>;
   /**
    * Every Business with what the administrator filters it by, in one read. The
    * whole platform at once: standing is worked out per Business's own today,
@@ -764,6 +779,61 @@ export type PreviewRepository = {
   setEnd(feature: Feature, endsOn: LocalDate): Promise<PreviewEntry>;
   /** Which Plans keep the Feature, and the end that gives the others their Notice. */
   place(feature: Feature, placement: { keepOn: readonly Plan[]; endsOn: LocalDate }, at: Instant): Promise<PreviewEntry>;
+};
+
+/**
+ * Add-ons on sale (ADR 0021). The Catalogue's: an administrator opens a sale,
+ * prices it and stops it; everyone may read what is on sale.
+ */
+export type AddonOfferRepository = {
+  /** Every Add-on ever sold, stopped ones included, by Feature. */
+  list(): Promise<readonly AddonOffer[]>;
+  /** One Feature's sale as it now stands: opened, repriced, a rise, or stopped. */
+  put(offer: AddonOffer): Promise<AddonOffer>;
+};
+
+/** An Add-on as it is added: the rest starts empty. */
+export type NewAddonHolding = Omit<AddonHolding, "id" | "nextPrice" | "endsOn" | "ending">;
+
+/**
+ * Who holds which Add-on (ADR 0021). An owner writes their own only through
+ * the `…AsOwner` doors (app.owner_adds_addon and its siblings), which take the
+ * price from the sale rather than from the caller; an administrator and the
+ * daily run write directly.
+ */
+export type AddonHoldingRepository = {
+  /** Every hold the Business ever had, oldest first. */
+  listForBusiness(businessId: BusinessId): Promise<readonly AddonHolding[]>;
+  /** Holds at every Business that run on, or end on or after `onOrAfter`, oldest first. */
+  listRunning(onOrAfter: LocalDate): Promise<readonly AddonHolding[]>;
+  add(holding: NewAddonHolding): Promise<AddonHolding>;
+  /** The owner's own: at the price the Add-on is on sale for, whatever `price` says. */
+  addAsOwner(holding: NewAddonHolding): Promise<AddonHolding>;
+  end(id: AddonHoldingId, ending: { endsOn: LocalDate; ending: AddonEnding }): Promise<AddonHolding>;
+  endAsOwner(
+    businessId: BusinessId,
+    id: AddonHoldingId,
+    ending: { endsOn: LocalDate; ending: AddonEnding },
+  ): Promise<AddonHolding>;
+  /** A cancellation withdrawn: it runs on. */
+  resume(id: AddonHoldingId): Promise<AddonHolding>;
+  resumeAsOwner(businessId: BusinessId, id: AddonHoldingId): Promise<AddonHolding>;
+  /** New prices from the Catalogue, each hold's own. */
+  setPrices(
+    changes: readonly { id: AddonHoldingId; price: Money; nextPrice: AddonHolding["nextPrice"] }[],
+  ): Promise<void>;
+};
+
+/**
+ * Days owed beyond a monthly price. An owner's own act may add to what they
+ * owe; only a recorded payment settles it.
+ */
+export type DaysOwedRepository = {
+  add(owed: Omit<DaysOwedEntry, "id" | "paymentId">): Promise<DaysOwedEntry>;
+  /** What the Business still owes, oldest first. */
+  listOwed(businessId: BusinessId): Promise<readonly DaysOwedEntry[]>;
+  /** Everything owed, settled by this payment. */
+  settle(businessId: BusinessId, paymentId: PaymentId): Promise<void>;
 };
 
 /**
@@ -1000,6 +1070,9 @@ export type Repositories = {
   readonly grants: GrantRepository;
   readonly planVersions: PlanVersionRepository;
   readonly previews: PreviewRepository;
+  readonly addonOffers: AddonOfferRepository;
+  readonly addonHoldings: AddonHoldingRepository;
+  readonly daysOwed: DaysOwedRepository;
   readonly usageRecords: UsageRecordRepository;
   readonly unitRates: UnitRateRepository;
   readonly administratorAllowlist: AdministratorAllowlistRepository;

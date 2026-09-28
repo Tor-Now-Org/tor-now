@@ -825,7 +825,7 @@ describe("Features and Previews over HTTP", () => {
     expect(listed.body).toMatchObject({
       features: expect.arrayContaining([
         expect.objectContaining({ feature: "WAITING_LIST", preview: expect.objectContaining({ keepOn: null }), canPreview: false }),
-        expect.objectContaining({ feature: "CUSTOMER_HISTORY", canPreview: true, counts: { PLAN: 0, GRANT: 0, PREVIEW: 0 } }),
+        expect.objectContaining({ feature: "CUSTOMER_HISTORY", canPreview: true, counts: { PLAN: 0, ADDON: 0, GRANT: 0, PREVIEW: 0 }, addon: null, canSell: true }),
       ]),
     });
 
@@ -843,5 +843,79 @@ describe("Features and Previews over HTTP", () => {
     const filtered = await api.get("/admin/businesses?feature=CUSTOMER_HISTORY&from=PREVIEW", admin.token);
     expect(filtered.body).toMatchObject({ total: 1, counts: { featureSources: { PREVIEW: 1 } } });
     expect((await api.post("/admin/catalogue/features/TELEPORT/preview", { endsOn: "2026-10-24" }, admin.token)).status).toBe(400);
+  });
+});
+
+describe("Add-ons over HTTP", () => {
+  it("sells one, and the owner adds and cancels it and sees what the next payment comes to", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const created = await api.post("/businesses", { ...A_BUSINESS, plan: "SOLO" }, owner.token);
+    const businessId = (created.body as { id: string }).id;
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+
+    const sold = await api.post("/admin/catalogue/features/CUSTOMER_HISTORY/addon", { priceMinor: 1900 }, admin.token);
+    expect(sold.status).toBe(200);
+    expect(sold.body).toMatchObject({
+      features: expect.arrayContaining([
+        expect.objectContaining({ feature: "CUSTOMER_HISTORY", addon: { priceMinor: 1900, since: "2026-08-25", rise: null }, canSell: false }),
+      ]),
+    });
+    expect((await api.post("/admin/catalogue/features/CUSTOMER_HISTORY/addon", { priceMinor: 1900 }, owner.token)).status).toBe(403);
+
+    // In the Trial it is included; kept, it is paid from the Trial's end.
+    const billing = await api.get(`/businesses/${businessId}/subscription`, owner.token);
+    expect(billing.body).toMatchObject({
+      addons: [{ feature: "CUSTOMER_HISTORY", priceMinor: 1900, inTrialUntil: "2026-09-23", ifAdded: { paysFrom: "2026-09-24", owed: null } }],
+      nextPayment: { on: "2026-09-24", totalMinor: 4900, lines: [{ kind: "PLAN", plan: "SOLO", amountMinor: 4900 }] },
+      moveUpOwed: [],
+      features: expect.arrayContaining([{ feature: "CUSTOMER_HISTORY", source: "ADDON", endsOn: "2026-09-23", grant: null }]),
+    });
+
+    const added = await api.post(`/businesses/${businessId}/addons/CUSTOMER_HISTORY`, undefined, owner.token);
+    expect(added.status).toBe(200);
+    expect(added.body).toMatchObject({
+      addons: [{ holding: { paysFrom: "2026-09-24", priceMinor: 1900, ending: null } }],
+      nextPayment: { totalMinor: 6800 },
+    });
+    const cancelled = await api.delete(`/businesses/${businessId}/addons/CUSTOMER_HISTORY`, owner.token);
+    expect(cancelled.body).toMatchObject({ addons: [{ holding: { endsOn: "2026-09-23", ending: "CANCELLED" } }], nextPayment: { totalMinor: 4900 } });
+
+    // An administrator, for the owner.
+    const again = await api.post(`/admin/businesses/${businessId}/addons/CUSTOMER_HISTORY`, undefined, admin.token);
+    expect(again.body).toMatchObject({ addons: [{ holding: { ending: null } }] });
+    expect((await api.post(`/businesses/${businessId}/addons/TELEPORT`, undefined, owner.token)).status).toBe(400);
+  });
+
+  it("reprices one, withdraws a rise, stops it, and places a Feature from its own card", async () => {
+    const api = httpHarness();
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+    await api.post("/admin/catalogue/features/CUSTOMER_HISTORY/addon", { priceMinor: 1900 }, admin.token);
+
+    const lower = await api.patch("/admin/catalogue/features/CUSTOMER_HISTORY/addon", { priceMinor: 1500 }, admin.token);
+    expect(lower.body).toMatchObject({ features: expect.arrayContaining([expect.objectContaining({ addon: expect.objectContaining({ priceMinor: 1500 }) })]) });
+    // Nobody holds it, so a rise has nobody to wait for, and nothing to withdraw.
+    await api.patch("/admin/catalogue/features/CUSTOMER_HISTORY/addon", { priceMinor: 2400 }, admin.token);
+    expect((await api.post("/admin/catalogue/features/CUSTOMER_HISTORY/addon/rise/cancel", undefined, admin.token)).status).toBe(409);
+
+    const stopped = await api.post("/admin/catalogue/features/CUSTOMER_HISTORY/addon/stop", undefined, admin.token);
+    expect(stopped.body).toMatchObject({
+      features: expect.arrayContaining([expect.objectContaining({ feature: "CUSTOMER_HISTORY", addon: null, canSell: true })]),
+    });
+
+    const placed = await api.put("/admin/catalogue/features/CUSTOMER_HISTORY/plans", { plans: ["SOLO", "TEAM"] }, admin.token);
+    expect(placed.status).toBe(200);
+    expect(placed.body).toMatchObject({
+      features: expect.arrayContaining([
+        expect.objectContaining({
+          feature: "CUSTOMER_HISTORY",
+          plans: [
+            { plan: "SOLO", number: 1, included: true },
+            { plan: "TEAM", number: 1, included: true },
+          ],
+        }),
+      ]),
+    });
+    expect((await api.put("/admin/catalogue/features/CUSTOMER_HISTORY/plans", { plans: ["GOLD"] }, admin.token)).status).toBe(400);
   });
 });

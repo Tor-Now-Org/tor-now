@@ -23,9 +23,11 @@ import {
   type FeatureSource,
   type GrantTerm,
   type Preview,
+  type DaysOwed,
 } from "@tor-now/domain";
 import type { MyWaiting } from "../application/waiting-service.ts";
 import type { PlatformStats } from "../application/admin-service.ts";
+import type { PaymentBoard } from "../application/addon-service.ts";
 import type { SubscriptionView } from "../application/billing.ts";
 import type { NoticeBoard } from "../application/notice-service.ts";
 import type { PlanView } from "../application/plan-catalogue.ts";
@@ -482,9 +484,73 @@ export const featureViewsOut = (views: readonly FeatureView[]) => ({
             keepOn: view.preview.placement?.keepOn ?? null,
             decidedAt: view.preview.decidedAt === null ? null : formatInstant(view.preview.decidedAt),
           },
+    addon:
+      view.addon === null
+        ? null
+        : {
+            priceMinor: view.addon.price,
+            since: view.addon.since,
+            rise:
+              view.addon.rise === null
+                ? null
+                : {
+                    fromMinor: view.addon.rise.from,
+                    announcedOn: view.addon.rise.announcedOn,
+                    firstOn: view.addon.rise.firstOn,
+                    lastOn: view.addon.rise.lastOn,
+                  },
+          },
     counts: view.counts,
     canPreview: view.canPreview,
+    canSell: view.canSell,
   })),
+});
+
+const daysChargeOut = (owed: DaysOwed) => ({ amountMinor: owed.amount, from: owed.from, through: owed.through });
+
+/** What a Business pays: its Add-ons, its next payment line by line, and what moving up would owe. */
+export const paymentBoardOut = (board: PaymentBoard) => ({
+  addons: board.addons.map((addon) => ({
+    feature: addon.feature,
+    priceMinor: addon.price,
+    onSale: addon.onSale,
+    holding:
+      addon.holding === null
+        ? null
+        : {
+            addedOn: addon.holding.addedOn,
+            paysFrom: addon.holding.paysFrom,
+            priceMinor: addon.holding.price,
+            nextPrice:
+              addon.holding.nextPrice === null
+                ? null
+                : { priceMinor: addon.holding.nextPrice.price, effectiveOn: addon.holding.nextPrice.effectiveOn },
+            endsOn: addon.holding.endsOn,
+            ending: addon.holding.ending,
+          },
+    hadBefore: addon.hadBefore,
+    inTrialUntil: addon.inTrialUntil,
+    ifAdded:
+      addon.ifAdded === null
+        ? null
+        : { paysFrom: addon.ifAdded.paysFrom, owed: addon.ifAdded.owed === null ? null : daysChargeOut(addon.ifAdded.owed) },
+  })),
+  nextPayment: {
+    on: board.nextPayment.on,
+    totalMinor: board.nextPayment.total,
+    lines: board.nextPayment.lines.map((line) =>
+      line.kind === "PLAN"
+        ? { kind: line.kind, plan: line.plan, amountMinor: line.amount }
+        : line.kind === "ADDON"
+          ? { kind: line.kind, feature: line.feature, amountMinor: line.amount }
+          : {
+              kind: line.kind,
+              owed: { kind: line.owed.kind, subject: line.owed.subject, ...daysChargeOut(line.owed) },
+              amountMinor: line.owed.amount,
+            },
+    ),
+  },
+  moveUpOwed: board.moveUpOwed.map(({ plan, owed }) => ({ plan, ...daysChargeOut(owed) })),
 });
 
 /** A Unit Rate as the Catalogue tab shows it. */
@@ -502,6 +568,7 @@ export const billingOut = (
   result: SubscriptionView & {
     payments: readonly Payment[];
     features?: readonly FeatureSource<GrantTerm | GrantEntry>[];
+    board?: PaymentBoard;
   },
 ) => ({
   subscription: subscriptionOut(result),
@@ -511,6 +578,7 @@ export const billingOut = (
   nextDate: result.standing.nextDate,
   flags: result.standing.flags,
   ...(result.features === undefined ? {} : { features: result.features.map(featureOut) }),
+  ...(result.board === undefined ? {} : paymentBoardOut(result.board)),
 });
 
 /**

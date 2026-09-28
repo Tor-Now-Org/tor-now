@@ -45,6 +45,8 @@ describe("what goes to WhatsApp", () => {
       "EDITION_ANNOUNCED",
       "EDITION_CANCELLED",
       "PREVIEW_LEAVING",
+      "ADDON_PRICE_RISING",
+      "ADDON_RISE_CANCELLED",
     ]);
   });
 
@@ -64,6 +66,8 @@ describe("how each kind is drawn", () => {
       "MOVE_SCHEDULED",
       "GRANT_EXTENDED",
       "PREVIEW_EXTENDED",
+      "ADDON_ADDED",
+      "ADDON_CANCELLED",
     ]);
   });
 
@@ -151,6 +155,7 @@ describe("noticesDue", () => {
     currentPlan: "TEAM" as const,
     grants: [],
     previewsLeaving: [],
+    addonRises: [],
     businessActive: true,
     today,
     ...overrides,
@@ -239,6 +244,19 @@ describe("noticesDue", () => {
     expect(leaving("2026-10-26")).toEqual([{ kind: "PREVIEW_ENDING", feature: "WAITING_LIST", endsOn: "2026-10-26" }]);
   });
 
+  it("reminds a week before an Add-on's new price reaches the Business, not on its own day", () => {
+    const rising = (effectiveOn: string) =>
+      noticesDue(input({ addonRises: [{ feature: "CUSTOMER_HISTORY", priceTo: 2400, effectiveOn: day(effectiveOn) }] }));
+    expect(rising("2026-10-27")).toEqual([]);
+    expect(rising("2026-10-26")).toEqual([
+      { kind: "ADDON_PRICE_SOON", feature: "CUSTOMER_HISTORY", priceTo: 2400, effectiveOn: "2026-10-26" },
+    ]);
+    expect(rising("2026-10-19")).toEqual([]);
+    expect(noticeKey({ kind: "ADDON_PRICE_SOON", feature: "CUSTOMER_HISTORY", priceTo: 2400, effectiveOn: day("2026-10-26") })).toBe(
+      "ADDON_PRICE_SOON:CUSTOMER_HISTORY:2026-10-26",
+    );
+  });
+
   it("says nothing to a Business that is switched off", () => {
     expect(
       noticesDue(
@@ -294,8 +312,16 @@ describe("parseNoticeFacts", () => {
     { kind: "PREVIEW_STARTED", feature: "CUSTOMER_HISTORY", endsOn: day("2026-12-26") },
     { kind: "PREVIEW_EXTENDED", feature: "CUSTOMER_HISTORY", endsOn: day("2027-01-26") },
     { kind: "PREVIEW_KEPT", feature: "WAITING_LIST", plan: "TEAM" },
-    { kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: day("2026-11-25") },
+    { kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: day("2026-11-25"), addonPriceMinor: 1500 },
     { kind: "PREVIEW_ENDING", feature: "WAITING_LIST", endsOn: day("2026-11-25") },
+    { kind: "ADDON_OFFERED", feature: "CUSTOMER_HISTORY", priceMinor: 1900 },
+    { kind: "ADDON_ADDED", feature: "CUSTOMER_HISTORY", by: "OWNER", priceMinor: 1900, paysFrom: day("2026-11-27"), owedMinor: 950 },
+    { kind: "ADDON_CANCELLED", feature: "CUSTOMER_HISTORY", by: "ADMINISTRATOR", endsOn: day("2026-11-26") },
+    { kind: "ADDON_PRICE_RISING", feature: "CUSTOMER_HISTORY", priceFrom: 1900, priceTo: 2400, effectiveOn: day("2026-11-27") },
+    { kind: "ADDON_PRICE_SOON", feature: "CUSTOMER_HISTORY", priceTo: 2400, effectiveOn: day("2026-11-27") },
+    { kind: "ADDON_RISE_CANCELLED", feature: "CUSTOMER_HISTORY", priceMinor: 1900 },
+    { kind: "ADDON_PRICE_LOWERED", feature: "CUSTOMER_HISTORY", priceFrom: 1900, priceTo: 1500 },
+    { kind: "ADDON_INCLUDED", feature: "CUSTOMER_HISTORY", plan: "SOLO" },
   ];
 
   it("reads back every kind exactly as it was written", () => {
@@ -303,6 +329,12 @@ describe("parseNoticeFacts", () => {
     for (const facts of every) {
       expect(parseNoticeFacts(JSON.parse(JSON.stringify(facts)))).toEqual(facts);
     }
+  });
+
+  it("reads a Preview leaving told before Add-ons as offering none", () => {
+    expect(
+      parseNoticeFacts({ kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: "2026-11-25" }),
+    ).toEqual({ kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: "2026-11-25", addonPriceMinor: null });
   });
 
   it("refuses what it cannot read, saying what is wrong", () => {

@@ -11,6 +11,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { effectOf, priceMinorOf } from "@/lib/plan-edit.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { Button, Card, Critical, Field, Sheet, Warning } from "@/components/ui.tsx";
+import { EffectBox } from "@/components/effect-box.tsx";
 
 /**
  * Editing one Plan (ADR 0020, ADR 0021): its price, calendars and Features,
@@ -192,15 +193,3 @@ export const PlanEditSheet = ({
     </Sheet>
   );
 };
-
-/** What a change does, as the edit and cancel sheets say it: warm when it takes, calm when it gives. */
-export const EffectBox = ({ tone, title, lines }: { tone: "takes" | "gives"; title: string; lines: readonly string[] }) => (
-  <div className={`effect-box ${tone}`} role="status">
-    <strong>{title}</strong>
-    <ul>
-      {lines.map((line) => (
-        <li key={line}>{line}</li>
-      ))}
-    </ul>
-  </div>
-);

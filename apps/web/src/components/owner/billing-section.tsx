@@ -9,6 +9,10 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { Card, Critical, Note, Warning } from "@/components/ui.tsx";
 import { NextDate, PlanBadge, StatusBadge } from "@/components/billing-badges.tsx";
 import { IncludedFeatures } from "./included-features.tsx";
+import { AddonsSection } from "./addons-section.tsx";
+import { PaymentLines } from "@/components/payment-lines.tsx";
+import { api } from "@/lib/api/client.ts";
+import { paymentBoardOf } from "@/lib/next-payment.ts";
 import { localDateOf } from "./day-filter.ts";
 import { usePlans } from "@/lib/use-plans.ts";
 
@@ -37,6 +41,7 @@ export const BillingSection = ({
   const { subscription, status, nextDate } = billing;
   const plans = usePlans();
   const longDate = (localDate: string) => formatLocalDate(localDate, language, { day: "numeric", month: "long" });
+  const board = paymentBoardOf(billing);
 
   return (
     <>
@@ -59,13 +64,23 @@ export const BillingSection = ({
         <Row label={words.dateLabel[status]}>
           <NextDate status={status} date={nextDate} timeZone={timeZone} />
         </Row>
+        {board !== null && <PaymentLines payment={board.nextPayment} />}
       </Card>
 
       {billing.features !== undefined && (
         <IncludedFeatures
           features={billing.features}
+          addons={board?.addons ?? []}
           plans={plans}
           today={localDateOf(new Date().toISOString(), timeZone)}
+        />
+      )}
+
+      {board !== null && (
+        <AddonsSection
+          board={board}
+          onAdd={async (feature) => onChanged(await api.addMyAddon(token, subscription.businessId, feature))}
+          onCancel={async (feature) => onChanged(await api.cancelMyAddon(token, subscription.businessId, feature))}
         />
       )}
 

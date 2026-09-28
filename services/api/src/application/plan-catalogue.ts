@@ -17,12 +17,14 @@ import {
   type Feature,
   type LocalDate,
   type Plan,
+  type PlanTerms,
   type PlanVersionId,
   type Preview,
   type Subscription,
 } from "@tor-now/domain";
 import type { DirectoryEntry, PlanEdition, Repositories } from "../ports/repositories.ts";
 import type { Actor, Session, UnitOfWork } from "../ports/unit-of-work.ts";
+import { endIncludedAddons, stopSaleOnceEveryPlanHas } from "./addons.ts";
 import { resumeWithinAllowance } from "./allowance.ts";
 import { requireAdministrator } from "./authorization.ts";
 import { entitlementOf } from "./billing.ts";
@@ -153,7 +155,12 @@ const viewOf = (catalogue: Catalogue, plan: Plan, today: LocalDate, todayOf: (en
 
 export type PlanChangeInput = { readonly priceMinor: number; readonly resourceAllowance: number; readonly features: readonly Feature[] };
 
-export const planCatalogueService = ({ unitOfWork, clock }: { unitOfWork: UnitOfWork; clock: Clock }) => {
+/**
+ * Changing a Plan's terms, by the one rule whichever screen asks: the Plan's
+ * own editor, or a Feature's "which plans" (ADR 0021). Classified here, not by
+ * the caller — what the screen said it would do is what the rules decide.
+ */
+export const planChanger = (clock: Clock) => {
   const today = () => todayIn(clock.now(), PLATFORM_ZONE);
   const todayOf = (entry: DirectoryEntry) => todayIn(clock.now(), entry.business.timeZone);
   const views = (catalogue: Catalogue) =>
@@ -174,6 +181,15 @@ export const planCatalogueService = ({ unitOfWork, clock }: { unitOfWork: UnitOf
       if (change.allowance !== null) {
         await resumeWithinAllowance(repositories, businessId, await entitlementOf(repositories, businessId, todayOf(entry)), clock.now());
       }
+      // What was an Add-on is the Plan's now: it stops costing anything extra.
+      await endIncludedAddons(repositories, {
+        businessId,
+        plan,
+        features: change.featuresAdded,
+        asOwner: false,
+        today: todayOf(entry),
+        at: clock.now(),
+      });
       await tell(repositories, {
         businessId,
         facts: {
@@ -188,6 +204,7 @@ export const planCatalogueService = ({ unitOfWork, clock }: { unitOfWork: UnitOf
         at: clock.now(),
       });
     }
+    for (const feature of change.featuresAdded) await stopSaleOnceEveryPlanHas(repositories, feature, today());
   };
 
   /** What a change that takes does: a new edition, and every existing Business told when it moves. */
@@ -226,6 +243,31 @@ export const planCatalogueService = ({ unitOfWork, clock }: { unitOfWork: UnitOf
     }
   };
 
+  /** A Plan's new terms, applied: onto every edition when they only give, as a new edition when they take. */
+  const apply = async (session: Session, plan: Plan, terms: PlanTerms): Promise<"GIVES" | "TAKES"> => {
+    const catalogue = await read(session.repositories);
+    const inPreview = catalogue.previews
+      .filter((preview) => compareLocalDate(today(), preview.endsOn) <= 0)
+      .map((preview) => preview.feature)
+      .filter((feature) => terms.features.includes(feature));
+    if (inPreview.length > 0) {
+      throw validationFailed("A Feature in Preview is placed when the Preview ends", { features: inPreview });
+    }
+    const current = standing(catalogue.editions, plan)[0];
+    if (current === undefined) throw notFound("PlanVersion", plan);
+    const { kind, change } = classifyChange(current.terms, terms);
+    if (kind === "NONE") throw validationFailed("Nothing about the plan changed");
+    if (kind === "GIVES") await give(session, catalogue, plan, change);
+    else await take(session, catalogue, plan, terms);
+    return kind;
+  };
+
+  return { apply, views, today, todayOf };
+};
+
+export const planCatalogueService = ({ unitOfWork, clock }: { unitOfWork: UnitOfWork; clock: Clock }) => {
+  const { apply, views, today, todayOf } = planChanger(clock);
+
   return {
     async plans(actor: Actor) {
       requireAdministrator(actor);
@@ -235,29 +277,14 @@ export const planCatalogueService = ({ unitOfWork, clock }: { unitOfWork: UnitOf
       });
     },
 
-    /**
-     * A Plan's new price, calendars and Features. Classified here, not by the
-     * caller: what the screen said it would do is what the rules decide.
-     */
+    /** A Plan's new price, calendars and Features. */
     async changePlan(actor: Actor, plan: Plan, input: PlanChangeInput) {
       requireAdministrator(actor);
       const terms = planTerms({ features: input.features, resourceAllowance: input.resourceAllowance, price: money(input.priceMinor) });
       return unitOfWork.run(actor, async (session) => {
+        const kind = await apply(session, plan, terms);
         const catalogue = await read(session.repositories);
-        const inPreview = catalogue.previews
-          .filter((preview) => compareLocalDate(today(), preview.endsOn) <= 0)
-          .map((preview) => preview.feature)
-          .filter((feature) => terms.features.includes(feature));
-        if (inPreview.length > 0) {
-          throw validationFailed("A Feature in Preview is placed when the Preview ends", { features: inPreview });
-        }
-        const current = standing(catalogue.editions, plan)[0];
-        if (current === undefined) throw notFound("PlanVersion", plan);
-        const { kind, change } = classifyChange(current.terms, terms);
-        if (kind === "NONE") throw validationFailed("Nothing about the plan changed");
-        if (kind === "GIVES") await give(session, catalogue, plan, change);
-        else await take(session, catalogue, plan, terms);
-        return { kind, plans: views(await read(session.repositories)), previews: catalogue.previews };
+        return { kind, plans: views(catalogue), previews: catalogue.previews };
       });
     },
 

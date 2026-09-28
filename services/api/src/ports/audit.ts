@@ -90,6 +90,15 @@ export const AUDIT_ACTIONS = {
   previewStarted: "PREVIEW_STARTED",
   previewEndMoved: "PREVIEW_END_MOVED",
   previewPlaced: "PREVIEW_PLACED",
+  /** ADR 0021: an Add-on's sale opened, repriced, its rise withdrawn, or stopped. */
+  addonOfferChanged: "ADDON_OFFER_CHANGED",
+  /** ADR 0021: an Add-on added, ended — cancelled, or included by the Plan — resumed, or repriced for its holder. */
+  addonAdded: "ADDON_ADDED",
+  addonEnded: "ADDON_ENDED",
+  addonResumed: "ADDON_RESUMED",
+  addonPricesSet: "ADDON_PRICES_SET",
+  /** Days owed beyond a monthly price: an Add-on added back, a Plan moved up to again. */
+  daysOwedAdded: "DAYS_OWED_ADDED",
   /**
    * ADR 0006: administrator reads of a customer record are audited as well as
    * writes. An unlogged read on the service_role path would be undetectable,

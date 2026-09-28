@@ -40,6 +40,14 @@ const ICON_OF: Readonly<Record<NoticeKind, keyof typeof ICONS>> = {
   PREVIEW_KEPT: "check",
   PREVIEW_LEAVING: "clock",
   PREVIEW_ENDING: "clock",
+  ADDON_OFFERED: "coin",
+  ADDON_ADDED: "coin",
+  ADDON_CANCELLED: "coin",
+  ADDON_PRICE_RISING: "clock",
+  ADDON_PRICE_SOON: "clock",
+  ADDON_RISE_CANCELLED: "check",
+  ADDON_PRICE_LOWERED: "coin",
+  ADDON_INCLUDED: "check",
 };
 
 /** A banner has no green: good news reads in the calm blue, and only warnings are warm. */
