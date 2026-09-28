@@ -1,4 +1,4 @@
-import type { BillingFlag, BillingStatus, DirectoryFilter, PlanName } from "@/lib/api/types.ts";
+import type { BillingFlag, BillingStatus, DirectoryFilter, FeatureFrom, FeatureName, PlanName } from "@/lib/api/types.ts";
 
 /**
  * The directory's filter as the interface edits it. Pure, so the rules — a
@@ -30,9 +30,34 @@ export const chooseEdition = (filter: DirectoryFilter, edition: string | null): 
   edition: filter.edition === edition ? null : edition,
 });
 
+export const FEATURE_FROM: readonly FeatureFrom[] = ["ANY", "PLAN", "GRANT", "PREVIEW"];
+
+/** The words each source is said in, in the catalogue dictionary. */
+export const FROM_KEY: Readonly<Record<FeatureFrom, "fromAny" | "fromPlan" | "fromGrant" | "fromPreview">> = {
+  ANY: "fromAny",
+  PLAN: "fromPlan",
+  GRANT: "fromGrant",
+  PREVIEW: "fromPreview",
+};
+
+/** A Feature to have, from anywhere at first; choosing it again clears it. */
+export const chooseFeature = (filter: DirectoryFilter, feature: FeatureName): DirectoryFilter =>
+  filter.feature === feature
+    ? { ...filter, feature: null, featureSource: "ANY" }
+    : { ...filter, feature, featureSource: "ANY" };
+
+export const chooseFeatureSource = (filter: DirectoryFilter, featureSource: FeatureFrom): DirectoryFilter => ({
+  ...filter,
+  featureSource,
+});
+
 /** Every choice made in the panel; the search is the field's, not the panel's. */
 export const choicesMade = (filter: DirectoryFilter): number =>
-  filter.statuses.length + (filter.plan === null ? 0 : 1) + (filter.edition === null ? 0 : 1) + filter.flags.length;
+  filter.statuses.length +
+  (filter.plan === null ? 0 : 1) +
+  (filter.edition === null ? 0 : 1) +
+  filter.flags.length +
+  (filter.feature === null ? 0 : 1);
 
 /** Clears the panel's choices and keeps whatever was typed in the search. */
 export const resetChoices = (filter: DirectoryFilter): DirectoryFilter => ({
@@ -41,6 +66,8 @@ export const resetChoices = (filter: DirectoryFilter): DirectoryFilter => ({
   plan: null,
   edition: null,
   flags: [],
+  feature: null,
+  featureSource: "ANY",
 });
 
 /** One removable token per choice, in the order the panel lists them. */
@@ -48,13 +75,15 @@ export type Token =
   | { readonly kind: "status"; readonly value: BillingStatus }
   | { readonly kind: "plan"; readonly value: PlanName }
   | { readonly kind: "edition"; readonly value: string }
-  | { readonly kind: "flag"; readonly value: BillingFlag };
+  | { readonly kind: "flag"; readonly value: BillingFlag }
+  | { readonly kind: "feature"; readonly value: FeatureName; readonly from: FeatureFrom };
 
 export const tokensOf = (filter: DirectoryFilter): Token[] => [
   ...filter.statuses.map((value) => ({ kind: "status" as const, value })),
   ...(filter.plan === null ? [] : [{ kind: "plan" as const, value: filter.plan }]),
   ...(filter.edition === null ? [] : [{ kind: "edition" as const, value: filter.edition }]),
   ...filter.flags.map((value) => ({ kind: "flag" as const, value })),
+  ...(filter.feature === null ? [] : [{ kind: "feature" as const, value: filter.feature, from: filter.featureSource }]),
 ];
 
 export const withoutToken = (filter: DirectoryFilter, token: Token): DirectoryFilter => {
@@ -67,5 +96,7 @@ export const withoutToken = (filter: DirectoryFilter, token: Token): DirectoryFi
       return chooseEdition(filter, token.value);
     case "flag":
       return toggleFlag(filter, token.value);
+    case "feature":
+      return { ...filter, feature: null, featureSource: "ANY" };
   }
 };

@@ -254,7 +254,7 @@ export const toSubscription = (row: Row): Subscription => {
   };
 };
 
-const toPlan = (value: unknown): Plan => {
+export const toPlan = (value: unknown): Plan => {
   const plan = text(value);
   if (!(PLANS as readonly string[]).includes(plan)) {
     throw new Error(`Unknown plan in the database: ${plan}`);

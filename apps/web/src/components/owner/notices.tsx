@@ -35,6 +35,11 @@ const ICON_OF: Readonly<Record<NoticeKind, keyof typeof ICONS>> = {
   EDITION_APPLIED: "swap",
   EDITION_CANCELLED: "check",
   PLAN_IMPROVED: "spark",
+  PREVIEW_STARTED: "spark",
+  PREVIEW_EXTENDED: "spark",
+  PREVIEW_KEPT: "check",
+  PREVIEW_LEAVING: "clock",
+  PREVIEW_ENDING: "clock",
 };
 
 /** A banner has no green: good news reads in the calm blue, and only warnings are warm. */

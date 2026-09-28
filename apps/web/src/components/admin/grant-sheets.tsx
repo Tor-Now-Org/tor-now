@@ -6,80 +6,20 @@ import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type { FeatureName, FeatureSourceDto } from "@/lib/api/types.ts";
 import { formatLocalDate } from "@/lib/format.ts";
-import { daysLeft, endsAfter, GRANT_LENGTHS, isGrantEnd } from "@/lib/grant-length.ts";
+import { daysLeft, isGrantEnd } from "@/lib/grant-length.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { Button, Card, Chip, Critical, Field, Sheet } from "@/components/ui.tsx";
+import { Button, Card, Critical, Field, Sheet } from "@/components/ui.tsx";
+import { lastDayOf, LengthPicker, type Length } from "./length-picker.tsx";
 
 /**
  * Giving a Business Features, and carrying one on (ADR 0021). Both ask the
  * same two things — until when, and why — so they share the length picker.
  */
 
-type Length = { readonly kind: "days"; readonly days: number } | { readonly kind: "date"; readonly date: string };
-
-/** The last day a length gives, counted from `from`. */
-const lastDayOf = (length: Length, from: string): string =>
-  length.kind === "days" ? endsAfter(from, length.days) : length.date;
-
-const LengthPicker = ({
-  id,
-  label,
-  length,
-  from,
-  onChange,
-  hint,
-}: {
-  id: string;
-  label: string;
-  length: Length;
-  /** The day lengths count from: today for a new Grant, its end for an extension. */
-  from: string;
-  onChange: (length: Length) => void;
-  hint: string;
-}) => {
-  const words = useCopy("catalogue");
-  return (
-    <>
-      <span className="label">{label}</span>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} role="group" aria-label={label}>
-        {GRANT_LENGTHS.map((days) => (
-          <Chip
-            key={days}
-            selected={length.kind === "days" && length.days === days}
-            onClick={() => onChange({ kind: "days", days })}
-            style={{ minHeight: 38, padding: "0 13px", fontSize: 13 }}
-          >
-            {fillText(words.days, { n: String(days) })}
-          </Chip>
-        ))}
-        <Chip
-          selected={length.kind === "date"}
-          onClick={() => onChange({ kind: "date", date: lastDayOf(length, from) })}
-          style={{ minHeight: 38, padding: "0 13px", fontSize: 13 }}
-        >
-          {words.otherDate}
-        </Chip>
-      </div>
-      {length.kind === "date" && (
-        <Field
-          id={id}
-          type="date"
-          label={words.endsOn}
-          value={length.date}
-          onChange={(event) => onChange({ kind: "date", date: event.target.value })}
-        />
-      )}
-      <span className="hint" style={{ marginTop: -6 }}>
-        {hint}
-      </span>
-    </>
-  );
-};
-
 /** Sends a change, and shows why it was refused rather than closing. */
-const useSubmit = () => {
+export const useSubmit = () => {
   const errorText = useErrorText();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

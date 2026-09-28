@@ -190,6 +190,24 @@ describe("noticeText — a Plan changing", () => {
   });
 });
 
+describe("noticeText — Previews", () => {
+  it("offers a new Feature to try, and says when it stays or leaves", () => {
+    expect(text({ kind: "PREVIEW_STARTED", feature: "CUSTOMER_HISTORY", endsOn: day("2026-12-26") })).toEqual({
+      title: "Customer history — new to try",
+      body: "In Preview until 26 December, at no extra cost.",
+      action: "INCLUDED",
+    });
+    expect(text({ kind: "PREVIEW_KEPT", feature: "WAITING_LIST", plan: "TEAM" }, "he").title).toBe("רשימת המתנה נשאר אצלכם");
+    expect(text({ kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: day("2026-11-25") })).toMatchObject({
+      title: "Waiting list leaves Solo on 25 November",
+      action: "PLANS",
+    });
+    expect(text({ kind: "PREVIEW_ENDING", feature: "WAITING_LIST", endsOn: day("2026-10-26") }).title).toBe(
+      "Waiting list ends in 7 days",
+    );
+  });
+});
+
 describe("noticeDay", () => {
   const at = (createdAt: string, today = "2026-10-19") =>
     noticeDay({ createdAt }, { ...context("en", today), timeZone: "Asia/Jerusalem" });

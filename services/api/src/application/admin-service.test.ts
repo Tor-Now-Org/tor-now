@@ -69,6 +69,8 @@ describe("administrator scope", () => {
       plan: "TEAM",
       edition: null,
       flags: [],
+      feature: null,
+      featureSource: "ANY",
     });
     expect(teams.rows.map((row) => row.business.name)).toEqual(["מספרת רן"]);
     expect(teams.counts.plans).toEqual({ SOLO: 1, TEAM: 1 });
@@ -79,6 +81,8 @@ describe("administrator scope", () => {
       plan: null,
       edition: null,
       flags: [],
+      feature: null,
+      featureSource: "ANY",
     });
     expect(byOwner.rows.map((row) => row.business.name)).toEqual(["סטודיו נוי"]);
 

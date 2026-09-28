@@ -420,4 +420,63 @@ test.describe("the Catalogue", () => {
 
     await expect(page.locator(".dir-token", { hasText: /צוות v1/ })).toBeVisible({ timeout: 15_000 });
   });
+
+  test("the Features tab says where each Feature is and who has it, and a count opens those Businesses", async ({ page }) => {
+    const admin = await anAdministrator();
+    await aBusinessWithOpenHours({ name: `פיצרים ${Date.now()}`, ownerPhone: uniquePhone(), plan: "SOLO" });
+    await asAdministrator(page, admin.token);
+    await page.getByRole("button", { name: "מחירון" }).click();
+    await page.getByRole("tab", { name: "פיצ'רים" }).click();
+
+    const waiting = page.locator(".feature-card", { hasText: "רשימת המתנה" });
+    await expect(waiting.getByText(/תצוגה מוקדמת בכל המסלולים/)).toBeVisible({ timeout: 15_000 });
+    await expect(waiting.getByText(/צריך להחליט עד/)).toBeVisible();
+
+    // Starting a Preview says what it gives before anything is saved.
+    const history = page.locator(".feature-card", { hasText: "היסטוריית לקוח" });
+    await history.getByRole("button", { name: "תצוגה מוקדמת" }).click();
+    const start = page.getByRole("dialog", { name: /תצוגה מוקדמת — היסטוריית לקוח/ });
+    await expect(start.getByText(/יחיד: מקבלים היסטוריית לקוח/)).toBeVisible();
+    await expect(start.getByText(/צוות: כבר כלול/)).toBeVisible();
+    await expect(start.getByRole("button", { name: "התחלת התצוגה המוקדמת" })).toBeEnabled();
+    await page.keyboard.press("Escape");
+    await expect(start).toBeHidden();
+
+    // Deciding where a Preview's Feature goes says what each Plan gains or loses.
+    await waiting.getByRole("button", { name: "מה קורה בסוף התצוגה" }).click();
+    const place = page.getByRole("dialog", { name: /מה קורה לרשימת המתנה/ });
+    await place.getByRole("group", { name: "צוות" }).getByRole("button", { name: "נשאר במסלול" }).click();
+    await expect(place.getByText(/צוות — נותן ערך/)).toBeVisible();
+    await expect(place.getByText(/יחיד — לוקח ערך/)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(place).toBeHidden();
+
+    await waiting.getByRole("button", { name: /בתצוגה מוקדמת/ }).click();
+    await expect(page.locator(".dir-token", { hasText: /רשימת המתנה · תצוגה/ })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("the Businesses list filters by a Feature and where it comes from", async ({ page }) => {
+    const admin = await anAdministrator();
+    const name = `הענקה ${Date.now()}`;
+    const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone(), plan: "SOLO" });
+    const endsOn = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+    await call(`/admin/businesses/${shop.business.id}/grants`, {
+      method: "POST",
+      token: admin.token,
+      body: { features: ["TEAM_ROLES"], endsOn, reason: "פיילוט" },
+    });
+
+    await asAdministrator(page, admin.token);
+    await findInDirectory(page, name);
+    await expect(inDirectory(page, name).getByText("+1 בהענקה")).toBeVisible();
+
+    await page.locator(".filters-btn").click();
+    const panel = page.locator(".filters-panel");
+    await panel.getByRole("button", { name: /מנהלים ועובדים/ }).click();
+    await panel.getByRole("group", { name: "מנהלים ועובדים" }).getByRole("button", { name: /בהענקה/ }).click();
+    await panel.getByRole("button", { name: /^הצג/ }).click();
+
+    await expect(page.locator(".dir-token", { hasText: /מנהלים ועובדים · בהענקה/ })).toBeVisible();
+    await expect(inDirectory(page, name)).toBeVisible();
+  });
 });

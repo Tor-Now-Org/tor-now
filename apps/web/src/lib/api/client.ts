@@ -20,6 +20,7 @@ import type {
   PlanCatalogueDto,
   PlanChangeKind,
   FeatureSourceDto,
+  FeatureViewDto,
   NoticeBoardDto,
   UnitRateDto,
   DirectoryFilter,
@@ -822,6 +823,7 @@ export const api = {
         ...(filter.plan === null ? {} : { plan: filter.plan }),
         ...(filter.edition === null ? {} : { edition: filter.edition }),
         ...(filter.flags.length === 0 ? {} : { flag: filter.flags.join(",") }),
+        ...(filter.feature === null ? {} : { feature: filter.feature, from: filter.featureSource }),
       },
     }),
 
@@ -866,6 +868,30 @@ export const api = {
   acknowledgeNotice: (token: string, businessId: string, noticeId: string) =>
     request<NoticeBoardDto>(`/businesses/${businessId}/notices/${noticeId}/acknowledge`, {
       method: "POST",
+      token,
+    }),
+
+  adminFeatures: (token: string) => request<{ features: FeatureViewDto[] }>("/admin/catalogue/features", { token }),
+
+  adminStartPreview: (token: string, feature: FeatureName, endsOn: string) =>
+    request<{ features: FeatureViewDto[] }>(`/admin/catalogue/features/${feature}/preview`, {
+      method: "POST",
+      body: { endsOn },
+      token,
+    }),
+
+  adminExtendPreview: (token: string, feature: FeatureName, endsOn: string) =>
+    request<{ features: FeatureViewDto[] }>(`/admin/catalogue/features/${feature}/preview`, {
+      method: "PATCH",
+      body: { endsOn },
+      token,
+    }),
+
+  /** Which Plans keep a Preview's Feature when it ends; decided once. */
+  adminPlacePreview: (token: string, feature: FeatureName, keepOn: PlanName[]) =>
+    request<{ features: FeatureViewDto[] }>(`/admin/catalogue/features/${feature}/preview/placement`, {
+      method: "POST",
+      body: { keepOn },
       token,
     }),
 

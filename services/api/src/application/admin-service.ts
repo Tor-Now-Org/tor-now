@@ -36,6 +36,7 @@ import { keepOnly, overAllowance } from "./allowance.ts";
 import { applyDueMoves, movePlan } from "./plan-move.ts";
 import { announce } from "./notices.ts";
 import { featuresWithGrants } from "./catalogue-admin.ts";
+import { sourcesByBusiness } from "./feature-sources.ts";
 import { announceDue } from "./notice-run.ts";
 import {
   directoryRow,
@@ -98,10 +99,16 @@ export const adminService = (dependencies: {
       repositories.planVersions.listAll(),
     ]);
     const byId = new Map(versions.map((version) => [version.id, version]));
+    const sources = await sourcesByBusiness(repositories, entries, clock.now());
     return entries.map((entry) => {
       const version = byId.get(entry.subscription.planVersionId);
       if (version === undefined) throw notFound("PlanVersion", entry.subscription.planVersionId);
-      return directoryRow(entry, version, todayIn(clock.now(), entry.business.timeZone));
+      return directoryRow(
+        entry,
+        version,
+        todayIn(clock.now(), entry.business.timeZone),
+        sources.get(entry.business.id) ?? [],
+      );
     });
   };
 

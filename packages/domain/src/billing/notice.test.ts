@@ -44,6 +44,7 @@ describe("what goes to WhatsApp", () => {
       "PAYMENT_RECORDED",
       "EDITION_ANNOUNCED",
       "EDITION_CANCELLED",
+      "PREVIEW_LEAVING",
     ]);
   });
 
@@ -62,6 +63,7 @@ describe("how each kind is drawn", () => {
       "PLAN_CHANGED",
       "MOVE_SCHEDULED",
       "GRANT_EXTENDED",
+      "PREVIEW_EXTENDED",
     ]);
   });
 
@@ -148,6 +150,7 @@ describe("noticesDue", () => {
     pausing: [],
     currentPlan: "TEAM" as const,
     grants: [],
+    previewsLeaving: [],
     businessActive: true,
     today,
     ...overrides,
@@ -229,6 +232,13 @@ describe("noticesDue", () => {
     expect(noticeKey(due[1] as NoticeFacts)).toBe("GRANT_ENDING:2026-10-26:CUSTOMER_HISTORY,TEAM_ROLES");
   });
 
+  it("reminds a week before a Preview's Feature leaves the Plan held", () => {
+    const leaving = (endsOn: string) =>
+      noticesDue(input({ previewsLeaving: [{ feature: "WAITING_LIST", endsOn: day(endsOn) }] }));
+    expect(leaving("2026-10-27")).toEqual([]);
+    expect(leaving("2026-10-26")).toEqual([{ kind: "PREVIEW_ENDING", feature: "WAITING_LIST", endsOn: "2026-10-26" }]);
+  });
+
   it("says nothing to a Business that is switched off", () => {
     expect(
       noticesDue(
@@ -281,6 +291,11 @@ describe("parseNoticeFacts", () => {
     { kind: "EDITION_APPLIED", plan: "SOLO" },
     { kind: "EDITION_CANCELLED", plan: "SOLO" },
     { kind: "PLAN_IMPROVED", plan: "TEAM", priceFrom: 8900, priceTo: 8900, allowanceFrom: 5, allowanceTo: 8, gained: [] },
+    { kind: "PREVIEW_STARTED", feature: "CUSTOMER_HISTORY", endsOn: day("2026-12-26") },
+    { kind: "PREVIEW_EXTENDED", feature: "CUSTOMER_HISTORY", endsOn: day("2027-01-26") },
+    { kind: "PREVIEW_KEPT", feature: "WAITING_LIST", plan: "TEAM" },
+    { kind: "PREVIEW_LEAVING", feature: "WAITING_LIST", plan: "SOLO", endsOn: day("2026-11-25") },
+    { kind: "PREVIEW_ENDING", feature: "WAITING_LIST", endsOn: day("2026-11-25") },
   ];
 
   it("reads back every kind exactly as it was written", () => {

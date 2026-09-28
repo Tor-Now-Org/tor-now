@@ -459,6 +459,15 @@ export const grantIdSchema = uuidSchema;
 /** A Plan named in the address. */
 export const planParamSchema = z.enum(PLANS);
 
+/** A Feature named in the address. */
+export const featureParamSchema = z.enum(FEATURES);
+
+/** ADR 0020: a Preview's last day — starting one, or extending it. */
+export const previewEndSchema = z.object({ endsOn: localDateSchema });
+
+/** ADR 0020: which Plans keep a Preview's Feature when it ends. */
+export const previewPlacementSchema = z.object({ keepOn: z.array(z.enum(PLANS)).max(PLANS.length) });
+
 /** ADR 0021: a Plan's terms as the administrator edits them. The service decides what the change is. */
 export const planEditSchema = z.object({
   priceMinor: z.number().int().min(0).max(10_000_000),
@@ -520,6 +529,8 @@ export const directoryQuerySchema = z.object({
   plan: z.enum(PLANS).nullable().default(null),
   edition: uuidSchema.nullable().default(null),
   flag: commaList(BILLING_FLAGS),
+  feature: z.enum(FEATURES).nullable().default(null),
+  from: z.enum(["ANY", "PLAN", "GRANT", "PREVIEW"]).default("ANY"),
 });
 
 export const statsQuerySchema = z.object({

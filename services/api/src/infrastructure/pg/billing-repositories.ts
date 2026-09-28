@@ -16,6 +16,7 @@ import type {
   PaymentRepository,
   PlanEdition,
   PlanVersionRepository,
+  PreviewEntry,
   PreviewRepository,
   SubscriptionRepository,
   UnitRateEntry,
@@ -31,6 +32,7 @@ import {
   toPlanVersion,
   toPreview,
   toInstant,
+  toPlan,
   toSubscription,
   type Row,
 } from "./mappers.ts";
@@ -244,10 +246,54 @@ export const planVersionRepository = (tx: Transaction): PlanVersionRepository =>
   },
 });
 
+const toPreviewEntry = (row: Row): PreviewEntry => {
+  const keepOn = row["keep_on"];
+  return {
+    ...toPreview(row),
+    placement: keepOn === null || keepOn === undefined ? null : { keepOn: (keepOn as string[]).map(toPlan) },
+    decidedAt: row["decided_at"] === null ? null : toInstant(row["decided_at"]),
+  };
+};
+
 export const previewRepository = (tx: Transaction): PreviewRepository => ({
   async list() {
     const rows = await tx<Row[]>`select * from feature_preview order by feature`;
     return rows.map(toPreview);
+  },
+
+  async listEntries() {
+    const rows = await tx<Row[]>`select * from feature_preview order by feature`;
+    return rows.map(toPreviewEntry);
+  },
+
+  async start(feature, endsOn) {
+    const rows = await tx<Row[]>`
+      insert into feature_preview (feature, ends_on) values (${feature}, ${endsOn})
+      on conflict (feature) do update
+      set ends_on = excluded.ends_on, keep_on = null, decided_at = null, created_at = now()
+      returning *`;
+    const row = rows[0];
+    if (row === undefined) throw notFound("Preview", feature);
+    return toPreviewEntry(row);
+  },
+
+  async setEnd(feature, endsOn) {
+    const rows = await tx<Row[]>`
+      update feature_preview set ends_on = ${endsOn} where feature = ${feature} returning *`;
+    const row = rows[0];
+    if (row === undefined) throw notFound("Preview", feature);
+    return toPreviewEntry(row);
+  },
+
+  async place(feature, placement, at) {
+    const rows = await tx<Row[]>`
+      update feature_preview
+      set keep_on = ${[...placement.keepOn]}::text[], ends_on = ${placement.endsOn}, decided_at = ${new Date(at)}
+      where feature = ${feature}
+      returning *`;
+    const row = rows[0];
+    if (row === undefined) throw notFound("Preview", feature);
+    return toPreviewEntry(row);
   },
 });
 

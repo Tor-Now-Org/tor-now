@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { NO_DIRECTORY_FILTER, type DirectoryFilter } from "@/lib/api/types.ts";
 import {
   chooseEdition,
+  chooseFeature,
+  chooseFeatureSource,
   choicesMade,
   choosePlan,
   resetChoices,
@@ -17,6 +19,8 @@ const chosen: DirectoryFilter = {
   plan: "TEAM",
   edition: null,
   flags: ["TRIAL_ENDING"],
+  feature: null,
+  featureSource: "ANY",
 };
 
 describe("the directory filter", () => {
@@ -68,5 +72,20 @@ describe("the directory filter", () => {
     expect(tokensOf(once)).toEqual([{ kind: "edition", value: "solo-2" }]);
     expect(withoutToken(once, { kind: "edition", value: "solo-2" }).edition).toBeNull();
     expect(resetChoices(once).edition).toBeNull();
+  });
+
+  it("chooses a Feature from anywhere, narrows where from, and a second tap clears both", () => {
+    const once = chooseFeature(NO_DIRECTORY_FILTER, "CUSTOMER_HISTORY");
+    expect(once).toMatchObject({ feature: "CUSTOMER_HISTORY", featureSource: "ANY" });
+    const granted = chooseFeatureSource(once, "GRANT");
+    expect(granted.featureSource).toBe("GRANT");
+    expect(chooseFeature(granted, "CUSTOMER_HISTORY")).toMatchObject({ feature: null, featureSource: "ANY" });
+    expect(chooseFeature(granted, "TEAM_ROLES")).toMatchObject({ feature: "TEAM_ROLES", featureSource: "ANY" });
+    expect(choicesMade(granted)).toBe(1);
+    expect(tokensOf(granted)).toEqual([{ kind: "feature", value: "CUSTOMER_HISTORY", from: "GRANT" }]);
+    expect(withoutToken(granted, { kind: "feature", value: "CUSTOMER_HISTORY", from: "GRANT" })).toMatchObject({
+      feature: null,
+      featureSource: "ANY",
+    });
   });
 });

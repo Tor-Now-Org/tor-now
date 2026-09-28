@@ -49,6 +49,7 @@ export const httpHarness = () => {
       test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" }),
     applyDueMoves: () => test.services.admin.applyDueMoves({ kind: "SYSTEM" }),
     announceDueNotices: () => test.services.admin.announceDueNotices({ kind: "SYSTEM" }),
+    stretchUndecidedPreviews: () => test.services.featureCatalogue.stretchUndecidedPreviews({ kind: "SYSTEM" }),
   }));
 
   const call = async (

@@ -86,6 +86,10 @@ export const AUDIT_ACTIONS = {
   planEditionPublished: "PLAN_EDITION_PUBLISHED",
   planTermsImproved: "PLAN_TERMS_IMPROVED",
   planEditionWithdrawn: "PLAN_EDITION_WITHDRAWN",
+  /** ADR 0020: a Preview started, its end moved, or where its Feature goes decided. */
+  previewStarted: "PREVIEW_STARTED",
+  previewEndMoved: "PREVIEW_END_MOVED",
+  previewPlaced: "PREVIEW_PLACED",
   /**
    * ADR 0006: administrator reads of a customer record are audited as well as
    * writes. An unlogged read on the service_role path would be undetectable,

@@ -27,8 +27,10 @@ import type {
   PartOfDay,
   Payment,
   PhotoSlot,
+  Feature,
   Plan,
   PlanTerms,
+  PreviewPlacement,
   PlanVersion,
   PlanVersionId,
   CostSource,
@@ -746,8 +748,22 @@ export type PlanVersionRepository = {
   withdraw(id: PlanVersionId, at: Instant): Promise<void>;
 };
 
+/** A Preview as the Catalogue editor sees it: what was decided for when it ends. */
+export type PreviewEntry = Preview & {
+  readonly placement: PreviewPlacement;
+  readonly decidedAt: Instant | null;
+};
+
 export type PreviewRepository = {
   list(): Promise<readonly Preview[]>;
+  /** Every Preview, ended ones included, with what was decided for each. */
+  listEntries(): Promise<readonly PreviewEntry[]>;
+  /** A Feature into Preview until a day — replacing an ended Preview of it, undecided again. */
+  start(feature: Feature, endsOn: LocalDate): Promise<PreviewEntry>;
+  /** A new last day: an extension, or the daily run carrying an undecided one. */
+  setEnd(feature: Feature, endsOn: LocalDate): Promise<PreviewEntry>;
+  /** Which Plans keep the Feature, and the end that gives the others their Notice. */
+  place(feature: Feature, placement: { keepOn: readonly Plan[]; endsOn: LocalDate }, at: Instant): Promise<PreviewEntry>;
 };
 
 /**

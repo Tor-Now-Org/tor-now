@@ -56,6 +56,8 @@ const summaryOf = (facts: BillingNoticePayload["facts"]): string => {
       return `מסלול ${PLAN_IN_HEBREW[facts.plan]} משתנה ב־${longDate(facts.effectiveOn)} — ${editionChanges(facts)}. עד אז הכול נשאר כמו שהוא.`;
     case "EDITION_CANCELLED":
       return `השינוי שהודענו עליו במסלול ${PLAN_IN_HEBREW[facts.plan]} בוטל. המסלול נשאר כמו שהוא.`;
+    case "PREVIEW_LEAVING":
+      return `${FEATURE_IN_HEBREW[facts.feature]} היה בתצוגה מוקדמת, והוא יוצא ממסלול ${PLAN_IN_HEBREW[facts.plan]} ב־${longDate(facts.endsOn)}. מה שכבר נעשה איתו נשאר.`;
   }
 };
 

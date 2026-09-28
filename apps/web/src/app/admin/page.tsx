@@ -259,8 +259,8 @@ export default function AdminPage() {
         {tab === "catalogue" && (
           <CatalogueTab
             token={token}
-            onShowBusinesses={(edition) => {
-              setDirectoryFilter({ ...NO_DIRECTORY_FILTER, edition });
+            onShowBusinesses={(filter) => {
+              setDirectoryFilter({ ...NO_DIRECTORY_FILTER, ...filter });
               setTab("businesses");
             }}
           />

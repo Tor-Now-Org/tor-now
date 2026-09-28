@@ -977,10 +977,18 @@ const adminRoutes = (services: Services) => {
 
   admin.get("/businesses", async (context) => {
     const page = parseQuery(context, schema.pageSchema);
-    const { q, status, plan, edition, flag } = parseQuery(context, schema.directoryQuerySchema);
+    const { q, status, plan, edition, flag, feature, from } = parseQuery(context, schema.directoryQuerySchema);
     const result = await services.admin.listBusinesses(
       actorOf(context),
-      { query: q, statuses: status, plan, edition: edition === null ? null : asId<"PlanVersion">(edition), flags: flag },
+      {
+        query: q,
+        statuses: status,
+        plan,
+        edition: edition === null ? null : asId<"PlanVersion">(edition),
+        flags: flag,
+        feature,
+        featureSource: from,
+      },
       page,
     );
     return context.json({
@@ -1127,6 +1135,50 @@ const adminRoutes = (services: Services) => {
       ),
     ),
   );
+
+  // ADR 0020: every Feature, where it is sold, who has it — and Previews.
+  admin.get("/catalogue/features", async (context) =>
+    context.json(wire.featureViewsOut(await services.featureCatalogue.features(actorOf(context)))),
+  );
+
+  admin.post("/catalogue/features/:feature/preview", async (context) => {
+    const { endsOn } = await parseBody(context, schema.previewEndSchema);
+    return context.json(
+      wire.featureViewsOut(
+        await services.featureCatalogue.startPreview(
+          actorOf(context),
+          parse(schema.featureParamSchema, context.req.param("feature")),
+          parseLocalDate(endsOn),
+        ),
+      ),
+    );
+  });
+
+  admin.patch("/catalogue/features/:feature/preview", async (context) => {
+    const { endsOn } = await parseBody(context, schema.previewEndSchema);
+    return context.json(
+      wire.featureViewsOut(
+        await services.featureCatalogue.extendPreview(
+          actorOf(context),
+          parse(schema.featureParamSchema, context.req.param("feature")),
+          parseLocalDate(endsOn),
+        ),
+      ),
+    );
+  });
+
+  admin.post("/catalogue/features/:feature/preview/placement", async (context) => {
+    const { keepOn } = await parseBody(context, schema.previewPlacementSchema);
+    return context.json(
+      wire.featureViewsOut(
+        await services.featureCatalogue.placePreview(
+          actorOf(context),
+          parse(schema.featureParamSchema, context.req.param("feature")),
+          keepOn,
+        ),
+      ),
+    );
+  });
 
   // ADR 0022: what each unit of messaging cost from a day, and the evidence.
   admin.get("/catalogue/rates", async (context) =>
@@ -1304,8 +1356,11 @@ const jobRoutes = (services: Services) => {
   jobs.post("/billing-deactivation", async (context) => {
     const moves = await services.applyDueMoves();
     const deactivated = await services.deactivateLapsedBusinesses();
+    // An undecided Preview near its end is carried on before anyone is told
+    // it is ending.
+    const stretched = await services.stretchUndecidedPreviews();
     const noticed = await services.announceDueNotices();
-    return context.json({ moved: moves.moved, paused: moves.paused, deactivated, noticed });
+    return context.json({ moved: moves.moved, paused: moves.paused, deactivated, stretched, noticed });
   });
 
   return jobs;

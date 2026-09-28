@@ -10,7 +10,7 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { Button, Card, Critical, Note } from "@/components/ui.tsx";
 import { FlagTag, NextDate, PlanBadge, STATUS_TONE, StatusBadge } from "@/components/billing-badges.tsx";
 import { BusinessFilters } from "./business-filters.tsx";
-import { resetChoices, tokensOf, withoutToken, type Token } from "./directory-filter.ts";
+import { FROM_KEY, resetChoices, tokensOf, withoutToken, type Token } from "./directory-filter.ts";
 
 const PAGE_SIZE = 50;
 /** Long enough that typing a name is one request, short enough to feel live. */
@@ -21,6 +21,12 @@ const SEARCH_PAUSE_MS = 250;
  * counting and sorting happen on the server over every Business, so what the
  * list says matches is what matches — not what the first page happened to hold.
  */
+/** Features a Business has by Grant, beyond its Plan: nothing when none. */
+const GrantedTag = ({ n }: { n: number }) => {
+  const catalogue = useCopy("catalogue");
+  return n === 0 ? null : <span className="source-tag grant">{fillText(catalogue.grantedTag, { n: String(n) })}</span>;
+};
+
 export const BusinessDirectory = ({
   token,
   filter,
@@ -37,6 +43,7 @@ export const BusinessDirectory = ({
 }) => {
   const copy = useCopy("admin");
   const billing = useCopy("billing");
+  const catalogue = useCopy("catalogue");
   const errorText = useErrorText();
   const [page, setPage] = useState<DirectoryPageDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +99,10 @@ export const BusinessDirectory = ({
         return editionLabel(item.value);
       case "flag":
         return billing.flag[item.value];
+      case "feature":
+        return item.from === "ANY"
+          ? billing.featureName[item.value]
+          : `${billing.featureName[item.value]} · ${catalogue[FROM_KEY[item.from]]}`;
     }
   };
 
@@ -189,6 +200,7 @@ export const BusinessDirectory = ({
                     <td style={{ padding: "14px 10px" }}>
                       <span style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                         {row.flags.map((flag) => <FlagTag key={flag} flag={flag} short />)}
+                        <GrantedTag n={row.granted ?? 0} />
                       </span>
                     </td>
                   </tr>
@@ -212,6 +224,7 @@ export const BusinessDirectory = ({
                     <PlanBadge plan={row.plan} />
                     <NextDate status={row.status} date={row.nextDate} timeZone={row.business.timeZone} />
                     {row.flags.map((flag) => <FlagTag key={flag} flag={flag} short />)}
+                    <GrantedTag n={row.granted ?? 0} />
                   </span>
                 </button>
               </Card>

@@ -16,12 +16,27 @@ export const announceDue = async (
 ): Promise<number> => {
   const { repositories } = session;
   // A day early: each Business's own today decides which Grants still run.
-  const [entries, versions, grants] = await Promise.all([
+  const [entries, versions, grants, previews] = await Promise.all([
     repositories.subscriptions.directory(),
     repositories.planVersions.listAll(),
     repositories.grants.listRunning(addDays(todayIn(now, timeZone("UTC")), -1)),
+    repositories.previews.listEntries(),
   ]);
   const planOf = new Map<PlanVersionId, Plan>(versions.map((version) => [version.id, version.plan]));
+  const editionOf = new Map(versions.map((version) => [version.id, version]));
+  // Decided Previews whose Feature a Plan does not keep: its Businesses are
+  // reminded before the Feature leaves, unless their edition has it anyway.
+  const leavingFor = (versionId: PlanVersionId) => {
+    const edition = editionOf.get(versionId);
+    return previews.flatMap((preview) =>
+      preview.placement === null ||
+      edition === undefined ||
+      preview.placement.keepOn.includes(edition.plan) ||
+      edition.terms.features.includes(preview.feature)
+        ? []
+        : [{ feature: preview.feature, endsOn: preview.endsOn }],
+    );
+  };
 
   const kept: (Notice | null)[] = [];
   for (const { business, subscription } of entries) {
@@ -38,6 +53,7 @@ export const announceDue = async (
       currentPlan: planOf.get(subscription.planVersionId) ?? null,
       pausing,
       grants: grants.filter((grant) => grant.businessId === business.id),
+      previewsLeaving: leavingFor(subscription.planVersionId),
       businessActive: business.active,
       today: todayIn(now, business.timeZone),
     });

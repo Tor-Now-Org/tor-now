@@ -29,6 +29,7 @@ import type { PlatformStats } from "../application/admin-service.ts";
 import type { SubscriptionView } from "../application/billing.ts";
 import type { NoticeBoard } from "../application/notice-service.ts";
 import type { PlanView } from "../application/plan-catalogue.ts";
+import type { FeatureView } from "../application/feature-catalogue.ts";
 import type { GrantEntry, PlanEdition, UnitRateEntry } from "../ports/repositories.ts";
 import type { DirectoryRow } from "../application/business-directory.ts";
 import type {
@@ -402,6 +403,8 @@ export const directoryRowOut = (row: DirectoryRow) => ({
   status: row.standing.status,
   nextDate: row.standing.nextDate,
   flags: row.standing.flags,
+  /** How many Features it has by Grant, beyond its Plan. */
+  granted: row.features.filter((source) => source.source === "GRANT").length,
 });
 
 /**
@@ -464,6 +467,24 @@ export const planCatalogueOut = (result: { plans: readonly PlanView[]; previews:
     ifTakenToday: view.ifTakenToday,
   })),
   previews: result.previews.map((preview) => ({ feature: preview.feature, endsOn: preview.endsOn })),
+});
+
+/** Each Feature as the Features tab shows it: where it is sold, a Preview of it, and who has it. */
+export const featureViewsOut = (views: readonly FeatureView[]) => ({
+  features: views.map((view) => ({
+    feature: view.feature,
+    plans: view.plans,
+    preview:
+      view.preview === null
+        ? null
+        : {
+            endsOn: view.preview.endsOn,
+            keepOn: view.preview.placement?.keepOn ?? null,
+            decidedAt: view.preview.decidedAt === null ? null : formatInstant(view.preview.decidedAt),
+          },
+    counts: view.counts,
+    canPreview: view.canPreview,
+  })),
 });
 
 /** A Unit Rate as the Catalogue tab shows it. */

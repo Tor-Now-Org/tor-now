@@ -12,7 +12,6 @@ import type {
   Grant,
   Instant,
   UsageRecord,
-  Preview,
   Resource,
   Review,
   Service,
@@ -22,7 +21,7 @@ import type {
 } from "@tor-now/domain";
 import { addDays, asId, instant, microShekels, money, parseLocalDate, planTerms } from "@tor-now/domain";
 import type { AuditEntry } from "../../ports/audit.ts";
-import type { PlanEdition, UnitRateEntry, WaitingEntry, WaitingRecheck } from "../../ports/repositories.ts";
+import type { PlanEdition, PreviewEntry, UnitRateEntry, WaitingEntry, WaitingRecheck } from "../../ports/repositories.ts";
 import type { OutboundMessage } from "../../ports/notifier.ts";
 import type { VerificationCodeRecord } from "../../ports/verification.ts";
 
@@ -58,7 +57,7 @@ export type Store = {
   /** With the dedupe key the table keeps beside each. */
   notices: { notice: Notice; key: string | null }[];
   planVersions: PlanEdition[];
-  previews: Preview[];
+  previews: PreviewEntry[];
   usageRecords: UsageRecord[];
   unitRates: UnitRateEntry[];
   grants: (Grant & { createdAt: Instant })[];
@@ -150,7 +149,7 @@ const initialCatalogue = (today: LocalDate): Pick<Store, "planVersions" | "previ
       firstMoveOn: null,
     },
   ],
-  previews: [{ feature: "WAITING_LIST", endsOn: addDays(today, 59) }],
+  previews: [{ feature: "WAITING_LIST", endsOn: addDays(today, 59), placement: null, decidedAt: null }],
 });
 
 /**

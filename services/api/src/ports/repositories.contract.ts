@@ -2154,6 +2154,27 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("starts a Preview, moves its end, decides where it goes, and starts it afresh once ended", async () => {
+      await withRepositories(async (repositories) => {
+        const endsOn = parseLocalDate("2031-05-01");
+        const started = await repositories.previews.start("CUSTOMER_HISTORY", endsOn);
+        expect(started).toEqual({ feature: "CUSTOMER_HISTORY", endsOn, placement: null, decidedAt: null });
+        expect(await repositories.previews.list()).toContainEqual({ feature: "CUSTOMER_HISTORY", endsOn });
+
+        const later = parseLocalDate("2031-06-01");
+        expect((await repositories.previews.setEnd("CUSTOMER_HISTORY", later)).endsOn).toBe(later);
+
+        const at = AT("2031-03-10T10:00:00.000Z");
+        const placed = await repositories.previews.place("CUSTOMER_HISTORY", { keepOn: ["TEAM"], endsOn: later }, at);
+        expect(placed).toMatchObject({ placement: { keepOn: ["TEAM"] }, decidedAt: at });
+        expect((await repositories.previews.listEntries()).find((entry) => entry.feature === "CUSTOMER_HISTORY")).toEqual(placed);
+
+        // A fresh Preview of the same Feature is undecided again.
+        const again = await repositories.previews.start("CUSTOMER_HISTORY", parseLocalDate("2031-09-01"));
+        expect(again.placement).toBeNull();
+      });
+    });
+
     it("replaces a rate for the same unit and day, keeps others, and says who checked it", async () => {
       await withRepositories(async (repositories) => {
         const admin = await repositories.users.create({

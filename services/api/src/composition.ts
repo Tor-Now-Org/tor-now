@@ -10,6 +10,7 @@ import { closureService } from "./application/closure-service.ts";
 import { catalogueService } from "./application/catalogue-service.ts";
 import { catalogueAdminService } from "./application/catalogue-admin.ts";
 import { planCatalogueService } from "./application/plan-catalogue.ts";
+import { featureCatalogueService } from "./application/feature-catalogue.ts";
 import { discoveryService } from "./application/discovery-service.ts";
 import { reviewService } from "./application/review-service.ts";
 import { noticeService } from "./application/notice-service.ts";
@@ -91,6 +92,7 @@ export const compose = (
   const photos = photoStoreFor(config);
 
   const admin = adminService({ unitOfWork, clock });
+  const featureCatalogue = featureCatalogueService({ unitOfWork, clock });
   // ADR 0001: the strategy is named here, so replacing it is a wiring change.
   const availability = availabilityService({ unitOfWork, clock, strategy: greedyWalk });
 
@@ -124,6 +126,7 @@ export const compose = (
     notices: noticeService({ unitOfWork, clock }),
     catalogueAdmin: catalogueAdminService({ unitOfWork, clock }),
     planCatalogue: planCatalogueService({ unitOfWork, clock }),
+    featureCatalogue,
     closures: closureService({ unitOfWork, clock }),
     admin,
 
@@ -135,6 +138,7 @@ export const compose = (
     deactivateLapsedBusinesses: () => admin.deactivateLapsedBusinesses(system()),
     applyDueMoves: () => admin.applyDueMoves(system()),
     announceDueNotices: () => admin.announceDueNotices(system()),
+    stretchUndecidedPreviews: () => featureCatalogue.stretchUndecidedPreviews(system()),
   };
 
   return { services, sql, config };

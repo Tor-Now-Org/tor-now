@@ -4,6 +4,8 @@ import type {
   GrantRepository,
   PlanEdition,
   PlanVersionRepository,
+  PreviewEntry,
+  PreviewRepository,
   UnitRateRepository,
 } from "../../ports/repositories.ts";
 import type { Store } from "./in-memory-store.ts";
@@ -141,6 +143,43 @@ export const inMemoryPlanVersions = (store: Store): PlanVersionRepository => {
     },
     async withdraw(id, at) {
       replace(id, (edition) => ({ ...edition, withdrawnAt: at }));
+    },
+  };
+};
+
+/** Previews held in memory, one per Feature as the table's key has it. */
+export const inMemoryPreviews = (store: Store): PreviewRepository => {
+  const byFeature = (a: PreviewEntry, b: PreviewEntry) => a.feature.localeCompare(b.feature);
+  const replace = (feature: PreviewEntry["feature"], change: (entry: PreviewEntry) => PreviewEntry): PreviewEntry => {
+    const entry = store.previews.find((candidate) => candidate.feature === feature);
+    if (entry === undefined) throw notFound("Preview", feature);
+    const updated = change(entry);
+    store.previews = store.previews.map((candidate) => (candidate.feature === feature ? updated : candidate));
+    return updated;
+  };
+
+  return {
+    async list() {
+      return [...store.previews].sort(byFeature).map(({ feature, endsOn }) => ({ feature, endsOn }));
+    },
+    async listEntries() {
+      return [...store.previews].sort(byFeature);
+    },
+    async start(feature, endsOn) {
+      const entry: PreviewEntry = { feature, endsOn, placement: null, decidedAt: null };
+      store.previews = [...store.previews.filter((candidate) => candidate.feature !== feature), entry];
+      return entry;
+    },
+    async setEnd(feature, endsOn) {
+      return replace(feature, (entry) => ({ ...entry, endsOn }));
+    },
+    async place(feature, placement, at) {
+      return replace(feature, (entry) => ({
+        ...entry,
+        endsOn: placement.endsOn,
+        placement: { keepOn: placement.keepOn },
+        decidedAt: at,
+      }));
     },
   };
 };

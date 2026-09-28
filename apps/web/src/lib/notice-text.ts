@@ -249,6 +249,43 @@ export const noticeText = (facts: NoticeFacts, context: NoticeContext): NoticeTe
         body: words.editionCancelledBody,
         action: null,
       };
+    case "PREVIEW_STARTED":
+      return {
+        title: fillText(words.previewStartedTitle, { feature: named([facts.feature]) }),
+        body: fillText(words.previewStartedBody, { date: date(facts.endsOn) }),
+        action: "INCLUDED",
+      };
+    case "PREVIEW_EXTENDED":
+      return {
+        title: fillText(words.previewExtendedTitle, { feature: named([facts.feature]) }),
+        body: fillText(words.previewExtendedBody, { date: date(facts.endsOn) }),
+        action: null,
+      };
+    case "PREVIEW_KEPT":
+      return {
+        title: fillText(words.previewKeptTitle, { feature: named([facts.feature]) }),
+        body: fillText(words.previewKeptBody, { plan: plan(facts.plan) }),
+        action: null,
+      };
+    case "PREVIEW_LEAVING":
+      return {
+        title: fillText(words.previewLeavingTitle, {
+          feature: named([facts.feature]),
+          plan: plan(facts.plan),
+          date: date(facts.endsOn),
+        }),
+        body: words.previewLeavingBody,
+        action: "PLANS",
+      };
+    case "PREVIEW_ENDING":
+      return {
+        title: fillText(words.previewEndingTitle, {
+          feature: named([facts.feature]),
+          when: whenOf(facts.endsOn, context) ?? date(facts.endsOn),
+        }),
+        body: fillText(words.previewEndingBody, { date: date(facts.endsOn) }),
+        action: "PLANS",
+      };
     case "PLAN_IMPROVED":
       return {
         title: fillText(words.planImprovedTitle, { plan: plan(facts.plan) }),

@@ -41,6 +41,11 @@ export const NOTICE_KINDS = [
   "EDITION_APPLIED",
   "EDITION_CANCELLED",
   "PLAN_IMPROVED",
+  "PREVIEW_STARTED",
+  "PREVIEW_EXTENDED",
+  "PREVIEW_KEPT",
+  "PREVIEW_LEAVING",
+  "PREVIEW_ENDING",
 ] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 
@@ -112,7 +117,15 @@ export type NoticeFacts =
       readonly allowanceFrom: number;
       readonly allowanceTo: number;
       readonly gained: readonly Feature[];
-    };
+    }
+  /** A new Feature to try, on the Plan held, until a day (ADR 0020). */
+  | { readonly kind: "PREVIEW_STARTED"; readonly feature: Feature; readonly endsOn: LocalDate }
+  | { readonly kind: "PREVIEW_EXTENDED"; readonly feature: Feature; readonly endsOn: LocalDate }
+  /** A Preview's Feature stays, part of the Plan now. */
+  | { readonly kind: "PREVIEW_KEPT"; readonly feature: Feature; readonly plan: Plan }
+  /** A Preview's Feature leaves the Plan held when the Preview ends. */
+  | { readonly kind: "PREVIEW_LEAVING"; readonly feature: Feature; readonly plan: Plan; readonly endsOn: LocalDate }
+  | { readonly kind: "PREVIEW_ENDING"; readonly feature: Feature; readonly endsOn: LocalDate };
 
 export type Notice = {
   readonly id: NoticeId;
@@ -168,6 +181,11 @@ const RULES: Readonly<Record<NoticeKind, KindRule>> = Object.freeze({
   EDITION_APPLIED: { tone: "info", banner: true, clears: ["EDITION_ANNOUNCED", "EDITION_SOON"] },
   EDITION_CANCELLED: { tone: "good", banner: true, clears: ["EDITION_ANNOUNCED", "EDITION_SOON"] },
   PLAN_IMPROVED: { tone: "good", banner: true, clears: [] },
+  PREVIEW_STARTED: { tone: "good", banner: true, clears: [] },
+  PREVIEW_EXTENDED: { tone: "good", banner: false, clears: ["PREVIEW_ENDING"] },
+  PREVIEW_KEPT: { tone: "good", banner: true, clears: ["PREVIEW_STARTED"] },
+  PREVIEW_LEAVING: { tone: "caution", banner: true, clears: ["PREVIEW_STARTED"] },
+  PREVIEW_ENDING: { tone: "caution", banner: true, clears: [] },
 });
 
 export const noticeTone = (kind: NoticeKind): NoticeTone => RULES[kind].tone;
@@ -185,6 +203,7 @@ const SENT_ON_WHATSAPP = [
   "PAYMENT_RECORDED",
   "EDITION_ANNOUNCED",
   "EDITION_CANCELLED",
+  "PREVIEW_LEAVING",
 ] as const;
 export type WhatsAppNoticeFacts = Extract<NoticeFacts, { kind: (typeof SENT_ON_WHATSAPP)[number] }>;
 
@@ -213,6 +232,8 @@ export const noticeKey = (facts: NoticeFacts): string | null => {
       return `MOVE_SOON:${facts.plan}:${facts.effectiveOn}`;
     case "EDITION_SOON":
       return `EDITION_SOON:${facts.plan}:${facts.effectiveOn}`;
+    case "PREVIEW_ENDING":
+      return `PREVIEW_ENDING:${facts.feature}:${facts.endsOn}`;
     case "GRANT_ENDING":
       return `GRANT_ENDING:${facts.endsOn}:${[...facts.features].sort().join(",")}`;
     default:
@@ -228,6 +249,8 @@ const BANNER_ORDER: readonly NoticeKind[] = [
   "MOVE_SOON",
   "EDITION_SOON",
   "EDITION_ANNOUNCED",
+  "PREVIEW_ENDING",
+  "PREVIEW_LEAVING",
   "GRANT_ENDING",
   "CALENDARS_PAUSED",
   "GRANT_ENDED",
@@ -236,7 +259,9 @@ const BANNER_ORDER: readonly NoticeKind[] = [
   "EDITION_CANCELLED",
   "CALENDARS_RESUMED",
   "PLAN_IMPROVED",
+  "PREVIEW_KEPT",
   "FEATURES_GRANTED",
+  "PREVIEW_STARTED",
   "TRIAL_STARTED",
 ];
 
@@ -277,6 +302,8 @@ export const noticesDue = (input: {
   readonly pausing: readonly string[];
   /** The Business's Grants; those ending within the week are announced. */
   readonly grants: readonly GrantTerm[];
+  /** Previews whose Feature leaves this Business's Plan when they end. */
+  readonly previewsLeaving: readonly { readonly feature: Feature; readonly endsOn: LocalDate }[];
   readonly businessActive: boolean;
   readonly today: LocalDate;
 }): readonly NoticeFacts[] => {
@@ -310,6 +337,9 @@ export const noticesDue = (input: {
       ending.some((grant) => grant.endsOn === endsOn && grant.feature === feature),
     );
     due.push({ kind: "GRANT_ENDING", features, endsOn });
+  }
+  for (const preview of input.previewsLeaving) {
+    if (within(preview.endsOn, 0)) due.push({ kind: "PREVIEW_ENDING", feature: preview.feature, endsOn: preview.endsOn });
   }
   return due;
 };
@@ -431,6 +461,14 @@ export const parseNoticeFacts = (value: unknown): NoticeFacts => {
     case "EDITION_APPLIED":
     case "EDITION_CANCELLED":
       return { kind, plan: planOf(facts) };
+    case "PREVIEW_STARTED":
+    case "PREVIEW_EXTENDED":
+    case "PREVIEW_ENDING":
+      return { kind, feature: parseFeature(textOf(facts, "feature")), endsOn: dateOf(facts, "endsOn") };
+    case "PREVIEW_KEPT":
+      return { kind, feature: parseFeature(textOf(facts, "feature")), plan: planOf(facts) };
+    case "PREVIEW_LEAVING":
+      return { kind, feature: parseFeature(textOf(facts, "feature")), plan: planOf(facts), endsOn: dateOf(facts, "endsOn") };
     case "PLAN_IMPROVED":
       return {
         kind,

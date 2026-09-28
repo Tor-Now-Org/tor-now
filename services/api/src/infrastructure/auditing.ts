@@ -15,6 +15,7 @@ import type {
   SubscriptionRepository,
   GrantRepository,
   PlanVersionRepository,
+  PreviewRepository,
   UnitRateRepository,
   UserRepository,
   WorkingHoursRepository,
@@ -515,7 +516,33 @@ export const auditedPlanVersions = (
   },
 });
 
-export const auditedUnitRates =(inner: UnitRateRepository, context: Context): UnitRateRepository => ({
+export const auditedPreviews = (inner: PreviewRepository, context: Context): PreviewRepository => {
+  const before = async (feature: string) =>
+    (await inner.listEntries()).find((entry) => entry.feature === feature) ?? null;
+  return {
+    ...inner,
+    async start(feature, endsOn) {
+      const previous = await before(feature);
+      const after = await inner.start(feature, endsOn);
+      await record(context, AUDIT_ACTIONS.previewStarted, "Preview", feature, previous, after);
+      return after;
+    },
+    async setEnd(feature, endsOn) {
+      const previous = await before(feature);
+      const after = await inner.setEnd(feature, endsOn);
+      await record(context, AUDIT_ACTIONS.previewEndMoved, "Preview", feature, previous, after);
+      return after;
+    },
+    async place(feature, placement, at) {
+      const previous = await before(feature);
+      const after = await inner.place(feature, placement, at);
+      await record(context, AUDIT_ACTIONS.previewPlaced, "Preview", feature, previous, after);
+      return after;
+    },
+  };
+};
+
+export const auditedUnitRates = (inner: UnitRateRepository, context: Context): UnitRateRepository => ({
   ...inner,
   async set(rate, checkedBy) {
     const before =
@@ -550,4 +577,5 @@ export const withAuditing = (
   grants: auditedGrants(repositories.grants, context),
   unitRates: auditedUnitRates(repositories.unitRates, context),
   planVersions: auditedPlanVersions(repositories.planVersions, context),
+  previews: auditedPreviews(repositories.previews, context),
 });

@@ -524,6 +524,16 @@ export type PlanCatalogueDto = {
 
 export type PlanChangeKind = "NONE" | "GIVES" | "TAKES";
 
+/** One Feature as the Features tab shows it (ADR 0020). */
+export type FeatureViewDto = {
+  feature: FeatureName;
+  plans: { plan: PlanName; number: number; included: boolean }[];
+  /** The running Preview of it: when it ends, and which Plans keep it (null while undecided). */
+  preview: { endsOn: string; keepOn: PlanName[] | null; decidedAt: string | null } | null;
+  counts: { PLAN: number; GRANT: number; PREVIEW: number };
+  canPreview: boolean;
+};
+
 export type CostUnitName = "WHATSAPP_UTILITY" | "WHATSAPP_AUTHENTICATION" | "SMS_SEGMENT";
 
 /** What one unit of messaging cost from a day, and the evidence (ADR 0022). */
@@ -574,7 +584,12 @@ export type DirectoryRowDto = Standing & {
   ownerPhone: string | null;
   plan: PlanName;
   planVersion: number;
+  /** How many Features it has by Grant, beyond its Plan. Absent from an older API. */
+  granted?: number;
 };
+
+/** Where a Feature comes from, as the directory filter asks it. */
+export type FeatureFrom = "ANY" | "PLAN" | "GRANT" | "PREVIEW";
 
 export type DirectoryFilter = {
   query: string;
@@ -583,9 +598,20 @@ export type DirectoryFilter = {
   /** One edition of a Plan, by its id. */
   edition: string | null;
   flags: BillingFlag[];
+  /** A Feature the Business has, and from where. */
+  feature: FeatureName | null;
+  featureSource: FeatureFrom;
 };
 
-export const NO_DIRECTORY_FILTER: DirectoryFilter = { query: "", statuses: [], plan: null, edition: null, flags: [] };
+export const NO_DIRECTORY_FILTER: DirectoryFilter = {
+  query: "",
+  statuses: [],
+  plan: null,
+  edition: null,
+  flags: [],
+  feature: null,
+  featureSource: "ANY",
+};
 
 /** An edition some Business is on, as the directory counts it. */
 export type EditionCountDto = { id: string; plan: PlanName; number: number; count: number };
@@ -601,6 +627,8 @@ export type DirectoryPageDto = {
     /** Absent from an API older than Plan editions. */
     editions?: EditionCountDto[];
     flags: Record<BillingFlag, number>;
+    features?: Record<FeatureName, number>;
+    featureSources?: Record<FeatureFrom, number>;
   };
 };
 

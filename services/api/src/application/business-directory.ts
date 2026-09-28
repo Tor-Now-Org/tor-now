@@ -2,10 +2,13 @@ import {
   BILLING_FLAGS,
   BILLING_STATUSES,
   compareLocalDate,
+  FEATURES,
   PLANS,
   standingOf,
   type BillingFlag,
   type BillingStatus,
+  type Feature,
+  type FeatureSource,
   type LocalDate,
   type Plan,
   type PlanVersion,
@@ -30,7 +33,14 @@ export type DirectoryFilter = {
   readonly edition: PlanVersionId | null;
   /** All of these must hold. */
   readonly flags: readonly BillingFlag[];
+  /** A Feature the Business has — from anywhere, or from one place. */
+  readonly feature: Feature | null;
+  readonly featureSource: FeatureFrom;
 };
+
+/** Where a Feature comes from, as the filter asks it: anywhere, or one source. */
+export const FEATURE_FROM = ["ANY", "PLAN", "GRANT", "PREVIEW"] as const;
+export type FeatureFrom = (typeof FEATURE_FROM)[number];
 
 export const NO_FILTER: DirectoryFilter = Object.freeze({
   query: null,
@@ -38,11 +48,15 @@ export const NO_FILTER: DirectoryFilter = Object.freeze({
   plan: null,
   edition: null,
   flags: [],
+  feature: null,
+  featureSource: "ANY",
 });
 
 export type DirectoryRow = DirectoryEntry & {
   readonly planVersion: PlanVersion;
   readonly standing: Standing;
+  /** Where the Business has each Feature from. */
+  readonly features: readonly FeatureSource[];
 };
 
 /**
@@ -57,15 +71,21 @@ export type DirectoryCounts = {
   /** Every edition some matching Business is on, Plan by Plan, oldest first. */
   readonly editions: readonly { readonly id: PlanVersionId; readonly plan: Plan; readonly number: number; readonly count: number }[];
   readonly flags: Readonly<Record<BillingFlag, number>>;
+  /** How many have each Feature, from anywhere. */
+  readonly features: Readonly<Record<Feature, number>>;
+  /** For the Feature chosen, how many have it from each place. */
+  readonly featureSources: Readonly<Record<FeatureFrom, number>>;
 };
 
 export const directoryRow = (
   entry: DirectoryEntry,
   planVersion: PlanVersion,
   today: LocalDate,
+  features: readonly FeatureSource[] = [],
 ): DirectoryRow => ({
   ...entry,
   planVersion,
+  features,
   standing: standingOf({
     subscription: entry.subscription,
     businessActive: entry.business.active,
@@ -75,7 +95,12 @@ export const directoryRow = (
   }),
 });
 
-type Group = "query" | "statuses" | "plan" | "edition" | "flags";
+type Group = "query" | "statuses" | "plan" | "edition" | "flags" | "feature";
+
+const hasFeature = (row: DirectoryRow, feature: Feature, from: FeatureFrom): boolean => {
+  const source = row.features.find((candidate) => candidate.feature === feature)?.source ?? "NONE";
+  return source !== "NONE" && (from === "ANY" || source === from);
+};
 
 const passes = (row: DirectoryRow, filter: DirectoryFilter, except?: Group): boolean => {
   const needle = filter.query?.trim().toLowerCase() ?? "";
@@ -90,7 +115,8 @@ const passes = (row: DirectoryRow, filter: DirectoryFilter, except?: Group): boo
       filter.statuses.includes(row.standing.status)) &&
     (except === "plan" || filter.plan === null || row.planVersion.plan === filter.plan) &&
     (except === "edition" || filter.edition === null || row.planVersion.id === filter.edition) &&
-    (except === "flags" || filter.flags.every((flag) => row.standing.flags.includes(flag)))
+    (except === "flags" || filter.flags.every((flag) => row.standing.flags.includes(flag))) &&
+    (except === "feature" || filter.feature === null || hasFeature(row, filter.feature, filter.featureSource))
   );
 };
 
@@ -143,6 +169,10 @@ export const filterDirectory = (
       plans: tally(PLANS, without("plan"), (row, plan) => row.planVersion.plan === plan),
       editions: editionsIn(without("edition")),
       flags: tally(BILLING_FLAGS, without("flags"), (row, flag) => row.standing.flags.includes(flag)),
+      features: tally(FEATURES, without("feature"), (row, feature) => hasFeature(row, feature, "ANY")),
+      featureSources: tally(FEATURE_FROM, without("feature"), (row, from) =>
+        filter.feature === null ? false : hasFeature(row, filter.feature, from),
+      ),
     },
   };
 };

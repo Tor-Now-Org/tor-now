@@ -59,7 +59,8 @@ back only gives value, so it applies at once (amended 2026-09-27).
 
 **A new Feature whose cost or demand is unknown launches as a Preview**: offered on
 every Plan for a stated period and labelled as unplaced. Ending a Preview is a
-change that takes value away for Plans that do not keep it.
+change that takes value away for Plans that do not keep it, so those Businesses
+hear at least thirty days ahead, on WhatsApp too (amended 2026-09-28; ADR 0021).
 
 Billing is monthly only. A yearly period would mean a Business waits up to a year
 to move, and every rule above would need a second case.

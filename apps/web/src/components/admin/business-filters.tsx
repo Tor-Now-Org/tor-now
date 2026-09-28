@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, type CSSProperties } from "react";
+import { FEATURES } from "@tor-now/domain";
 import {
   BILLING_FLAGS,
   BILLING_STATUSES,
@@ -12,7 +13,18 @@ import { useCopy } from "@/lib/i18n/index.tsx";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { Button } from "@/components/ui.tsx";
 import { STATUS_TONE } from "@/components/billing-badges.tsx";
-import { chooseEdition, choicesMade, choosePlan, resetChoices, toggleFlag, toggleStatus } from "./directory-filter.ts";
+import {
+  chooseEdition,
+  chooseFeature,
+  chooseFeatureSource,
+  choicesMade,
+  choosePlan,
+  resetChoices,
+  toggleFlag,
+  toggleStatus,
+  FEATURE_FROM,
+  FROM_KEY,
+} from "./directory-filter.ts";
 
 const FilterIcon = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -165,6 +177,45 @@ export const BusinessFilters = ({
                 </div>
               </div>
             )}
+
+            <div className="fp-section">
+              <span className="label">{catalogue.featureFilter}</span>
+              <div className="fp-pills">
+                {FEATURES.map((feature) => {
+                  const n = counts?.features?.[feature] ?? 0;
+                  const on = filter.feature === feature;
+                  return (
+                    <button
+                      key={feature}
+                      type="button"
+                      className="fp-pill"
+                      aria-pressed={on}
+                      disabled={n === 0 && !on}
+                      style={{ "--tone": "var(--accent-strong)", "--tone-soft": "var(--accent-soft)" } as CSSProperties}
+                      onClick={() => onChange(chooseFeature(filter, feature))}
+                    >
+                      <span className="name">{billing.featureName[feature]}</span>
+                      <small>{n}</small>
+                    </button>
+                  );
+                })}
+              </div>
+              {filter.feature !== null && (
+                <div className="fp-seg" role="group" aria-label={billing.featureName[filter.feature]}>
+                  {FEATURE_FROM.map((from) => (
+                    <button
+                      key={from}
+                      type="button"
+                      aria-pressed={filter.featureSource === from}
+                      onClick={() => onChange(chooseFeatureSource(filter, from))}
+                    >
+                      {catalogue[FROM_KEY[from]]}
+                      <small>{counts?.featureSources?.[from] ?? 0}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="fp-section">
               <span className="label">{copy.attention}</span>

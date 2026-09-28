@@ -812,3 +812,36 @@ describe("editing Plans over HTTP", () => {
     expect((await api.get("/admin/catalogue/plans", owner.token)).status).toBe(403);
   });
 });
+
+describe("Features and Previews over HTTP", () => {
+  it("lists Features, starts, extends and places a Preview, and filters Businesses by a Feature", async () => {
+    const api = httpHarness();
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    await api.post("/businesses", { ...A_BUSINESS, plan: "SOLO" }, owner.token);
+    const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+
+    const listed = await api.get("/admin/catalogue/features", admin.token);
+    expect(listed.status).toBe(200);
+    expect(listed.body).toMatchObject({
+      features: expect.arrayContaining([
+        expect.objectContaining({ feature: "WAITING_LIST", preview: expect.objectContaining({ keepOn: null }), canPreview: false }),
+        expect.objectContaining({ feature: "CUSTOMER_HISTORY", canPreview: true, counts: { PLAN: 0, GRANT: 0, PREVIEW: 0 } }),
+      ]),
+    });
+
+    const started = await api.post("/admin/catalogue/features/CUSTOMER_HISTORY/preview", { endsOn: "2026-10-24" }, admin.token);
+    expect(started.status).toBe(200);
+    const extended = await api.patch("/admin/catalogue/features/CUSTOMER_HISTORY/preview", { endsOn: "2026-11-24" }, admin.token);
+    expect(extended.body).toMatchObject({
+      features: expect.arrayContaining([expect.objectContaining({ feature: "CUSTOMER_HISTORY", preview: expect.objectContaining({ endsOn: "2026-11-24" }) })]),
+    });
+    const placed = await api.post("/admin/catalogue/features/CUSTOMER_HISTORY/preview/placement", { keepOn: ["TEAM"] }, admin.token);
+    expect(placed.body).toMatchObject({
+      features: expect.arrayContaining([expect.objectContaining({ feature: "CUSTOMER_HISTORY", preview: expect.objectContaining({ keepOn: ["TEAM"] }) })]),
+    });
+
+    const filtered = await api.get("/admin/businesses?feature=CUSTOMER_HISTORY&from=PREVIEW", admin.token);
+    expect(filtered.body).toMatchObject({ total: 1, counts: { featureSources: { PREVIEW: 1 } } });
+    expect((await api.post("/admin/catalogue/features/TELEPORT/preview", { endsOn: "2026-10-24" }, admin.token)).status).toBe(400);
+  });
+});

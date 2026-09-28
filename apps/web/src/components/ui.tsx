@@ -1,6 +1,6 @@
 "use client";
 
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import { useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { useSheetPresence } from "./sheet-presence.ts";
 
 /**
@@ -291,6 +291,35 @@ export const Empty = ({
   </div>
 );
 
+/**
+ * The sheets open right now, newest last. Escape closes only the newest: a
+ * sheet opened over another — a Grant over a Business — goes back to the one
+ * beneath, as the backdrop does.
+ */
+let escapeStack: (() => void)[] = [];
+
+const useEscapeCloses = (open: boolean, onClose: () => void): void => {
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    if (!open) return;
+    const entry = () => close.current();
+    escapeStack = [...escapeStack, entry];
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || escapeStack.at(-1) !== entry) return;
+      event.preventDefault();
+      entry();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      escapeStack = escapeStack.filter((candidate) => candidate !== entry);
+    };
+  }, [open]);
+};
+
 export const Sheet = ({
   open,
   onClose,
@@ -305,6 +334,7 @@ export const Sheet = ({
   // Said here, so that anything which has to yield to a sheet — the + button,
   // today — never has to be told about a sheet one screen at a time.
   useSheetPresence(open);
+  useEscapeCloses(open, onClose);
   if (!open) return null;
   return (
     <div

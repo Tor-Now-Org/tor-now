@@ -82,3 +82,22 @@ customer; at worst they cost the platform, and they are audited.
 - **Seeing it all:** "All plans side by side" lists every edition in use with
   what changed marked, a Plan's card compares its own editions, and the
   Businesses list filters by edition.
+
+## Features and Previews in practice (2026-09-28)
+
+- **A Features tab** shows each Feature: which Plans include it (by edition),
+  whether it is in Preview, and how many Businesses have it through a Plan, a
+  Grant or a Preview. Each count opens the Businesses list filtered by that
+  Feature and source; each row there also says how many Features it has by Grant.
+- **Starting a Preview** gives the Feature to every Plan that lacks it, for 30
+  to 365 days, and tells only those Businesses, in the app. A Feature every
+  Plan has, or one already in Preview, cannot start one. A Preview can be
+  extended later, never shortened.
+- **Where the Feature goes is decided once, per Plan.** A Plan that keeps it
+  gets it now — it gives value, so it is added to that Plan's standing
+  editions. A Plan that loses it is told at once, in the app and on WhatsApp
+  (ADR 0020 treats losing value like a price rise), with a reminder a week
+  before the end; if the end is under thirty days away, it moves out to thirty.
+- **An undecided Preview never ends by default.** When fewer than thirty days
+  remain and nobody has decided, it is carried on by thirty days, so no Plan
+  loses a Feature without being told in time.
