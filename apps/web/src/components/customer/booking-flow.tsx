@@ -108,8 +108,12 @@ export const BookingFlow = ({
           part === "MORNING" ? "morning" : part === "NOON" ? "noon" : "evening",
         );
 
-  const loadWaiting = useCallback(async () => {
-    if (token === null) {
+  /**
+   * As a given session, not only the current one: right after verifying, the
+   * new token is in hand before the session around this screen has caught up.
+   */
+  const loadWaiting = useCallback(async (as: string | null = token) => {
+    if (as === null) {
       setWaiting([]);
       return;
     }
@@ -117,7 +121,7 @@ export const BookingFlow = ({
       // This shop's worth, asked for as such: taking the customer's whole list
       // and keeping one shop's rows meant the other shops' standing requests
       // reached this page only to be thrown away.
-      setWaiting(await api.myWaiting(token, business.id));
+      setWaiting(await api.myWaiting(as, business.id));
     } catch {
       // The list is an embellishment on a screen that works without it: a
       // failure here must not stop somebody booking.
@@ -130,11 +134,19 @@ export const BookingFlow = ({
   }, [loadWaiting]);
 
   /**
+   * What a visitor asked to wait for, kept while they verify. Without it the
+   * ask was dropped at the verification step, and they came back signed in to
+   * an empty booking sheet with the offer still unanswered.
+   */
+  const waitAfterVerifying = useRef<((token: string) => Promise<void>) | null>(null);
+
+  /**
    * Join, change or leave — all three are the same shape: do it, say so, and
    * re-read the list so the screen matches what the server now holds.
    */
-  const keepWaiting = async (change: (token: string) => Promise<void>) => {
-    if (token === null) {
+  const keepWaiting = async (change: (token: string) => Promise<void>, as: string | null = token) => {
+    if (as === null) {
+      waitAfterVerifying.current = change;
       setWaitingFor(undefined);
       setStage("verifying");
       return;
@@ -142,9 +154,9 @@ export const BookingFlow = ({
     setBusy(true);
     setError(null);
     try {
-      await change(token);
+      await change(as);
       setWaitingFor(undefined);
-      await loadWaiting();
+      await loadWaiting(as);
     } catch (trouble) {
       setError(errorText(isApiError(trouble) ? trouble.code : "INTERNAL"));
     } finally {
@@ -261,6 +273,9 @@ export const BookingFlow = ({
   const confirm = async (answers = answered) => {
     if (service === null || resource === null || slot === null) return;
     if (token === null) {
+      // Verifying to book: whatever wait was asked for and walked away from
+      // stays unasked.
+      waitAfterVerifying.current = null;
       setStage("verifying");
       return;
     }
@@ -758,7 +773,10 @@ export const BookingFlow = ({
 
       <Sheet
         open={stage === "confirming" || stage === "verifying"}
-        onClose={() => setStage("choosing")}
+        onClose={() => {
+          waitAfterVerifying.current = null;
+          setStage("choosing");
+        }}
         labelledBy="confirm-title"
       >
         {stage === "confirming" && slot !== null && service !== null && (
@@ -884,6 +902,14 @@ export const BookingFlow = ({
             errorText={errorText}
             onVerified={(newToken, newUser) => {
               signIn(newToken, newUser);
+              // Verified to wait, not to book: finish the ask they made.
+              const waitFor = waitAfterVerifying.current;
+              if (waitFor !== null) {
+                waitAfterVerifying.current = null;
+                setStage("choosing");
+                void keepWaiting(waitFor, newToken);
+                return;
+              }
               // The slot was never held (ADR 0003), so availability is asked
               // again before the booking is attempted.
               setStage("confirming");

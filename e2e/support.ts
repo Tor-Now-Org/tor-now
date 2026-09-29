@@ -81,13 +81,31 @@ export const paymentFellDue = async (businessId: string): Promise<void> => {
 };
 
 /**
- * The daily billing run, called the way Supabase Cron calls it: with the
- * credential both sides read from the database.
+ * A scheduled job, called the way Supabase Cron calls it: with the credential
+ * both sides read from the database.
  */
-export const runTheDailyBillingJob = async (): Promise<{ noticed: number }> => {
+const runTheJob = async <T>(path: string): Promise<T> => {
   const [row] = await database()<{ secret: string | null }[]>`select app.job_secret() as secret`;
   if (row?.secret === null || row?.secret === undefined) throw new Error("The database has no job credential");
-  return call<{ noticed: number }>("/jobs/billing-deactivation", { method: "POST", token: row.secret });
+  return call<T>(`/jobs/${path}`, { method: "POST", token: row.secret });
+};
+
+export const runTheDailyBillingJob = (): Promise<{ noticed: number }> =>
+  runTheJob<{ noticed: number }>("billing-deactivation");
+
+/**
+ * The waiting-list run, until it has looked at a calendar. Each run takes the
+ * oldest changes first, and the suite's database holds every change any
+ * journey made, so one run may not reach this one's yet.
+ */
+export const runTheWaitingListJobFor = async (resourceId: string): Promise<void> => {
+  for (let runs = 0; runs < 20; runs += 1) {
+    await runTheJob("waiting-list");
+    const [left] = await database()<{ count: number }[]>`
+      select count(*)::int as count from waiting_recheck where resource_id = ${resourceId}`;
+    if (left?.count === 0) return;
+  }
+  throw new Error("The waiting-list job never reached this calendar");
 };
 
 /** A phone number nobody else in the run will use. */

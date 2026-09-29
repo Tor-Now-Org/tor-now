@@ -2,10 +2,13 @@ import { expect, test } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
   aDayFromNow,
+  asTyped,
   anInstantAt,
   call,
+  database,
   openTheDayOf,
   ready,
+  runTheWaitingListJobFor,
   showDay,
   signInDirectly,
   uniquePhone,
@@ -89,6 +92,36 @@ test.describe("waiting for a time", () => {
     await page.getByRole("button", { name: /תספורת/ }).click();
     await showDay(page, daysAhead);
   };
+
+  /** Somebody waiting for any part of that day, joined the way the sheet joins. */
+  const somebodyWaiting = async (shop: Awaited<ReturnType<typeof aShopWithNoRoom>>["shop"], day: string) => {
+    const phone = uniquePhone();
+    const { code } = await call<{ code: string }>("/auth/request-code", { method: "POST", body: { phone } });
+    const { token } = await call<{ token: string }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name: { givenName: "ממתינה", familyName: null } },
+    });
+    await call("/waiting", {
+      method: "PUT",
+      token,
+      body: {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceIds: [shop.resource.id],
+        onDate: day,
+        parts: ["MORNING", "NOON", "EVENING"],
+      },
+    });
+    return phone;
+  };
+
+  /** The waiting-list messages written for a phone, as the delivery worker finds them. */
+  const openingsFor = async (phone: string) =>
+    (
+      await database()<{ count: number }[]>`
+        select count(*)::int as count from notification_outbox
+        where recipient_phone = ${phone} and template = 'WAITING_LIST_OPENING'`
+    )[0]?.count ?? 0;
 
   const offer = (page: import("@playwright/test").Page) =>
     page.getByRole("button", { name: /הודיעו לי אם מתפנה תור/ });
@@ -324,19 +357,73 @@ test.describe("waiting for a time", () => {
    * Waiting needs somebody to message. A visitor who has not verified is taken
    * through the same verification booking uses rather than told no.
    */
-  test("a visitor who has not verified is asked to, not refused", async ({ page }) => {
+  test("a visitor who has not verified is asked to, then put on the list they asked for", async ({ page }) => {
     const { shop } = await aShopWithNoRoom(`אורח ${Date.now()}`);
 
     await openTheDay(page, shop.business.id, 3);
     await offer(page).click();
+    await page.getByRole("dialog").getByRole("button", { name: "בוקר", exact: true }).click();
     await page.getByRole("dialog").getByRole("button", { name: "הודיעו לי", exact: true }).click();
 
-    await expect(page.getByText(/אימות|קוד/).first()).toBeVisible({ timeout: 15_000 });
+    // The same verification booking uses…
+    await expect(page.getByText("מאמתים מספר טלפון")).toBeVisible({ timeout: 15_000 });
+    await page.getByLabel("מספר טלפון").fill(asTyped(uniquePhone()));
+    await page.getByRole("button", { name: "שליחת קוד" }).click();
+    const notice = page.getByText(/code is returned here: (\d+)/);
+    await expect(notice).toBeVisible({ timeout: 15_000 });
+    await page.getByLabel("הקוד שקיבלתם").fill((await notice.textContent())?.match(/(\d{4,8})/)?.[1] ?? "");
+    await page.getByRole("button", { name: "אישור הקוד" }).click();
+    await page.getByLabel("שם פרטי").fill("ענבל");
+    await page.getByLabel("שם משפחה").fill("שגיא");
+    await page.getByRole("button", { name: "ממשיכים" }).click();
+
+    // …and then what they asked for: on the list for the morning, without
+    // being made to ask again.
+    await expect(page.getByRole("button", { name: /אתם ברשימת ההמתנה לבוקר/ })).toBeVisible({ timeout: 15_000 });
+  });
+
+  /**
+   * The other side of carrying the ask through verification: one walked away
+   * from is not made on their behalf when they later verify to book.
+   */
+  test("a wait walked away from is not made when the visitor later books", async ({ page }) => {
+    const { shop } = await aShopWithNoRoom(`חרטה ${Date.now()}`);
+    const phone = uniquePhone();
+
+    await openTheDay(page, shop.business.id, 3);
+    await offer(page).click();
+    await page.getByRole("dialog").getByRole("button", { name: "הודיעו לי", exact: true }).click();
+    await expect(page.getByText("מאמתים מספר טלפון")).toBeVisible({ timeout: 15_000 });
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    // Another day, with room, booked the ordinary way.
+    await showDay(page, 4);
+    const times = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
+    await expect(times.first()).toBeVisible({ timeout: 15_000 });
+    await times.first().click();
+    await page.getByRole("button", { name: "אישור התור" }).click();
+    await page.getByLabel("מספר טלפון").fill(asTyped(phone));
+    await page.getByRole("button", { name: "שליחת קוד" }).click();
+    const notice = page.getByText(/code is returned here: (\d+)/);
+    await expect(notice).toBeVisible({ timeout: 15_000 });
+    await page.getByLabel("הקוד שקיבלתם").fill((await notice.textContent())?.match(/(\d{4,8})/)?.[1] ?? "");
+    await page.getByRole("button", { name: "אישור הקוד" }).click();
+    await page.getByLabel("שם פרטי").fill("רוני");
+    await page.getByLabel("שם משפחה").fill("לב");
+    await page.getByRole("button", { name: "ממשיכים" }).click();
+    await page.getByRole("button", { name: "אישור התור" }).click();
+    await expect(page.getByText("התור נקבע")).toBeVisible({ timeout: 20_000 });
+
+    const [entries] = await database()<{ count: number }[]>`
+      select count(*)::int as count from waiting_entry e join app_user u on u.id = e.customer_id
+      where u.phone = ${phone}`;
+    expect(entries?.count).toBe(0);
   });
 
   /** Somebody who books the thing they were waiting for is no longer waiting. */
   test("booking the day closes the wait", async ({ page }) => {
-    const { shop, day, taken } = await aShopWithNoRoom(`נסגר ${Date.now()}`);
+    const { shop, taken } = await aShopWithNoRoom(`נסגר ${Date.now()}`);
     await signInDirectly(page, uniquePhone(), "מיכל");
 
     await openTheDay(page, shop.business.id, 3);
@@ -362,23 +449,34 @@ test.describe("waiting for a time", () => {
     await page.getByRole("button", { name: "התורים שלי" }).click();
     await expect(page.getByText("תספורת").first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("ברשימת המתנה")).toHaveCount(0);
-    expect(day).toBeTruthy();
   });
 
-  test("an owner cancelling chooses what becomes of the hour", async ({ page }) => {
-    const { shop, day, taken } = await aShopWithNoRoom(`בחירת בעלים ${Date.now()}`);
+  /** The owner's side, opened on the day and on the first appointment in it. */
+  const openTheAppointment = async (
+    page: import("@playwright/test").Page,
+    shop: Awaited<ReturnType<typeof aShopWithNoRoom>>["shop"],
+    day: string,
+  ) => {
     await page.addInitScript(
       ([key, token]) => window.localStorage.setItem(key as string, token as string),
       ["tor-now.session", shop.owner.token],
     );
-
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await openTheDayOf(page, day);
     await page.getByRole("button").filter({ hasText: "רוזן0" }).first().click();
-
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByText("השעה שתתפנה")).toBeVisible({ timeout: 15_000 });
+    return sheet;
+  };
+
+  const statusOf = async (appointmentId: string) =>
+    (await database()<{ status: string }[]>`select status from appointment where id = ${appointmentId}`)[0]?.status;
+
+  test("an owner cancelling chooses what becomes of the hour, and a kept hour tells nobody", async ({ page }) => {
+    const { shop, day, taken } = await aShopWithNoRoom(`בחירת בעלים ${Date.now()}`);
+    const waiting = await somebodyWaiting(shop, day);
+    const sheet = await openTheAppointment(page, shop, day);
 
     // Publishing is the default, and the button says what it will do.
     await expect(sheet.getByRole("button", { name: "לפרסם" })).toHaveAttribute(
@@ -391,8 +489,25 @@ test.describe("waiting for a time", () => {
     await sheet.getByRole("button", { name: "לשמור לי" }).click();
     await expect(sheet.getByText(/לא יישלחו הודעות/)).toBeVisible();
     await sheet.getByRole("button", { name: "ביטול ושמירת השעה" }).click();
-
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
-    expect(taken.length).toBeGreaterThan(0);
+
+    // Cancelled — and whoever was waiting for that day hears nothing of it.
+    await expect.poll(() => statusOf(taken[0]!.id), { timeout: 15_000 }).toBe("CANCELLED");
+    await runTheWaitingListJobFor(shop.resource.id);
+    expect(await openingsFor(waiting)).toBe(0);
+  });
+
+  test("an hour the owner publishes reaches whoever was waiting for it", async ({ page }) => {
+    const { shop, day, taken } = await aShopWithNoRoom(`פרסום ${Date.now()}`);
+    const waiting = await somebodyWaiting(shop, day);
+    const sheet = await openTheAppointment(page, shop, day);
+
+    await sheet.getByRole("button", { name: "ביטול ופרסום השעה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+    await expect.poll(() => statusOf(taken[0]!.id), { timeout: 15_000 }).toBe("CANCELLED");
+
+    // The message is written when the job looks at the day, once.
+    await runTheWaitingListJobFor(shop.resource.id);
+    expect(await openingsFor(waiting)).toBe(1);
   });
 });

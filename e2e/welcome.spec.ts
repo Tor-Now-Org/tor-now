@@ -148,6 +148,21 @@ test.describe("the welcome page", () => {
   test("leads somewhere from every call to action", async ({ page }) => {
     await page.goto("/welcome");
     await ready(page);
+
+    // Every button on the page, not only the first: a section on the page it
+    // names, or a screen that answers.
+    const targets = await page.locator("a.lp-btn").evaluateAll((links) =>
+      links.map((link) => link.getAttribute("href") ?? ""),
+    );
+    expect(targets.length).toBeGreaterThan(5);
+    for (const href of new Set(targets)) {
+      if (href.startsWith("#")) {
+        await expect(page.locator(href), `${href} names no section`).toHaveCount(1);
+      } else {
+        expect((await page.request.get(href)).status(), `${href} does not answer`).toBe(200);
+      }
+    }
+
     await page.getByRole("link", { name: "נסו עכשיו" }).click();
     await ready(page);
     // The app itself, which is what the page is selling.

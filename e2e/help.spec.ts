@@ -6,8 +6,8 @@ import { ready, signInDirectly, uniquePhone } from "./support.ts";
  *
  * The one screen in the system that must work for somebody who cannot sign in,
  * so the first thing tested is that it opens with no session at all. The rest
- * is the promise the screen makes: an answer without writing to anybody, and a
- * message that arrives somewhere the person can see it afterwards.
+ * is the promise the screen makes: an answer without writing to anybody, and
+ * two real ways to reach a person — never a form that goes nowhere.
  */
 test.describe("support", () => {
   test("opens without a session and answers before it asks", async ({ page }) => {

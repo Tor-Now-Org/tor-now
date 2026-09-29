@@ -3,6 +3,8 @@ import { findInDirectory, inDirectory, noAddonsOnSale, openFeatures } from "./ad
 import { anAdministrator, asAdministrator, paidUp } from "./cost-support.ts";
 import {
   aBusinessWithOpenHours,
+  aDayFromNow,
+  anInstantAt,
   call,
   closeDatabase,
   database,
@@ -41,7 +43,9 @@ const resourcesOf = (shop: { business: { id: string }; owner: { token: string } 
 const billingOf = (shop: { business: { id: string }; owner: { token: string } }) =>
   call<{
     subscription: { plan: string; scheduledMove: { plan: string } | null };
-    nextPayment: { totalMinor: number; lines: { kind: string }[] };
+    nextPayment: { totalMinor: number; lines: { kind: string; amountMinor: number }[] };
+    moveUpOwed: { plan: string; amountMinor: number }[];
+    addons: { feature: string; ifAdded: { owed: { amountMinor: number } | null } | null }[];
   }>(`/businesses/${shop.business.id}/subscription`, { token: shop.owner.token });
 
 test.describe("paying", () => {
@@ -50,6 +54,10 @@ test.describe("paying", () => {
     const name = `תשלום ${Date.now()}`;
     const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone(), plan: "SOLO" });
     await paymentFellDue(shop.business.id);
+    // Half past midnight in Israel, when UTC still reads yesterday: the hour a
+    // payment stamped with the UTC date lands on the wrong day.
+    const today = aDayFromNow(0);
+    await page.clock.setFixedTime(new Date(anInstantAt(today, "00:30")));
 
     await asAdministrator(page, admin);
     await findInDirectory(page, name);
@@ -59,14 +67,13 @@ test.describe("paying", () => {
     const amount = sheet.getByLabel("סכום");
     // What the owner was told the next payment comes to, line by line.
     await expect(amount).toHaveValue("49", { timeout: 15_000 });
-    await expect(sheet.getByText(/יחיד/).first()).toBeVisible();
+    await expect(sheet.getByText(/^יחיד .*49.*\. אפשר לשנות\.$/)).toBeVisible();
     await sheet.getByRole("button", { name: "רישום תשלום" }).click();
 
     await expect(inDirectory(page, name).getByText("משולם")).toBeVisible({ timeout: 20_000 });
-    const [payment] = await database()<{ amount_minor: number; on_israel_day: boolean }[]>`
-      select amount_minor, paid_on = (now() at time zone 'Asia/Jerusalem')::date as on_israel_day
-      from payment where business_id = ${shop.business.id}`;
-    expect(payment).toEqual({ amount_minor: 4_900, on_israel_day: true });
+    const payments = await database()<{ amount_minor: number; paid_on: string }[]>`
+      select amount_minor, paid_on::text from payment where business_id = ${shop.business.id}`;
+    expect(payments).toEqual([{ amount_minor: 4_900, paid_on: today }]);
   });
 });
 
@@ -99,6 +106,8 @@ test.describe("moving between Plans", () => {
     await paidUp(shop.business.id);
     // Held Team while paying, as a Business that moved down from it would have.
     await database()`insert into plan_held (business_id, plan) values (${shop.business.id}, 'TEAM')`;
+    const owed = (await billingOf(shop)).moveUpOwed.find((entry) => entry.plan === "TEAM")?.amountMinor ?? 0;
+    expect(owed).toBeGreaterThan(0);
     await signInDirectly(page, ownerPhone, "בעלים");
     await openBilling(page, shop.business.id);
 
@@ -109,8 +118,12 @@ test.describe("moving between Plans", () => {
     await expect(page.locator(".plan-choice.on").getByText("המסלול שלכם")).toBeVisible({ timeout: 15_000 });
     await expect(page.locator(".pay-row", { hasText: /בתשלום הבא/ })).toBeVisible();
     const after = await billingOf(shop);
-    expect(after.nextPayment.lines.map((line) => line.kind)).toEqual(["PLAN", "DAYS"]);
-    expect(after.nextPayment.totalMinor).toBeGreaterThan(8_900);
+    // Exactly what it said it would owe, on top of Team's price.
+    expect(after.nextPayment.lines).toEqual([
+      expect.objectContaining({ kind: "PLAN", amountMinor: 8_900 }),
+      expect.objectContaining({ kind: "DAYS", amountMinor: owed }),
+    ]);
+    expect(after.nextPayment.totalMinor).toBe(8_900 + owed);
   });
 
   test("a calendar paused for a smaller Plan comes back when the owner moves up", async ({ page }) => {
@@ -151,6 +164,8 @@ test.describe("Add-ons", () => {
         insert into addon_holding (business_id, feature, added_on, pays_from, price_minor, ends_on, ending)
         values (${shop.business.id}, 'CUSTOMER_BLOCKING', current_date - 40, current_date - 30, 900,
                 current_date - 7, 'CANCELLED')`;
+      const owed = (await billingOf(shop)).addons.find((addon) => addon.feature === "CUSTOMER_BLOCKING")?.ifAdded?.owed?.amountMinor ?? 0;
+      expect(owed).toBeGreaterThan(0);
       await signInDirectly(page, ownerPhone, "בעלים");
       await openBilling(page, shop.business.id);
 
@@ -164,7 +179,12 @@ test.describe("Add-ons", () => {
       await expect(row.getByText("פעיל")).toBeVisible({ timeout: 15_000 });
       await expect(page.locator(".pay-row", { hasText: /בתשלום הבא/ })).toBeVisible();
       const after = await billingOf(shop);
-      expect(after.nextPayment.lines.map((line) => line.kind)).toEqual(["PLAN", "ADDON", "DAYS"]);
+      expect(after.nextPayment.lines).toEqual([
+        expect.objectContaining({ kind: "PLAN", amountMinor: 4_900 }),
+        expect.objectContaining({ kind: "ADDON", amountMinor: 900 }),
+        expect.objectContaining({ kind: "DAYS", amountMinor: owed }),
+      ]);
+      expect(after.nextPayment.totalMinor).toBe(4_900 + 900 + owed);
     } finally {
       await call("/admin/catalogue/features/CUSTOMER_BLOCKING/addon/stop", { method: "POST", token: admin }).catch(() => undefined);
     }

@@ -2872,12 +2872,17 @@ test.describe("reading a day at a glance", () => {
     expect(painted[1]?.background).not.toBe(painted[0]?.background);
   });
 
-  // FILTER_BUTTON is off in day-filter-bar.tsx; back on, unskip.
-  test.skip("keeps the + out of the way of any sheet, including the filter", async ({ page }) => {
+  test("keeps the + out of the way of any sheet, its own and one it knows nothing about", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `כפתור ${Date.now()}`,
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
+    });
+    const [day] = inOneMonth([2]);
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { blocks: [{ startAt: anInstantAt(day, "10:00"), endAt: anInstantAt(day, "11:00"), reason: "ספק" }] },
     });
     await page.addInitScript(
       ([key, value]) => window.localStorage.setItem(key as string, value as string),
@@ -2889,12 +2894,22 @@ test.describe("reading a day at a glance", () => {
     const plus = page.getByRole("button", { name: "הוספה ליום" });
     await expect(plus).toBeVisible({ timeout: 15_000 });
 
-    // The filter is a sheet like any other, and the + used to sit on top of it.
-    await page.getByRole("button", { name: "סינון" }).click();
+    // Its own sheet: the + does not sit on the menu it opened.
+    await plus.click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(plus).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(plus).toBeVisible();
 
-    await page.getByRole("button", { name: "הצגת התוצאות" }).click();
+    // A sheet the + was never told about — a blockage opened from the day. The
+    // filter's sheet is one more of these, when its button comes back.
+    await openTheDayOf(page, day);
+    await page.getByRole("button", { name: /\d\d:\d\d ספק/ }).first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(plus).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
     await expect(plus).toBeVisible({ timeout: 15_000 });
   });
 
