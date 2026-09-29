@@ -1,3 +1,4 @@
+import { inMemoryFairUseLimits, inMemoryReferenceBusinesses, inMemoryRunningCosts } from "./in-memory-costs.ts";
 import {
   asId,
   BUSINESS_DEFAULTS,
@@ -1370,6 +1371,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             unit: record.unit,
             day,
             quantity: (lines.get(key)?.quantity ?? 0) + record.quantity,
+            messages: (lines.get(key)?.messages ?? 0) + 1,
           });
         }
         return [...lines.values()].sort(
@@ -1383,6 +1385,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
     },
 
     unitRates: inMemoryUnitRates(store),
+    fairUseLimits: inMemoryFairUseLimits(store),
+    referenceBusinesses: inMemoryReferenceBusinesses(store),
+    runningCosts: inMemoryRunningCosts(store),
     grants: inMemoryGrants(store),
 
     previews: inMemoryPreviews(store),

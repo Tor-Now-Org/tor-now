@@ -11,6 +11,8 @@
  * record, this file is the running text.
  */
 
+import { costs } from "./costs-copy.ts";
+
 export const LANGUAGES = ["he", "en"] as const;
 export type Language = (typeof LANGUAGES)[number];
 
@@ -2455,7 +2457,7 @@ const catalogue = {
     "tab": "מחירון",
     "edition": "גרסה",
     "subPlans": "מסלולים",
-    "subRates": "תעריפי הודעות",
+    "subRates": "תעריפים",
     "subFeatures": "פיצ'רים",
     "featuresNote": "כל פיצ'ר, איפה הוא נמכר, ולמי יש אותו. רשימת הפיצ'רים עצמה נקבעת בקוד — מכאן מחליטים איפה כל אחד נמצא: במסלול, בתצוגה מוקדמת, כתוספת, או בהענקה לעסק.",
     "featureWhat": {
@@ -2715,7 +2717,7 @@ const catalogue = {
     "tab": "Catalogue",
     "edition": "Edition",
     "subPlans": "Plans",
-    "subRates": "Message rates",
+    "subRates": "Rates",
     "subFeatures": "Features",
     "featuresNote": "Every Feature, where it's sold, and who has it. The list of Features itself is set in code — here you decide where each one is: in a plan, in a Preview, as an Add-on, or granted to a Business.",
     "featureWhat": {
@@ -2974,6 +2976,7 @@ const catalogue = {
 };
 
 export const DICTIONARIES = {
+  costs,
   customer,
   signIn,
   onboarding,

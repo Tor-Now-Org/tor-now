@@ -21,6 +21,8 @@ import { catalogueAdminService } from "../../application/catalogue-admin.ts";
 import { planCatalogueService } from "../../application/plan-catalogue.ts";
 import { featureCatalogueService } from "../../application/feature-catalogue.ts";
 import { addonCatalogueService } from "../../application/addon-catalogue.ts";
+import { costService } from "../../application/cost-service.ts";
+import { fairUseService } from "../../application/fair-use-service.ts";
 import { addonService } from "../../application/addon-service.ts";
 import { outboxWorker } from "../../application/outbox-worker.ts";
 import { reminderService } from "../../application/reminder-service.ts";
@@ -300,6 +302,8 @@ export const harness = (options: { now?: Instant } = {}) => {
       planCatalogue: planCatalogueService({ unitOfWork, clock }),
       featureCatalogue: featureCatalogueService({ unitOfWork, clock }),
       addonCatalogue: addonCatalogueService({ unitOfWork, clock }),
+      costs: costService({ unitOfWork, clock }),
+      fairUse: fairUseService({ unitOfWork, clock }),
       addons: addonService({ unitOfWork, clock }),
       closures: closureService({ unitOfWork, clock }),
       admin,

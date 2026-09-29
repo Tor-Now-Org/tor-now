@@ -99,6 +99,15 @@ export const AUDIT_ACTIONS = {
   addonPricesSet: "ADDON_PRICES_SET",
   /** Days owed beyond a monthly price: an Add-on added back, a Plan moved up to again. */
   daysOwedAdded: "DAYS_OWED_ADDED",
+  /** ADR 0023: a Fair Use Limit changed — a cause's, or the daily one for sign-in codes. */
+  fairUseLimitSet: "FAIR_USE_LIMIT_SET",
+  /** ADR 0023: the Cost Calculator's saved Businesses, kept, changed, renamed or deleted. */
+  referenceBusinessSaved: "REFERENCE_BUSINESS_SAVED",
+  referenceBusinessUpdated: "REFERENCE_BUSINESS_UPDATED",
+  referenceBusinessRenamed: "REFERENCE_BUSINESS_RENAMED",
+  referenceBusinessDeleted: "REFERENCE_BUSINESS_DELETED",
+  /** ADR 0023: a running cost added, or its amount from a day entered. */
+  runningCostSet: "RUNNING_COST_SET",
   /**
    * ADR 0006: administrator reads of a customer record are audited as well as
    * writes. An unlogged read on the service_role path would be undetectable,

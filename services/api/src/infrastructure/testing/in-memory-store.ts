@@ -2,7 +2,10 @@ import type {
   AddonHolding,
   AddonOffer,
   DaysOwedEntry,
+  FairUseLimits,
   Plan,
+  ReferenceBusiness,
+  RunningCost,
   Appointment,
   Block,
   Business,
@@ -69,6 +72,9 @@ export type Store = {
   plansHeld: { businessId: string; plan: Plan }[];
   usageRecords: UsageRecord[];
   unitRates: UnitRateEntry[];
+  fairUseLimits: FairUseLimits;
+  referenceBusinesses: ReferenceBusiness[];
+  runningCosts: RunningCost[];
   grants: (Grant & { createdAt: Instant })[];
   /** app_user.trial_taken_on, kept beside the User as the database keeps it. */
   trialsTaken: { userId: string; on: LocalDate }[];
@@ -123,6 +129,7 @@ export const emptyStore = (
     checkedBy: null,
     enteredAt: instant(0),
   })),
+  ...initialCosts(),
   grants: [],
   trialsTaken: [],
   allowlist: [],
@@ -163,6 +170,41 @@ const initialCatalogue = (today: LocalDate): Pick<Store, "planVersions" | "previ
     },
   ],
   previews: [{ feature: "WAITING_LIST", endsOn: addDays(today, 59), placement: null, decidedAt: null }],
+});
+
+/** What the costs migration seeds: the Fair Use Limits, and two saved Businesses. */
+const initialCosts = (): Pick<Store, "fairUseLimits" | "referenceBusinesses" | "runningCosts"> => ({
+  fairUseLimits: {
+    perBusiness: { BOOKING: money(12_000), REMINDERS: money(10_000), WAITING_LIST: money(1_000) },
+    signInPerDay: 300,
+  },
+  referenceBusinesses: [
+    {
+      id: asId("0000bea1-0000-4000-8000-000000000001"),
+      name: "בינוני",
+      savedOn: parseLocalDate("2026-09-29"),
+      use: {
+        calendars: 1,
+        BOOKING: { whatsapp: 205, sms: 2 },
+        REMINDERS: { whatsapp: 178, sms: 2 },
+        WAITING_LIST: { whatsapp: 10, sms: 0 },
+        BILLING: { whatsapp: 2, sms: 0 },
+      },
+    },
+    {
+      id: asId("0000bea1-0000-4000-8000-000000000002"),
+      name: "עמוס",
+      savedOn: parseLocalDate("2026-09-29"),
+      use: {
+        calendars: 4,
+        BOOKING: { whatsapp: 1051, sms: 11 },
+        REMINDERS: { whatsapp: 891, sms: 9 },
+        WAITING_LIST: { whatsapp: 59, sms: 1 },
+        BILLING: { whatsapp: 2, sms: 0 },
+      },
+    },
+  ],
+  runningCosts: [],
 });
 
 /**

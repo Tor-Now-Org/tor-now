@@ -22,6 +22,7 @@ import {
   usageRecordRepository,
 } from "./billing-repositories.ts";
 import { addonHoldingRepository, addonOfferRepository, daysOwedRepository } from "./addon-repositories.ts";
+import { fairUseLimitRepository, referenceBusinessRepository, runningCostRepository } from "./cost-repositories.ts";
 import { grantRepository } from "./grant-repository.ts";
 import { noticeRepository } from "./notice-repository.ts";
 import { outbox } from "./outbox.ts";
@@ -61,6 +62,9 @@ const repositoriesOn = (tx: Transaction): Repositories => ({
   daysOwed: daysOwedRepository(tx),
   usageRecords: usageRecordRepository(tx),
   unitRates: unitRateRepository(tx),
+  fairUseLimits: fairUseLimitRepository(tx),
+  referenceBusinesses: referenceBusinessRepository(tx),
+  runningCosts: runningCostRepository(tx),
   administratorAllowlist: administratorAllowlistRepository(tx),
   waitingEntries: waitingEntryRepository(tx),
   waitingRechecks: waitingRecheckRepository(tx),

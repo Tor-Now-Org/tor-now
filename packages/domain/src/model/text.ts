@@ -16,6 +16,16 @@
 /** E.164, which is also what the database's CHECK constraint enforces. */
 export const PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
 
+/**
+ * Where a sign-in code may be sent while the platform serves Israel. Every
+ * code costs the platform a message, and a code to an expensive foreign number
+ * is how "SMS pumping" runs up a bill — so the first phase sends to +972 only.
+ */
+export const SIGN_IN_DIAL_CODE = "+972";
+
+export const canReceiveSignInCode = (phone: string): boolean =>
+  PHONE_PATTERN.test(phone) && phone.startsWith(SIGN_IN_DIAL_CODE);
+
 export type TextRule = {
   readonly min: number;
   readonly max: number;

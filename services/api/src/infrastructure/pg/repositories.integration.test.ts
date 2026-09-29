@@ -28,6 +28,7 @@ import {
   workingHoursRepository,
 } from "./scheduling-repositories.ts";
 import { addonHoldingRepository, addonOfferRepository, daysOwedRepository } from "./addon-repositories.ts";
+import { fairUseLimitRepository, referenceBusinessRepository, runningCostRepository } from "./cost-repositories.ts";
 import { grantRepository } from "./grant-repository.ts";
 import { noticeRepository } from "./notice-repository.ts";
 import {
@@ -140,6 +141,9 @@ if (databaseUrl === undefined || databaseUrl === "") {
         daysOwed: recording("daysOwed", daysOwedRepository(transaction)),
         usageRecords: recording("usageRecords", usageRecordRepository(transaction)),
         unitRates: recording("unitRates", unitRateRepository(transaction)),
+        fairUseLimits: recording("fairUseLimits", fairUseLimitRepository(transaction)),
+        referenceBusinesses: recording("referenceBusinesses", referenceBusinessRepository(transaction)),
+        runningCosts: recording("runningCosts", runningCostRepository(transaction)),
         administratorAllowlist: recording(
           "administratorAllowlist",
           administratorAllowlistRepository(transaction),

@@ -130,6 +130,16 @@ export const adminService = (dependencies: {
       });
     },
 
+    /** One Business as the directory shows it — for opening its sheet from anywhere else. */
+    async businessRow(actor: Actor, businessId: BusinessId): Promise<DirectoryRow> {
+      requireAdministrator(actor);
+      return unitOfWork.run(actor, async ({ repositories }) => {
+        const row = (await directoryOf(repositories)).find((candidate) => candidate.business.id === businessId);
+        if (row === undefined) throw notFound("Business", businessId);
+        return row;
+      });
+    },
+
     /** ADR 0010: toggling the active flag, which removes a Business from search. */
     async setBusinessActive(
       actor: Actor,

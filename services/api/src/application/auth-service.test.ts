@@ -193,3 +193,40 @@ describe("what a sign-in code uses", () => {
     expect(test.store.usageRecords).toEqual([]);
   });
 });
+
+/**
+ * Every code is a message the platform pays for, and codes sent to foreign
+ * numbers are how a bill is run up. For now, Israeli numbers only (ADR 0023).
+ */
+describe("who a code goes to", () => {
+  let test: Harness;
+
+  beforeEach(() => {
+    test = harness();
+    test.sendCodesBy("SMS");
+  });
+
+  it("refuses a number outside Israel before anything is sent, stored or paid for", async () => {
+    for (const foreign of ["+14155238886", "+447700900123", "+33612345678"]) {
+      await expect(test.services.auth.requestCode(foreign)).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+        details: { field: "phone" },
+      });
+    }
+    expect(test.sentCodes).toEqual([]);
+    expect(test.store.usageRecords).toEqual([]);
+    expect(test.store.verificationCodes).toEqual([]);
+  });
+
+  it("sends to an Israeli number as before", async () => {
+    await test.services.auth.requestCode("+972500000073");
+    expect(test.store.usageRecords).toHaveLength(1);
+  });
+
+  it("gives a foreign number no way in, since no code was ever issued to check", async () => {
+    await expect(test.services.auth.requestCode("+14155238886")).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    await expect(test.services.auth.verifyCode("+14155238886", "111111", null)).rejects.toMatchObject({
+      code: "VERIFICATION_FAILED",
+    });
+  });
+});

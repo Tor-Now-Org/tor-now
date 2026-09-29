@@ -40,9 +40,16 @@ import type {
   PreviewPlacement,
   PlanVersion,
   PlanVersionId,
-  CostSource,
-  CostUnit,
+  CalculatorUse,
+  FairUseLimits,
+  FairUseSource,
+  ReferenceBusiness,
+  ReferenceBusinessId,
+  RunningCost,
+  RunningCostAmount,
+  RunningCostId,
   UnitRate,
+  UsageDay,
   UsageRecord,
   Grant,
   GrantId,
@@ -839,15 +846,10 @@ export type DaysOwedRepository = {
 /**
  * Usage added up per Business, source, unit and day — the day being what a
  * Unit Rate is dated by, so each line is priced by the rate in force on it.
- * Days are UTC, as providers bill.
+ * Days are UTC, as providers bill. `messages` counts what was sent, so an
+ * SMS's parts per message can be measured.
  */
-export type DailyUsageLine = {
-  readonly businessId: BusinessId | null;
-  readonly source: CostSource;
-  readonly unit: CostUnit;
-  readonly day: LocalDate;
-  readonly quantity: number;
-};
+export type DailyUsageLine = UsageDay;
 
 export type UsageRecordRepository = {
   /** Append-only: what happened is never revised; only its price may be. */
@@ -872,6 +874,43 @@ export type UnitRateRepository = {
    * stays as it is (ADR 0022).
    */
   set(rate: UnitRate, checkedBy: UserId): Promise<UnitRateEntry>;
+};
+
+/** Fair Use Limits (ADR 0023): one per cause, and one for sign-in codes. Only ever alert. */
+export type FairUseLimitRepository = {
+  get(): Promise<FairUseLimits>;
+  setBusinessLimit(source: FairUseSource, amount: Money): Promise<FairUseLimits>;
+  setSignInLimit(codesPerDay: number): Promise<FairUseLimits>;
+};
+
+/** The Cost Calculator's saved examples (ADR 0023), shared by every administrator, oldest first. */
+export type ReferenceBusinessRepository = {
+  list(): Promise<readonly ReferenceBusiness[]>;
+  create(input: {
+    name: string;
+    use: CalculatorUse;
+    savedOn: LocalDate;
+    savedBy: UserId;
+  }): Promise<ReferenceBusiness>;
+  /** New numbers for a saved one; its name stays. */
+  update(
+    id: ReferenceBusinessId,
+    input: { use: CalculatorUse; savedOn: LocalDate; savedBy: UserId },
+  ): Promise<ReferenceBusiness>;
+  rename(id: ReferenceBusinessId, name: string): Promise<ReferenceBusiness>;
+  delete(id: ReferenceBusinessId): Promise<void>;
+};
+
+/**
+ * What the platform pays whatever the Businesses do (ADR 0023), each a series
+ * of dated amounts. An amount for a cost and day already there is replaced;
+ * every other one stays.
+ */
+export type RunningCostRepository = {
+  /** Every cost, in the order they were added, each with every amount oldest first. */
+  list(): Promise<readonly RunningCost[]>;
+  create(name: string, amount: RunningCostAmount, enteredBy: UserId): Promise<RunningCost>;
+  setAmount(id: RunningCostId, amount: RunningCostAmount, enteredBy: UserId): Promise<RunningCost>;
 };
 
 /** A Grant as the administrator sees it: who gave it, and when. */
@@ -1075,6 +1114,9 @@ export type Repositories = {
   readonly daysOwed: DaysOwedRepository;
   readonly usageRecords: UsageRecordRepository;
   readonly unitRates: UnitRateRepository;
+  readonly fairUseLimits: FairUseLimitRepository;
+  readonly referenceBusinesses: ReferenceBusinessRepository;
+  readonly runningCosts: RunningCostRepository;
   readonly administratorAllowlist: AdministratorAllowlistRepository;
   readonly waitingEntries: WaitingEntryRepository;
   readonly waitingRechecks: WaitingRecheckRepository;

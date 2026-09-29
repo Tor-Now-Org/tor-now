@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asId, instant } from "@tor-now/domain";
+import { asId, BUSINESS_MESSAGE_SOURCES, FAIR_USE_SOURCES, instant } from "@tor-now/domain";
 import { TEMPLATES } from "../ports/notifier.ts";
 import { SOURCE_OF_TEMPLATE, usageRecordFor } from "./usage.ts";
 
@@ -12,6 +12,20 @@ describe("SOURCE_OF_TEMPLATE", () => {
     expect(SOURCE_OF_TEMPLATE[TEMPLATES.bookingReminder]).toBe("REMINDERS");
     expect(SOURCE_OF_TEMPLATE[TEMPLATES.waitingListOpening]).toBe("WAITING_LIST");
     expect(SOURCE_OF_TEMPLATE[TEMPLATES.billingNotice]).toBe("BILLING");
+  });
+
+  // ADR 0023: the Cost Calculator has a row for each cause a Business's
+  // messages have. A template added without one would cost money no row shows.
+  it("has a Cost Calculator row for every cause a Business's message can have", () => {
+    for (const source of Object.values(SOURCE_OF_TEMPLATE)) {
+      expect(BUSINESS_MESSAGE_SOURCES).toContain(source);
+    }
+  });
+
+  it("puts a Fair Use Limit on every cause but the platform's own payment notices", () => {
+    expect([...BUSINESS_MESSAGE_SOURCES].filter((source) => !(FAIR_USE_SOURCES as readonly string[]).includes(source))).toEqual([
+      "BILLING",
+    ]);
   });
 });
 

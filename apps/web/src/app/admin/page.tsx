@@ -34,7 +34,11 @@ import { AddonsSection } from "@/components/owner/addons-section.tsx";
 import { PaymentLines } from "@/components/payment-lines.tsx";
 import { paymentBoardOf } from "@/lib/next-payment.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
-import { CatalogueTab } from "@/components/admin/catalogue-tab.tsx";
+import { CatalogueTab, type CataloguePart } from "@/components/admin/catalogue-tab.tsx";
+import type { CostPart } from "@/components/admin/costs/costs-part.tsx";
+import { FairUseBanner } from "@/components/admin/costs/fair-use-banner.tsx";
+import { UsageCard } from "@/components/admin/costs/usage-card.tsx";
+import { costApi } from "@/lib/api/cost-client.ts";
 import { localDateOf } from "@/components/owner/day-filter.ts";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner, Warning } from "@/components/ui.tsx";
 import { AdminStats } from "@/components/admin-stats.tsx";
@@ -80,6 +84,11 @@ export default function AdminPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const problem = useFieldProblem();
   const [openBusiness, setOpenBusiness] = useState<DirectoryRowDto | null>(null);
+  // Where the Catalogue opens; `at` remounts it when a banner sends the administrator there again.
+  const [catalogueStart, setCatalogueStart] = useState<{ part: CataloguePart; costs?: CostPart; at: number }>({
+    part: "plans",
+    at: 0,
+  });
   const [billing, setBilling] = useState<BillingDto | null>(null);
   const [editReason, setEditReason] = useState("");
   const [edits, setEdits] = useState<{
@@ -204,6 +213,15 @@ export default function AdminPage() {
       .catch(() => setBilling(null));
   };
 
+  /** A Business's sheet from anywhere that knows only its id — a cost screen, say. */
+  const openBusinessById = (businessId: string) => {
+    setError(null);
+    void costApi
+      .businessRow(token, businessId)
+      .then(openRow)
+      .catch((cause: unknown) => setError(errorText(isApiError(cause) ? cause.code : "INTERNAL")));
+  };
+
   const showStatus = (status: BillingStatus) => {
     setDirectoryFilter({ ...NO_DIRECTORY_FILTER, statuses: [status] });
     setTab("businesses");
@@ -226,6 +244,14 @@ export default function AdminPage() {
         {error !== null && <Critical>{error}</Critical>}
 
         {tab === "businesses" && (
+          <>
+          <FairUseBanner
+            token={token}
+            onOpen={() => {
+              setCatalogueStart({ part: "costs", costs: "fairUse", at: Date.now() });
+              setTab("catalogue");
+            }}
+          />
           <BusinessDirectory
             token={token}
             filter={directoryFilter}
@@ -233,6 +259,7 @@ export default function AdminPage() {
             onOpen={openRow}
             refreshKey={directoryRefresh}
           />
+          </>
         )}
 
         {tab === "users" && (
@@ -294,11 +321,14 @@ export default function AdminPage() {
 
         {tab === "catalogue" && (
           <CatalogueTab
+            key={catalogueStart.at}
             token={token}
+            initial={catalogueStart}
             onShowBusinesses={(filter) => {
               setDirectoryFilter({ ...NO_DIRECTORY_FILTER, ...filter });
               setTab("businesses");
             }}
+            onOpenBusiness={openBusinessById}
           />
         )}
 
@@ -379,7 +409,11 @@ export default function AdminPage() {
 
       <BottomNav
         current={tab}
-        onSelect={(id) => setTab(id as Tab)}
+        onSelect={(id) => {
+          // The navigation opens the Catalogue where it always has; only a banner opens it elsewhere.
+          if (id === "catalogue") setCatalogueStart({ part: "plans", at: Date.now() });
+          setTab(id as Tab);
+        }}
         items={[
           { id: "businesses", label: copy.businesses, icon: <BuildingIcon /> },
           { id: "users", label: copy.users, icon: <PeopleIcon /> },
@@ -423,6 +457,8 @@ export default function AdminPage() {
                 </>
               )}
             </Card>
+
+            <UsageCard key={`usage-${openBusiness.business.id}`} token={token} businessId={openBusiness.business.id} />
 
             {billing?.features !== undefined && (
               <FeaturesCard

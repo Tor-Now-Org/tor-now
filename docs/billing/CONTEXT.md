@@ -77,10 +77,30 @@ not yet placed. When it ends, the Feature joins a Plan or becomes an Add-on.
 _Avoid_: Beta, early access, trial
 
 **Fair Use Limit**:
-An internal ceiling on how much a Feature may cost the platform for one Business,
-set well above what a busy Business uses. Never priced, never shown as an
-allowance; crossing it means abuse is suspected, not that more is owed.
-_Avoid_: Quota, allowance, cap, meter
+An internal ceiling on how much a cause of messages — booking, reminders, the
+waiting list — may cost the platform for one Business in a calendar month, set
+well above what a busy Business uses; and one for the sign-in codes the whole
+platform sends in a day. Never priced, never shown as an allowance; crossing it
+means abuse is suspected, not that more is owed. It only alerts, and whether a
+Business is over one is read from its usage whenever an administrator looks —
+never stored, so a new month starts clean on its own.
+_Avoid_: Quota, allowance, cap, meter, over-usage status
+
+**Platform Cost**:
+What the platform pays that no Business caused: sign-in codes, measured from
+Usage Records, and running costs — hosting, the website, a phone number — each
+a monthly amount entered by hand from a day, with where the figure came from,
+like a Unit Rate. A month's Platform Cost over the Businesses paying for it is
+the share every price has to cover.
+_Avoid_: Overhead, expenses, fixed cost
+
+**Reference Business**:
+A Business saved in the Cost Calculator as an example to price from: a month of
+its messages per cause, in the units a provider bills, and its calendars.
+Shared by every administrator, eight at most. The measured examples — the actual
+average and the most expensive paying Business — are read from usage and are
+never saved.
+_Avoid_: Preset, template, profile
 
 **Grant**:
 One Feature given to one Business beyond what its Plan Version includes, for a

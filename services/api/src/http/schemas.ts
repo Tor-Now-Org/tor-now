@@ -53,6 +53,7 @@ const uuidSchema = z.string().uuid();
 
 /** An id in the address, checked before it reaches a uuid column. */
 export const noticeIdSchema = uuidSchema;
+export const businessIdSchema = uuidSchema;
 
 export const requestCodeSchema = z.object({ phone: phoneSchema });
 

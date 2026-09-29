@@ -12,7 +12,7 @@ import type { Language } from "./i18n/dictionaries.ts";
  * renders them in its own language and in the Business's own timezone.
  */
 
-const LOCALE: Readonly<Record<Language, string>> = Object.freeze({
+export const LOCALE: Readonly<Record<Language, string>> = Object.freeze({
   he: "he-IL",
   en: "en-GB",
 });

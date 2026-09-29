@@ -351,7 +351,8 @@ export const usageRecordRepository = (tx: Transaction): UsageRecordRepository =>
     const rows = await tx<Row[]>`
       select business_id, source, unit,
              (occurred_at at time zone 'UTC')::date as day,
-             sum(quantity)::int as quantity
+             sum(quantity)::int as quantity,
+             count(*)::int as messages
       from usage_record
       where occurred_at >= ${new Date(from)} and occurred_at < ${new Date(to)}
       group by business_id, source, unit, day
@@ -362,6 +363,7 @@ export const usageRecordRepository = (tx: Transaction): UsageRecordRepository =>
       unit: toCostUnit(text(row["unit"])),
       day: toLocalDate(row["day"]),
       quantity: Number(row["quantity"]),
+      messages: Number(row["messages"]),
     }));
   },
 });

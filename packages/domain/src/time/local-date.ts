@@ -84,6 +84,18 @@ export const weekStartOf = (date: LocalDate): LocalDate =>
 export const monthStartOf = (date: LocalDate): LocalDate =>
   parseLocalDate(`${date.slice(0, 7)}-01`);
 
+/** The first of the month after this date's. */
+export const nextMonthStartOf = (date: LocalDate): LocalDate => {
+  const { year, month } = partsOf(date);
+  return month === 12 ? localDateOf(year + 1, 1, 1) : localDateOf(year, month + 1, 1);
+};
+
+/** Midnight UTC at the start of a date — the day a provider bills by (ADR 0022). */
+export const utcStartOf = (date: LocalDate): number => {
+  const { year, month, day } = partsOf(date);
+  return Date.UTC(year, month - 1, day);
+};
+
 export const addDays = (date: LocalDate, days: number): LocalDate => {
   const { year, month, day } = partsOf(date);
   const shifted = new Date(

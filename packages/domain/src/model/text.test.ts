@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TEXT_RULES, bareHandle, checkInstagram, checkPhone, checkText } from "./text.ts";
+import { TEXT_RULES, bareHandle, canReceiveSignInCode, checkInstagram, checkPhone, checkText } from "./text.ts";
 
 describe("text fields", () => {
   it("calls an empty required field missing rather than too short", () => {
@@ -64,5 +64,16 @@ describe("an Instagram handle", () => {
     expect(checkInstagram("dream hair")).toBe("NOT_A_HANDLE");
     expect(checkInstagram("dream/hair")).toBe("NOT_A_HANDLE");
     expect(checkInstagram("a".repeat(31))).toBe("TOO_LONG");
+  });
+});
+
+describe("who a sign-in code may go to", () => {
+  it("is an Israeli number, and only a well-formed one", () => {
+    expect(canReceiveSignInCode("+972501234567")).toBe(true);
+    expect(canReceiveSignInCode("+14155238886")).toBe(false);
+    expect(canReceiveSignInCode("+447700900123")).toBe(false);
+    expect(canReceiveSignInCode("+97250")).toBe(false);
+    expect(canReceiveSignInCode("972501234567")).toBe(false);
+    expect(canReceiveSignInCode("+9725012345678901")).toBe(false);
   });
 });

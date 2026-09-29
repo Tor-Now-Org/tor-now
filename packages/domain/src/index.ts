@@ -41,3 +41,8 @@ export * from "./billing/preview.ts";
 export * from "./billing/addon.ts";
 export * from "./billing/days-owed.ts";
 export * from "./billing/next-payment.ts";
+export * from "./billing/usage-cost.ts";
+export * from "./billing/fair-use.ts";
+export * from "./billing/platform-cost.ts";
+export * from "./billing/cost-stats.ts";
+export * from "./billing/calculator.ts";

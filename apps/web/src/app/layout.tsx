@@ -6,6 +6,7 @@ import { DEFAULT_LANGUAGE, DIRECTION } from "@/lib/i18n/dictionaries.ts";
 import { LanguageProvider } from "@/lib/i18n/index.tsx";
 import { SessionProvider } from "@/lib/session.tsx";
 import "./globals.css";
+import "./costs.css";
 
 export const metadata: Metadata = {
   title: "תור פנוי · Tor Panuy",

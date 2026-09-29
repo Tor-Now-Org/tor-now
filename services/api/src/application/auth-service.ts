@@ -1,10 +1,12 @@
 import {
+  canReceiveSignInCode,
   DomainError,
   forbidden,
   instant,
   parseLocalDate,
   UNNAMED,
   unauthenticated,
+  validationFailed,
   type Clock,
   type LocalDate,
   type Patch,
@@ -61,6 +63,11 @@ export const authService = (dependencies: AuthDependencies) => ({
    * both a cost and a way to harass a phone number.
    */
   async requestCode(phone: string): Promise<RequestCodeResult> {
+    // Every code is a message the platform pays for, and codes to foreign
+    // numbers are how a bill is run up: Israeli numbers only, for now.
+    if (!canReceiveSignInCode(phone)) {
+      throw validationFailed("Sign-in codes go to Israeli numbers only", { field: "phone" });
+    }
     const now = dependencies.clock.now();
     const windowStart = instant(
       now - VERIFICATION.issuanceWindowSeconds * MILLISECONDS,

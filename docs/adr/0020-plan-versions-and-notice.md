@@ -78,4 +78,5 @@ to move, and every rule above would need a second case.
   moving up after each payment and scheduling the move back would never pay for
   the higher Plan. See ADR 0021 on Add-ons, which follow the same rule.
 - Fair Use is alert-only: a runaway Business costs money until an administrator
-  acts. Automatic throttling was deferred as not worth its complexity yet.
+  acts. Automatic throttling was deferred as not worth its complexity yet. ADR 0023 reads
+  it from usage whenever an administrator looks; nothing about it is stored.

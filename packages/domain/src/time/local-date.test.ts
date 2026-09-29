@@ -4,7 +4,9 @@ import {
   datesBetween,
   dayOfWeekOf,
   daysBetween,
+  nextMonthStartOf,
   parseLocalDate,
+  utcStartOf,
 } from "./local-date.ts";
 import { DomainError } from "../shared/errors.ts";
 
@@ -44,5 +46,19 @@ describe("LocalDate", () => {
       "2026-01-03",
     ]);
     expect(datesBetween(date("2026-01-03"), date("2026-01-01"))).toEqual([]);
+  });
+});
+
+describe("months and UTC days", () => {
+  it("finds the first of the next month, across a year's end and a short February", () => {
+    expect(nextMonthStartOf(date("2026-09-29"))).toBe("2026-10-01");
+    expect(nextMonthStartOf(date("2026-12-31"))).toBe("2027-01-01");
+    expect(nextMonthStartOf(date("2028-02-29"))).toBe("2028-03-01");
+    expect(nextMonthStartOf(date("2026-01-01"))).toBe("2026-02-01");
+  });
+
+  it("starts a day at midnight UTC, the day a provider bills by", () => {
+    expect(new Date(utcStartOf(date("2026-09-01"))).toISOString()).toBe("2026-09-01T00:00:00.000Z");
+    expect(utcStartOf(date("2026-09-02")) - utcStartOf(date("2026-09-01"))).toBe(86_400_000);
   });
 });

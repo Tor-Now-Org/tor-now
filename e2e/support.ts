@@ -21,7 +21,7 @@ export const API_URL =
 const databaseUrl = process.env["TEST_DATABASE_URL"];
 
 let pool: ReturnType<typeof postgres> | null = null;
-const database = () => {
+export const database = () => {
   if (databaseUrl === undefined || databaseUrl === "") {
     throw new Error("TEST_DATABASE_URL is required for the end-to-end suite");
   }

@@ -2422,12 +2422,208 @@ export const describeRepositoryContract = (
         );
 
         expect(summary).toEqual([
-          { businessId: null, source: "SIGN_IN", unit: "WHATSAPP_AUTHENTICATION", day: "2031-03-10", quantity: 1 },
-          { businessId: shop, source: "BILLING", unit: "WHATSAPP_UTILITY", day: "2031-03-10", quantity: 1 },
-          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", day: "2031-03-10", quantity: 2 },
-          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", day: "2031-03-11", quantity: 1 },
-          { businessId: shop, source: "WAITING_LIST", unit: "SMS_SEGMENT", day: "2031-03-10", quantity: 2 },
+          { businessId: null, source: "SIGN_IN", unit: "WHATSAPP_AUTHENTICATION", day: "2031-03-10", quantity: 1, messages: 1 },
+          { businessId: shop, source: "BILLING", unit: "WHATSAPP_UTILITY", day: "2031-03-10", quantity: 1, messages: 1 },
+          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", day: "2031-03-10", quantity: 2, messages: 2 },
+          { businessId: shop, source: "BOOKING", unit: "WHATSAPP_UTILITY", day: "2031-03-11", quantity: 1, messages: 1 },
+          // One SMS in two parts: billed as two, sent as one.
+          { businessId: shop, source: "WAITING_LIST", unit: "SMS_SEGMENT", day: "2031-03-10", quantity: 2, messages: 1 },
         ]);
+      });
+    });
+
+    // --- What Businesses and the platform cost: ADR 0023 ---------------
+
+    it("keeps a Fair Use Limit per cause and one for sign-in codes, and changes each alone", async () => {
+      await withRepositories(async (repositories) => {
+        expect(await repositories.fairUseLimits.get()).toEqual({
+          perBusiness: { BOOKING: 12_000, REMINDERS: 10_000, WAITING_LIST: 1_000 },
+          signInPerDay: 300,
+        });
+        expect(await repositories.fairUseLimits.setBusinessLimit("WAITING_LIST", money(2_500))).toEqual({
+          perBusiness: { BOOKING: 12_000, REMINDERS: 10_000, WAITING_LIST: 2_500 },
+          signInPerDay: 300,
+        });
+        expect(await repositories.fairUseLimits.setSignInLimit(450)).toEqual({
+          perBusiness: { BOOKING: 12_000, REMINDERS: 10_000, WAITING_LIST: 2_500 },
+          signInPerDay: 450,
+        });
+        expect((await repositories.fairUseLimits.get()).signInPerDay).toBe(450);
+      });
+    });
+
+    const aUse = (calendars: number, bookingWhatsapp: number) => ({
+      calendars,
+      BOOKING: { whatsapp: bookingWhatsapp, sms: 3 },
+      REMINDERS: { whatsapp: 10, sms: 0 },
+      WAITING_LIST: { whatsapp: 0, sms: 1 },
+      BILLING: { whatsapp: 2, sms: 0 },
+    });
+
+    it("starts with the two saved Businesses, and saves, updates, renames and deletes one", async () => {
+      await withRepositories(async (repositories) => {
+        const admin = await repositories.users.create({ phone: "+972500077301", givenName: "מנהלת", familyName: null, birthDate: null });
+        const seeded = await repositories.referenceBusinesses.list();
+        expect(seeded.map((one) => [one.name, one.use.calendars])).toEqual([
+          ["בינוני", 1],
+          ["עמוס", 4],
+        ]);
+        expect(seeded[1]?.use.REMINDERS).toEqual({ whatsapp: 891, sms: 9 });
+
+        const saved = await repositories.referenceBusinesses.create({
+          name: "מספרה עם 3 כיסאות",
+          use: aUse(3, 500),
+          savedOn: parseLocalDate("2031-03-10"),
+          savedBy: admin.id,
+        });
+        expect(saved).toMatchObject({ name: "מספרה עם 3 כיסאות", use: aUse(3, 500), savedOn: "2031-03-10" });
+
+        const updated = await repositories.referenceBusinesses.update(saved.id, {
+          use: aUse(2, 900),
+          savedOn: parseLocalDate("2031-03-11"),
+          savedBy: admin.id,
+        });
+        expect(updated).toMatchObject({ id: saved.id, name: "מספרה עם 3 כיסאות", use: aUse(2, 900), savedOn: "2031-03-11" });
+
+        const renamed = await repositories.referenceBusinesses.rename(saved.id, "שלושה כיסאות");
+        expect(renamed).toMatchObject({ id: saved.id, name: "שלושה כיסאות", use: aUse(2, 900) });
+
+        expect((await repositories.referenceBusinesses.list()).map((one) => one.name)).toEqual([
+          "בינוני",
+          "עמוס",
+          "שלושה כיסאות",
+        ]);
+        await repositories.referenceBusinesses.delete(saved.id);
+        expect((await repositories.referenceBusinesses.list()).map((one) => one.name)).toEqual(["בינוני", "עמוס"]);
+      });
+    });
+
+    it("refuses a saved Business a name another has, in any case", async () => {
+      await withRepositories(async (repositories) => {
+        const admin = await repositories.users.create({ phone: "+972500077302", givenName: "מנהלת", familyName: null, birthDate: null });
+        await repositories.referenceBusinesses.create({
+          name: "Busy Salon",
+          use: aUse(1, 1),
+          savedOn: parseLocalDate("2031-03-10"),
+          savedBy: admin.id,
+        });
+        await expect(
+          repositories.referenceBusinesses.create({
+            name: "busy salon",
+            use: aUse(1, 1),
+            savedOn: parseLocalDate("2031-03-10"),
+            savedBy: admin.id,
+          }),
+        ).rejects.toMatchObject({ code: "VALIDATION_FAILED", details: { field: "name" } });
+      });
+    });
+
+    it("refuses renaming a saved Business to another's name", async () => {
+      await withRepositories(async (repositories) => {
+        const [medium] = await repositories.referenceBusinesses.list();
+        await expect(repositories.referenceBusinesses.rename(medium?.id ?? asId(""), " עמוס ".trim())).rejects.toMatchObject({
+          code: "VALIDATION_FAILED",
+          details: { field: "name" },
+        });
+      });
+    });
+
+    it("keeps eight saved Businesses at most", async () => {
+      await withRepositories(async (repositories) => {
+        const admin = await repositories.users.create({ phone: "+972500077303", givenName: "מנהלת", familyName: null, birthDate: null });
+        for (let at = 0; at < 6; at += 1) {
+          await repositories.referenceBusinesses.create({
+            name: `דוגמה ${at}`,
+            use: aUse(1, at),
+            savedOn: parseLocalDate("2031-03-10"),
+            savedBy: admin.id,
+          });
+        }
+        expect(await repositories.referenceBusinesses.list()).toHaveLength(8);
+        await expect(
+          repositories.referenceBusinesses.create({
+            name: "התשיעית",
+            use: aUse(1, 1),
+            savedOn: parseLocalDate("2031-03-10"),
+            savedBy: admin.id,
+          }),
+        ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+      });
+    });
+
+    it("says a saved Business that is gone is not found, to update, rename or delete", async () => {
+      await withRepositories(async (repositories) => {
+        const admin = await repositories.users.create({ phone: "+972500077304", givenName: "מנהלת", familyName: null, birthDate: null });
+        const gone = asId<"ReferenceBusiness">("00000000-0000-4000-8000-00000000d0d0");
+        await expect(
+          repositories.referenceBusinesses.update(gone, { use: aUse(1, 1), savedOn: parseLocalDate("2031-03-10"), savedBy: admin.id }),
+        ).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect(repositories.referenceBusinesses.rename(gone, "שם חדש")).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect(repositories.referenceBusinesses.delete(gone)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+    });
+
+    it("keeps each running cost's amounts by day, replacing one for the same day and keeping the rest", async () => {
+      await withRepositories(async (repositories) => {
+        const admin = await repositories.users.create({ phone: "+972500077305", givenName: "מנהלת", familyName: null, birthDate: null });
+        expect(await repositories.runningCosts.list()).toEqual([]);
+        const hosting = await repositories.runningCosts.create(
+          "Supabase",
+          { effectiveFrom: parseLocalDate("2031-03-01"), amount: money(9_250), source: "invoice February" },
+          admin.id,
+        );
+        expect(hosting).toMatchObject({
+          name: "Supabase",
+          amounts: [{ effectiveFrom: "2031-03-01", amount: 9_250, source: "invoice February" }],
+        });
+        await repositories.runningCosts.setAmount(
+          hosting.id,
+          { effectiveFrom: parseLocalDate("2031-05-01"), amount: money(0), source: "cancelled" },
+          admin.id,
+        );
+        const corrected = await repositories.runningCosts.setAmount(
+          hosting.id,
+          { effectiveFrom: parseLocalDate("2031-03-01"), amount: money(9_990), source: "invoice February, corrected" },
+          admin.id,
+        );
+        expect(corrected.amounts).toEqual([
+          { effectiveFrom: "2031-03-01", amount: 9_990, source: "invoice February, corrected" },
+          { effectiveFrom: "2031-05-01", amount: 0, source: "cancelled" },
+        ]);
+        await repositories.runningCosts.create(
+          "Vercel",
+          { effectiveFrom: parseLocalDate("2031-03-01"), amount: money(7_400), source: "invoice February" },
+          admin.id,
+        );
+        expect((await repositories.runningCosts.list()).map((cost) => [cost.name, cost.amounts.length])).toEqual([
+          ["Supabase", 2],
+          ["Vercel", 1],
+        ]);
+      });
+    });
+
+    it("refuses a second running cost of the same name, in any case", async () => {
+      await withRepositories(async (repositories) => {
+        const admin = await repositories.users.create({ phone: "+972500077306", givenName: "מנהלת", familyName: null, birthDate: null });
+        const first = { effectiveFrom: parseLocalDate("2031-03-01"), amount: money(100), source: "invoice" };
+        await repositories.runningCosts.create("Domain", first, admin.id);
+        await expect(repositories.runningCosts.create(" domain ".trim(), first, admin.id)).rejects.toMatchObject({
+          code: "VALIDATION_FAILED",
+          details: { field: "name" },
+        });
+      });
+    });
+
+    it("says a running cost that does not exist is not found", async () => {
+      await withRepositories(async (repositories) => {
+        const admin = await repositories.users.create({ phone: "+972500077307", givenName: "מנהלת", familyName: null, birthDate: null });
+        await expect(
+          repositories.runningCosts.setAmount(
+            asId("00000000-0000-4000-8000-00000000c0c0"),
+            { effectiveFrom: parseLocalDate("2031-03-01"), amount: money(100), source: "invoice" },
+            admin.id,
+          ),
+        ).rejects.toMatchObject({ code: "NOT_FOUND" });
       });
     });
 

@@ -14,6 +14,7 @@ import {
 import { toErrorResponse } from "./errors.ts";
 import * as schema from "./schemas.ts";
 import * as wire from "./wire.ts";
+import { costRoutes } from "./cost-routes.ts";
 import type { Actor } from "../ports/unit-of-work.ts";
 
 const equalsInConstantTime = (left: string, right: string): boolean => {
@@ -1044,6 +1045,11 @@ const adminRoutes = (services: Services) => {
     );
   });
 
+  admin.get("/businesses/:businessId", async (context) => {
+    const businessId = asId<"Business">(parse(schema.businessIdSchema, context.req.param("businessId")));
+    return context.json(wire.directoryRowOut(await services.admin.businessRow(actorOf(context), businessId)));
+  });
+
   admin.get("/businesses/:businessId/subscription", async (context) => {
     const result = await services.admin.subscriptionFor(
       actorOf(context),
@@ -1401,6 +1407,8 @@ const adminRoutes = (services: Services) => {
       })),
     );
   });
+
+  costRoutes(admin, services);
 
   return admin;
 };

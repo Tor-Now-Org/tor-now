@@ -210,5 +210,33 @@ begin
   end;
   if not v_failed then raise exception 'INVARIANT BROKEN: a Plan''s days were charged for a Feature'; end if;
 
+  -- ADR 0023: a cause a Business runs up takes a limit in agorot, sign-in codes one per day — never the other.
+  v_failed := false;
+  begin
+    update fair_use_limit set codes_per_day = 10 where source = 'BOOKING';
+  exception when check_violation then v_failed := true;
+  end;
+  if not v_failed then raise exception 'INVARIANT BROKEN: a Business''s limit was given a daily code count'; end if;
+
+  -- Eight saved Reference Businesses at most, however they are written.
+  insert into reference_business (name, calendars, usage, saved_on)
+    select 'probe ' || n, 1, '{}'::jsonb, current_date from generate_series(1, 6) as n;
+  v_failed := false;
+  begin
+    insert into reference_business (name, calendars, usage, saved_on) values ('probe ninth', 1, '{}', current_date);
+  exception when check_violation then v_failed := true;
+  end;
+  if not v_failed then raise exception 'INVARIANT BROKEN: a ninth Reference Business was kept'; end if;
+
+  -- A running cost's amount is never below zero; zero is how one stops.
+  insert into running_cost (name) values ('probe host') returning id into v_override;
+  v_failed := false;
+  begin
+    insert into running_cost_amount (running_cost_id, effective_from, amount_minor, source)
+      values (v_override, current_date, -1, 'probe invoice');
+  exception when check_violation then v_failed := true;
+  end;
+  if not v_failed then raise exception 'INVARIANT BROKEN: a running cost went below zero'; end if;
+
   raise exception 'ALL_INVARIANTS_HELD';
 end $$;

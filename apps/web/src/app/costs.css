@@ -1,0 +1,170 @@
+/* The Catalogue's Cost tab and Fair Use (ADR 0023). Tokens from globals.css. */
+
+.costs-parts{flex:none}
+
+.card-title{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.card-title strong{font-size:16px;font-weight:600}
+.card-title .end{margin-inline-start:auto}
+
+.figure-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cost-figure{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cost-figure .hint{font-size:12px}
+.cost-figure strong{font-size:22px;font-weight:600;letter-spacing:-.01em}
+
+.cost-split{display:flex;flex-direction:column;gap:7px}
+.cost-split .bar{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--sunken);gap:2px}
+.cost-split .legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.cost-split .legend span{display:inline-flex;gap:6px;align-items:center}
+.cost-split .legend i{width:8px;height:8px;border-radius:3px}
+.cost-split .legend b{color:var(--ink);font-weight:600}
+
+.cost-rows{display:flex;flex-direction:column}
+.cost-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.cost-row.first{border-top:0}
+.cost-row .what{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.cost-row .name{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13.5px}
+.cost-row .hint{font-size:11.5px}
+.cost-row strong{font-size:14px}
+.cost-row .link{font-size:12.5px;font-weight:600;color:var(--accent);min-height:32px;padding:0 4px}
+
+.kind-tag{font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--sunken);color:var(--muted)}
+.kind-tag.measured{background:var(--accent-soft);color:var(--accent-strong)}
+.over-tag{display:inline-flex;align-items:center;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--caution-soft);color:var(--caution);font-weight:600;white-space:nowrap}
+
+.month-picker{display:flex;align-items:center;gap:6px;min-height:34px;flex:none}
+.month-picker .chip{min-width:34px;min-height:34px}
+.month-picker .chip:disabled{opacity:.4}
+.month-picker .name{flex:1;text-align:center;font-weight:600}
+.month-picker .name .hint{font-weight:400}
+
+.month-figures{display:flex;flex-direction:column;gap:14px;transition:opacity .15s ease}
+.month-figures[aria-busy="true"]{opacity:.45;pointer-events:none}
+@media (prefers-reduced-motion: reduce){.month-figures{transition:none}}
+
+.after-share{display:flex;align-items:baseline;gap:8px;padding:8px 12px;border-radius:12px;background:var(--sunken);font-size:13px}
+.after-share > span:first-child{flex:1}
+.after-share.stacked{flex-direction:column;gap:4px;font-size:12.5px}
+.after-share .plans{display:flex;gap:14px}
+
+.priciest{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:var(--sunken);text-align:start;width:100%}
+.priciest .what{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.priciest .what .hint{font-size:11.5px}
+.priciest .name{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.priciest .name strong{font-size:14px;font-weight:600}
+.priciest .go,.over-row .go{color:var(--accent);font-size:18px}
+
+/* The calculator: nothing floats over anything. The page holds still and only the rows scroll. */
+.calc-root{flex:1 1 0;min-height:0;display:flex;flex-direction:column;gap:12px}
+.calc-presets{display:flex;flex-direction:column;gap:8px;flex:none}
+.calc-presets .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.calc-presets .preset{min-height:36px;padding:0 13px;font-size:13px;background:var(--raised);color:var(--ink);border:1px solid var(--line)}
+.calc-presets .preset.measured{border-style:dashed}
+.calc-presets .preset[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.calc-presets .divider{width:1px;height:22px;background:var(--line);margin-inline:2px}
+.calc-presets .manage{margin-inline-start:auto;font-size:13px;font-weight:600;color:var(--accent);min-height:36px;padding:0 4px}
+.calc-presets .hint{font-size:12px}
+.calc-presets .flash{color:var(--positive);font-weight:600}
+.calc-changed{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:12px;background:var(--accent-soft);font-size:12.5px}
+.row-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.row-actions .primary,.row-actions .quiet,.row-actions .danger,button.small{width:auto;flex:none;min-height:36px;padding:0 14px;font-size:13px;border-radius:10px}
+.row-actions .link{font-size:13px;font-weight:600;color:var(--muted);min-height:36px;padding:0 6px}
+
+.calc-line{display:flex;align-items:center;gap:14px;padding:10px 16px;flex:none}
+.calc-line .t{display:flex;flex-direction:column;flex:1}
+.calc-line .p{display:flex;flex-direction:column;align-items:center}
+.calc-line .hint{font-size:11.5px}
+.calc-line strong{font-size:18px;font-weight:600}
+
+.calc-body{flex:1 1 0;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;border-radius:18px;scrollbar-width:none}
+.calc-body::-webkit-scrollbar,.calc-rows::-webkit-scrollbar{display:none}
+.calc-rows{padding:2px 16px 4px;display:flex;flex-direction:column;flex:none}
+.calc-rows .cause{display:flex;flex-direction:column;gap:10px;padding:14px 0;border-top:1px solid var(--line)}
+.calc-rows .cause.first{border-top:0}
+.cause-head{display:flex;align-items:baseline;gap:8px}
+.cause-head > span{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.cause-head strong{font-size:14.5px;font-weight:600}
+.cause-head .hint{font-size:12px}
+.cause-head b{font-size:16px;font-weight:600}
+.calc-meter{display:grid;grid-template-columns:minmax(0,1fr) 84px;gap:4px 10px;align-items:center}
+.calc-meter label{font-size:13px}
+.calc-meter .hint{font-size:11.5px}
+.calc-meter .calc-num{grid-row:span 2}
+.calc-meter input[type=range]{width:100%;margin:0;accent-color:var(--accent)}
+.calc-num{text-align:center;min-height:40px;padding:0 6px}
+.calc-rows .cause.calendars{flex-direction:row;align-items:center;gap:10px}
+.calc-rows .cause.calendars label{flex:1;font-size:13px}
+.calc-rows .cause.calendars .calc-num{width:84px}
+.calc-rows .rates-line{font-size:12px;padding-bottom:12px}
+.calc-side{flex:none}
+.calc-summary{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.calc-summary .total{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.calc-summary .total strong{font-size:26px;font-weight:600;letter-spacing:-.01em}
+.calc-summary .sms-share{font-size:12.5px;padding:8px 10px;border-radius:10px;background:var(--caution-soft)}
+.calc-summary .margins{display:flex;flex-direction:column}
+.calc-summary .margins > div{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.calc-summary .margins > div.off{opacity:.55}
+.calc-summary .margins strong{min-width:44px;font-weight:600}
+.calc-summary .m{margin-inline-start:auto;display:flex;align-items:baseline;gap:6px}
+.calc-summary .m b{font-size:16px}
+
+@media (min-width: 1024px){
+  /* Beside the rows on a computer, so the summary is never covered or scrolled away. */
+  .calc-body{display:grid;grid-template-columns:minmax(0,1fr) 250px;grid-template-rows:minmax(0,1fr);overflow:hidden}
+  .calc-rows{overflow-y:auto;scrollbar-width:none;min-height:0}
+  .calc-side{align-self:start}
+  .calc-line{display:none}
+}
+
+.manage-list{padding:0 16px;display:flex;flex-direction:column}
+.manage-row{display:flex;align-items:center;gap:8px;padding:12px 0;border-top:1px solid var(--line)}
+.manage-row:first-child{border-top:0}
+.manage-row .what{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.manage-row .what strong{font-size:14px;font-weight:600}
+.manage-row .what .hint{font-size:11.5px}
+.manage-row > .link{font-size:13px;font-weight:600;color:var(--accent);min-height:36px;padding:0 6px}
+.manage-row > .link.critical{color:var(--critical)}
+.manage-row.editing{flex-direction:column;align-items:stretch}
+.manage-row.confirming{flex-direction:column;align-items:stretch;gap:8px;padding:12px;margin:6px 0;border-radius:12px;background:var(--caution-soft);font-size:13px}
+
+.limit-card{padding:16px;display:flex;flex-direction:column;gap:10px}
+.limit-card.over{border-color:color-mix(in oklch, var(--caution) 45%, var(--line))}
+.limit-card .head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.limit-card .what{display:flex;flex-direction:column;gap:2px;flex:1}
+.limit-card .what strong{font-size:15px;font-weight:600}
+.limit-card .amount{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.limit-card .amount strong{font-size:20px;font-weight:600}
+.limit-card > .hint{font-size:12px}
+.limit-card .foot{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.limit-card .foot .quiet{width:auto;flex:1;min-height:42px;font-size:14px}
+.limit-card .foot .end{margin-inline-start:auto}
+.limit-card .foot .over{font-size:13px;font-weight:600;color:var(--caution)}
+.gauge{height:8px;border-radius:999px;background:var(--sunken);overflow:hidden}
+.gauge span{display:block;height:100%;border-radius:999px;background:var(--accent)}
+.gauge.over span,.limit-card.over .gauge span{background:var(--caution)}
+
+.over-row{display:flex;align-items:center;gap:10px;padding:12px 0;text-align:start;width:100%;border-top:1px solid var(--line)}
+.over-row.first{border-top:0}
+.over-row .what{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.over-row .what strong{font-size:14px;font-weight:600}
+.over-row .hint{font-size:11.5px}
+.over-row .over-cost{font-size:14px;color:var(--caution)}
+
+.usage-card{padding:16px;display:flex;flex-direction:column;gap:12px}
+.usage-card.over{border-color:color-mix(in oklch, var(--caution) 45%, var(--line))}
+.usage-card .head{display:flex;align-items:center;gap:8px}
+.usage-card .head .label{flex:1}
+.usage-card .reading{display:flex;flex-direction:column;gap:5px}
+.usage-card .line{display:flex;gap:8px;align-items:baseline}
+.usage-card .line .name{flex:1;font-size:13.5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.usage-card .line strong{font-size:13.5px}
+.usage-card .reading.over .line strong{color:var(--caution)}
+.usage-card .gauge{height:6px}
+.usage-card .reading.over .gauge span{background:var(--caution)}
+.usage-card > .hint{font-size:12px}
+
+.fair-use-banner{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:16px;background:var(--caution-soft);border:1px solid color-mix(in oklch, var(--caution) 35%, transparent);flex:none}
+.fair-use-banner .body{display:flex;flex-direction:column;gap:6px;flex:1;font-size:13px;line-height:1.55}
+.fair-use-banner strong{font-size:14px;color:var(--caution)}
+.fair-use-banner .hint{font-size:12px}
+.fair-use-banner .link{align-self:flex-start;font-size:13px;font-weight:600;color:var(--accent);min-height:32px}
+.fair-use-banner .close{font-size:18px;color:var(--muted);min-width:32px;min-height:32px}

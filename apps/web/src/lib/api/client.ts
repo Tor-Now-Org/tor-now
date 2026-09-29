@@ -127,7 +127,7 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<ApiErrorCode>([
   "INTERNAL",
 ]);
 
-const request = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
+export const request = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
   const { method = "GET", body, token, query, signal, raw } = options;
 
   let response: Response;

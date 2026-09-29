@@ -298,7 +298,7 @@ test.describe("the Catalogue", () => {
     const admin = await anAdministrator();
     await asAdministrator(page, admin.token);
     await page.getByRole("button", { name: "מחירון" }).click();
-    await page.getByRole("tab", { name: "תעריפי הודעות" }).click();
+    await page.getByRole("tab", { name: "תעריפים" }).click();
 
     // The suite shares one database, so this rate may have been corrected
     // already by another run; the journey only asks that the correction lands.

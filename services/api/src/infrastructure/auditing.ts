@@ -1,5 +1,7 @@
-import type { AddonHoldingId, BusinessId, UserId } from "@tor-now/domain";
-import { AUDIT_ACTIONS, type AuditSink } from "../ports/audit.ts";
+import type { AddonHoldingId, BusinessId } from "@tor-now/domain";
+import { AUDIT_ACTIONS } from "../ports/audit.ts";
+import { auditedFairUseLimits, auditedReferenceBusinesses, auditedRunningCosts } from "./auditing-costs.ts";
+import { record, type Context } from "./audit-record.ts";
 import type {
   AddonHoldingRepository,
   AddonOfferRepository,
@@ -36,18 +38,6 @@ import type {
  * the composition root, not an edit to every mutation site.
  */
 
-type Context = { readonly sink: AuditSink; readonly actorId: UserId | null };
-
-const record = async (
-  { sink, actorId }: Context,
-  action: string,
-  entityType: string,
-  entityId: string | null,
-  before: unknown,
-  after: unknown,
-): Promise<void> => {
-  await sink.append({ actorId, action, entityType, entityId, before, after });
-};
 
 export const auditedAppointments = (
   inner: AppointmentRepository,
@@ -649,4 +639,7 @@ export const withAuditing = (
   addonOffers: auditedAddonOffers(repositories.addonOffers, context),
   addonHoldings: auditedAddonHoldings(repositories.addonHoldings, context),
   daysOwed: auditedDaysOwed(repositories.daysOwed, context),
+  fairUseLimits: auditedFairUseLimits(repositories.fairUseLimits, context),
+  referenceBusinesses: auditedReferenceBusinesses(repositories.referenceBusinesses, context),
+  runningCosts: auditedRunningCosts(repositories.runningCosts, context),
 });
