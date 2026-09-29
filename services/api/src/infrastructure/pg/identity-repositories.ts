@@ -43,6 +43,14 @@ export const userRepository = (tx: Transaction): UserRepository => ({
     return row === undefined ? null : toUser(row);
   },
 
+  async findByIds(ids) {
+    if (ids.length === 0) return [];
+    const rows = await tx<Row[]>`
+      select * from app_user
+      where id = any(${[...ids]}::uuid[]) and deleted_at is null`;
+    return rows.map(toUser);
+  },
+
   async findByPhone(phone) {
     // Deleted rows are returned here on purpose: ADR 0008 keeps the phone, and
     // the sign-in path has to be able to tell "deleted" from "unknown".
@@ -101,6 +109,13 @@ export const userRepository = (tx: Transaction): UserRepository => ({
   async trialTakenOn(id) {
     const rows = await tx<Row[]>`select trial_taken_on from app_user where id = ${id}`;
     return nullableLocalDate(rows[0]?.["trial_taken_on"]);
+  },
+
+  async acceptTerms(id, version) {
+    const rows = await tx<Row[]>`
+      update app_user set terms_version = ${version}, terms_accepted_at = now()
+      where id = ${id} and deleted_at is null returning *`;
+    return one(rows, toUser, "User");
   },
 
   async list(page: Page, query) {

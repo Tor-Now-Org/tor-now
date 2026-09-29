@@ -19,7 +19,7 @@ import {
   type Resource,
 } from "@tor-now/domain";
 import { loadManagedBusiness } from "./authorization.ts";
-import { markForRecheck } from "./waiting-service.ts";
+import { markManyForRecheck } from "./waiting-service.ts";
 import { namedFor, stillToCome, type Impact, type Upcoming } from "./stranded.ts";
 import { notificationFor } from "./notifications.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
@@ -96,17 +96,20 @@ const writeOverrides = async (
     startMinutes: range.start,
     endMinutes: range.end,
   }));
-  for (const calendar of calendars) {
-    for (const date of dates) {
-      await repositories.dateOverrides.put({
+  // One write for the decision. A fortnight across four chairs is still one
+  // Override per calendar per date — ADR 0002 leaves no other way to say it —
+  // but they are written together rather than one round trip at a time.
+  await repositories.dateOverrides.putMany(
+    calendars.flatMap((calendar) =>
+      dates.map((date) => ({
         resourceId: calendar.id,
         businessId,
         date,
         note,
         ranges,
-      });
-    }
-  }
+      })),
+    ),
+  );
 };
 
 const onOfferIn = async (
@@ -274,30 +277,16 @@ export const closureService = ({
         if (first === undefined || last === undefined) return 0;
 
         const calendars = await repositories.resources.listForBusiness(businessId);
-        let renamed = 0;
-        for (const calendar of calendars) {
-          const theirs = await repositories.dateOverrides.listForResource(
-            calendar.id,
-            first,
-            last,
-          );
-          for (const override of theirs) {
-            await repositories.dateOverrides.put({
-              resourceId: calendar.id,
-              businessId,
-              date: override.date,
-              note,
-              // The hours as they stand: this changes the words and nothing
-              // else, so what the day keeps is what it already kept.
-              ranges: override.ranges.map((range) => ({
-                startMinutes: range.start,
-                endMinutes: range.end,
-              })),
-            });
-            renamed += 1;
-          }
-        }
-        return renamed;
+        // Only the words change, so this is an update over the span rather than
+        // every day being written out again: what each day keeps is what it
+        // already kept.
+        const renamed = await repositories.dateOverrides.renameBetween(
+          calendars.map((calendar) => calendar.id),
+          first,
+          last,
+          note,
+        );
+        return renamed.length;
       });
     },
 
@@ -326,23 +315,23 @@ export const closureService = ({
         // Every calendar, not only the ones still on offer: a withdrawn
         // calendar's Override would otherwise outlive the closure that made it.
         const calendars = await repositories.resources.listForBusiness(businessId);
-        let removed = 0;
-        for (const calendar of calendars) {
-          const overrides = await repositories.dateOverrides.listForResource(
-            calendar.id,
-            first,
-            last,
-          );
-          for (const override of overrides) {
-            await repositories.dateOverrides.delete(override.id);
-            // ADR 0018. This is the case a "hook the cancellation" design
-            // misses most plainly: a day off called off is a whole day of
-            // hours reappearing, with nothing cancelled anywhere.
-            await markForRecheck(repositories, calendar.id, override.date);
-            removed += 1;
-          }
-        }
-        return removed;
+        const removed = await repositories.dateOverrides.deleteBetween(
+          calendars.map((calendar) => calendar.id),
+          first,
+          last,
+        );
+        // ADR 0018. This is the case a "hook the cancellation" design misses
+        // most plainly: a day off called off is a whole day of hours
+        // reappearing, with nothing cancelled anywhere. Every day it freed, in
+        // one mark rather than one each.
+        await markManyForRecheck(
+          repositories,
+          removed.map((override) => ({
+            resourceId: override.resourceId,
+            onDate: override.date,
+          })),
+        );
+        return removed.length;
       });
     },
   };

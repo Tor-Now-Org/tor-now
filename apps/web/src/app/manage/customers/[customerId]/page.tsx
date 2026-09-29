@@ -97,7 +97,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
       businessId === null ? "/manage" : `/manage?business=${businessId}&tab=customers`,
     );
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner page />;
 
   if (token === null || businessId === null) {
     return (
@@ -115,7 +115,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
       <>
         <AppHeader onBack={back} backLabel={copy.tabCustomers} />
         <main style={{ flex: 1, padding: 24 }}>
-          {error === null ? <Spinner /> : <Critical>{error}</Critical>}
+          {error === null ? <Spinner page /> : <Critical>{error}</Critical>}
         </main>
       </>
     );
@@ -455,7 +455,7 @@ export default function Page({
   const { customerId } = use(params);
   // useSearchParams needs a Suspense boundary for static rendering.
   return (
-    <Suspense fallback={<Spinner />}>
+    <Suspense fallback={<Spinner page />}>
       <CustomerPage customerId={customerId} />
     </Suspense>
   );

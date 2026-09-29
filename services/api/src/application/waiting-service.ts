@@ -91,6 +91,22 @@ export const markForRecheck = async (
 };
 
 /**
+ * Many days at once, in one statement.
+ *
+ * The changes that free time rarely free a single day: a blockage lifted, a
+ * closure called off, a weekday made longer. Marked one at a time, a fortnight
+ * given back cost fourteen round trips inside the transaction the owner was
+ * waiting on.
+ */
+export const markManyForRecheck = async (
+  repositories: Repositories,
+  marks: readonly { resourceId: ResourceId; onDate: LocalDate }[],
+): Promise<void> => {
+  if (marks.length === 0) return;
+  await repositories.waitingRechecks.markMany(marks);
+};
+
+/**
  * The same, for something that happened at an instant rather than on a date —
  * an Appointment, which knows when it starts and not which local day that is.
  */
@@ -118,9 +134,13 @@ export const markSpanForRecheck = async (
   const first = todayIn(span.startAt, zone);
   // The end is exclusive: a block ending at midnight belongs to the day before.
   const last = todayIn(addMinutesToInstant(span.endAt, -1), zone);
-  for (const date of datesBetween(first, last < first ? first : last)) {
-    await markForRecheck(repositories, span.resourceId, date);
-  }
+  await markManyForRecheck(
+    repositories,
+    datesBetween(first, last < first ? first : last).map((onDate) => ({
+      resourceId: span.resourceId,
+      onDate,
+    })),
+  );
 };
 
 /**
@@ -140,10 +160,12 @@ export const markWeekdayForRecheck = async (
 ): Promise<void> => {
   const from = todayIn(now, business.timeZone);
   const to = addDays(from, business.bookingHorizonDays);
-  for (const date of datesBetween(from, to)) {
-    if (dayOfWeekOf(date) !== weekday) continue;
-    await markForRecheck(repositories, resourceId, date);
-  }
+  await markManyForRecheck(
+    repositories,
+    datesBetween(from, to)
+      .filter((date) => dayOfWeekOf(date) === weekday)
+      .map((onDate) => ({ resourceId, onDate })),
+  );
 };
 
 const UTC = timeZone("UTC");
@@ -228,7 +250,11 @@ export const waitingService = (dependencies: {
      * From today onward: an entry for a day that has gone by is not waiting
      * for anything, which is why a single date needs no expiry sweep.
      */
-    async mine(actor: Actor): Promise<readonly MyWaiting[]> {
+    async mine(
+      actor: Actor,
+      /** One shop's worth, for the screen that shows one shop. */
+      businessId?: BusinessId,
+    ): Promise<readonly MyWaiting[]> {
       const customerId = actorUserId(actor);
       if (customerId === null) throw forbidden("Only a signed-in customer has a list");
 
@@ -236,29 +262,27 @@ export const waitingService = (dependencies: {
         // A day earlier than any zone could make it, because the entries may
         // span businesses in different ones. Each is then judged against its
         // own Business's today, below.
-        const open = await repositories.waitingEntries.openForCustomer(
+        //
+        // The names travel with the entries: asked for one at a time they cost
+        // three reads each, and the list is drawn from nothing else.
+        const open = await repositories.waitingEntries.openForCustomerNamed(
           customerId,
           todayIn(addMinutesToInstant(clock.now(), -A_DAY_IN_MINUTES), UTC),
+          businessId ?? null,
         );
 
         const mine: MyWaiting[] = [];
-        for (const entry of open) {
-          const business = await repositories.businesses.findById(entry.businessId);
-          const service = await repositories.services.findById(entry.serviceId);
-          if (business === null || service === null) continue;
-          if (entry.onDate < todayIn(clock.now(), business.timeZone)) continue;
+        for (const held of open) {
+          const { entry } = held;
+          if (entry.onDate < todayIn(clock.now(), timeZone(held.businessTimeZone))) continue;
 
-          const resources = await repositories.resources.listForBusiness(entry.businessId);
           mine.push({
             id: entry.id,
             businessId: entry.businessId,
-            businessName: business.name,
+            businessName: held.businessName,
             serviceId: entry.serviceId,
-            serviceName: service.name,
-            resourceNames: entry.resourceIds.flatMap((id) => {
-              const resource = resources.find((one) => one.id === id);
-              return resource === undefined ? [] : [resource.name];
-            }),
+            serviceName: held.serviceName,
+            resourceNames: held.resourceNames,
             onDate: entry.onDate,
             parts: entry.parts,
           });

@@ -123,6 +123,12 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         const found = store.users.find((user) => user.id === id);
         return found === undefined || found.deletedAt !== null ? null : found;
       },
+      async findByIds(ids) {
+        const wanted = new Set<string>(ids);
+        return store.users.filter(
+          (user) => wanted.has(user.id) && user.deletedAt === null,
+        );
+      },
       async findByPhone(phone) {
         // Deleted rows are returned deliberately: ADR 0008 keeps the phone, and
         // sign-in has to tell "closed" from "unknown".
@@ -141,6 +147,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           deletedAt: null,
           anonymisedAt: null,
           isAdministrator: false,
+          termsVersion: null,
+          termsAcceptedAt: null,
           createdAt: now(),
         };
         store.users = [...store.users, user];
@@ -181,6 +189,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       },
       async trialTakenOn(id) {
         return store.trialsTaken.find((trial) => trial.userId === id)?.on ?? null;
+      },
+      async acceptTerms(id, version) {
+        return replaceUser({ ...requireUser(id), termsVersion: version, termsAcceptedAt: now() });
       },
       async list(page, query) {
         const matching = store.users.filter(
@@ -523,6 +534,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             deletedAt: null,
             anonymisedAt: null,
             isAdministrator: false,
+            termsVersion: null,
+            termsAcceptedAt: null,
             createdAt: now(),
           };
           store.users = [...store.users, user];
@@ -562,6 +575,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             deletedAt: null,
             anonymisedAt: null,
             isAdministrator: false,
+            termsVersion: null,
+            termsAcceptedAt: null,
             createdAt: now(),
           };
           store.users = [...store.users, user];
@@ -640,6 +655,10 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       },
       async listForBusiness(businessId) {
         return store.resources.filter((resource) => resource.businessId === businessId);
+      },
+      async listForBusinesses(businessIds) {
+        const wanted = new Set<string>(businessIds);
+        return store.resources.filter((resource) => wanted.has(resource.businessId));
       },
       async create({ businessId, name }) {
         const resource: Resource = {
@@ -754,6 +773,12 @@ export const inMemoryRepositories = (store: Store): Repositories => {
     },
 
     workingHours: {
+      async listForResources(resourceIds) {
+        const wanted = new Set<string>(resourceIds);
+        return store.workingHours
+          .filter((hours) => wanted.has(hours.resourceId))
+          .sort((left, right) => left.dayOfWeek - right.dayOfWeek || left.start - right.start);
+      },
       async listForResource(resourceId) {
         return store.workingHours
           .filter((hours) => hours.resourceId === resourceId)
@@ -805,6 +830,17 @@ export const inMemoryRepositories = (store: Store): Repositories => {
     },
 
     dateOverrides: {
+      async listForResources(resourceIds, from, to) {
+        const wanted = new Set<string>(resourceIds);
+        return store.dateOverrides
+          .filter(
+            (override) =>
+              wanted.has(override.resourceId) &&
+              compareLocalDate(override.date, from) >= 0 &&
+              compareLocalDate(override.date, to) <= 0,
+          )
+          .sort((left, right) => compareLocalDate(left.date, right.date));
+      },
       async listForResource(resourceId, from, to) {
         return store.dateOverrides.filter(
           (override) =>
@@ -812,6 +848,9 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             compareLocalDate(override.date, from) >= 0 &&
             compareLocalDate(override.date, to) <= 0,
         );
+      },
+      async findById(id) {
+        return store.dateOverrides.find((override) => override.id === id) ?? null;
       },
       async findByDate(resourceId, date) {
         return (
@@ -843,10 +882,77 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         ];
         return override;
       },
+      async putMany(overrides) {
+        const written: (typeof store.dateOverrides)[number][] = [];
+        // The last write for a repeated (calendar, date) wins, as the upsert does.
+        const wanted = [
+          ...new Map(
+            overrides.map((override) => [`${override.resourceId}|${override.date}`, override]),
+          ).values(),
+        ];
+        for (const input of wanted) {
+          const existing = store.dateOverrides.find(
+            (override) =>
+              override.resourceId === input.resourceId && override.date === input.date,
+          );
+          const override = {
+            id: existing?.id ?? asId(nextId("override")),
+            resourceId: input.resourceId,
+            businessId: input.businessId,
+            date: input.date,
+            note: input.note,
+            ranges: input.ranges.map((range) => ({
+              start: localTime(range.startMinutes),
+              end: localTime(range.endMinutes),
+            })),
+          } as (typeof store.dateOverrides)[number];
+          store.dateOverrides = [
+            ...store.dateOverrides.filter((candidate) => candidate.id !== override.id),
+            override,
+          ];
+          written.push(override);
+        }
+        return written;
+      },
+      async deleteBetween(resourceIds, from, to) {
+        const wanted = new Set<string>(resourceIds);
+        const doomed = store.dateOverrides
+          .filter(
+            (override) =>
+              wanted.has(override.resourceId) &&
+              compareLocalDate(override.date, from) >= 0 &&
+              compareLocalDate(override.date, to) <= 0,
+          )
+          .sort((left, right) => compareLocalDate(left.date, right.date));
+        const gone = new Set(doomed.map((override) => override.id));
+        store.dateOverrides = store.dateOverrides.filter(
+          (override) => !gone.has(override.id),
+        );
+        return doomed;
+      },
+      async renameBetween(resourceIds, from, to, note) {
+        const wanted = new Set<string>(resourceIds);
+        const renamed = store.dateOverrides
+          .filter(
+            (override) =>
+              wanted.has(override.resourceId) &&
+              compareLocalDate(override.date, from) >= 0 &&
+              compareLocalDate(override.date, to) <= 0,
+          )
+          .map((override) => ({ ...override, note }));
+        const touched = new Map(renamed.map((override) => [override.id, override]));
+        store.dateOverrides = store.dateOverrides.map(
+          (override) => touched.get(override.id) ?? override,
+        );
+        return renamed;
+      },
       async delete(id) {
+        const removed = store.dateOverrides.find((override) => override.id === id);
         store.dateOverrides = store.dateOverrides.filter(
           (override) => override.id !== id,
         );
+        if (removed === undefined) return null;
+        return { resourceId: removed.resourceId, date: removed.date };
       },
     },
 
@@ -877,6 +983,15 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             .map((block) => block.startAt),
           timeZone,
         );
+      },
+
+      async listForResourcesBetween(resourceIds, from, to) {
+        const wanted = new Set<string>(resourceIds);
+        return store.blocks
+          .filter(
+            (block) => wanted.has(block.resourceId) && block.startAt < to && block.endAt > from,
+          )
+          .sort((left, right) => left.startAt - right.startAt);
       },
 
       async listForResourceBetween(resourceId, from, to) {
@@ -943,6 +1058,24 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             occupiedUntil: appointment.occupiedUntil,
           }));
       },
+      async countsByLocalDayForResources(resourceIds, from, to, timeZone) {
+        // Per calendar, then flattened: the same grouping the SQL does with
+        // `group by resource_id, day`.
+        return resourceIds.flatMap((resourceId) =>
+          countByLocalDay(
+            store.appointments
+              .filter(
+                (appointment) =>
+                  appointment.resourceId === resourceId &&
+                  appointment.startAt >= from &&
+                  appointment.startAt < to &&
+                  appointment.status !== "CANCELLED",
+              )
+              .map((appointment) => appointment.startAt),
+            timeZone,
+          ).map((entry) => ({ ...entry, resourceId })),
+        );
+      },
       async countsByLocalDay(resourceId, from, to, timeZone) {
         return countByLocalDay(
           store.appointments
@@ -984,6 +1117,18 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             customerPhone: (customer as User).phone,
           }));
       },
+      async listForResourcesBetween(resourceIds, from, to) {
+        const wanted = new Set<string>(resourceIds);
+        return store.appointments
+          .filter(
+            (appointment) =>
+              wanted.has(appointment.resourceId) &&
+              appointment.startAt < to &&
+              appointment.occupiedUntil > from,
+          )
+          .sort((left, right) => left.startAt - right.startAt);
+      },
+
       async listForResourceBetween(resourceId, from, to) {
         return store.appointments
           .filter(
@@ -1493,6 +1638,38 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           .sort((left, right) => compareLocalDate(left.onDate, right.onDate));
       },
 
+      async openForCustomerNamed(customerId, from, businessId) {
+        const open = store.waitingEntries
+          .filter(
+            (entry) =>
+              entry.customerId === customerId &&
+              entry.closedAt === null &&
+              compareLocalDate(entry.onDate, from) >= 0 &&
+              (businessId === null || entry.businessId === businessId),
+          )
+          .sort((left, right) => compareLocalDate(left.onDate, right.onDate));
+
+        // The join drops an entry whose Business or Service has gone, which is
+        // what the loop this replaced did by skipping a null.
+        return open.flatMap((entry) => {
+          const business = store.businesses.find((one) => one.id === entry.businessId);
+          const service = store.services.find((one) => one.id === entry.serviceId);
+          if (business === undefined || service === undefined) return [];
+          return [
+            {
+              entry,
+              businessName: business.name,
+              businessTimeZone: business.timeZone,
+              serviceName: service.name,
+              resourceNames: entry.resourceIds.flatMap((id) => {
+                const resource = store.resources.find((one) => one.id === id);
+                return resource === undefined ? [] : [resource.name];
+              }),
+            },
+          ];
+        });
+      },
+
       async toTell(resourceId, onDate, notifiedBefore) {
         const waiting = store.waitingEntries.filter(
           (entry) =>
@@ -1558,6 +1735,23 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           ...store.waitingRechecks,
           { resourceId, onDate, createdAt: store.waitingRechecks.length },
         ];
+      },
+
+      async markMany(marks) {
+        for (const mark of marks) {
+          const already = store.waitingRechecks.some(
+            (held) => held.resourceId === mark.resourceId && held.onDate === mark.onDate,
+          );
+          if (already) continue;
+          store.waitingRechecks = [
+            ...store.waitingRechecks,
+            {
+              resourceId: mark.resourceId,
+              onDate: mark.onDate,
+              createdAt: store.waitingRechecks.length,
+            },
+          ];
+        }
       },
 
       async oldest(limit) {

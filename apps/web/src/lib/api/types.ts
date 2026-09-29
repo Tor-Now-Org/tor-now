@@ -46,6 +46,13 @@ export type BusinessDto = {
    */
   entitlement?: EntitlementDto;
   /**
+   * The calendars this person may see there, on the businesses list only.
+   *
+   * Optional, like `role`: an API deployed before it travelled here sends no
+   * key, and the manage screen then asks for them as it always did.
+   */
+  resources?: ResourceDto[];
+  /**
    * Whether some active Resource is open right now, in the Business's own
    * timezone. Search results only — every other endpoint that returns a
    * BusinessDto has no use for it and never sends it.
@@ -224,6 +231,8 @@ export type DayAvailabilityDto = {
   date: string;
   slots: SlotDto[];
   emptyReason: EmptyReason | null;
+  /** The parts of the day this calendar works at all, whatever is booked. */
+  openParts: PartOfDayName[];
 };
 
 export type AppointmentStatus =
@@ -340,6 +349,8 @@ export type UserDto = {
  * work anywhere, which is what decides the invitation to open a business.
  */
 export type MeDto = UserDto & {
+  /** The terms version last agreed to; older than TERMS_VERSION shows the notice. */
+  termsVersion: string | null;
   isHasBusinesses: boolean;
 };
 

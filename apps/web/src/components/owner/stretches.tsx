@@ -2,7 +2,7 @@
 
 import { mergedRanges, type TimeRange } from "@tor-now/domain";
 import { useCopy } from "@/lib/i18n/index.tsx";
-import { breakBetween, collidesWithPrevious, isUsable } from "./usual-week.ts";
+import { breakBetween, collidesWithPrevious, isClock, isUsable } from "./usual-week.ts";
 import { DEFAULT_OPENING } from "./week.ts";
 
 /**
@@ -223,6 +223,10 @@ export const Stretches = ({
                 id={`to-${id}-${position}`}
                 label={copy.to}
                 value={range.end}
+                // An end that is not after the start is as unsaveable as a
+                // half-typed one, so it wears the same red rather than looking
+                // fine beside a disabled save button.
+                wrong={isClock(range.start) && isClock(range.end) && !isUsable(range)}
                 onChange={(end) => at(position, (found) => ({ ...found, end }))}
                 onDone={tidy}
               />
@@ -293,17 +297,20 @@ const Clock = ({
   value,
   onChange,
   onDone,
+  wrong = false,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   onDone: () => void;
+  wrong?: boolean;
 }) => {
-  const usable = /^\d{2}:\d{2}$/.test(value);
+  const usable = isClock(value) && !wrong;
   return (
     <span
       style={{
+        position: "relative",
         flex: 1,
         minWidth: 0,
         display: "flex",
@@ -338,9 +345,32 @@ const Clock = ({
           fontSize: 18,
           letterSpacing: "-.01em",
           fontVariantNumeric: "tabular-nums",
-          color: usable ? "var(--ink)" : "var(--critical)",
+          // The 24-hour face below stands in for it; see ClockFace in
+          // components/ui.tsx for why it cannot be reformatted in place.
+          color: "transparent",
         }}
       />
+      <span
+        aria-hidden="true"
+        dir="ltr"
+        style={{
+          position: "absolute",
+          insetInlineStart: 0,
+          insetInlineEnd: 0,
+          bottom: 7,
+          pointerEvents: "none",
+          textAlign: "center",
+          fontFamily: "Rubik, sans-serif",
+          fontWeight: 600,
+          fontSize: 18,
+          letterSpacing: "-.01em",
+          fontVariantNumeric: "tabular-nums",
+          lineHeight: "32px",
+          color: usable ? "var(--ink)" : "var(--critical)",
+        }}
+      >
+        {value === "" ? "––:––" : value.slice(0, 5)}
+      </span>
     </span>
   );
 };

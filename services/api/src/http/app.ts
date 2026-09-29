@@ -116,7 +116,7 @@ export const createApp = (services: Services) => {
     return context.json({
       token: result.token,
       isNewUser: result.isNewUser,
-      user: { ...wire.userOut(result.user), isHasBusinesses },
+      user: wire.meOut(result.user, isHasBusinesses),
     });
   });
 
@@ -129,7 +129,7 @@ export const createApp = (services: Services) => {
       services.profile.me(actor),
       services.business.hasAny(actor),
     ]);
-    return context.json({ ...wire.userOut(user), isHasBusinesses });
+    return context.json(wire.meOut(user, isHasBusinesses));
   });
 
   app.patch("/me", async (context) => {
@@ -139,7 +139,16 @@ export const createApp = (services: Services) => {
       services.profile.updateProfile(actor, changes),
       services.business.hasAny(actor),
     ]);
-    return context.json({ ...wire.userOut(user), isHasBusinesses });
+    return context.json(wire.meOut(user, isHasBusinesses));
+  });
+
+  app.post("/me/terms", async (context) => {
+    const actor = actorOf(context);
+    const [user, isHasBusinesses] = await Promise.all([
+      services.profile.acceptTerms(actor),
+      services.business.hasAny(actor),
+    ]);
+    return context.json(wire.meOut(user, isHasBusinesses));
   });
 
   app.delete("/me", async (context) => {
@@ -311,9 +320,19 @@ export const createApp = (services: Services) => {
     return context.body(null, 204);
   });
 
-  app.get("/me/waiting", async (context) =>
-    context.json((await services.waiting.mine(actorOf(context))).map(wire.waitingOut)),
-  );
+  app.get("/me/waiting", async (context) => {
+    // `businessId` narrows it to the shop asking, which is what a business page
+    // draws — it used to take the lot and keep one shop's worth.
+    const { businessId } = parseQuery(context, schema.waitingListSchema);
+    return context.json(
+      (
+        await services.waiting.mine(
+          actorOf(context),
+          businessId === null ? undefined : (businessId as never),
+        )
+      ).map(wire.waitingOut),
+    );
+  });
 
   app.put("/appointments/:appointmentId/note", async (context) => {
     const { customerNote } = await parseBody(context, schema.customerNoteSchema);
@@ -488,12 +507,8 @@ const ownerRoutes = (services: Services) => {
       actorOf(context),
       idParam(context, "businessId"),
     );
-    return context.json(
-      list.map((entry) => ({
-        ...wire.resourceOut(entry.resource),
-        upcomingAppointments: entry.upcoming,
-      })),
-    );
+    // The same shape the businesses list carries, so the two cannot drift.
+    return context.json(list.map(wire.resourceWithUpcomingOut));
   });
 
   owner.post("/:businessId/resources", async (context) => {
@@ -596,6 +611,22 @@ const ownerRoutes = (services: Services) => {
       idParam(context, "id"),
     );
     return context.body(null, 204);
+  });
+
+  /**
+   * Every readable calendar's special days over a span. The schedule screen
+   * needs them all to tell one chair's day from the shop's, and used to ask one
+   * request per calendar to find out.
+   */
+  owner.get("/:businessId/overrides", async (context) => {
+    const { from, to } = parseQuery(context, schema.dateRangeSchema);
+    const overrides = await services.business.listAllOverrides(
+      actorOf(context),
+      idParam(context, "businessId"),
+      from,
+      to,
+    );
+    return context.json(overrides.map(wire.overrideOut));
   });
 
   owner.get("/:businessId/resources/:resourceId/overrides", async (context) => {
@@ -756,6 +787,22 @@ const ownerRoutes = (services: Services) => {
   });
 
   // What a blockage would strand, before it is made.
+  /**
+   * The blockages a calendar holds across a span — the list its own screen
+   * shows. A day at a time was the wrong question for a standing decision.
+   */
+  owner.get("/:businessId/resources/:resourceId/blocks", async (context) => {
+    const { from, to } = parseQuery(context, schema.dateRangeSchema);
+    const blocks = await services.calendar.blocksBetween(
+      actorOf(context),
+      idParam(context, "businessId"),
+      idParam(context, "resourceId"),
+      from,
+      to,
+    );
+    return context.json(blocks.map(wire.blockOut));
+  });
+
   owner.post("/:businessId/resources/:resourceId/blocks/preview", async (context) => {
     const body = await parseBody(context, schema.blockPreviewSchema);
     return context.json(

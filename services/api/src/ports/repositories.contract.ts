@@ -140,6 +140,51 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("finds many users by id at once, and hides the deleted among them", async () => {
+      await withRepositories(async (repositories) => {
+        const her = await repositories.users.create({
+          phone: "+972500001121",
+          givenName: "דנה",
+          familyName: null,
+          birthDate: null,
+        });
+        const him = await repositories.users.create({
+          phone: "+972500001122",
+          givenName: "יוסי",
+          familyName: null,
+          birthDate: null,
+        });
+        const closed = await repositories.users.create({
+          phone: "+972500001123",
+          givenName: "סגור",
+          familyName: null,
+          birthDate: null,
+        });
+        await repositories.users.softDelete(closed.id);
+
+        // An id repeated, an id nobody answers for, and a closed account: the
+        // callers pass whatever the appointments gave them, so all three have
+        // to behave — and the result is indexed by id, never by position.
+        const found = await repositories.users.findByIds([
+          her.id,
+          him.id,
+          her.id,
+          closed.id,
+          asId("00000000-0000-4000-8000-999999999999"),
+        ]);
+
+        expect([...found].map((user) => user.id).sort()).toEqual(
+          [her.id, him.id].sort(),
+        );
+      });
+    });
+
+    it("asks nothing of the database for an empty list of ids", async () => {
+      await withRepositories(async (repositories) => {
+        expect(await repositories.users.findByIds([])).toEqual([]);
+      });
+    });
+
     it("restores a soft-deleted user", async () => {
       await withRepositories(async (repositories) => {
         const created = await repositories.users.create({
@@ -203,6 +248,24 @@ export const describeRepositoryContract = (
         });
         expect(displayName(updated)).toBe("אחרי כהן");
         expect(updated.birthDate).toBe("1990-01-01");
+      });
+    });
+
+    it("records which terms a user agreed to, and when", async () => {
+      await withRepositories(async (repositories) => {
+        const created = await repositories.users.create({
+          phone: "+972500001116",
+          givenName: "דנה",
+          familyName: null,
+          birthDate: null,
+        });
+        expect(created.termsVersion).toBeNull();
+        expect(created.termsAcceptedAt).toBeNull();
+
+        const accepted = await repositories.users.acceptTerms(created.id, "2026-09-25");
+        expect(accepted.termsVersion).toBe("2026-09-25");
+        expect(accepted.termsAcceptedAt).not.toBeNull();
+        expect((await repositories.users.findById(created.id))?.termsVersion).toBe("2026-09-25");
       });
     });
 
@@ -661,6 +724,320 @@ export const describeRepositoryContract = (
     });
 
     // --- Schedule layers: ADR 0002 -------------------------------------
+
+    it("finds an override by its own id, ranges included", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04801");
+        const date = parseLocalDate("2026-09-08");
+        const written = await repositories.dateOverrides.put({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          date,
+          note: "יום קצר",
+          ranges: [{ startMinutes: 600, endMinutes: 720 }],
+        });
+
+        const found = await repositories.dateOverrides.findById(written.id);
+
+        // Whose calendar it stands on is the point of the lookup.
+        expect(found?.resourceId).toBe(context.resource.id);
+        expect(found?.date).toBe(date);
+        expect(found?.ranges).toHaveLength(1);
+        expect(
+          await repositories.dateOverrides.findById(
+            asId("00000000-0000-4000-8000-999999999999"),
+          ),
+        ).toBeNull();
+      });
+    });
+
+
+    /**
+     * The batched writes, which a closure uses in place of one round trip per
+     * calendar per date. Each asks the same thing: does writing them together
+     * leave exactly what writing them one at a time left?
+     */
+    it("writes many overrides at once, replacing what each day held", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04701");
+        const second = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "יומן ב",
+        });
+        const ids = [context.resource.id, second.id];
+        const first = parseLocalDate("2026-09-01");
+        const last = parseLocalDate("2026-09-03");
+        const dates = [first, parseLocalDate("2026-09-02"), last];
+
+        // A short day on one of them first, so the batch has something to replace.
+        await repositories.dateOverrides.put({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          date: first,
+          note: "לפני",
+          ranges: [{ startMinutes: 600, endMinutes: 660 }],
+        });
+
+        const written = await repositories.dateOverrides.putMany(
+          ids.flatMap((resourceId) =>
+            dates.map((date) => ({
+              resourceId,
+              businessId: context.business.id,
+              date,
+              note: "חופשה",
+              ranges: [],
+            })),
+          ),
+        );
+
+        expect(written).toHaveLength(6);
+        // Read back rather than trusted: a closed day is an override with no
+        // ranges, and the one that had hours has lost them.
+        const held = await repositories.dateOverrides.listForResources(ids, first, last);
+        expect(held).toHaveLength(6);
+        expect(held.every((one) => one.ranges.length === 0)).toBe(true);
+        expect(held.every((one) => one.note === "חופשה")).toBe(true);
+
+        // And again, which is what a closure written twice does: still six.
+        await repositories.dateOverrides.putMany(
+          ids.flatMap((resourceId) =>
+            dates.map((date) => ({
+              resourceId,
+              businessId: context.business.id,
+              date,
+              note: "שוב",
+              ranges: [{ startMinutes: 540, endMinutes: 720 }],
+            })),
+          ),
+        );
+        const again = await repositories.dateOverrides.listForResources(ids, first, last);
+        expect(again).toHaveLength(6);
+        expect(again.every((one) => one.ranges.length === 1)).toBe(true);
+        expect(await repositories.dateOverrides.putMany([])).toEqual([]);
+      });
+    });
+
+    it("removes a span of overrides and hands back what stood there", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04702");
+        const inside = parseLocalDate("2026-09-10");
+        const outside = parseLocalDate("2026-09-20");
+        for (const date of [inside, outside]) {
+          await repositories.dateOverrides.put({
+            resourceId: context.resource.id,
+            businessId: context.business.id,
+            date,
+            note: "סגור",
+            ranges: [{ startMinutes: 600, endMinutes: 720 }],
+          });
+        }
+
+        const removed = await repositories.dateOverrides.deleteBetween(
+          [context.resource.id],
+          inside,
+          inside,
+        );
+
+        // What was there, hours included — the caller has a date to mark and a
+        // trail to write, and after the delete there is nothing left to read.
+        expect(removed).toHaveLength(1);
+        expect(removed[0]?.date).toBe(inside);
+        expect(removed[0]?.ranges).toHaveLength(1);
+        // The day outside the span is untouched.
+        expect(
+          await repositories.dateOverrides.listForResource(context.resource.id, inside, outside),
+        ).toHaveLength(1);
+        expect(await repositories.dateOverrides.deleteBetween([], inside, inside)).toEqual([]);
+      });
+    });
+
+    it("rewords a span of overrides and leaves their hours alone", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04703");
+        const date = parseLocalDate("2026-09-14");
+        await repositories.dateOverrides.put({
+          resourceId: context.resource.id,
+          businessId: context.business.id,
+          date,
+          note: "חופשה",
+          ranges: [{ startMinutes: 600, endMinutes: 720 }],
+        });
+
+        const renamed = await repositories.dateOverrides.renameBetween(
+          [context.resource.id],
+          date,
+          date,
+          "שיפוצים",
+        );
+
+        expect(renamed).toHaveLength(1);
+        expect(renamed[0]?.note).toBe("שיפוצים");
+        // The words changed and nothing else did.
+        expect(renamed[0]?.ranges).toHaveLength(1);
+        const held = await repositories.dateOverrides.findByDate(context.resource.id, date);
+        expect(held?.note).toBe("שיפוצים");
+        expect(held?.ranges).toHaveLength(1);
+        expect(await repositories.dateOverrides.renameBetween([], date, date, "x")).toEqual([]);
+      });
+    });
+
+    it("marks many days for a recheck in one go, and twice is once", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04704");
+        const dates = [parseLocalDate("2026-09-01"), parseLocalDate("2026-09-02")];
+
+        await repositories.waitingRechecks.markMany(
+          dates.map((onDate) => ({ resourceId: context.resource.id, onDate })),
+        );
+        // The same mark again is still one mark: the work is "look at this day".
+        await repositories.waitingRechecks.markMany([
+          { resourceId: context.resource.id, onDate: dates[0] as never },
+        ]);
+        await repositories.waitingRechecks.markMany([]);
+
+        const marks = await repositories.waitingRechecks.oldest(10);
+        const mine = marks.filter((mark) => mark.resourceId === context.resource.id);
+        expect(mine).toHaveLength(2);
+        expect([...mine].map((mark) => mark.onDate).sort()).toEqual([...dates].sort());
+      });
+    });
+
+
+    it("reads the calendars of several businesses at once, inactive ones included", async () => {
+      await withRepositories(async (repositories) => {
+        const here = await aBookableBusiness(repositories, "04601");
+        const there = await aBookableBusiness(repositories, "04602");
+        // A withdrawn calendar still comes back, exactly as the single-business
+        // read returns it: search decides what "active" means, not the store.
+        const withdrawn = await repositories.resources.create({
+          businessId: here.business.id,
+          name: "יומן שהוסר",
+        });
+        await repositories.resources.update(withdrawn.id, { active: false });
+
+        const both = await repositories.resources.listForBusinesses([
+          here.business.id,
+          there.business.id,
+        ]);
+
+        for (const business of [here.business, there.business]) {
+          expect(both.filter((one) => one.businessId === business.id)).toEqual(
+            await repositories.resources.listForBusiness(business.id),
+          );
+        }
+        expect(both.some((one) => one.id === withdrawn.id && !one.active)).toBe(true);
+        expect(await repositories.resources.listForBusinesses([])).toEqual([]);
+      });
+    });
+
+
+    /**
+     * The plural reads, which a screen drawing every calendar side by side uses
+     * in place of one round trip per calendar.
+     *
+     * What each case is really asking is whether the batched statement answers
+     * exactly what the single-calendar one answers, calendar by calendar —
+     * because that equivalence is the whole claim being made by using it.
+     */
+    it("reads the schedule of several calendars at once, as the single-calendar reads would", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "04501");
+        const second = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "יומן ב",
+        });
+        // A third, left empty on purpose: a calendar with nothing on it must
+        // still be answerable, and is exactly what a naive grouping loses.
+        const empty = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "יומן ג",
+        });
+        const ids = [context.resource.id, second.id, empty.id];
+        const date = parseLocalDate("2026-09-01");
+        const from = parseInstant("2026-09-01T00:00:00Z");
+        const to = parseInstant("2026-09-02T00:00:00Z");
+
+        // One of each layer, on two of the three calendars.
+        for (const resourceId of [context.resource.id, second.id]) {
+          await repositories.workingHours.create({
+            resourceId,
+            businessId: context.business.id,
+            dayOfWeek: 2,
+            startMinutes: 540,
+            endMinutes: 1020,
+          });
+          await repositories.dateOverrides.put({
+            resourceId,
+            businessId: context.business.id,
+            date,
+            note: "יום מיוחד",
+            ranges: [{ startMinutes: 600, endMinutes: 720 }],
+          });
+          await repositories.blocks.create({
+            resourceId,
+            businessId: context.business.id,
+            startAt: parseInstant("2026-09-01T09:00:00Z"),
+            endAt: parseInstant("2026-09-01T10:00:00Z"),
+            reason: "הפסקה",
+            groupId: crypto.randomUUID(),
+          });
+        }
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-01T11:00:00Z", "2026-09-01T11:30:00Z", "2026-09-01T11:40:00Z"),
+        );
+        await repositories.appointments.create({
+          ...anAppointmentAt(context, "2026-09-01T13:00:00Z", "2026-09-01T13:30:00Z", "2026-09-01T13:40:00Z"),
+          resourceId: second.id,
+        });
+
+        const [hours, overrides, blocks, appointments] = await Promise.all([
+          repositories.workingHours.listForResources(ids),
+          repositories.dateOverrides.listForResources(ids, date, date),
+          repositories.blocks.listForResourcesBetween(ids, from, to),
+          repositories.appointments.listForResourcesBetween(ids, from, to),
+        ]);
+
+        // Grouped by calendar, the batch is the single-calendar answer.
+        for (const resourceId of ids) {
+          expect(hours.filter((one) => one.resourceId === resourceId)).toEqual(
+            await repositories.workingHours.listForResource(resourceId),
+          );
+          expect(overrides.filter((one) => one.resourceId === resourceId)).toEqual(
+            await repositories.dateOverrides.listForResource(resourceId, date, date),
+          );
+          expect(blocks.filter((one) => one.resourceId === resourceId)).toEqual(
+            await repositories.blocks.listForResourceBetween(resourceId, from, to),
+          );
+          expect(appointments.filter((one) => one.resourceId === resourceId)).toEqual(
+            await repositories.appointments.listForResourceBetween(resourceId, from, to),
+          );
+        }
+
+        // And the empty calendar contributes nothing rather than failing.
+        expect(hours.filter((one) => one.resourceId === empty.id)).toEqual([]);
+        expect(appointments.filter((one) => one.resourceId === empty.id)).toEqual([]);
+        // The ranges came back hydrated, not as a bare override with no hours.
+        expect(overrides.every((one) => one.ranges.length === 1)).toBe(true);
+      });
+    });
+
+    it("asks nothing of the database for an empty list of calendars", async () => {
+      await withRepositories(async (repositories) => {
+        const date = parseLocalDate("2026-09-01");
+        const from = parseInstant("2026-09-01T00:00:00Z");
+        const to = parseInstant("2026-09-02T00:00:00Z");
+        expect(await repositories.workingHours.listForResources([])).toEqual([]);
+        expect(await repositories.dateOverrides.listForResources([], date, date)).toEqual([]);
+        expect(await repositories.blocks.listForResourcesBetween([], from, to)).toEqual([]);
+        expect(await repositories.appointments.listForResourcesBetween([], from, to)).toEqual([]);
+        expect(
+          await repositories.appointments.countsByLocalDayForResources(
+            [], from, to, timeZone("Asia/Jerusalem"),
+          ),
+        ).toEqual([]);
+      });
+    });
+
 
     it("replaces a date override wholesale, ranges included", async () => {
       await withRepositories(async (repositories) => {
@@ -1170,7 +1547,13 @@ export const describeRepositoryContract = (
             parseLocalDate("2026-09-17"),
           ),
         ).toHaveLength(1);
-        await repositories.dateOverrides.delete(override.id);
+        // The caller only has the id, so what comes back is what lets it mark
+        // the date for the waiting list. ADR 0018.
+        expect(await repositories.dateOverrides.delete(override.id)).toEqual({
+          resourceId: context.resource.id,
+          date: parseLocalDate("2026-09-17"),
+        });
+        expect(await repositories.dateOverrides.delete(override.id)).toBeNull();
         expect(
           await repositories.dateOverrides.listForResource(
             context.resource.id,
@@ -1481,6 +1864,59 @@ export const describeRepositoryContract = (
           timeZone("Asia/Jerusalem"),
         );
         expect(counts).toEqual([{ date: parseLocalDate("2026-09-02"), count: 1 }]);
+      });
+    });
+
+    it("counts a month for several calendars at once, each day naming its calendar", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "4104");
+        const second = await repositories.resources.create({
+          businessId: context.business.id,
+          name: "יומן ב",
+        });
+        const zone = timeZone("Asia/Jerusalem");
+        const from = parseInstant("2026-09-01T00:00:00Z");
+        const to = parseInstant("2026-09-30T21:00:00Z");
+
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-10T09:00:00Z", "2026-09-10T09:30:00Z", "2026-09-10T09:40:00Z"),
+        );
+        await repositories.appointments.create({
+          ...anAppointmentAt(context, "2026-09-10T11:00:00Z", "2026-09-10T11:30:00Z", "2026-09-10T11:40:00Z"),
+          resourceId: second.id,
+        });
+        // Cancelled, and so not a busy day for anybody — the same rule the
+        // single-calendar count obeys.
+        const calledOff = await repositories.appointments.create({
+          ...anAppointmentAt(context, "2026-09-11T09:00:00Z", "2026-09-11T09:30:00Z", "2026-09-11T09:40:00Z"),
+          resourceId: second.id,
+        });
+        await repositories.appointments.update(calledOff.id, {
+          status: "CANCELLED",
+          cancelledAt: parseInstant("2026-09-10T09:00:00Z"),
+          cancelledBy: "CUSTOMER",
+        });
+
+        const counts = await repositories.appointments.countsByLocalDayForResources(
+          [context.resource.id, second.id], from, to, zone,
+        );
+
+        expect([...counts].sort((left, right) => left.resourceId.localeCompare(right.resourceId)))
+          .toEqual(
+            [
+              { resourceId: context.resource.id, date: parseLocalDate("2026-09-10"), count: 1 },
+              { resourceId: second.id, date: parseLocalDate("2026-09-10"), count: 1 },
+            ].sort((left, right) => left.resourceId.localeCompare(right.resourceId)),
+          );
+
+        // Calendar by calendar, it agrees with the single-calendar count.
+        for (const resourceId of [context.resource.id, second.id]) {
+          expect(
+            counts
+              .filter((one) => one.resourceId === resourceId)
+              .map(({ date, count }) => ({ date, count })),
+          ).toEqual(await repositories.appointments.countsByLocalDay(resourceId, from, to, zone));
+        }
       });
     });
 
@@ -2823,6 +3259,73 @@ export const describeRepositoryContract = (
           expect(
             await repositories.waitingEntries.openForCustomer(customer.id, onDate),
           ).toEqual([entry]);
+        });
+      });
+
+      it("gives a customer's open entries with the names their list shows", async () => {
+        await withRepositories(async (repositories) => {
+          const here = await aWaitingCustomer(repositories, "4109");
+          const there = await aBookableBusiness(repositories, "4110");
+          const second = await repositories.resources.create({
+            businessId: here.business.id,
+            name: "יומן ב",
+          });
+          const onDate = parseLocalDate("2026-09-21");
+
+          const mine = await repositories.waitingEntries.put({
+            businessId: here.business.id,
+            customerId: here.customer.id,
+            serviceId: here.service.id,
+            resourceIds: [here.resource.id, second.id],
+            onDate,
+            parts: ["MORNING"],
+          });
+          // A second shop, so the narrowing has something to leave out.
+          await repositories.waitingEntries.put({
+            businessId: there.business.id,
+            customerId: here.customer.id,
+            serviceId: there.service.id,
+            resourceIds: [there.resource.id],
+            onDate,
+            parts: ["EVENING"],
+          });
+
+          const all = await repositories.waitingEntries.openForCustomerNamed(
+            here.customer.id,
+            onDate,
+            null,
+          );
+
+          expect(all).toHaveLength(2);
+          const held = all.find((one) => one.entry.id === mine.id);
+          // The three names the loop this replaced fetched one read at a time.
+          expect(held?.businessName).toBe(here.business.name);
+          expect(held?.serviceName).toBe(here.service.name);
+          expect(held?.businessTimeZone).toBe("Asia/Jerusalem");
+          // In the entry's own order, so the chip reads the way it was asked.
+          expect(held?.resourceNames).toEqual(
+            held?.entry.resourceIds.map((id) =>
+              id === second.id ? "יומן ב" : here.resource.name,
+            ),
+          );
+
+          // One shop's worth, for the screen that draws one shop.
+          const narrowed = await repositories.waitingEntries.openForCustomerNamed(
+            here.customer.id,
+            onDate,
+            here.business.id,
+          );
+          expect(narrowed.map((one) => one.entry.id)).toEqual([mine.id]);
+
+          // A closed entry is nobody's standing question any more.
+          await repositories.waitingEntries.close([mine.id], AT("2026-09-20T10:00:00.000Z"));
+          expect(
+            await repositories.waitingEntries.openForCustomerNamed(
+              here.customer.id,
+              onDate,
+              here.business.id,
+            ),
+          ).toEqual([]);
         });
       });
 

@@ -31,8 +31,23 @@ export type User = {
   readonly anonymisedAt: Instant | null;
   /** ADR 0010: set only by another administrator, and audited. */
   readonly isAdministrator: boolean;
+  /**
+   * The TERMS_VERSION this person last agreed to, and when — null for someone
+   * who has not agreed to any. Kept on the row rather than only in the audit
+   * trail, which is pruned after a year while the agreement still stands.
+   */
+  readonly termsVersion: string | null;
+  readonly termsAcceptedAt: Instant | null;
   readonly createdAt: Instant;
 };
+
+/**
+ * The Terms of Service and Privacy Policy in force (docs/legal). Bump it — to
+ * the date the new text takes effect — only for a material change: everyone
+ * signed in on an older version is then shown the update notice until they
+ * acknowledge it. A typo fix leaves it alone.
+ */
+export const TERMS_VERSION = "2026-09-25";
 
 /**
  * The name to show. Joining happens here rather than in each interface, so

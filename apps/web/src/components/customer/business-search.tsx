@@ -59,7 +59,7 @@ const FAVORITES_STORAGE_KEY = "tor-now.favorite-businesses";
 
 /** Never persisted server-side — the point is a device-local shortlist. */
 // Search filters sit above results; smaller than the shared .chip default.
-const compactChip = { minHeight: 36, padding: "0 12px", fontSize: 13 };
+const compactChip = { minHeight: 33, padding: "0 10px", fontSize: 13 };
 
 export const readFavorites = (): Set<string> => {
   try {
@@ -330,7 +330,7 @@ export const BusinessSearch = ({
   return (
     <div style={{ padding: "28px 18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 14 }}>
-        <h1 style={{ fontSize: 30, lineHeight: 1.2, textAlign: "center" }}>
+        <h1 className="search-headline" style={{ lineHeight: 1.2, textAlign: "center" }}>
           {copy.headline1}
           <br />
           {copy.headline2}

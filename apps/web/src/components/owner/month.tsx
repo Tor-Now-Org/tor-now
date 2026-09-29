@@ -22,11 +22,14 @@ import {
   factsOn,
   BAND_ROWS_IN_A_WEEK,
   labelFitting,
+  mergeMonths,
   mergeOverlapping,
+  monthsOf,
   nothingKnown,
   worksOn,
   packBands,
   segmentIn,
+  weekFrom,
   weeksOf,
   type Merged,
   type Segment,
@@ -72,12 +75,14 @@ export const Month = ({
   scope,
   selected,
   firstOfMonth,
+  firstOfWeek = null,
   onPickDay,
   reloadKey,
   choosing,
   onChosen,
   onCancelChoosing,
   onChanged,
+  onReady,
 }: {
   token: string;
   business: BusinessDto;
@@ -94,6 +99,15 @@ export const Month = ({
    * put when the screen swaps the calendar for a list of search results.
    */
   firstOfMonth: string;
+  /**
+   * One week instead of the month, from its Sunday.
+   *
+   * The same grid folded to a single row rather than a view of its own, so
+   * everything a month does — reading a day, aiming a blockage or special
+   * hours at a run of days, the bars across them — a week does the same way.
+   * A week that crosses the first of the month is read from both months.
+   */
+  firstOfWeek?: string | null;
   onPickDay: (date: string) => void;
   /** Changes when something elsewhere edited the month, so it reloads. */
   reloadKey: number;
@@ -127,6 +141,13 @@ export const Month = ({
    * open day until the screen was reopened.
    */
   onChanged: () => void;
+  /**
+   * The grid has an answer to draw.
+   *
+   * The day below waits for it, so a first load shows one spinner where the
+   * calendar will be instead of two, one under the other.
+   */
+  onReady?: () => void;
 }) => {
   const copy = useCopy("owner");
   const { language } = useLanguage();
@@ -163,19 +184,29 @@ export const Month = ({
    * is still in flight — which is the only way to tell a late answer to a
    * question nobody is asking any more from the answer to this one.
    */
-  const wanted = useRef(firstOfMonth);
-  wanted.current = firstOfMonth;
+  const reading = firstOfWeek ?? firstOfMonth;
+  const wanted = useRef(reading);
+  wanted.current = reading;
 
   const load = useCallback(async () => {
     setError(null);
-    const asked = firstOfMonth;
+    const asked = firstOfWeek ?? firstOfMonth;
     try {
-      const data = await api.businessMonth(token, business.id, asked);
-      if (wanted.current === asked) setMonth({ of: asked, data });
+      const data = mergeMonths(
+        await Promise.all(
+          (firstOfWeek === null ? [firstOfMonth] : monthsOf(weekFrom(firstOfWeek))).map(
+            (month) => api.businessMonth(token, business.id, month),
+          ),
+        ),
+      );
+      if (wanted.current === asked) {
+        setMonth({ of: asked, data });
+        onReady?.();
+      }
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
-  }, [token, business.id, firstOfMonth, errorText]);
+  }, [token, business.id, firstOfMonth, firstOfWeek, errorText, onReady]);
 
   useEffect(() => {
     void load();
@@ -201,14 +232,14 @@ export const Month = ({
     }
   };
 
-  if (month === null) return <Spinner />;
+  if (month === null) return <Spinner page />;
 
   // Until the answer for this month arrives, the squares are drawn with nothing
   // said about them rather than with what was true of another month.
-  const known = month.of === firstOfMonth ? month.data : null;
+  const known = month.of === reading ? month.data : null;
 
   const chosen = from === null ? [] : datesBetween(from, to ?? from);
-  const weeks = weeksOf(firstOfMonth);
+  const weeks = firstOfWeek === null ? weeksOf(firstOfMonth) : [weekFrom(firstOfWeek)];
   const today = todayIn(business.timeZone);
 
   /** Which calendars a change made here would touch. */
@@ -442,10 +473,17 @@ export const Month = ({
       <Sheet open={openClosure !== null} onClose={() => setOpenClosure(null)}>
         {openClosure !== null && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* A shortened day is named by what it is, the way its band in the
+                month names it, and the words somebody put on it read as the
+                subtitle underneath. */}
             <h2 style={{ fontSize: 18 }}>
-              {openClosure.note ??
-                (openClosure.kind === "SHUT" ? copy.closedWord : copy.differentHours)}
+              {openClosure.kind === "SHUT"
+                ? (openClosure.note ?? copy.closedWord)
+                : copy.shortDayWord}
             </h2>
+            {openClosure.kind !== "SHUT" && openClosure.note !== null && (
+              <p className="hint" style={{ margin: 0 }}>{openClosure.note}</p>
+            )}
             {/* What the shop is actually doing that day — the half-day was the
                 case with nothing to read at all. */}
             <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }} className="tab">

@@ -1,4 +1,4 @@
-import type { AddonHoldingId, BusinessId } from "@tor-now/domain";
+import type { AddonHoldingId, BusinessId, LocalDate, ResourceId } from "@tor-now/domain";
 import { AUDIT_ACTIONS } from "../ports/audit.ts";
 import { auditedFairUseLimits, auditedReferenceBusinesses, auditedRunningCosts } from "./auditing-costs.ts";
 import { record, type Context } from "./audit-record.ts";
@@ -345,10 +345,81 @@ export const auditedDateOverrides = (
     return after;
   },
   async delete(id) {
-    await inner.delete(id);
+    const removed = await inner.delete(id);
     await record(context, AUDIT_ACTIONS.dateOverrideChanged, "DateOverride", id, null, null);
+    return removed;
+  },
+  /**
+   * One row for the decision, not one per Override it took.
+   *
+   * The same reading as `replaceForResource` above: what a person did was
+   * "the shop is shut from the first to the thirtieth", and ninety rows each
+   * saying an Override was written is a worse record of that than one row
+   * holding the closure and what it replaced. Kept against the Business, which
+   * is whose days these are — an Override is not what was edited here, the
+   * shop's calendar is.
+   */
+  async putMany(overrides) {
+    if (overrides.length === 0) return [];
+    const before = await priorOverrides(inner, overrides);
+    const after = await inner.putMany(overrides);
+    await record(
+      context,
+      AUDIT_ACTIONS.dateOverrideChanged,
+      "Business",
+      overrides[0]?.businessId ?? null,
+      before,
+      after,
+    );
+    return after;
+  },
+  async deleteBetween(resourceIds, from, to) {
+    // The removed rows are the whole record: they are what was there, and
+    // afterwards there is nothing to read.
+    const removed = await inner.deleteBetween(resourceIds, from, to);
+    if (removed.length === 0) return removed;
+    await record(
+      context,
+      AUDIT_ACTIONS.dateOverrideChanged,
+      "Business",
+      removed[0]?.businessId ?? null,
+      removed,
+      null,
+    );
+    return removed;
+  },
+  async renameBetween(resourceIds, from, to, note) {
+    const before = await inner.listForResources(resourceIds, from, to);
+    const after = await inner.renameBetween(resourceIds, from, to, note);
+    if (after.length === 0) return after;
+    await record(
+      context,
+      AUDIT_ACTIONS.dateOverrideChanged,
+      "Business",
+      after[0]?.businessId ?? null,
+      before,
+      after,
+    );
+    return after;
   },
 });
+
+/**
+ * What stood on these calendars and dates before the batch replaced it — one
+ * read across the span rather than one per Override, which is the whole point.
+ */
+const priorOverrides = async (
+  inner: DateOverrideRepository,
+  overrides: readonly { resourceId: ResourceId; date: LocalDate }[],
+) => {
+  const dates = overrides.map((override) => override.date).sort();
+  const from = dates[0];
+  const to = dates[dates.length - 1];
+  /* istanbul ignore next -- both hold while there is an override, checked above */
+  if (from === undefined || to === undefined) return [];
+  const resourceIds = [...new Set(overrides.map((override) => override.resourceId))];
+  return inner.listForResources(resourceIds, from, to);
+};
 
 export const auditedBlocks = (
   inner: BlockRepository,
@@ -452,6 +523,12 @@ export const auditedUsers = (
     await record(context, AUDIT_ACTIONS.userAnonymised, "User", id, null, {
       anonymisedAt: after.anonymisedAt,
     });
+    return after;
+  },
+  async acceptTerms(id, version) {
+    const before = await inner.findById(id);
+    const after = await inner.acceptTerms(id, version);
+    await record(context, AUDIT_ACTIONS.termsAccepted, "User", id, before, after);
     return after;
   },
   async setAdministrator(id, isAdministrator) {

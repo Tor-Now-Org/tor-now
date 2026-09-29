@@ -176,7 +176,7 @@ export default function AdminPage() {
     return fillText(catalogueCopy.paymentBreakdown, { lines: lines.join(" + ") });
   };
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner page />;
 
   if (token === null || user === null || !user.isAdministrator) {
     return (

@@ -9,7 +9,7 @@ import type {
   CalendarAppointmentDto,
   ResourceDto,
 } from "@/lib/api/types.ts";
-import { monthName, todayIn, whenIn } from "@/lib/format.ts";
+import { addDaysTo, monthName, todayIn, weekName, whenIn } from "@/lib/format.ts";
 import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { canCloseBusiness } from "@/lib/roles.ts";
@@ -33,7 +33,16 @@ import { DayTimeline, type Picked } from "./day-timeline.tsx";
 import { DayActionSheet } from "./day-actions.tsx";
 import { AddButton, FinishAim, type Aim } from "./day-add.tsx";
 import { Button, Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
-import { shiftMonth } from "./month-model.ts";
+import {
+  DAYS_IN_A_WEEK,
+  daysInMonth,
+  firstOfWeekOf,
+  shiftMonth,
+  weekFrom,
+} from "./month-model.ts";
+
+/** "1" when the grid was last folded to a week; the month is the default. */
+const WEEK_VIEW_KEY = "tor-now.calendar-week-view";
 
 /**
  * The owner's day. ADR 0003 declines to keep this live: it is fetched on open
@@ -83,6 +92,20 @@ export const CalendarDay = ({
   const [firstOfMonth, setFirstOfMonth] = useState(
     () => `${todayIn(business.timeZone).slice(0, 7)}-01`,
   );
+  /**
+   * The week the grid is folded to, from its Sunday, or null for the month.
+   *
+   * Folding keeps the day being read in view — the week it is in, or the
+   * month's first week when that day is in another month — and unfolding
+   * opens the month the week was in, so neither way loses your place.
+   */
+  const [firstOfWeek, setFirstOfWeek] = useState<string | null>(() => {
+    try {
+      return window.localStorage.getItem(WEEK_VIEW_KEY) === "1" ? firstOfWeekOf(date) : null;
+    } catch {
+      return null;
+    }
+  });
   const [reach, setReach] = useState<Reach>("DAY");
   /**
    * Bumped when anything on this screen changed what the answers would be.
@@ -96,6 +119,9 @@ export const CalendarDay = ({
   const [freshness, setFreshness] = useState(0);
   /** Bumped when the day changes something the month draws, so it reloads. */
   const [monthKey, setMonthKey] = useState(0);
+  /** The grid above has drawn, so the day may show its own wait. */
+  const [monthReady, setMonthReady] = useState(false);
+  const monthDrew = useCallback(() => setMonthReady(true), []);
   /**
    * The booking being written, and what the way in already answered.
    *
@@ -208,12 +234,16 @@ export const CalendarDay = ({
     if (wanted === null || resource === null) return;
     let current = true;
     api
-      .listCustomers(token, business.id)
-      .then((people) => {
+      // Their record, not the whole book: the id is known, and the list would
+      // be every customer the business has in order to use one of them.
+      .customerRecord(token, business.id, wanted)
+      .then((record) => {
         if (!current) return;
-        const found = people.find((one) => one.id === wanted);
-        if (found === undefined) return;
-        setAimedCustomer({ id: found.id, name: found.name, phone: found.phone });
+        setAimedCustomer({
+          id: record.user.id,
+          name: record.user.name,
+          phone: record.user.phone,
+        });
         setAim("appointment");
         setAimedAt([]);
       })
@@ -303,6 +333,12 @@ export const CalendarDay = ({
     }
   };
 
+  /** The month unfolding the week opens: the day being read's, when it is in the week. */
+  const unfoldsTo =
+    firstOfWeek === null
+      ? firstOfMonth
+      : `${(weekFrom(firstOfWeek).includes(date) ? date : firstOfWeek).slice(0, 7)}-01`;
+
   /** While somebody is typing, the row is the field and the month steps aside. */
   const looking = searching || query !== "";
 
@@ -317,6 +353,11 @@ export const CalendarDay = ({
     setFacets(NOTHING);
     setQuery("");
     setReach("DAY");
+    // The box goes too, not only what was typed in it. `looking` is the box
+    // being open *or* holding words, and while it is true the month is not on
+    // screen — so clearing the words alone handed back a calendar with no way
+    // to reach another month, which is most of what choosing a day is.
+    setSearching(false);
   };
 
   return (
@@ -332,8 +373,12 @@ export const CalendarDay = ({
           <>
             <button
               className="chip tap"
-              aria-label={copy.previousMonth}
-              onClick={() => setFirstOfMonth(shiftMonth(firstOfMonth, -1))}
+              aria-label={firstOfWeek === null ? copy.previousMonth : copy.previousWeek}
+              onClick={() =>
+                firstOfWeek === null
+                  ? setFirstOfMonth(shiftMonth(firstOfMonth, -1))
+                  : setFirstOfWeek(addDaysTo(firstOfWeek, -7))
+              }
               style={{ minWidth: 34, minHeight: 34 }}
             >
               ‹
@@ -352,22 +397,73 @@ export const CalendarDay = ({
               {/* Short where the row is shared with the calendar picker: that
                   chip and this name are the two things here that can grow, and
                   only one of them is a name somebody chose. */}
-              {monthName(
-                firstOfMonth,
-                business.timeZone,
-                language,
-                resources.length > 1 ? "short" : "long",
-              )}
+              {firstOfWeek === null
+                ? monthName(
+                    firstOfMonth,
+                    business.timeZone,
+                    language,
+                    resources.length > 1 ? "short" : "long",
+                  )
+                : weekName(firstOfWeek, language)}
             </span>
             <button
               className="chip tap"
-              aria-label={copy.nextMonth}
-              onClick={() => setFirstOfMonth(shiftMonth(firstOfMonth, 1))}
+              aria-label={firstOfWeek === null ? copy.nextMonth : copy.nextWeek}
+              onClick={() =>
+                firstOfWeek === null
+                  ? setFirstOfMonth(shiftMonth(firstOfMonth, 1))
+                  : setFirstOfWeek(addDaysTo(firstOfWeek, 7))
+              }
               style={{ minWidth: 34, minHeight: 34 }}
             >
               ›
             </button>
           </>
+        )}
+        {!looking && (
+          // Month to one week, and back. The page-a-day glyph says how many
+          // days the tap will show — 7, or however long that month is.
+          <button
+            className="chip tap"
+            aria-label={firstOfWeek === null ? copy.showWeek : copy.showMonth}
+            onClick={() => {
+              try {
+                window.localStorage.setItem(WEEK_VIEW_KEY, firstOfWeek === null ? "1" : "0");
+              } catch {
+                // Without storage it simply opens on the month next time.
+              }
+              if (firstOfWeek === null) {
+                setFirstOfWeek(
+                  firstOfWeekOf(date.startsWith(firstOfMonth.slice(0, 8)) ? date : firstOfMonth),
+                );
+                return;
+              }
+              setFirstOfMonth(unfoldsTo);
+              setFirstOfWeek(null);
+            }}
+            style={{ minWidth: 34, minHeight: 34, padding: 0 }}
+          >
+            <span
+              aria-hidden="true"
+              className="tab"
+              style={{
+                width: 20,
+                height: 20,
+                border: "1.5px solid var(--accent-strong)",
+                borderTopWidth: 4,
+                borderRadius: 4,
+                boxSizing: "border-box",
+                display: "grid",
+                placeItems: "center",
+                fontSize: 9,
+                fontWeight: 700,
+                lineHeight: 1,
+                color: "var(--accent-strong)",
+              }}
+            >
+              {firstOfWeek === null ? DAYS_IN_A_WEEK : daysInMonth(unfoldsTo)}
+            </span>
+          </button>
         )}
         {!looking && (
           <CalendarScope
@@ -597,13 +693,15 @@ export const CalendarDay = ({
           setAimedCustomer(null);
         }}
         onChanged={() => void load()}
+        onReady={monthDrew}
         firstOfMonth={firstOfMonth}
+        firstOfWeek={firstOfWeek}
       />
 
       {error !== null && <Critical>{error}</Critical>}
 
       {busy && wholeDay === null ? (
-        <Spinner />
+        monthReady ? <Spinner /> : null
       ) : wholeDay === null ? (
         <Empty title={copy.noAppointments} body={copy.refreshHint} />
       ) : shut !== null ? (

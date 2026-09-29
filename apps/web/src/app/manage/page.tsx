@@ -80,8 +80,9 @@ function ManageApp() {
     businessId: string;
     list: ResourceDto[];
   } | null>(null);
-  const resources =
-    business !== null && loadedResources?.businessId === business.id ? loadedResources.list : NONE;
+  const alreadyHaveResources =
+    business !== null && loadedResources?.businessId === business.id;
+  const resources = alreadyHaveResources ? loadedResources.list : NONE;
   // A panel can be asked for in the address too — a lock elsewhere opens the
   // plans with `tab=business&panel=billing`.
   const requestedPanel = params.get("panel");
@@ -124,6 +125,12 @@ function ManageApp() {
         : chosen,
     );
     if (chosen !== null) rememberManaged(chosen.id);
+    // The calendars come with the business now, so the screen does not wait on a
+    // second request before it can draw anything. An API that does not send them
+    // leaves this alone and the effect below asks, as it always did.
+    if (chosen?.resources !== undefined) {
+      setLoadedResources({ businessId: chosen.id, list: chosen.resources });
+    }
   }, [token, requested]);
 
   useEffect(() => {
@@ -152,12 +159,16 @@ function ManageApp() {
   );
 
   useEffect(() => {
+    // Already in hand for this business, from the businesses list: asking again
+    // is the round trip this was meant to remove. Every other path — switching
+    // business, or a calendar changing — calls `loadResources` directly.
+    if (alreadyHaveResources) return;
     let stale = false;
     void loadResources(() => stale);
     return () => {
       stale = true;
     };
-  }, [loadResources]);
+  }, [loadResources, alreadyHaveResources]);
 
   // ADR 0020: what the platform told the owner — a bell, one banner, a list.
   // Billing is the OWNER's alone (ADR 0016); for anybody else there is none.
@@ -390,7 +401,7 @@ function ManageApp() {
 export default function ManagePage() {
   // useSearchParams needs a Suspense boundary for static rendering.
   return (
-    <Suspense fallback={<Spinner />}>
+    <Suspense fallback={<Spinner page />}>
       <ManageApp />
     </Suspense>
   );

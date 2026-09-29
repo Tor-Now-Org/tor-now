@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
 import { useSheetPresence } from "./sheet-presence.ts";
 
 /**
@@ -62,6 +62,38 @@ export const Card = ({
 );
 
 /**
+ * The 24-hour face of a native time input.
+ *
+ * `<input type="time">` draws am/pm whenever the browser's locale says so, and
+ * nothing in the page — not its language, not the `lang` attribute — changes
+ * that. So the input keeps its picker and its keyboard, its own text is turned
+ * transparent, and the value it already holds (always HH:MM on the wire) is
+ * drawn over it instead — at rest and while editing alike. It used to step
+ * aside on focus, so that typing showed something; but a picker keeps the focus
+ * after it closes, which put am/pm back on screen the moment anyone used one.
+ *
+ * ponytail: the picker, the arrow keys and the phone wheel all move the value,
+ * so the face follows them. Typed digits land a segment at a time and only
+ * reach the value once the whole time is complete.
+ */
+const ClockFace = ({ value, style }: { value: unknown; style?: CSSProperties }) => (
+  <span
+    aria-hidden="true"
+    dir="ltr"
+    style={{
+      position: "absolute",
+      top: "50%",
+      transform: "translateY(-50%)",
+      pointerEvents: "none",
+      fontVariantNumeric: "tabular-nums",
+      ...style,
+    }}
+  >
+    {typeof value === "string" && value !== "" ? value.slice(0, 5) : "––:––"}
+  </span>
+);
+
+/**
  * A labelled input that can say what is wrong with it.
  *
  * The problem is shown under the field rather than collected at the top of the
@@ -93,6 +125,7 @@ export const Field = ({
 }) => {
   const wrong = problem !== undefined && problem !== null;
   const describedBy = wrong ? `${id ?? ""}-problem` : undefined;
+  const clock = rest.type === "time";
   const input = (
     <input
       {...rest}
@@ -104,6 +137,8 @@ export const Field = ({
         ...(startAdornment !== undefined && { paddingLeft: 92 }),
         ...rest.style,
         ...(wrong && { borderColor: "var(--critical)" }),
+        // The picker's own text is hidden while ClockFace stands in for it.
+        ...(clock && { color: "transparent" }),
       }}
     />
   );
@@ -113,7 +148,12 @@ export const Field = ({
         {label}
         {required && <span aria-hidden="true"> *</span>}
       </span>
-      {startAdornment !== undefined ? (
+      {clock ? (
+        <span style={{ position: "relative", display: "block" }}>
+          {input}
+          <ClockFace value={rest.value} style={{ insetInlineStart: 13 }} />
+        </span>
+      ) : startAdornment !== undefined ? (
         <span style={{ position: "relative" }}>
           <span
             aria-hidden="true"
@@ -355,9 +395,23 @@ export const Sheet = ({
   );
 };
 
-export const Spinner = () => (
-  <div style={{ display: "grid", placeItems: "center", padding: 40 }}>
-    <span className="spinner" />
+/**
+ * `page` is for a spinner that *is* the screen — a tab body or a route still
+ * loading. It claims the height the content will take, so the ring sits in the
+ * middle of the page instead of under the header. Inline waits leave it off.
+ */
+export const Spinner = ({ page = false }: { page?: boolean }) => (
+  <div
+    style={{
+      display: "grid",
+      placeItems: "center",
+      padding: 0,
+      // Extra padding below rather than above: optically centred sits a touch
+      // higher than measured centre.
+      ...(page ? { flex: 1, minHeight: "55svh", paddingBottom: 50 } : {}),
+    }}
+  >
+    <span className={page ? "spinner spinner-page" : "spinner"} />
   </div>
 );
 

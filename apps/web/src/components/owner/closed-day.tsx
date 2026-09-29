@@ -86,7 +86,7 @@ export const ClosedDay = ({
       <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
         <RenameNote note={note} busy={busy} onSave={onDescribe} />
         <Button intent="quiet" busy={busy} onClick={onReopen}>
-          {copy.reopenOneDay}
+          {copy.reopenClosedDay}
         </Button>
       </div>
     )}

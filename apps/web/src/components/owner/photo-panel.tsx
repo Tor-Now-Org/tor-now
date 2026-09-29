@@ -95,7 +95,7 @@ export const PhotoPanel = ({
     }
   };
 
-  if (photos === null) return <Spinner />;
+  if (photos === null) return <Spinner page />;
 
   const tile = (slot: PhotoSlot) => {
     const photo = photos.find((candidate) => candidate.slot === slot);

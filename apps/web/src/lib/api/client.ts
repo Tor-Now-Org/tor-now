@@ -253,6 +253,9 @@ export const api = {
       token,
     }),
 
+  acceptTerms: (token: string) =>
+    request<MeDto>("/me/terms", { method: "POST", token }),
+
   deleteAccount: (token: string) =>
     request<void>("/me", { method: "DELETE", token }),
 
@@ -367,7 +370,12 @@ export const api = {
   stopWaiting: (token: string, entryId: string) =>
     request<void>(`/waiting/${entryId}`, { method: "DELETE", token }),
 
-  myWaiting: (token: string) => request<WaitingDto[]>("/me/waiting", { token }),
+  /** `businessId` asks for one shop's worth, which is what a business page draws. */
+  myWaiting: (token: string, businessId?: string) =>
+    request<WaitingDto[]>(
+      businessId === undefined ? "/me/waiting" : `/me/waiting?businessId=${businessId}`,
+      { token },
+    ),
 
   setCustomerNote: (token: string, appointmentId: string, customerNote: string | null) =>
     request<AppointmentDto>(`/appointments/${appointmentId}/note`, {
@@ -577,6 +585,17 @@ export const api = {
       { method: "PUT", body: input, token },
     ),
 
+  /** Every readable calendar's special days, for telling a chair's day from the shop's. */
+  listAllOverrides: (
+    token: string,
+    businessId: string,
+    range: { from: string; to: string },
+  ) =>
+    request<OverrideDto[]>(
+      `/businesses/${businessId}/overrides?from=${range.from}&to=${range.to}`,
+      { token },
+    ),
+
   deleteOverride: (token: string, businessId: string, id: string) =>
     request<void>(`/businesses/${businessId}/overrides/${id}`, {
       method: "DELETE",
@@ -695,6 +714,18 @@ export const api = {
     request<ClosureImpactDto>(
       `/businesses/${businessId}/resources/${resourceId}/blocks/preview`,
       { method: "POST", body: { blocks }, token },
+    ),
+
+  /** The blockages a calendar holds across a span, for the list that shows them. */
+  listBlocks: (
+    token: string,
+    businessId: string,
+    resourceId: string,
+    range: { from: string; to: string },
+  ) =>
+    request<BlockDto[]>(
+      `/businesses/${businessId}/resources/${resourceId}/blocks?from=${range.from}&to=${range.to}`,
+      { token },
     ),
 
   blockGroup: (token: string, businessId: string, groupId: string) =>

@@ -1,5 +1,7 @@
 import { validationFailed } from "../shared/errors.ts";
 import type { Instant } from "../time/instant.ts";
+import type { LocalInterval } from "../schedule/open-hours.ts";
+import { MINUTES_PER_HOUR } from "../shared/constants.ts";
 import { hourOf } from "../time/local-time.ts";
 import { instantToZoned, type TimeZone } from "../time/zone.ts";
 
@@ -30,6 +32,27 @@ export const partOfDayAt = (value: Instant, zone: TimeZone): PartOfDay => {
   if (hour < PART_OF_DAY_STARTS_AT_HOUR.NOON) return "MORNING";
   if (hour < PART_OF_DAY_STARTS_AT_HOUR.EVENING) return "NOON";
   return "EVENING";
+};
+
+/**
+ * The parts of the day a calendar's open hours touch at all. A part it never
+ * works has nothing that could free up, so there is nothing to wait for there.
+ */
+export const partsOfDayOpen = (
+  open: readonly LocalInterval[],
+): readonly PartOfDay[] => {
+  const bounds: Readonly<Record<PartOfDay, readonly [number, number]>> = {
+    MORNING: [0, PART_OF_DAY_STARTS_AT_HOUR.NOON],
+    NOON: [PART_OF_DAY_STARTS_AT_HOUR.NOON, PART_OF_DAY_STARTS_AT_HOUR.EVENING],
+    EVENING: [PART_OF_DAY_STARTS_AT_HOUR.EVENING, 24],
+  };
+  return PARTS_OF_DAY.filter((part) => {
+    const [from, to] = bounds[part];
+    return open.some(
+      (range) =>
+        range.start < to * MINUTES_PER_HOUR && range.end > from * MINUTES_PER_HOUR,
+    );
+  });
 };
 
 const isPartOfDay = (value: string): value is PartOfDay =>

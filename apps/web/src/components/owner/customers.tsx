@@ -45,7 +45,7 @@ export const Customers = ({
     void load();
   }, [load]);
 
-  if (customers === null) return <Spinner />;
+  if (customers === null) return <Spinner page />;
 
   const needle = query.trim().toLowerCase();
   const shown = customers.filter(
@@ -103,14 +103,16 @@ export const Customers = ({
           >
             <Card style={{ width: "100%", display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontWeight: 500 }}>{customer.name}</span>
+                <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span style={{ flex: 1, fontWeight: 500 }}>{customer.name}</span>
+                  <span className="hint tab" dir="ltr">{customer.phone}</span>
+                </span>
                 <span
                   className="hint"
                   style={customer.blocked ? { color: "var(--critical)" } : undefined}
                 >
                   {customer.blocked ? copy.blockedCustomer : copy.activeCustomer}
                 </span>
-                <span className="hint tab" dir="ltr">{customer.phone}</span>
               </span>
             </Card>
           </button>

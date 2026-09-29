@@ -106,7 +106,7 @@ export const VisitedBusinesses = ({
     });
   };
 
-  if (appointments === null && error === null) return <Spinner />;
+  if (appointments === null && error === null) return <Spinner page />;
 
   const dateFormat = new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
     day: "numeric",

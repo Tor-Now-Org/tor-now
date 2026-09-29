@@ -35,6 +35,7 @@ import type { FeatureView } from "../application/feature-catalogue.ts";
 import type { GrantEntry, PlanEdition, UnitRateEntry } from "../ports/repositories.ts";
 import type { DirectoryRow } from "../application/business-directory.ts";
 import type {
+  ResourceWithUpcoming,
   StaffedBusiness,
   TeamMember,
 } from "../application/business-service.ts";
@@ -79,6 +80,12 @@ export const businessOut = (business: Business) => ({
  * A Business as it reaches someone who works there, flattened so the client
  * reads one object: the same fields plus the terms they work on it under.
  */
+/** A calendar as every owner screen is given it: the calendar, and what is still booked. */
+export const resourceWithUpcomingOut = (entry: ResourceWithUpcoming) => ({
+  ...resourceOut(entry.resource),
+  upcomingAppointments: entry.upcoming,
+});
+
 export const staffedBusinessOut = (staffed: StaffedBusiness) => ({
   ...businessOut(staffed.business),
   role: staffed.role,
@@ -87,6 +94,12 @@ export const staffedBusinessOut = (staffed: StaffedBusiness) => ({
     features: staffed.entitlement.features,
     resourceAllowance: staffed.entitlement.resourceAllowance,
   },
+  // The calendars travel with the business: the screen behind `/manage` needs
+  // them to draw anything, and asking for them separately cost a round trip it
+  // could not start until this one answered. Through the same shape the
+  // resources endpoint sends, count included — a list without it reads as
+  // "nobody booked" on the screen that asks before removing a calendar.
+  resources: staffed.resources.map(resourceWithUpcomingOut),
 });
 
 /**
@@ -332,6 +345,16 @@ export const userOut = (user: User) => ({
   deleted: user.deletedAt !== null,
   anonymised: user.anonymisedAt !== null,
   createdAt: formatInstant(user.createdAt),
+});
+
+/**
+ * The signed-in User as they see themselves. The terms version is theirs
+ * alone; a Business looking at a customer has no use for it.
+ */
+export const meOut = (user: User, isHasBusinesses: boolean) => ({
+  ...userOut(user),
+  termsVersion: user.termsVersion,
+  isHasBusinesses,
 });
 
 /** A User as their Business sees them: the person, plus their standing here. */

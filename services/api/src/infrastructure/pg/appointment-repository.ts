@@ -53,6 +53,26 @@ export const appointmentRepository = (
    * and doing it here would mean fetching every row to find out which day it
    * fell on.
    */
+  async countsByLocalDayForResources(resourceIds, from, to, timeZone) {
+    if (resourceIds.length === 0) return [];
+    const rows = await tx<Row[]>`
+      select resource_id,
+             (start_at at time zone ${timeZone})::date as on_date,
+             count(*)::int as count
+      from appointment
+      where resource_id = any(${[...resourceIds]}::uuid[])
+        and start_at >= ${new Date(from)}
+        and start_at < ${new Date(to)}
+        and status <> 'CANCELLED'
+      group by 1, 2
+      order by 2`;
+    return rows.map((row) => ({
+      resourceId: asId(String(row["resource_id"])),
+      date: toLocalDate(row["on_date"]),
+      count: Number(row["count"]),
+    }));
+  },
+
   async countsByLocalDay(resourceId, from, to, timeZone) {
     const rows = await tx<Row[]>`
       select (start_at at time zone ${timeZone})::date as on_date,
@@ -68,6 +88,16 @@ export const appointmentRepository = (
       date: toLocalDate(row["on_date"]),
       count: Number(row["count"]),
     }));
+  },
+
+  async listForResourcesBetween(resourceIds, from, to) {
+    if (resourceIds.length === 0) return [];
+    const rows = await tx<Row[]>`
+      select * from appointment
+      where resource_id = any(${[...resourceIds]}::uuid[])
+        and start_at < ${asDate(to)} and occupied_until > ${asDate(from)}
+      order by start_at`;
+    return rows.map(toAppointment);
   },
 
   async searchUpcoming(businessId, query, from, limit) {

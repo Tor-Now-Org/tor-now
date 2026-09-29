@@ -1,4 +1,4 @@
-import { instant, notFound, type DateOverride } from "@tor-now/domain";
+import { asId, instant, notFound, type DateOverride } from "@tor-now/domain";
 import type {
   BlockRepository,
   DateOverrideRepository,
@@ -14,6 +14,7 @@ import {
   toService,
   toWorkingHours,
   type Row,
+  text,
   toLocalDate,
 } from "./mappers.ts";
 
@@ -33,6 +34,15 @@ export const resourceRepository = (tx: Transaction): ResourceRepository => ({
   async listForBusiness(businessId) {
     const rows = await tx<Row[]>`
       select * from resource where business_id = ${businessId} order by created_at`;
+    return rows.map(toResource);
+  },
+
+  async listForBusinesses(businessIds) {
+    if (businessIds.length === 0) return [];
+    const rows = await tx<Row[]>`
+      select * from resource
+      where business_id = any(${[...businessIds]}::uuid[])
+      order by created_at`;
     return rows.map(toResource);
   },
 
@@ -148,6 +158,15 @@ export const serviceRepository = (tx: Transaction): ServiceRepository => ({
 export const workingHoursRepository = (
   tx: Transaction,
 ): WorkingHoursRepository => ({
+  async listForResources(resourceIds) {
+    if (resourceIds.length === 0) return [];
+    const rows = await tx<Row[]>`
+      select * from working_hours
+      where resource_id = any(${[...resourceIds]}::uuid[])
+      order by day_of_week, start_local`;
+    return rows.map(toWorkingHours);
+  },
+
   async listForResource(resourceId) {
     const rows = await tx<Row[]>`
       select * from working_hours where resource_id = ${resourceId}
@@ -220,12 +239,30 @@ export const dateOverrideRepository = (
   };
 
   return {
+    async listForResources(resourceIds, from, to) {
+      if (resourceIds.length === 0) return [];
+      const rows = await tx<Row[]>`
+        select * from date_override
+        where resource_id = any(${[...resourceIds]}::uuid[])
+          and on_date between ${from} and ${to}
+        order by on_date`;
+      // `hydrate` loads every override's ranges in one query, so a month of
+      // special days across six calendars is two reads rather than two a day.
+      return hydrate(rows);
+    },
+
     async listForResource(resourceId, from, to) {
       const rows = await tx<Row[]>`
         select * from date_override
         where resource_id = ${resourceId} and on_date between ${from} and ${to}
         order by on_date`;
       return hydrate(rows);
+    },
+
+    async findById(id) {
+      const rows = await tx<Row[]>`select * from date_override where id = ${id}`;
+      const hydrated = await hydrate(rows);
+      return hydrated[0] ?? null;
     },
 
     async findByDate(resourceId, date) {
@@ -265,8 +302,112 @@ export const dateOverrideRepository = (
       return toDateOverride(saved, rangeRows.flat());
     },
 
+    /**
+     * The same write, for many calendars and dates, in three statements rather
+     * than two per row. `on conflict` makes it a replacement per (calendar,
+     * date) exactly as `put` does, so a closure written twice is idempotent.
+     */
+    async putMany(overrides) {
+      if (overrides.length === 0) return [];
+      // One row per (calendar, date). A repeated pair would make the upsert
+      // touch the same row twice, which Postgres refuses, and the last writer
+      // is what `put` would have left anyway.
+      const wanted = [
+        ...new Map(
+          overrides.map((override) => [`${override.resourceId}|${override.date}`, override]),
+        ).values(),
+      ];
+
+      const saved = await tx<Row[]>`
+        insert into date_override ${tx(
+          wanted.map((override) => ({
+            resource_id: override.resourceId,
+            business_id: override.businessId,
+            on_date: override.date,
+            note: override.note,
+          })),
+        )}
+        on conflict (resource_id, on_date) do update set note = excluded.note
+        returning *`;
+
+      const idOf = new Map(
+        saved.map((row) => [`${text(row["resource_id"])}|${toLocalDate(row["on_date"])}`, String(row["id"])]),
+      );
+      await tx`
+        delete from date_override_range
+        where date_override_id = any(${saved.map((row) => String(row["id"]))}::uuid[])`;
+
+      const rangeRows = wanted.flatMap((override) => {
+        const id = idOf.get(`${override.resourceId}|${override.date}`);
+        return id === undefined
+          ? []
+          : override.ranges.map((range) => ({
+              date_override_id: id,
+              business_id: override.businessId,
+              start_local: range.startMinutes,
+              end_local: range.endMinutes,
+            }));
+      });
+      // A closed day has no ranges at all, which is the common case here.
+      const written =
+        rangeRows.length === 0
+          ? []
+          : await tx<Row[]>`insert into date_override_range ${tx(rangeRows)} returning *`;
+
+      return saved.map((row) =>
+        toDateOverride(
+          row,
+          written.filter((range) => String(range["date_override_id"]) === String(row["id"])),
+        ),
+      );
+    },
+
+    /**
+     * Read first, then removed in one statement: the caller has to mark every
+     * date this freed and the trail has to say what stood there, and the ranges
+     * go with the rows (`on delete cascade`) so afterwards there is nothing left
+     * to ask.
+     */
+    async deleteBetween(resourceIds, from, to) {
+      if (resourceIds.length === 0) return [];
+      const rows = await tx<Row[]>`
+        select * from date_override
+        where resource_id = any(${[...resourceIds]}::uuid[])
+          and on_date between ${from} and ${to}
+        order by on_date`;
+      const doomed = await hydrate(rows);
+      if (doomed.length === 0) return [];
+      await tx`
+        delete from date_override
+        where resource_id = any(${[...resourceIds]}::uuid[])
+          and on_date between ${from} and ${to}`;
+      return doomed;
+    },
+
+    async renameBetween(resourceIds, from, to, note) {
+      if (resourceIds.length === 0) return [];
+      const rows = await tx<Row[]>`
+        update date_override set note = ${note}
+        where resource_id = any(${[...resourceIds]}::uuid[])
+          and on_date between ${from} and ${to}
+        returning *`;
+      // The hours are untouched, so they are read back rather than rewritten.
+      return hydrate(rows);
+    },
+
     async delete(id) {
-      await tx`delete from date_override where id = ${id}`;
+      // The delete already had to find the row; returning two of its columns
+      // saves the caller a read it could not make anyway — an Override cannot
+      // be looked up by id.
+      const rows = await tx<Row[]>`
+        delete from date_override where id = ${id}
+        returning resource_id, on_date`;
+      const removed = rows[0];
+      if (removed === undefined) return null;
+      return {
+        resourceId: asId(text(removed["resource_id"])),
+        date: toLocalDate(removed["on_date"]),
+      };
     },
   };
 };
@@ -301,6 +442,16 @@ export const blockRepository = (tx: Transaction): BlockRepository => ({
       date: toLocalDate(row["on_date"]),
       count: Number(row["count"]),
     }));
+  },
+
+  async listForResourcesBetween(resourceIds, from, to) {
+    if (resourceIds.length === 0) return [];
+    const rows = await tx<Row[]>`
+      select * from block
+      where resource_id = any(${[...resourceIds]}::uuid[])
+        and start_at < ${new Date(to)} and end_at > ${new Date(from)}
+      order by start_at`;
+    return rows.map(toBlock);
   },
 
   async listForResourceBetween(resourceId, from, to) {

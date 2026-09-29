@@ -37,6 +37,7 @@ import { cheapestRoomierThan } from "@/lib/entitlement.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { usePlans } from "@/lib/use-plans.ts";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
+import { ConsentText, useLegalSheet } from "@/components/legal.tsx";
 import type { BusinessDto, PlanName } from "@/lib/api/types.ts";
 
 // Leaflet reaches for `window`, so the map can only render on the client.
@@ -121,6 +122,11 @@ function OnboardingWizard() {
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<readonly ChosenPhoto[]>([]);
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
+  // A business pays and holds its customers' data, so it ticks the terms
+  // rather than agreeing by carrying on. Asked last, once it knows what it
+  // is agreeing to run.
+  const [agreed, setAgreed] = useState(false);
+  const legal = useLegalSheet();
   const leave = (field: string) =>
     setTouched((previous) => new Set(previous).add(field));
   const problem = useFieldProblem();
@@ -142,7 +148,7 @@ function OnboardingWizard() {
     if (plan === null) router.replace("/pricing");
   }, [plan, router]);
 
-  if (loading || plan === null) return <Spinner />;
+  if (loading || plan === null) return <Spinner page />;
 
   // Registering a business needs an identity; it is the same sign-in as
   // everything else, so it happens here rather than sending anyone away.
@@ -220,6 +226,8 @@ function OnboardingWizard() {
     setBusy(true);
     setError(null);
     try {
+      // The ticked box, recorded against the owner before the business exists.
+      await api.acceptTerms(token);
       const business = await api.registerBusiness(token, {
         name: name.trim(),
         phone: toE164(phone),
@@ -594,6 +602,31 @@ function OnboardingWizard() {
             <StepHeading title={copy.hoursTitle} body={copy.hoursBody} />
 
             <WeeklyHours hours={hours} setHours={setHours} />
+
+            <label
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+                padding: 14,
+                borderRadius: 14,
+                background: "var(--accent-soft)",
+                fontSize: 14,
+                lineHeight: 1.6,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(event) => setAgreed(event.target.checked)}
+                style={{ width: 22, height: 22, margin: "1px 0 0", flexShrink: 0, accentColor: "var(--accent)" }}
+              />
+              <span>
+                <ConsentText variant="agree" onOpen={legal.open} />
+              </span>
+            </label>
+            {legal.sheet}
           </>
         )}
 
@@ -604,7 +637,7 @@ function OnboardingWizard() {
             step === "hours" ? void finish() : setStep(STEPS[index + 1] as Step)
           }
           busy={busy}
-          disabled={!canContinue}
+          disabled={!canContinue || (step === "hours" && !agreed)}
         >
           {step === "hours" ? copy.finish : copy.next}
         </Button>

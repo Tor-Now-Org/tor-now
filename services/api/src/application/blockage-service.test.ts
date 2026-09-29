@@ -126,6 +126,79 @@ describe("blocking time out", () => {
   });
 });
 
+/**
+ * The list a calendar's own screen shows.
+ *
+ * The blockages layer used to be fed from the day the screen opened on, so a
+ * blockage made for a week on Thursday was invisible on the Tuesday it was made
+ * — the owner saw an empty list and made it again.
+ */
+describe("the blockages a calendar is holding", () => {
+  let test: Harness;
+  let shop: Awaited<ReturnType<typeof anEstablishedBusiness>>;
+
+  beforeEach(async () => {
+    test = harness();
+    shop = await anEstablishedBusiness(test);
+  });
+
+  const blockOn = async (day: string, start: string, end: string, reason: string) =>
+    test.services.calendar.createBlocks(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      [{ startAt: `${day}T${start}:00.000Z`, endAt: `${day}T${end}:00.000Z`, reason }],
+      "KEEP",
+    );
+
+  it("holds the ones still to come, not only today's", async () => {
+    // The harness stands on 2026-08-25. One blockage today, one two days out —
+    // which is the case that went missing.
+    await blockOn("2026-08-25", "09:00", "10:00", "היום");
+    await blockOn("2026-08-27", "07:30", "08:00", "פגישה עם ספק");
+
+    const held = await test.services.calendar.blocksBetween(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      "2026-08-25",
+      "2026-11-23",
+    );
+
+    expect(held.map((block) => block.reason)).toEqual(["היום", "פגישה עם ספק"]);
+  });
+
+  it("keeps out what falls outside the window", async () => {
+    await blockOn("2026-08-20", "09:00", "10:00", "שעבר");
+    await blockOn("2026-12-25", "09:00", "10:00", "רחוק");
+    await blockOn("2026-08-27", "07:30", "08:00", "בפנים");
+
+    const held = await test.services.calendar.blocksBetween(
+      shop.owner.actor,
+      shop.business.id,
+      shop.resource.id,
+      "2026-08-25",
+      "2026-11-23",
+    );
+
+    expect(held.map((block) => block.reason)).toEqual(["בפנים"]);
+  });
+
+  it("is refused to somebody the calendar is not theirs", async () => {
+    const stranger = await signIn(test, "+972500000044", "זר");
+
+    await expect(
+      test.services.calendar.blocksBetween(
+        stranger.actor,
+        shop.business.id,
+        shop.resource.id,
+        "2026-08-25",
+        "2026-11-23",
+      ),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
 describe("who may block a calendar", () => {
   let test: Harness;
   let shop: Awaited<ReturnType<typeof anEstablishedBusiness>>;

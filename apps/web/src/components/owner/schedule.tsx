@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type {
@@ -10,9 +10,10 @@ import type {
   ResourceDto,
   WorkingHoursDto,
 } from "@/lib/api/types.ts";
-import { addDaysTo, formatLocalDate, timeIn, todayIn } from "@/lib/format.ts";
+import { addDaysTo, dateIn, formatLocalDate, timeIn, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { mergedRanges, TEXT_RULES, type TimeRange } from "@tor-now/domain";
+import { canCloseBusiness } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useFieldProblem } from "@/lib/use-field-problem.ts";
 import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
@@ -80,9 +81,13 @@ export const Schedule = ({
   const [hours, setHours] = useState<WorkingHoursDto[] | null>(null);
   const [week, setWeek] = useState<DayHours[]>(emptyWeek);
   const [saved, setSaved] = useState(false);
-  const [overrides, setOverrides] = useState<OverrideDto[]>([]);
-  /** The dates on which this override is the shop's decision, not this chair's. */
-  const [shopDates, setShopDates] = useState<Set<string>>(new Set());
+  /**
+   * Every calendar's special days, raw. Business-wide and calendar-independent,
+   * so it is fetched on its own rather than with the chosen calendar's week —
+   * switching chairs changes nothing about it and used to refetch it anyway.
+   * `null` is "not read yet", which an empty list is not.
+   */
+  const [everyOverride, setEveryOverride] = useState<OverrideDto[] | null>(null);
   const [blocks, setBlocks] = useState<BlockDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -96,7 +101,6 @@ export const Schedule = ({
    */
   const [editingOverride, setEditingOverride] = useState<{
     date: string;
-    closed: boolean;
     ranges: TimeRange[];
   } | null>(null);
   /**
@@ -111,35 +115,108 @@ export const Schedule = ({
     reason: string;
   } | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(
+    async (isStale: () => boolean = () => false) => {
     if (resource === null) return;
     const from = todayIn(business.timeZone);
     const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
     try {
-      const [loadedHours, loadedOverrides, calendarDays, everyCalendar] = await Promise.all([
+      const [loadedHours, loadedBlocks] = await Promise.all([
         api.listWorkingHours(token, business.id, resource.id),
-        api.listOverrides(token, business.id, resource.id, { from, to }),
-        api.calendarDay(token, business.id, resource.id, from),
-        // Every calendar's special days, not only this one's. A day the shop
-        // closed is one Override per calendar, and a row here that offers to
-        // delete a single copy of it leaves the shop half shut.
-        Promise.all(
-          resources.map((one) => api.listOverrides(token, business.id, one.id, { from, to })),
-        ),
+        // The same span the special days are read over. This used to read the
+        // day the screen opened on, so a blockage made for later was missing
+        // from the list that exists to show it — and it came back with a day of
+        // appointments, customers' names and numbers included, that this screen
+        // never draws.
+        api.listBlocks(token, business.id, resource.id, { from, to }),
       ]);
+      // Switched calendars while this was in flight: the answer is for the one
+      // being left, and writing the week from it would throw away whatever has
+      // been typed into the one now on screen.
+      if (isStale()) return;
       setHours(loadedHours);
       setWeek(weekFromRanges(loadedHours));
-      setOverrides(loadedOverrides);
-      setShopDates(shopWideDates(everyCalendar, resources.length));
-      setBlocks(calendarDays.blocks);
+      setBlocks(loadedBlocks);
     } catch (cause) {
+      if (isStale()) return;
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     }
-  }, [token, business.id, business.timeZone, resource, resources, errorText]);
+    },
+    [token, business.id, business.timeZone, resource, errorText],
+  );
+
+  /**
+   * The special days of every calendar, in one request. Deliberately not keyed
+   * on the chosen calendar: a day the shop closed is one Override per calendar,
+   * and telling that from one chair's day off needs all of them — the same
+   * answer whichever chair is on screen.
+   */
+  const loadOverrides = useCallback(
+    async (isStale: () => boolean = () => false) => {
+      const from = todayIn(business.timeZone);
+      const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
+      try {
+        const everyone = await api.listAllOverrides(token, business.id, { from, to });
+        if (isStale()) return;
+        setEveryOverride(everyone);
+      } catch (cause) {
+        if (isStale()) return;
+        setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+      }
+    },
+    [token, business.id, business.timeZone, errorText],
+  );
+
+  const overrides = useMemo(
+    () =>
+      resource === null
+        ? []
+        : (everyOverride ?? []).filter((override) => override.resourceId === resource.id),
+    [everyOverride, resource],
+  );
+
+  /** The dates on which an override is the shop's decision, not this chair's. */
+  const shopDates = useMemo(
+    // One list per calendar, taken from the calendars on screen rather than
+    // from the rows: a calendar with no special day has to count as agreeing
+    // to nothing, and built the other way round it would drop out and change
+    // what "every calendar said the same" means.
+    () =>
+      shopWideDates(
+        resources.map((one) =>
+          (everyOverride ?? []).filter((override) => override.resourceId === one.id),
+        ),
+        resources.length,
+      ),
+    [everyOverride, resources],
+  );
+
+  /**
+   * A calendar's week belongs to that calendar. Leaving it on screen while the
+   * next one is fetched let the hours of one chair be read — and edited, and
+   * saved — as if they were another's, which on a slow answer is a week
+   * overwritten with a week that was never on the screen it was typed into.
+   */
+  useEffect(() => {
+    setHours(null);
+    setWeek(emptyWeek);
+  }, [resource?.id]);
 
   useEffect(() => {
-    void load();
+    let stale = false;
+    void load(() => stale);
+    return () => {
+      stale = true;
+    };
   }, [load]);
+
+  useEffect(() => {
+    let stale = false;
+    void loadOverrides(() => stale);
+    return () => {
+      stale = true;
+    };
+  }, [loadOverrides]);
 
   const act = async (action: () => Promise<unknown>) => {
     setBusy(true);
@@ -149,7 +226,7 @@ export const Schedule = ({
       setEditingRange(null);
       setEditingOverride(null);
       setEditingBlock(null);
-      await load();
+      await Promise.all([load(), loadOverrides()]);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
@@ -184,7 +261,12 @@ export const Schedule = ({
     }
   };
 
-  if (hours === null || resource === null) return <Spinner />;
+  // What the tab on screen is still waiting for. The special days are read
+  // once for the whole business, so that tab has nothing to wait for when the
+  // chosen calendar changes — only the week and the blockages do.
+  const pending = layer === "overrides" ? everyOverride === null : hours === null;
+
+  if (resource === null) return <Spinner />;
 
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -229,7 +311,12 @@ export const Schedule = ({
 
       {error !== null && <Critical>{error}</Critical>}
 
-      {layer === "hours" && (
+      {/* ponytail: only the layer below waits for the new calendar — the
+          picker and the tabs stay put, so switching calendars does not blank
+          the page out from under the hand that pressed it. */}
+      {pending && <Spinner />}
+
+      {!pending && layer === "hours" && (
         <>
           {/* The same editor the wizard uses. A business described its week
               once in plain words and then edited it, ever after, as a list of
@@ -254,7 +341,7 @@ export const Schedule = ({
         </>
       )}
 
-      {layer === "overrides" && (
+      {!pending && layer === "overrides" && (
         <>
           {/* ADR 0002: an override replaces the weekday's rules entirely. */}
           <Note>{copy.overrideNote}</Note>
@@ -293,6 +380,11 @@ export const Schedule = ({
                     {override.note === null ? "" : ` · ${override.note}`}
                   </span>
                 </span>
+                {/* A day the whole shop is shut is the business speaking, and
+                    giving it back is a manager's to do — so a worker is not
+                    offered a button that could only be refused. Their own
+                    calendar's special days they may remove. */}
+                {(!shopWide || canCloseBusiness(business)) && (
                 <button
                   onClick={() =>
                     act(() =>
@@ -305,6 +397,7 @@ export const Schedule = ({
                 >
                   {copy.delete}
                 </button>
+                )}
               </Card>
             );
           })}
@@ -313,7 +406,6 @@ export const Schedule = ({
             onClick={() =>
               setEditingOverride({
                 date: todayIn(business.timeZone),
-                closed: true,
                 ranges: [{ start: "10:00", end: "14:00" }],
               })
             }
@@ -323,16 +415,23 @@ export const Schedule = ({
         </>
       )}
 
-      {layer === "blocks" && (
+      {!pending && layer === "blocks" && (
         <>
           <Note>{copy.blockNote}</Note>
           {blocks.length === 0 && <Empty title={copy.noBlocks} body={copy.blockFormHint} />}
-          {blocks.map((block) => (
+          {blocks.map((block) => {
+            const from = timeIn(block.startAt, business.timeZone, language);
+            const until = timeIn(block.endAt, business.timeZone, language);
+            // ponytail: a blockage spanning the whole day is stored as 00:00–23:59
+            // (see spansOf); those two clocks say "closed" to nobody.
+            const wholeDay = from === "00:00" && until === "23:59";
+            return (
             <Card key={block.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontWeight: 500 }}>{block.reason || copy.reason}</span>
+                <span style={{ fontWeight: 500 }}>{block.reason || copy.blockedWord}</span>
                 <span className="hint tab">
-                  {timeIn(block.startAt, business.timeZone, language)}–{timeIn(block.endAt, business.timeZone, language)}
+                  {dateIn(block.startAt, business.timeZone, language)} ·{" "}
+                  {wholeDay ? copy.closedAllDay : `${from}–${until}`}
                 </span>
               </span>
               <button
@@ -352,7 +451,8 @@ export const Schedule = ({
                 {copy.delete}
               </button>
             </Card>
-          ))}
+            );
+          })}
           <Button
             intent="quiet"
             onClick={() =>
@@ -415,57 +515,36 @@ export const Schedule = ({
             <Note>{copy.overrideFormHint}</Note>
             <Field id="override-date" label={copy.date} type="date" value={editingOverride.date}
               onChange={(e) => setEditingOverride({ ...editingOverride, date: e.target.value })} />
-            <span className="label">{copy.whatHappens}</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              {[true, false].map((closed) => (
-                <button
-                  key={String(closed)}
-                  className="chip"
-                  onClick={() => setEditingOverride({ ...editingOverride, closed })}
-                  aria-pressed={editingOverride.closed === closed}
-                  style={{
-                    flex: 1,
-                    background: editingOverride.closed === closed ? "var(--accent)" : "var(--raised)",
-                    color: editingOverride.closed === closed ? "var(--on-accent)" : "var(--ink)",
-                    border: "1px solid var(--line)",
-                  }}
-                >
-                  {closed ? copy.closedAllDay : copy.differentHours}
-                </button>
-              ))}
+            {/* ponytail: this calendar's special day only ever gives other
+                hours. Shutting a day outright is the shop's decision, made
+                from the month — so the choice is not offered here. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* The same editor the week uses: a special day is a day, and a
+                  day that shuts for lunch has two stretches whichever layer
+                  it belongs to. */}
+              <Stretches
+                id="override"
+                ranges={editingOverride.ranges}
+                setRanges={(ranges) => setEditingOverride({ ...editingOverride, ranges })}
+                namesTheGap={false}
+              />
             </div>
-            {!editingOverride.closed && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* The same editor the week uses: a special day is a day, and a
-                    day that shuts for lunch has two stretches whichever layer
-                    it belongs to. */}
-                <Stretches
-                  id="override"
-                  ranges={editingOverride.ranges}
-                  setRanges={(ranges) => setEditingOverride({ ...editingOverride, ranges })}
-                  namesTheGap={false}
-                />
-              </div>
-            )}
             <Note>{copy.overrideReplaces}</Note>
-            {!editingOverride.closed && !editingOverride.ranges.every(isUsable) && (
+            {!editingOverride.ranges.every(isUsable) && (
               <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>
             )}
             <Button
               busy={busy}
-              disabled={!editingOverride.closed && !editingOverride.ranges.every(isUsable)}
+              disabled={!editingOverride.ranges.every(isUsable)}
               onClick={() =>
                 act(() =>
                   api.putOverride(token, business.id, resource.id, {
                     date: editingOverride.date,
                     note: null,
-                    // An empty list is a day off — the absence of ranges is the
-                    // whole of what "closed" means (ADR 0002). Merged on the
-                    // way out, so two stretches the owner ran together are the
-                    // one stretch they describe rather than a refusal.
-                    ranges: editingOverride.closed
-                      ? []
-                      : mergedRanges(editingOverride.ranges),
+                    // Merged on the way out, so two stretches the owner ran
+                    // together are the one stretch they describe rather than a
+                    // refusal.
+                    ranges: mergedRanges(editingOverride.ranges),
                   }),
                 )
               }

@@ -91,6 +91,15 @@ export type DayCount = {
   readonly count: number;
 };
 
+/**
+ * One day of one calendar's month overview.
+ *
+ * The plural reads answer for several calendars at once, so the row has to say
+ * whose day it is — a flat list the caller groups, rather than a shape the port
+ * has to know how to nest.
+ */
+export type ResourceDayCount = DayCount & { readonly resourceId: ResourceId };
+
 /** How many rows were created in a month, for a signup trend. */
 export type MonthCount = {
   readonly monthStart: LocalDate;
@@ -115,6 +124,16 @@ export type BusinessVolume = {
 
 export type UserRepository = {
   findById(id: UserId): Promise<User | null>;
+  /**
+   * The same question asked about many people at once, for the screens that
+   * name the customer on every row — a day's appointments, a business's
+   * customer list. One per id is one round trip per id, and a transaction holds
+   * a single connection, so the list of names cost as much as the list itself.
+   *
+   * Ids nothing answers for are absent rather than null, and the order is the
+   * database's: callers index the result by id.
+   */
+  findByIds(ids: readonly UserId[]): Promise<readonly User[]>;
   findByPhone(phone: string): Promise<User | null>;
   create(user: {
     phone: string;
@@ -138,6 +157,8 @@ export type UserRepository = {
   setAdministrator(id: UserId, isAdministrator: boolean): Promise<User>;
   /** The day this person's one Trial began, as an owner; null if never. */
   trialTakenOn(id: UserId): Promise<LocalDate | null>;
+  /** Records agreement to that version of the terms, timed by the store. */
+  acceptTerms(id: UserId, version: string): Promise<User>;
   list(page: Page, query: string | null): Promise<readonly User[]>;
   /** Platform-wide signups by month, for the administrator's statistics tab. */
   monthlySignups(from: Instant, to: Instant): Promise<readonly MonthCount[]>;
@@ -301,6 +322,17 @@ export type MembershipResourceRepository = {
 export type ResourceRepository = {
   findById(id: ResourceId): Promise<Resource | null>;
   listForBusiness(businessId: BusinessId): Promise<readonly Resource[]>;
+  /**
+   * The calendars of several Businesses at once, flat, each row naming its own.
+   *
+   * Search asks whether each result is open right now, and that question is
+   * per calendar (ADR 0002 has no business-wide hours) — so asking per result
+   * made a page of twenty shops twenty reads before the hours were even looked
+   * at. Inactive ones come back too, exactly as `listForBusiness` returns them.
+   */
+  listForBusinesses(
+    businessIds: readonly BusinessId[],
+  ): Promise<readonly Resource[]>;
   create(resource: {
     businessId: BusinessId;
     name: string;
@@ -344,6 +376,16 @@ export type ServiceRepository = {
 
 export type WorkingHoursRepository = {
   listForResource(resourceId: ResourceId): Promise<readonly WorkingHours[]>;
+  /**
+   * The weeks of several calendars at once, flat, each row naming its own.
+   *
+   * A screen that draws every calendar side by side asked this once per
+   * calendar, and a transaction holds one connection — so a shop with six
+   * chairs paid six round trips for what is one question with six answers.
+   */
+  listForResources(
+    resourceIds: readonly ResourceId[],
+  ): Promise<readonly WorkingHours[]>;
   create(hours: {
     resourceId: ResourceId;
     businessId: BusinessId;
@@ -377,10 +419,21 @@ export type DateOverrideRepository = {
     from: LocalDate,
     to: LocalDate,
   ): Promise<readonly DateOverride[]>;
+  /** As `listForResource`, for several calendars at once. See `listForResources` on working hours. */
+  listForResources(
+    resourceIds: readonly ResourceId[],
+    from: LocalDate,
+    to: LocalDate,
+  ): Promise<readonly DateOverride[]>;
   findByDate(
     resourceId: ResourceId,
     date: LocalDate,
   ): Promise<DateOverride | null>;
+  /**
+   * One Override by its own id, so a caller holding nothing but the id can find
+   * out whose calendar it stands on — which is what says who may remove it.
+   */
+  findById(id: DateOverrideId): Promise<DateOverride | null>;
   /**
    * Replaces the whole override for a date, ranges included. ADR 0002 makes an
    * Override a replacement rather than an addition, so writing one is a single
@@ -393,7 +446,51 @@ export type DateOverrideRepository = {
     note: string | null;
     ranges: readonly { startMinutes: number; endMinutes: number }[];
   }): Promise<DateOverride>;
-  delete(id: DateOverrideId): Promise<void>;
+  /**
+   * The same write for many calendars and many dates at once.
+   *
+   * A shop closing for a fortnight is one Override per calendar per date — ADR
+   * 0002 keeps hours on calendars, so "the shop is shut" is not one row — and
+   * writing them one at a time made a month's closure across a few chairs cost
+   * hundreds of sequential statements while the owner watched.
+   */
+  putMany(
+    overrides: readonly {
+      resourceId: ResourceId;
+      businessId: BusinessId;
+      date: LocalDate;
+      note: string | null;
+      ranges: readonly { startMinutes: number; endMinutes: number }[];
+    }[],
+  ): Promise<readonly DateOverride[]>;
+  /**
+   * Every Override these calendars keep across this span, removed, and returned
+   * as they were — the caller has to mark each date it freed (ADR 0018), and
+   * the audit trail has to say what was there.
+   */
+  deleteBetween(
+    resourceIds: readonly ResourceId[],
+    from: LocalDate,
+    to: LocalDate,
+  ): Promise<readonly DateOverride[]>;
+  /**
+   * The reason, reworded, on every Override already standing across this span.
+   * Only the note changes: what each day keeps is what it already kept.
+   */
+  renameBetween(
+    resourceIds: readonly ResourceId[],
+    from: LocalDate,
+    to: LocalDate,
+    note: string | null,
+  ): Promise<readonly DateOverride[]>;
+  /**
+   * Returns the calendar and date the removed Override stood on, or null when
+   * nothing matched. ADR 0018: removing one restores the weekday's Working
+   * Hours, so the caller has to mark that date — and the id is all it has.
+   */
+  delete(
+    id: DateOverrideId,
+  ): Promise<{ resourceId: ResourceId; date: LocalDate } | null>;
 };
 
 export type BlockRepository = {
@@ -406,6 +503,12 @@ export type BlockRepository = {
   ): Promise<readonly BlockedSpan[]>;
   listForResourceBetween(
     resourceId: ResourceId,
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly Block[]>;
+  /** As `listForResourceBetween`, for several calendars at once. */
+  listForResourcesBetween(
+    resourceIds: readonly ResourceId[],
     from: Instant,
     to: Instant,
   ): Promise<readonly Block[]>;
@@ -512,6 +615,12 @@ export type AppointmentRepository = {
     from: Instant,
     to: Instant,
   ): Promise<readonly Appointment[]>;
+  /** As `listForResourceBetween`, for several calendars at once. */
+  listForResourcesBetween(
+    resourceIds: readonly ResourceId[],
+    from: Instant,
+    to: Instant,
+  ): Promise<readonly Appointment[]>;
   /**
    * How many appointments fall on each day of a span, counted in the Business's
    * own zone rather than the server's.
@@ -527,6 +636,13 @@ export type AppointmentRepository = {
     to: Instant,
     timeZone: TimeZone,
   ): Promise<readonly DayCount[]>;
+  /** As `countsByLocalDay`, for several calendars at once, each row naming its own. */
+  countsByLocalDayForResources(
+    resourceIds: readonly ResourceId[],
+    from: Instant,
+    to: Instant,
+    timeZone: TimeZone,
+  ): Promise<readonly ResourceDayCount[]>;
   /**
    * Appointments still to come at this Business whose customer matches a
    * search, soonest first.
@@ -1045,6 +1161,19 @@ export type WaitingEntryRepository = {
     from: LocalDate,
   ): Promise<readonly WaitingEntry[]>;
   /**
+   * The same, carrying the names the customer's own list shows.
+   *
+   * Asked for entry by entry, the names cost three reads each — the Business,
+   * the Service and the calendars — so a customer waiting at five shops paid
+   * fifteen round trips to draw five rows. The join answers all of it at once,
+   * and `businessId` narrows it to the shop whose page is asking.
+   */
+  openForCustomerNamed(
+    customerId: UserId,
+    from: LocalDate,
+    businessId: BusinessId | null,
+  ): Promise<readonly WaitingEntryForCustomer[]>;
+  /**
    * Everyone still waiting on this calendar and date, ready to be told.
    *
    * `notifiedBefore` keeps one entry from becoming a stream of messages on a
@@ -1072,6 +1201,19 @@ export type WaitingEntryRepository = {
   ): Promise<void>;
 };
 
+/**
+ * A Waiting Entry as its own customer's list shows it: the entry, and the names
+ * of the things it points at. `resourceNames` is in the entry's own
+ * `resourceIds` order, and leaves out a calendar that has since gone.
+ */
+export type WaitingEntryForCustomer = {
+  readonly entry: WaitingEntry;
+  readonly businessName: string;
+  readonly businessTimeZone: string;
+  readonly serviceName: string;
+  readonly resourceNames: readonly string[];
+};
+
 /** A calendar date whose availability changed and has not been re-examined. */
 export type WaitingRecheck = {
   readonly resourceId: ResourceId;
@@ -1085,6 +1227,13 @@ export type WaitingRecheckRepository = {
    * asked for it.
    */
   mark(resourceId: ResourceId, onDate: LocalDate): Promise<void>;
+  /**
+   * Many marks in one statement, for the changes that free a stretch of days at
+   * once — a closure lifted, a blockage removed, a weekday made longer.
+   */
+  markMany(
+    marks: readonly { resourceId: ResourceId; onDate: LocalDate }[],
+  ): Promise<void>;
   /** Oldest first, so a busy morning cannot starve an earlier change. */
   oldest(limit: number): Promise<readonly WaitingRecheck[]>;
   clear(marks: readonly WaitingRecheck[]): Promise<void>;

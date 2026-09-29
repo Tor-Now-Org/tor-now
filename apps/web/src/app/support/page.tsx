@@ -8,6 +8,7 @@ import { SUPPORT, emailLink, whatsappLink } from "@/lib/support.ts";
 import { AppHeader } from "@/components/app-header.tsx";
 import { Card } from "@/components/ui.tsx";
 import { Wordmark } from "@/components/logo.tsx";
+import { LegalLinks } from "@/components/legal.tsx";
 
 /**
  * Support.
@@ -272,6 +273,7 @@ export default function SupportPage() {
         >
           <Wordmark size={15} />
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{copy.builtWith}</span>
+          <LegalLinks />
           <span className="hint">{copy.rights}</span>
           <span className="tab" style={{ fontSize: 11.5, color: "var(--faint)" }}>
             {copy.version}

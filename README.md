@@ -142,7 +142,8 @@ The function reads everything from its environment. Supabase injects
 
 | Variable | Effect |
 | --- | --- |
-| `SUPABASE_DB_URL` | the direct Supavisor connection string, not PostgREST |
+| `DATABASE_POOLER_URL` | Supavisor in transaction mode, port 6543. Set this: every request boots its own isolate, so the function cannot pool connections itself and the direct connection exhausts the database's slots. No `SUPABASE_` prefix — the platform reserves it and refuses the secret |
+| `SUPABASE_DB_URL` | the direct connection Supabase injects, used only when the pooler URL is absent |
 | `SUPABASE_JWT_SECRET` | signs sessions; falls back to deriving a key from the service role key |
 | `VERIFICATION_TRANSPORT` | `LOG` (default), `WHATSAPP` or `SMS` |
 | `NOTIFICATION_TRANSPORT` | `LOG` (default), `WHATSAPP` or `SMS` |

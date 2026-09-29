@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { displayName, instant } from "@tor-now/domain";
+import { displayName, instant, TERMS_VERSION } from "@tor-now/domain";
 import { VERIFICATION } from "../config.ts";
 import { harness, signIn, type Harness } from "../infrastructure/testing/harness.ts";
 import { anEstablishedBusiness } from "../infrastructure/testing/scenarios.ts";
@@ -119,6 +119,29 @@ describe("verification", () => {
     await expect(
       test.services.auth.verifyCode(phone, "111111", null),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("agreeing to the terms", () => {
+  it("is recorded by verifying, since the code was asked for under the consent line", async () => {
+    const test = harness();
+    const person = await signIn(test, "+972500000042", "דנה");
+    expect(person.user.termsVersion).toBe(TERMS_VERSION);
+    expect(test.store.audit.filter((entry) => entry.action === "TERMS_ACCEPTED")).toHaveLength(1);
+
+    // Already on the current version: signing in again records nothing new.
+    await signIn(test, "+972500000042", "דנה");
+    expect(test.store.audit.filter((entry) => entry.action === "TERMS_ACCEPTED")).toHaveLength(1);
+  });
+
+  it("moves someone on an older version to the current one when they acknowledge it", async () => {
+    const test = harness();
+    const person = await signIn(test, "+972500000042", "דנה");
+    test.store.users = test.store.users.map((user) =>
+      user.id === person.user.id ? { ...user, termsVersion: "2000-01-01" } : user,
+    );
+    const accepted = await test.services.profile.acceptTerms(person.actor);
+    expect(accepted.termsVersion).toBe(TERMS_VERSION);
   });
 });
 
