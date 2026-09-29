@@ -1,4 +1,4 @@
-import { asId, displayName, DomainError, instant, notFound } from "@tor-now/domain";
+import { asId, displayName, DomainError, instant, likeContaining, notFound, peopleSearchOf } from "@tor-now/domain";
 import type { AppointmentRepository } from "../../ports/repositories.ts";
 import { errorCodeOf, PG_ERRORS, type Transaction } from "./client.ts";
 import {
@@ -101,7 +101,8 @@ export const appointmentRepository = (
   },
 
   async searchUpcoming(businessId, query, from, limit) {
-    const like = `%${query}%`;
+    const search = peopleSearchOf(query);
+    const phone = search.phoneDigits === null ? null : likeContaining(search.phoneDigits);
     const rows = await tx<Row[]>`
       select a.*, c.given_name, c.family_name, c.phone as customer_phone
       from appointment a
@@ -110,9 +111,8 @@ export const appointmentRepository = (
         and a.status = 'CONFIRMED'
         and a.start_at >= ${asDate(from)}
         and (
-          c.given_name ilike ${like}
-          or coalesce(c.family_name, '') ilike ${like}
-          or c.phone like ${like}
+          c.given_name || coalesce(' ' || c.family_name, '') ilike ${likeContaining(search.text)}
+          or (${phone}::text is not null and replace(c.phone, '+', '') like ${phone})
         )
       order by a.start_at
       limit ${limit}`;

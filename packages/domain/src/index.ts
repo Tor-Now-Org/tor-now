@@ -8,6 +8,7 @@ export * from "./model/money.ts";
 export * from "./model/business.ts";
 export * from "./model/business-category.ts";
 export * from "./model/text.ts";
+export * from "./model/people-search.ts";
 export * from "./model/ranges.ts";
 export * from "./model/schedule.ts";
 export * from "./model/appointment.ts";

@@ -29,6 +29,8 @@ import {
   instantToZoned,
   dayOfWeek,
   displayName,
+  matchesPerson,
+  peopleSearchOf,
   localTime,
   monthStartOf,
   weekStartOf,
@@ -196,9 +198,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
       async list(page, query) {
         const matching = store.users.filter(
           (user) =>
-            query === null ||
-            displayName(user).toLowerCase().includes(query.toLowerCase()) ||
-            user.phone.includes(query),
+            query === null || matchesPerson(user, peopleSearchOf(query)),
         );
         return matching.slice(page.offset, page.offset + page.limit);
       },
@@ -1091,7 +1091,6 @@ export const inMemoryRepositories = (store: Store): Repositories => {
         );
       },
       async searchUpcoming(businessId, query, from, limit) {
-        const needle = query.toLowerCase();
         return store.appointments
           .filter(
             (appointment) =>
@@ -1105,9 +1104,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           }))
           .filter(
             ({ customer }) =>
-              customer !== undefined &&
-              (displayName(customer).toLowerCase().includes(needle) ||
-                customer.phone.includes(query)),
+              customer !== undefined && matchesPerson(customer, peopleSearchOf(query)),
           )
           .sort((left, right) => left.appointment.startAt - right.appointment.startAt)
           .slice(0, limit)

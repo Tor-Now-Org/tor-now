@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { matchesNameOrPhone, peopleSearchOf } from "@tor-now/domain";
 import type { CustomerDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { checkLocalPhone, fromE164, localDigits, toE164 } from "@/lib/phone.ts";
@@ -13,7 +14,7 @@ export type ChosenCustomer = {
   readonly phone: string;
 };
 
-/** Digits only, so "050-555-6677", "0505556677" and "5556677" all find her. */
+/** Digits only: what a search that looks like a number is about to be typed as. */
 const digitsOf = (value: string): string => value.replace(/\D/g, "");
 
 /** Enough rows to recognise somebody in; the search is how a long list narrows. */
@@ -36,11 +37,8 @@ export const customerMatches = (
   customer: { name: string; phone: string },
   query: string,
 ): boolean => {
-  const trimmed = query.trim();
-  if (trimmed === "") return true;
-  if (customer.name.toLocaleLowerCase().includes(trimmed.toLocaleLowerCase())) return true;
-  const digits = digitsOf(trimmed);
-  return digits !== "" && digitsOf(customer.phone).includes(digits);
+  const search = peopleSearchOf(query);
+  return search.text === "" || matchesNameOrPhone(customer.name, customer.phone, search);
 };
 
 /**

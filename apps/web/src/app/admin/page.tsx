@@ -19,7 +19,7 @@ import {
 } from "@/lib/api/types.ts";
 import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { TEXT_RULES } from "@tor-now/domain";
+import { matchesPerson, peopleSearchOf, TEXT_RULES } from "@tor-now/domain";
 import { useSession } from "@/lib/session.tsx";
 import { usePlans } from "@/lib/use-plans.ts";
 import { useFieldProblem } from "@/lib/use-field-problem.ts";
@@ -192,10 +192,8 @@ export default function AdminPage() {
     );
   }
 
-  const needle = query.trim().toLowerCase();
-  const shownUsers = needle === ""
-    ? users
-    : users.filter((candidate) => candidate.name.toLowerCase().includes(needle) || candidate.phone.includes(needle));
+  const search = peopleSearchOf(query);
+  const shownUsers = search.text === "" ? users : users.filter((candidate) => matchesPerson(candidate, search));
 
   const openRow = (row: DirectoryRowDto) => {
     setOpenBusiness(row);

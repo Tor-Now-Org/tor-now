@@ -7,6 +7,7 @@ import {
   theStartShownAs,
   theNextStart,
   call,
+  database,
   ready,
   signInDirectly,
   uniquePhone,
@@ -42,16 +43,15 @@ test.describe("finding and booking", () => {
   });
 
   test("finds a business by part of its name and opens it", async ({ page }) => {
-    const shop = await aBusinessWithOpenHours({
-      name: `מספרת בדיקה ${Date.now()}`,
-      ownerPhone: uniquePhone(),
-    });
+    const name = `מספרת בדיקה ${Date.now()}`;
+    const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
 
     await page.goto("/");
     await ready(page);
-    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill("מספרת בדיקה");
+    // Part of the name — the end of it, which only this Business has.
+    await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice("מספרת ".length));
 
-    const card = page.getByText(shop.business.id ? "מספרת בדיקה" : "", { exact: false }).first();
+    const card = page.getByText(name).first();
     await expect(card).toBeVisible({ timeout: 15_000 });
     await card.click();
 
@@ -59,9 +59,7 @@ test.describe("finding and booking", () => {
     await expect(page.getByText("תספורת")).toBeVisible();
     await expect(page.getByText("בוחרים שעה")).toBeVisible();
     // Opening a business puts it in the address bar, so the page can be shared.
-    // Which business is not asserted: the name is shared with earlier runs, so
-    // the card that matches is not necessarily the one just created.
-    await expect(page).toHaveURL(/\/business\/[0-9a-f-]{36}$/);
+    await expect(page).toHaveURL(new RegExp(`/business/${shop.business.id}$`));
   });
 
   test("puts the search on a map, and a pin opens the business", async ({ page, context }) => {
@@ -246,9 +244,15 @@ test.describe("finding and booking", () => {
     // The heading, not the navigation item: they are the same two words, and on
     // the desktop layout the rail keeps its label on screen beside the list.
     await expect(page.getByRole("heading", { name: "התורים שלי" })).toBeVisible();
-    if (chosen !== undefined) {
-      await expect(page.getByText(chosen, { exact: false }).first()).toBeVisible();
-    }
+    expect(chosen).toMatch(/^\d\d:\d\d$/);
+    await expect(page.getByText(chosen ?? "", { exact: false }).first()).toBeVisible();
+
+    // Booked, not only shown: one confirmed appointment, for the person who
+    // verified, at the business they chose.
+    const booked = await database()<{ status: string; given_name: string }[]>`
+      select a.status, u.given_name from appointment a join app_user u on u.id = a.customer_id
+      where a.business_id = ${shop.business.id}`;
+    expect(booked).toEqual([{ status: "CONFIRMED", given_name: "דנה" }]);
   });
 
   test("a booked slot stops being offered", async ({ page, request }) => {
@@ -517,6 +521,8 @@ test.describe("a customer's own appointments", () => {
     await page.getByRole("dialog").getByRole("button", { name: "ביטול התור" }).click();
 
     await expect(page.getByText("בוטל").first()).toBeVisible({ timeout: 15_000 });
+    const mine = await call<{ status: string }[]>("/me/appointments", { token: session.token });
+    expect(mine.map((appointment) => appointment.status)).toEqual(["CANCELLED"]);
   });
 
   test("an empty list says so rather than showing nothing", async ({ page }) => {
@@ -563,7 +569,10 @@ test.describe("leaving", () => {
     await page.getByRole("button", { name: "החשבון שלי" }).click();
     await page.getByRole("button", { name: "הפרטים שלי" }).click();
 
-    await expect(page.getByRole("button", { name: "התנתקות" })).toBeVisible();
+    // The same control, doing the same thing.
+    await page.getByRole("button", { name: "התנתקות" }).click();
+    await expect(page.getByRole("button", { name: "החשבון שלי" })).toHaveCount(0);
+    expect(await page.evaluate(() => window.localStorage.getItem("tor-now.session"))).toBeNull();
   });
 });
 

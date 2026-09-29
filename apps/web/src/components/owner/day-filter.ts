@@ -1,3 +1,4 @@
+import { matchesNameOrPhone, peopleSearchOf } from "@tor-now/domain";
 import type { CalendarAppointmentDto } from "@/lib/api/types.ts";
 
 /**
@@ -41,9 +42,6 @@ export const countOfFilters = (facets: Facets): number =>
   facets.services.length +
   facets.statuses.length;
 
-/** Digits only, so "050-555-6677", "0505556677" and "5556677" all find her. */
-const digitsOf = (value: string): string => value.replace(/\D/g, "");
-
 /**
  * The people behind a set of appointments, each once.
  *
@@ -71,13 +69,8 @@ export const customersIn = (
  * Hebrew name and quietly failed for "yael" against "Yael". Half the product
  * working is what a flaky search looks like from the outside.
  */
-export const matchesQuery = (customer: Customer, query: string): boolean => {
-  const trimmed = query.trim();
-  if (trimmed === "") return false;
-  if (customer.name.toLocaleLowerCase().includes(trimmed.toLocaleLowerCase())) return true;
-  const digits = digitsOf(trimmed);
-  return digits !== "" && digitsOf(customer.phone).includes(digits);
-};
+export const matchesQuery = (customer: Customer, query: string): boolean =>
+  matchesNameOrPhone(customer.name, customer.phone, peopleSearchOf(query));
 
 export const statusOf = (
   appointment: Pick<CalendarAppointmentDto, "status" | "endAt">,

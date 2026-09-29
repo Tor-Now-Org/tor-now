@@ -1713,6 +1713,50 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("finds an appointment by the whole name, and by the number the way it is written locally", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "6108");
+        const her = await repositories.users.create({
+          phone: "+972550006108",
+          givenName: "דנה",
+          familyName: "כהן",
+          birthDate: null,
+        });
+        await repositories.appointments.create({
+          ...anAppointmentAt(context, "2026-11-20T09:00:00Z", "2026-11-20T09:30:00Z", "2026-11-20T09:40:00Z"),
+          customerId: her.id,
+        });
+        const from = parseInstant("2026-09-01T00:00:00Z");
+        const found = (query: string) =>
+          repositories.appointments.searchUpcoming(context.business.id, query, from, 10);
+
+        for (const query of ["דנה כהן", "0550006108", "055-000-6108", "+972 55 000 6108"]) {
+          expect(await found(query), query).toHaveLength(1);
+        }
+        // Typed characters, not wildcards: a percent sign matches no name here.
+        expect(await found("%")).toHaveLength(0);
+        expect(await found("_")).toHaveLength(0);
+      });
+    });
+
+    it("finds a person for an administrator the same ways", async () => {
+      await withRepositories(async (repositories) => {
+        const her = await repositories.users.create({
+          phone: "+972550006109",
+          givenName: "רוני",
+          familyName: "אבידן",
+          birthDate: null,
+        });
+        const ids = async (query: string) =>
+          (await repositories.users.list({ limit: 50, offset: 0 }, query)).map((user) => user.id);
+
+        for (const query of ["רוני אבידן", "אבידן", "0550006109", "055-000-6109"]) {
+          expect(await ids(query), query).toContain(her.id);
+        }
+        expect(await ids("%")).not.toContain(her.id);
+      });
+    });
+
     it("offers nothing that has already been and gone", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "6102");

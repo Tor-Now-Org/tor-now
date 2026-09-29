@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { matchesPerson, peopleSearchOf } from "@tor-now/domain";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import { useRouter } from "next/navigation";
@@ -47,13 +48,13 @@ export const Customers = ({
 
   if (customers === null) return <Spinner page />;
 
-  const needle = query.trim().toLowerCase();
+  // The same rule the server searches by: a whole name, or a number as it is
+  // written here — "055-351-9297" as much as "+972553519297".
+  const search = peopleSearchOf(query);
   const shown = customers.filter(
     (customer) =>
       (standing === "ALL" || customer.blocked === (standing === "BLOCKED")) &&
-      (needle === "" ||
-        customer.name.toLowerCase().includes(needle) ||
-        customer.phone.includes(needle)),
+      (search.text === "" || matchesPerson(customer, search)),
   );
 
   const filters = [

@@ -397,6 +397,12 @@ export const showTheMonthOf = async (page: Page, date: string): Promise<void> =>
   await expect(page.getByRole("button", { name: date }).first()).toBeVisible({ timeout: 15_000 });
 };
 
+/** An instant as the shop's own clock reads it: "09:30". */
+export const localClockOf = (instant: string): string =>
+  new Intl.DateTimeFormat("en-GB", { timeZone: BUSINESS_TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: false }).format(
+    new Date(instant),
+  );
+
 /**
  * The instant at which a clock in the business's own zone reads this time.
  *

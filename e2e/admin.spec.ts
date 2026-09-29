@@ -4,6 +4,7 @@ import {
   aBusinessWithOpenHours,
   call,
   closeDatabase,
+  database,
   makeAdministrator,
   ready,
   signInDirectly,
@@ -233,13 +234,21 @@ test.describe("the panel itself", () => {
 
     await expect(page.getByRole("button", { name: "הסרה ניסיון" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("button", { name: /^מסננים\s*1$/ })).toBeVisible();
+    // Filtered, not only labelled: every Business listed is in its Trial.
+    const listed = page.locator(".dir-table tbody tr, .dir-card").filter({ visible: true });
+    await expect(listed.first()).toBeVisible({ timeout: 15_000 });
+    await expect(listed.filter({ hasNotText: "ניסיון" })).toHaveCount(0);
   });
 
   test("opening a customer record writes it to the audit log", async ({ page }) => {
     const admin = await anAdministrator();
-    const shop = await aBusinessWithOpenHours({
-      name: `ביקורת ${Date.now()}`,
-      ownerPhone: uniquePhone(),
+    // Somebody only this journey knows, so the entry it finds is its own.
+    const phone = uniquePhone();
+    const familyName = `נבדקת${Date.now()}`;
+    const { code } = await call<{ code: string }>("/auth/request-code", { method: "POST", body: { phone } });
+    const person = await call<{ user: { id: string } }>("/auth/verify", {
+      method: "POST",
+      body: { phone, code, name: { givenName: "רוני", familyName } },
     });
 
     await page.addInitScript(
@@ -250,18 +259,20 @@ test.describe("the panel itself", () => {
     await ready(page);
 
     await page.getByRole("button", { name: "משתמשים" }).click();
-    await page.getByPlaceholder("חיפוש לפי שם או טלפון").fill("בעלים");
-    await page.getByRole("button", { name: /בעלים/ }).first().click();
+    await page.getByPlaceholder("חיפוש לפי שם או טלפון").fill(familyName);
+    await page.getByRole("button", { name: new RegExp(familyName) }).click({ timeout: 15_000 });
 
     await expect(page.getByRole("dialog")).toBeVisible();
     // ADR 0006: the read is logged, and the screen says so plainly.
     await expect(page.getByText(/נרשמה ביומן הביקורת/)).toBeVisible();
 
-    const trail = await call<{ action: string }[]>("/admin/audit?limit=50", {
+    const trail = await call<{ action: string; entityType: string; entityId: string | null }[]>("/admin/audit?limit=50", {
       token: admin.token,
     });
-    expect(trail.some((entry) => entry.action === "CUSTOMER_RECORD_READ")).toBe(true);
-    expect(shop.business.id).toBeTruthy();
+    // This read of this person — not any read the shared database holds.
+    expect(trail).toContainEqual(
+      expect.objectContaining({ action: "CUSTOMER_RECORD_READ", entityType: "User", entityId: person.user.id }),
+    );
   });
 
   test("the audit log is presented as unchangeable", async ({ page }) => {
@@ -369,6 +380,13 @@ test.describe("the Catalogue", () => {
       token: shop.owner.token,
     });
     expect(board.notices.map((notice) => notice.kind)).toContain("EDITION_ANNOUNCED");
+    const onWhatsApp = async () =>
+      (
+        await database()<{ count: number }[]>`
+          select count(*)::int as count from notification_outbox
+          where recipient_phone = ${ownerPhone} and template = 'BILLING_NOTICE'`
+      )[0]?.count ?? 0;
+    expect(await onWhatsApp()).toBe(1);
 
     await solo.getByRole("button", { name: "ביטול השינוי" }).click();
     const cancel = page.getByRole("dialog", { name: /ביטול השינוי ביחיד/ });
@@ -377,6 +395,8 @@ test.describe("the Catalogue", () => {
 
     await expect(solo.locator(".pending-change")).toHaveCount(0, { timeout: 15_000 });
     await expect(solo.locator(".price")).toContainText("49");
+    // And told again that it is off.
+    expect(await onWhatsApp()).toBe(2);
   });
 
   test("an edit that only gives says it applies now, before anything is saved", async ({ page }) => {

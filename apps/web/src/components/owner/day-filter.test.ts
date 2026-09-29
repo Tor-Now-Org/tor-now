@@ -40,16 +40,16 @@ const appointment = (
     ...over,
   });
 
-const yael = appointment({ customerName: "יעל כהן", customerPhone: "050-555-6677" });
+const yael = appointment({ customerName: "יעל כהן", customerPhone: "+972505556677" });
 const otherYael = appointment({
   customerName: "יעל אלון",
-  customerPhone: "050-111-2233",
+  customerPhone: "+972501112233",
   serviceName: "צבע",
   resourceId: "r2",
 });
 const noa = appointment({
   customerName: "נועה שדה",
-  customerPhone: "050-333-4455",
+  customerPhone: "+972503334455",
   startAt: "2026-10-21T09:00:00.000Z",
   endAt: "2026-10-21T10:00:00.000Z",
 });
@@ -58,7 +58,7 @@ describe("naming a person rather than filtering on a string", () => {
   it("offers each customer once, however many appointments they have", () => {
     const twice = appointment({
       customerName: "יעל כהן",
-      customerPhone: "050-555-6677",
+      customerPhone: "+972505556677",
       startAt: "2026-10-19T16:00:00.000Z",
     });
     expect(customersIn([yael, twice, otherYael])).toHaveLength(2);
@@ -102,7 +102,7 @@ describe("what the filters leave", () => {
   });
 
   it("narrows to one person when one is named", () => {
-    const kept = keptBy(all, { ...NOTHING, customer: { name: "יעל כהן", phone: "050-555-6677" } }, NOW);
+    const kept = keptBy(all, { ...NOTHING, customer: { name: "יעל כהן", phone: "+972505556677" } }, NOW);
     expect(kept).toEqual([yael]);
   });
 
@@ -113,7 +113,7 @@ describe("what the filters leave", () => {
       all,
       {
         ...NOTHING,
-        customer: { name: "יעל כהן", phone: "050-555-6677" },
+        customer: { name: "יעל כהן", phone: "+972505556677" },
         services: ["צבע"],
       },
       NOW,
@@ -167,7 +167,7 @@ describe("how far a filtered view reaches", () => {
     // she has nothing booked.
     const lateNight = appointment({
       customerName: "יעל כהן",
-      customerPhone: "050-555-6677",
+      customerPhone: "+972505556677",
       startAt: "2026-10-19T22:30:00.000Z",
       endAt: "2026-10-19T23:00:00.000Z",
     });

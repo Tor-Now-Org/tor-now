@@ -220,6 +220,13 @@ test.describe("the calculator", () => {
     await page.getByRole("button", { name: 'עדכון "מספרה עם 3 כיסאות"' }).click();
     await expect(page.getByText('"מספרה עם 3 כיסאות" עודכן.')).toBeVisible();
 
+    // Kept, not only said: after a reload the saved Business opens on its numbers.
+    await page.reload();
+    await openCosts(page, "מחשבון");
+    await page.getByRole("button", { name: "מספרה עם 3 כיסאות", exact: true }).click();
+    await expect(page.locator("#calc-BOOKING-whatsapp")).toHaveValue("1500");
+    await expect(page.locator("#calc-BILLING-whatsapp")).toHaveValue("9");
+
     await page.getByRole("button", { name: "ניהול" }).click();
     const manage = page.getByRole("dialog");
     const row = manage.locator('[data-saved="מספרה עם 3 כיסאות"]');

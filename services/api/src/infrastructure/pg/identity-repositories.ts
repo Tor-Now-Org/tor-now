@@ -1,5 +1,7 @@
 import {
+  likeContaining,
   notFound,
+  peopleSearchOf,
   type BusinessId,
   type MembershipRole,
   type UserId,
@@ -119,14 +121,15 @@ export const userRepository = (tx: Transaction): UserRepository => ({
   },
 
   async list(page: Page, query) {
+    const search = query === null ? null : peopleSearchOf(query);
+    const phone = search?.phoneDigits == null ? null : likeContaining(search.phoneDigits);
     const rows = await tx<Row[]>`
       select * from app_user
       where ${
-        query === null
+        search === null
           ? tx`true`
-          : tx`(given_name ilike ${"%" + query + "%"}
-                or coalesce(family_name, '') ilike ${"%" + query + "%"}
-                or phone like ${"%" + query + "%"})`
+          : tx`(given_name || coalesce(' ' || family_name, '') ilike ${likeContaining(search?.text ?? "")}
+                or (${phone}::text is not null and replace(phone, '+', '') like ${phone}))`
       }
       order by created_at desc
       limit ${page.limit} offset ${page.offset}`;
