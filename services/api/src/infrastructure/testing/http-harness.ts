@@ -24,6 +24,22 @@ const testConfig: Config = {
 
 const JOB_SECRET = "test-job-secret";
 
+/** A one-calendar barbershop, as an owner opens it over HTTP. */
+export const A_BUSINESS = {
+  name: "מספרת רן",
+  phone: "+972500000001",
+  description: null,
+  address: "רחוב הרצל 1",
+  latitude: 32.0853,
+  longitude: 34.7818,
+  category: "barbershop",
+  resourceNames: ["רן"],
+  services: [
+    { name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null },
+  ],
+  workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],
+};
+
 export const httpHarness = () => {
   const test: Harness = harness();
 

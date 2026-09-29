@@ -500,7 +500,8 @@ export default function AdminPage() {
                 act(() =>
                   api.adminRecordPayment(token, openBusiness.business.id, {
                     amountMinor: Math.round(Number(paymentAmount) * MINOR_UNITS_PER_MAJOR),
-                    paidOn: new Date().toISOString().slice(0, 10),
+                    // The Business's own day: in Israel's small hours UTC is still yesterday.
+                    paidOn: localDateOf(new Date().toISOString(), openBusiness.business.timeZone),
                     note: null,
                   }),
                 )

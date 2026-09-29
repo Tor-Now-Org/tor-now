@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { findInDirectory, inDirectory, noAddonsOnSale, openFeatures, SEARCH } from "./admin-support.ts";
 import {
   aBusinessWithOpenHours,
   call,
@@ -46,8 +47,6 @@ const anAdministrator = async (): Promise<{ token: string; phone: string }> => {
   return { token: elevated.token, phone };
 };
 
-const SEARCH = "חיפוש לפי שם עסק, בעלים או טלפון";
-
 const asAdministrator = async (page: Page, token: string): Promise<void> => {
   await page.addInitScript(
     ([key, value]) => window.localStorage.setItem(key as string, value as string),
@@ -56,19 +55,6 @@ const asAdministrator = async (page: Page, token: string): Promise<void> => {
   await page.goto("/admin");
   await ready(page);
 };
-
-/**
- * The suite's database holds every Business any run has made, so a journey
- * finds its own the way an administrator would: by typing its name.
- */
-const findInDirectory = async (page: Page, name: string): Promise<void> => {
-  await page.getByPlaceholder(SEARCH).fill(name);
-  await expect(inDirectory(page, name)).toBeVisible({ timeout: 20_000 });
-};
-
-/** A Business's line in the directory: a table row on a desktop, a card on a phone. */
-const inDirectory = (page: Page, name: string) =>
-  page.locator(".dir-table tbody tr, .dir-card").filter({ hasText: name }).filter({ visible: true });
 
 test.describe("who may reach the panel", () => {
   test("an ordinary session is shown the door, not the data", async ({ page }) => {
@@ -482,21 +468,6 @@ test.describe("the Catalogue", () => {
   });
 
   // --- ADR 0021: Add-ons, and a Feature's own "which plans" ------------------
-
-  /** Nothing on sale on its own, whatever an earlier run left: the suite shares one database. */
-  const noAddonsOnSale = async (token: string): Promise<void> => {
-    const { features } = await call<{ features: { feature: string; addon?: unknown }[] }>("/admin/catalogue/features", { token });
-    for (const view of features) {
-      if (view.addon !== null && view.addon !== undefined) {
-        await call(`/admin/catalogue/features/${view.feature}/addon/stop`, { method: "POST", token });
-      }
-    }
-  };
-
-  const openFeatures = async (page: Page) => {
-    await page.getByRole("button", { name: "מחירון" }).click();
-    await page.getByRole("tab", { name: "פיצ'רים" }).click();
-  };
 
   test("a Feature goes on sale as an Add-on, is repriced, and its sale stops", async ({ page }) => {
     const admin = await anAdministrator();

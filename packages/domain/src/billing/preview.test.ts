@@ -65,3 +65,18 @@ describe("stretchUndecided", () => {
     expect(stretchUndecided({ ...waiting, placement: { keepOn: ["TEAM"] } }, day("2026-11-20"))).toBeNull();
   });
 });
+
+describe("a Preview that has already ended", () => {
+  const ended = { ...waiting, endsOn: day("2026-09-27") };
+
+  it("can be neither extended nor placed — it is over, and a new one would have to start", () => {
+    expect(() => checkPreviewExtension(ended, day("2026-12-25"), today)).toThrow(/running Preview can be extended/);
+    expect(() => placePreview(ended, ["TEAM"], today)).toThrow(/running Preview can be placed/);
+  });
+
+  it("is still running on its last day", () => {
+    const lastDay = { ...waiting, endsOn: today };
+    expect(() => checkPreviewExtension(lastDay, day("2026-12-25"), today)).not.toThrow();
+    expect(() => placePreview(lastDay, ["TEAM"], today)).not.toThrow();
+  });
+});

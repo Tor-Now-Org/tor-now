@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  A_BUSINESS,
   httpHarness,
   signInAsAdministratorOverHttp,
   signInOverHttp,
@@ -12,21 +13,6 @@ import {
  * the actor middleware, zod validation and the error translation are all under
  * test — the layer that has no other coverage.
  */
-
-const A_BUSINESS = {
-  name: "מספרת רן",
-  phone: "+972500000001",
-  description: null,
-  address: "רחוב הרצל 1",
-  latitude: 32.0853,
-  longitude: 34.7818,
-  category: "barbershop",
-  resourceNames: ["רן"],
-  services: [
-    { name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null },
-  ],
-  workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],
-};
 
 describe("health", () => {
   it("reports how the deployment is configured", async () => {
@@ -232,6 +218,14 @@ describe("the booking route", () => {
   it("answers 404 for a business that does not exist", async () => {
     const { status } = await api.get("/businesses/2f8d0f16-3b1e-4d9f-9d5f-6a1d9c5f1a99");
     expect(status).toBe(404);
+  });
+
+  it("refuses an id that is no id before it reaches a uuid column", async () => {
+    for (const path of ["/businesses/not-an-id", "/businesses/1", "/businesses/2f8d0f16-3b1e-4d9f-9d5f-6a1d9c5f1a99x/availability"]) {
+      const { status, body } = await api.get(path);
+      expect(status).toBe(400);
+      expect(body).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
+    }
   });
 });
 

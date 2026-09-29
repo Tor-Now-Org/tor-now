@@ -99,6 +99,9 @@ export const parseQuery = <T extends z.ZodTypeAny, E extends Env>(
   schema: T,
 ): z.infer<T> => parse(schema, context.req.query());
 
+/** Every id is a uuid column; anything else would reach Postgres and fail there. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Path parameters arrive as strings; branding them is a single cast site. */
 export const idParam = <T extends string, E extends Env>(
   context: AnyContext<E>,
@@ -108,6 +111,7 @@ export const idParam = <T extends string, E extends Env>(
   if (value === undefined || value.length === 0) {
     throw validationFailed(`${name} is required`);
   }
+  if (!UUID.test(value)) throw validationFailed(`${name} is not an id`, { field: name });
   return asId<T>(value);
 };
 

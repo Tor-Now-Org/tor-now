@@ -258,6 +258,8 @@ export const harness = (options: { now?: Instant } = {}) => {
   return {
     store,
     clock,
+    /** The same unit of work the services use, for a test that calls an application function directly. */
+    unitOfWork,
     /** Moves the harness's clock, so a later moment can be tested. */
     /** Delivers every message by this channel from now on, as a provider would bill it. */
     deliverBy: (via: DeliveryChannel, units = 1) => {
