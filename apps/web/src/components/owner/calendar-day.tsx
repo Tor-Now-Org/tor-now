@@ -739,9 +739,13 @@ export const CalendarDay = ({
           // The search has to be handed back first. While it has words in it
           // the screen is answering "where is she", and the month — which is
           // what a day is chosen on — is not on screen at all. Choosing a day
-          // is a different question, so it gets the calendar back.
+          // is a different question, so it gets the calendar back — and the
+          // month's arrows with it, which an open search box keeps off the row
+          // even once it is empty. Without them a day next month was out of
+          // reach.
           setSelected(null);
           showTheWholeDay();
+          setSearching(false);
           setAimedCustomer(customer);
           setAim("appointment");
           setAimedAt([]);

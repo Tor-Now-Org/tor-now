@@ -37,6 +37,10 @@ export default defineConfig({
     },
     {
       name: "desktop",
+      // The front door's pictures are taken once, at the phone artboard they
+      // set for themselves; a second run in another project books the same
+      // sample customers again and collides with the first.
+      grepInvert: /@shots/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: BASE_URL,

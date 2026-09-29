@@ -390,6 +390,25 @@ for (const tongue of TONGUES) {
   const { words, street } = tongue;
   const into = `${SHOTS}/${tongue.code}`;
   /** Nobody can answer these, and the two languages never share a customer. */
+  /**
+   * Every banner the owner would have read and put away by the time anybody
+   * photographed their screens. A picture of the product is not a picture of
+   * its first day's news — and a banner pushes what the caption promises down
+   * the frame.
+   */
+  const acknowledgeTheBanners = async (shop: Shop): Promise<void> => {
+    for (let read = 0; read < 10; read += 1) {
+      const board = await call<{ banner: { noticeId: string } | null }>(`/businesses/${shop.id}/notices`, {
+        token: shop.token,
+      });
+      if (board.banner === null) return;
+      await call(`/businesses/${shop.id}/notices/${board.banner.noticeId}/acknowledge`, {
+        method: "POST",
+        token: shop.token,
+      });
+    }
+  };
+
   const fakePhone = (n: number) => `${tongue.dial}${String(n).padStart(2, "0")}`;
 
   /** A stretch of free time on the day timeline — the word and its separator. */
@@ -570,6 +589,7 @@ for (const tongue of TONGUES) {
     });
 
     test("the owner's screens", async ({ page }) => {
+      await acknowledgeTheBanners(barber);
       await remember(page, barber.token, tongue);
       const calendarChip = page.getByRole("button", {
         name: new RegExp(`^${words.calendarsWord}:`),

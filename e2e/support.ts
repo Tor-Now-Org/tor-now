@@ -343,6 +343,32 @@ export const aDayFromNow = (days: number): string => {
 const BUSINESS_TIMEZONE = "Asia/Jerusalem";
 
 /**
+ * Where a run of days can start — a number of days from today, `earliest` or
+ * later — so that the whole run, and `after` more days, fall in one month.
+ *
+ * The month grid shows one month. A journey that took "tomorrow and the two
+ * days after" found them on it for most of the month, and not in its last
+ * days, when some of them are next month's — so it passed or failed by the
+ * date it ran on. A run that fits one month is on one grid, whatever the date.
+ */
+export const aRunInOneMonth = (length: number, options: { earliest?: number; after?: number } = {}): number => {
+  const earliest = options.earliest ?? 1;
+  const monthOf = (date: string) => date.slice(0, 7);
+  for (let start = earliest; start < earliest + 40; start += 1) {
+    if (monthOf(aDayFromNow(start)) === monthOf(aDayFromNow(start + length - 1 + (options.after ?? 0)))) return start;
+  }
+  throw new Error(`No run of ${length} days fits in one month`);
+};
+
+/**
+ * Turn the month grid until it shows a date, without touching the date itself.
+ */
+export const showTheMonthOf = async (page: Page, date: string): Promise<void> => {
+  await turnTheMonthTo(page, date);
+  await expect(page.getByRole("button", { name: date }).first()).toBeVisible({ timeout: 15_000 });
+};
+
+/**
  * The instant at which a clock in the business's own zone reads this time.
  *
  * Blockages and appointments are written as instants, and the hours they are
@@ -455,21 +481,50 @@ export const pickACategory = async (page: Page, typed = "ספר"): Promise<void>
   await page.getByRole("option", { name: /מספרה/ }).first().click();
 };
 
+/** The month the grid is on, read off its own dated squares — the month most of them belong to. */
+const shownMonth = async (page: Page): Promise<string | null> =>
+  page
+    .getByRole("grid")
+    .first()
+    .evaluate((grid) => {
+      const counts = new Map<string, number>();
+      for (const square of Array.from(grid.querySelectorAll("[aria-label]"))) {
+        const label = square.getAttribute("aria-label") ?? "";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(label)) counts.set(label.slice(0, 7), (counts.get(label.slice(0, 7)) ?? 0) + 1);
+      }
+      return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    });
+
 /**
- * Open a day by its date, turning the month over if it is not this one.
+ * Turn the month grid, either way, until it is on the month of a date.
  *
  * The grid holds one month, so a day a fortnight out is often not on it — and
- * whether it is depends on what today happens to be. A test that clicked the
- * square directly therefore passed or failed by the calendar date, which is a
- * way of being broken that only shows up later and somewhere else.
+ * whether it is depends on what today happens to be. The grid may also have
+ * jumped ahead on its own: opening a customer's record brings it to their
+ * next booking. So the way to turn is read off the grid, not assumed.
+ */
+const turnTheMonthTo = async (page: Page, date: string): Promise<void> => {
+  const wanted = date.slice(0, 7);
+  await expect(page.getByRole("grid").first()).toBeVisible({ timeout: 15_000 });
+  for (let turns = 0; turns < 12; turns += 1) {
+    const shown = await shownMonth(page);
+    if (shown === wanted) return;
+    await page.getByRole("button", { name: shown !== null && shown > wanted ? "החודש הקודם" : "החודש הבא" }).click();
+    await expect.poll(() => shownMonth(page), { timeout: 15_000 }).not.toBe(shown);
+  }
+  throw new Error(`The month grid never came to ${wanted}`);
+};
+
+/**
+ * Open a day by its date, turning the month over to it first.
+ *
+ * A test that clicked the square directly passed or failed by the calendar
+ * date, which is a way of being broken that only shows up later and
+ * somewhere else.
  */
 export const openTheDayOf = async (page: Page, date: string): Promise<void> => {
-  const square = page.getByRole("button", { name: date });
-  for (let turns = 0; turns < 6 && (await square.count()) === 0; turns += 1) {
-    await page.getByRole("button", { name: "החודש הבא" }).click();
-    await page.waitForTimeout(300);
-  }
-  await square.click({ timeout: 15_000 });
+  await turnTheMonthTo(page, date);
+  await page.getByRole("button", { name: date }).click({ timeout: 15_000 });
 };
 
 /**
