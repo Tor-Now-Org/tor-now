@@ -3374,6 +3374,15 @@ test.describe("a day the shop keeps its own hours", () => {
     });
     const day = aDayFromNow(2);
     await shortenTheDay(shop, day, "ערב חג");
+    const afternoon = async () => {
+      const days = await call<{ slots: { startAt: string }[] }[]>(
+        `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+          `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+      );
+      return (days[0]?.slots ?? []).filter((slot) => localClockOf(slot.startAt) >= "12:00").length;
+    };
+    // Shortened to the morning: nothing from noon on.
+    expect(await afternoon()).toBe(0);
 
     await openCalendar(page, shop, shop.owner.token);
     await showTheMonthOf(page, day);
@@ -3392,18 +3401,7 @@ test.describe("a day the shop keeps its own hours", () => {
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Back on its usual hours: the afternoon is bookable again.
-    await expect
-      .poll(
-        async () => {
-          const days = await call<{ slots: { startAt: string }[] }[]>(
-            `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
-              `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
-          );
-          return (days[0]?.slots ?? []).filter((slot) => slot.startAt >= `${day}T12:00`).length;
-        },
-        { timeout: 15_000 },
-      )
-      .toBeGreaterThan(0);
+    await expect.poll(afternoon, { timeout: 15_000 }).toBeGreaterThan(0);
   });
 
   test("draws a band on a single day, not only on a run of them", async ({ page }) => {
@@ -3421,7 +3419,7 @@ test.describe("a day the shop keeps its own hours", () => {
 
     await openCalendar(page, shop, shop.owner.token);
     await showTheMonthOf(page, day);
-    await expect(page.getByRole("button", { name: "סגור" }).first()).toBeVisible({
+    await expect(page.getByRole("button", { name: "סגור", exact: true })).toHaveCount(1, {
       timeout: 15_000,
     });
   });
@@ -3507,12 +3505,6 @@ test.describe("a day the shop keeps its own hours", () => {
 });
 
 /**
- * A busy month still has to read as a month.
- *
- * Every decision used to take a bar of its own, laid over the squares — so a
- * week with several of them buried the days it was describing.
- */
-/**
  * Four consecutive days inside one week of the grid, and one month of it.
  *
  * The month draws a week to a row, Sunday first, so a run beginning on a
@@ -3530,6 +3522,12 @@ const fourDaysFromTheNextSunday = (): string[] => {
   throw new Error("No Sunday within six weeks starting four days of one month, which cannot happen");
 };
 
+/**
+ * A busy month still has to read as a month.
+ *
+ * Every decision used to take a bar of its own, laid over the squares — so a
+ * week with several of them buried the days it was describing.
+ */
 test.describe("a month with a lot decided about it", () => {
   const blockOn = async (
     shop: { business: { id: string }; owner: { token: string } },
@@ -3709,7 +3707,7 @@ test.describe("where a band is drawn", () => {
     await ready(page);
     await showTheMonthOf(page, from);
 
-    const band = await page.getByRole("button", { name: "סגור" }).first().boundingBox();
+    const band = await page.getByRole("button", { name: "סגור", exact: true }).first().boundingBox();
     const first = await page.getByRole("button", { name: from }).boundingBox();
     const second = await page.getByRole("button", { name: to }).boundingBox();
     expect(band).not.toBeNull();
@@ -3756,8 +3754,6 @@ test.describe("where a band is drawn", () => {
     );
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
-    await showTheMonthOf(page, busy);
-
     await showTheMonthOf(page, busy);
 
     // A day in the week that has a blockage, and one in a week that has none.
@@ -4372,11 +4368,15 @@ test.describe("the calendar, altogether", () => {
 
     // One blockage, not two lying on top of each other — and removing it gives
     // the whole day back rather than uncovering the one underneath.
-    const read = await call<{ blocks: { id: string }[] }>(
+    const read = await call<{ blocks: { id: string; startAt: string; endAt: string }[] }>(
       `/businesses/${shop.business.id}/resources/${shop.resource.id}/calendar?date=${day}`,
       { token: shop.owner.token },
     );
     expect(read.blocks).toHaveLength(1);
+    // Covering both: the earlier two hours lie inside the one that is left.
+    const [kept] = read.blocks;
+    expect(Date.parse(kept?.startAt ?? "")).toBeLessThanOrEqual(Date.parse(`${day}T11:00:00.000Z`));
+    expect(Date.parse(kept?.endAt ?? "")).toBeGreaterThanOrEqual(Date.parse(`${day}T13:00:00.000Z`));
   });
 
   test("the toolbar carries which calendar is being read, and switches it", async ({ page }) => {
@@ -4531,8 +4531,6 @@ test.describe("a calendar's own days off", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
-
-    await showTheMonthOf(page, friday);
 
     // Reading the chair that takes Fridays off: the Friday says so.
     await showTheMonthOf(page, friday);
@@ -4752,9 +4750,22 @@ test.describe("a day nobody works, and why nobody works it", () => {
     await page.getByRole("button", { name: "שמירה" }).click();
     await expect(page.getByText("חופשה משפחתית")).toBeVisible({ timeout: 15_000 });
 
-    // And the closure comes off, leaving an ordinary day behind it.
+    // And the closure comes off, leaving an ordinary day behind it — one a
+    // customer can book again.
     await page.getByRole("button", { name: "ביטול הסגירה" }).click();
     await expect(page.getByText("סגור כל היום")).toHaveCount(0, { timeout: 15_000 });
+    await expect
+      .poll(
+        async () =>
+          (
+            await call<{ slots: unknown[] }[]>(
+              `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}` +
+                `&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+            )
+          )[0]?.slots.length ?? 0,
+        { timeout: 15_000 },
+      )
+      .toBeGreaterThan(0);
   });
 });
 
@@ -4924,23 +4935,6 @@ test.describe("a search that answers the question it was asked", () => {
 });
 
 test.describe("acting on something the search found", () => {
-  /**
-   * Open a day by its date, paging the month along if it is not this one.
-   *
-   * The grid only holds one month, so a day three weeks out is often not on it
-   * — a test that clicked straight at the square waited forty-five seconds for
-   * a square in a month nobody had turned to.
-   */
-  const openTheDay = async (page: Page, date: string) => {
-    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
-    const square = page.getByRole("button", { name: date });
-    for (let turns = 0; turns < 6 && (await square.count()) === 0; turns += 1) {
-      await page.getByRole("button", { name: "החודש הבא" }).click();
-      await page.waitForTimeout(300);
-    }
-    await square.click({ timeout: 15_000 });
-  };
-
   /** The time a result card shows for an instant, in the business's own zone. */
   const clockShownFor = (instant: string): string =>
     new Intl.DateTimeFormat("en-GB", {
@@ -5163,7 +5157,7 @@ test.describe("acting on something the search found", () => {
     await ready(page);
 
     // On the day itself, so the cancellation happens in the day's own list.
-    await openTheDay(page, day);
+    await openTheDayOf(page, day);
     await page.getByText("תמר בן דוד").first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByRole("button", { name: "ביטול ופרסום השעה" }).click();
@@ -5190,7 +5184,7 @@ test.describe("acting on something the search found", () => {
     await signInDirectly(page, ownerPhone, "בעלים");
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
-    await openTheDay(page, day);
+    await openTheDayOf(page, day);
 
     // A status nothing on this day has: the filter is an "and", so it leaves
     // nothing rather than falling back to everything.
@@ -5260,6 +5254,20 @@ test.describe("booking a customer in", () => {
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
   };
 
+  /** What stands on the calendar that day, as "HH:MM name" — what was actually booked. */
+  const bookedOn = async (
+    shop: { business: { id: string }; resource: { id: string }; owner: { token: string } },
+    day: string,
+  ) =>
+    (
+      await call<{ appointments: { startAt: string; customerName: string; status: string }[] }>(
+        `/businesses/${shop.business.id}/resources/${shop.resource.id}/calendar?date=${day}`,
+        { token: shop.owner.token },
+      )
+    ).appointments
+      .filter((appointment) => appointment.status === "CONFIRMED")
+      .map((appointment) => `${localClockOf(appointment.startAt)} ${appointment.customerName}`);
+
   const aKnownCustomer = async (
     shop: { business: { id: string }; service: { id: string }; resource: { id: string } },
     name: { givenName: string; familyName: string },
@@ -5328,8 +5336,9 @@ test.describe("booking a customer in", () => {
     });
     await page.getByRole("button", { name: "קביעה ל־09:00" }).click();
 
-    // And it is on the day, under her name, without a reload.
+    // And it is on the day, under her name, without a reload — and booked.
     await expect(page.getByText("תמר בן דוד").first()).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => bookedOn(shop, day), { timeout: 15_000 }).toEqual(["09:00 תמר בן דוד"]);
   });
 
   test("another hour in the day can be taken instead of the suggested one", async ({
@@ -5360,6 +5369,7 @@ test.describe("booking a customer in", () => {
     await page.getByRole("button", { name: "קביעה ל־15:30" }).click();
 
     await expect(page.getByText("תמר בן דוד").first()).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => bookedOn(shop, day), { timeout: 15_000 }).toEqual(["15:30 תמר בן דוד"]);
   });
 
   test("from the +: one day is chosen, then the same sheet", async ({ page }) => {
@@ -5389,6 +5399,7 @@ test.describe("booking a customer in", () => {
     await page.getByRole("button", { name: "11:00", exact: true }).click({ timeout: 15_000 });
     await page.getByRole("button", { name: "קביעה ל־11:00" }).click();
     await expect(page.getByText("תמר בן דוד").first()).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => bookedOn(shop, day), { timeout: 15_000 }).toEqual(["11:00 תמר בן דוד"]);
   });
 
   test("a second tap moves the day rather than building a range", async ({ page }) => {
@@ -5463,6 +5474,7 @@ test.describe("booking a customer in", () => {
     await page.getByRole("button", { name: "10:00", exact: true }).click();
     await page.getByRole("button", { name: "קביעה ל־10:00" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+    await expect.poll(() => bookedOn(shop, later), { timeout: 15_000 }).toEqual(["10:00 תמר בן דוד"]);
   });
 
   test("a tapped gap offers booking first, and asks the hours only for a blockage", async ({
@@ -5688,8 +5700,11 @@ test.describe("booking a customer in", () => {
     await expect(page.getByRole("button", { name: /^קביעה ל־/ })).toBeVisible({
       timeout: 15_000,
     });
+    const hour = (await page.getByRole("button", { name: /^קביעה ל־/ }).textContent())?.match(/\d\d:\d\d/)?.[0];
     await page.getByRole("button", { name: /^קביעה ל־/ }).click();
     await expect(page.getByText("אביגיל").first()).toBeVisible({ timeout: 15_000 });
+    // Written down as a customer of this shop, and booked at the hour offered.
+    await expect.poll(() => bookedOn(shop, day), { timeout: 15_000 }).toEqual([`${hour} אביגיל`]);
   });
 });
 
@@ -6079,6 +6094,14 @@ test.describe("adding somebody to a business you are not the only owner of", () 
     await expect(
       page.getByRole("group", { name: "מעבר בין לקוח לניהול" }).getByText(second.business.name),
     ).toBeVisible();
+
+    // And on the server too: on the second business's team, not the first's.
+    const teamOf = async (shop: typeof first) =>
+      (await call<{ name: string }[]>(`/businesses/${shop.business.id}/users`, { token: shop.owner.token })).map(
+        (member) => member.name,
+      );
+    expect(await teamOf(second)).toContain("שימי");
+    expect(await teamOf(first)).not.toContain("שימי");
   });
 
   test("asks for the number first, and scolds nobody on the way in", async ({ page }) => {
@@ -6186,7 +6209,8 @@ test.describe("what Solo locks", () => {
     await expect(page.getByRole("button", { name: "הוספה", exact: true })).toHaveCount(0);
 
     await lock.getByRole("button", { name: "למסלולים" }).click();
-    await expect(page.getByText("ניסיון", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("המסלולים")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("radio", { name: /צוות/ })).toBeVisible();
   });
 
   test("adding to the team is a lock, and whoever is there stays", async ({ page }) => {
@@ -6287,6 +6311,11 @@ test.describe("choosing a plan", () => {
     await page.getByRole("button", { name: "עוברים לצוות עכשיו" }).click();
 
     await expect(page.locator(".plan-choice.on").getByText("המסלול שלכם")).toBeVisible({ timeout: 15_000 });
+    const billing = await call<{ subscription: { plan: string; resourceAllowance: number } }>(
+      `/businesses/${shop.business.id}/subscription`,
+      { token: shop.owner.token },
+    );
+    expect(billing.subscription).toMatchObject({ plan: "TEAM", resourceAllowance: 5 });
   });
 
   test("an owner moving to Solo chooses which calendar stays, and the other pauses", async ({ page }) => {
