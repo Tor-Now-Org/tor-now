@@ -311,7 +311,7 @@ export const MyAppointments = ({
             <span
               style={{
                 flex: 1,
-                fontFamily: "Rubik, sans-serif",
+                fontFamily: "var(--font-rubik), sans-serif",
                 fontSize: 11.5,
                 fontWeight: 600,
                 letterSpacing: ".04em",
@@ -338,7 +338,7 @@ export const MyAppointments = ({
               <span
                 style={{
                   flex: 1,
-                  fontFamily: "Rubik, sans-serif",
+                  fontFamily: "var(--font-rubik), sans-serif",
                   fontWeight: 600,
                   fontSize: 17,
                 }}
@@ -448,7 +448,7 @@ export const MyAppointments = ({
                           style={{
                             width: 46,
                             flexShrink: 0,
-                            fontFamily: "Rubik, sans-serif",
+                            fontFamily: "var(--font-rubik), sans-serif",
                             fontWeight: 600,
                             fontSize: 15,
                             color: colourOf(appointment.serviceName).rail,
@@ -528,7 +528,7 @@ export const MyAppointments = ({
               style={{
                 flex: 1,
                 textAlign: "start",
-                fontFamily: "Rubik, sans-serif",
+                fontFamily: "var(--font-rubik), sans-serif",
                 fontWeight: 600,
                 fontSize: 14,
               }}

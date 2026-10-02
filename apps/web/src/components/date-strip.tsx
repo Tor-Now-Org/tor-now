@@ -67,7 +67,7 @@ export const DateStrip = ({
             </span>
             <span
               className="tab"
-              style={{ fontSize: 15, fontFamily: "Rubik, sans-serif", fontWeight: 600 }}
+              style={{ fontSize: 15, fontFamily: "var(--font-rubik), sans-serif", fontWeight: 600 }}
             >
               {formatLocalDate(date, language, { day: "numeric", month: "numeric" })}
             </span>

@@ -4,15 +4,15 @@
 
 ## 1. Who we are
 
-1.1. Tor Panuy ("**the Platform**") is operated by [Company Name Ltd.], company no. [_________], of [registered address] ("**the Company**", "**we**").
+1.1. Tor Panuy ("**the Platform**") is operated by [Full name], exempt dealer (osek patur) no. [_________], email tor.panuy@gmail.com ("**the Operator**", "**we**").
 
 1.2. This policy explains what information we collect, why, who we share it with and what your rights are, in accordance with the Israeli Protection of Privacy Law, 5741-1981 (including Amendment No. 13), and its regulations. It forms part of the Terms of Service.
 
 1.3. You are under no legal obligation to give us information. You provide it voluntarily and with your consent, but without a phone number you cannot register, log in or book.
 
 1.4. **Two roles:**
-   - For your user account on the Platform, the Company is the **database controller**.
-   - For the information a Business keeps about its customers (appointment history with it, blocks, customers it added itself), **the Business** is the controller and the Company acts as a **holder** processing that information on its behalf and on its instructions. Requests about such information can go to the Business or to us, and we will pass them on to the Business.
+   - For your user account on the Platform, the Operator is the **database controller**.
+   - For the information a Business keeps about its customers (appointment history with it, blocks, customers it added itself), **the Business** is the controller and the Operator acts as a **holder** processing that information on its behalf and on its instructions. Requests about such information can go to the Business or to us, and we will pass them on to the Business.
 
 ## 2. What we collect
 
@@ -34,7 +34,7 @@
 - business name, category, address and map location, contact details, photos, services, prices and hours;
 - details of invited team members;
 - details of customers the Business added itself;
-- subscription and payment details with the Company.
+- subscription and payment details with the Operator.
 
 **What we don't collect:** customer payment details, passwords, medical information, or your device's location.
 
@@ -68,7 +68,7 @@
 | Twilio and Meta (WhatsApp) | sending verification codes and messages | USA |
 | GovMap / OpenStreetMap (Nominatim) | address search during business sign-up (search text only) | Israel / European Union |
 
-4.4. **Authorities** – where the law, a court order or a competent authority requires it, or to protect the rights of the Company, users or the public.
+4.4. **Authorities** – where the law, a court order or a competent authority requires it, or to protect the rights of the Operator, users or the public.
 
 4.5. **Corporate change** – in a merger, acquisition or transfer of business, information will pass to the successor, provided it commits to this policy.
 
@@ -98,7 +98,7 @@ We take reasonable, accepted measures to secure information, in accordance with 
 
 8.3. **Erasure** – to ask us to erase your identifying information. We perform an irreversible anonymisation: your name, phone number and date of birth are removed, and appointment records stay without identifying details so Businesses' records are not broken. After that the account cannot be restored, and your phone number is released for a new registration. We may keep information we are legally required to keep.
 
-8.4. Send requests to [privacy@example.co.il]. We may ask you to confirm your identity, for example with a code sent to the phone number on the account. We will respond within 30 days.
+8.4. Send requests to tor.panuy@gmail.com. We may ask you to confirm your identity, for example with a code sent to the phone number on the account. We will respond within 30 days.
 
 8.5. If you are not satisfied with how we handled your request, you may contact the Privacy Protection Authority at the Israeli Ministry of Justice.
 
@@ -108,7 +108,7 @@ We take reasonable, accepted measures to secure information, in accordance with 
 
 9.2. We store data in your browser (local storage) that the Service needs to work: your login token, businesses you marked as favourites, and display preferences. Clearing site data in your browser logs you out.
 
-9.3. We use Vercel Web Analytics for aggregated usage measurement. It uses no cookies and does not identify you personally.
+9.3. We use Vercel Web Analytics for aggregated usage measurement and Vercel Speed Insights to measure page load speed. Neither uses cookies or identifies you personally.
 
 9.4. **Links to outside services.** Some actions take you to an outside service, and only when you choose them: adding an appointment to Google Calendar sends the appointment's details to Google, and contacting support on WhatsApp goes through WhatsApp. That service's own privacy policy applies to what is shared this way.
 
@@ -122,7 +122,6 @@ We may update this policy. We will announce material changes on the Platform or 
 
 ## 12. Contact
 
-[Company Name Ltd.], company no. [_________]
-Address: [registered address]
-Privacy requests: [privacy@example.co.il]
+[Full name], exempt dealer (osek patur) no. [_________]
+Email: tor.panuy@gmail.com
 [Privacy Protection Officer: name and contact details, if appointed]

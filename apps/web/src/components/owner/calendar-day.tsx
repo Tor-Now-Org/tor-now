@@ -630,7 +630,7 @@ export const CalendarDay = ({
                         being assumed from which day is open. */}
                     <span
                       className="tab"
-                      style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 14 }}
+                      style={{ fontFamily: "var(--font-rubik), sans-serif", fontWeight: 600, fontSize: 14 }}
                     >
                       {whenIn(appointment.startAt, business.timeZone, language)}
                     </span>

@@ -152,7 +152,7 @@ export const VisitedBusinesses = ({
                       {category != null ? <CategoryIcon category={category} /> : <AllCategoriesIcon />}
                     </span>
                     <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-                      <span style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 16.5 }}>
+                      <span style={{ fontFamily: "var(--font-rubik), sans-serif", fontWeight: 600, fontSize: 16.5 }}>
                         {business?.name ?? businessName}
                       </span>
                       {(business?.address ?? businessAddress) != null && (

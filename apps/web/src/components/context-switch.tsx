@@ -183,7 +183,7 @@ const half = (pressed: boolean) => ({
   minHeight: 31,
   padding: "0 8px",
   borderRadius: 999,
-  fontFamily: "Rubik, sans-serif",
+  fontFamily: "var(--font-rubik), sans-serif",
   fontSize: 12,
   fontWeight: 600,
   background: pressed ? "var(--raised)" : "transparent",

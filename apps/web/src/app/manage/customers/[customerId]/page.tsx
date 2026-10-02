@@ -199,7 +199,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
               borderRadius: 18,
               background: "var(--accent-soft)",
               color: "var(--accent-strong)",
-              fontFamily: "Rubik, sans-serif",
+              fontFamily: "var(--font-rubik), sans-serif",
               fontSize: 22,
             }}
           >
@@ -308,7 +308,7 @@ function CustomerPage({ customerId }: { customerId: string }) {
                 >
                   <span
                     className="tab"
-                    style={{ fontSize: 14.5, fontWeight: 600, fontFamily: "Rubik, sans-serif" }}
+                    style={{ fontSize: 14.5, fontWeight: 600, fontFamily: "var(--font-rubik), sans-serif" }}
                   >
                     {dayAndTime(appointment.startAt)}
                   </span>

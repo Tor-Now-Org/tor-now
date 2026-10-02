@@ -30,7 +30,7 @@ export const Mark = ({
       placeItems: "center",
       fontSize: size * 0.53,
       fontWeight: 600,
-      fontFamily: "Rubik, sans-serif",
+      fontFamily: "var(--font-rubik), sans-serif",
       background: laneColourOf(index),
       color: "var(--on-accent)",
     }}

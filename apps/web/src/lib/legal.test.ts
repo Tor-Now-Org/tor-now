@@ -17,7 +17,7 @@ describe("markdownToHtml", () => {
         "| --- | --- |",
         "| Supabase | EU |",
         "",
-        "Company Ltd.",
+        "Operator name",
         "Address: here",
         "",
         "Write to us on the [support page](/support), not [here](javascript:alert).",
@@ -30,7 +30,7 @@ describe("markdownToHtml", () => {
         "<p>6.4. The Business is responsible for:</p>",
         "<ul><li>using it &lt;only&gt; for appointments;</li><li>consent.</li></ul>",
         "<table><thead><tr><th>Provider</th><th>Where</th></tr></thead><tbody><tr><td>Supabase</td><td>EU</td></tr></tbody></table>",
-        "<p>Company Ltd.<br>Address: here</p>",
+        "<p>Operator name<br>Address: here</p>",
         '<p>Write to us on the <a href="/support">support page</a>, not [here](javascript:alert).</p>',
       ].join("\n"),
     );

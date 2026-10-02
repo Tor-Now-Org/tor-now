@@ -288,7 +288,7 @@ export const ReviewSummary = ({ reviews: { held, error, average, save } }: { rev
         <>
           <div className="card" style={{ display: "flex", gap: 18, alignItems: "center", padding: 18 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 90 }}>
-              <span style={{ fontFamily: "Rubik, sans-serif", fontSize: 44, fontWeight: 600, lineHeight: 1 }}>
+              <span style={{ fontFamily: "var(--font-rubik), sans-serif", fontSize: 44, fontWeight: 600, lineHeight: 1 }}>
                 {average.toFixed(1)}
               </span>
               <StarRow count={Math.round(average)} size={16} />

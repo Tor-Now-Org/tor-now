@@ -70,7 +70,7 @@ export default function SupportPage() {
           <p
             style={{
               margin: 0,
-              fontFamily: "Rubik, sans-serif",
+              fontFamily: "var(--font-rubik), sans-serif",
               fontSize: 22,
               fontWeight: 600,
               letterSpacing: "-.015em",

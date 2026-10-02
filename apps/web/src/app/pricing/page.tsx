@@ -9,6 +9,7 @@ import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useCatalogue } from "@/lib/use-plans.ts";
 import { AppHeader } from "@/components/app-header.tsx";
+import { LegalLinks } from "@/components/legal.tsx";
 import { Button, Card, Spinner } from "@/components/ui.tsx";
 
 /**
@@ -116,7 +117,7 @@ const Plan = ({
         <span className="hint">{hint}</span>
       </span>
       <span style={{ display: "flex", alignItems: "baseline", gap: 3 }} dir="ltr">
-        <span className="tab" style={{ fontFamily: "Rubik, sans-serif", fontSize: 28, fontWeight: 700 }}>
+        <span className="tab" style={{ fontFamily: "var(--font-rubik), sans-serif", fontSize: 28, fontWeight: 700 }}>
           ₪{price}
         </span>
       </span>
@@ -256,6 +257,7 @@ export default function PricingPage() {
         <span style={{ textAlign: "center", fontSize: 12.5, color: "var(--faint)" }}>
           {copy.vat} · {copy.questions} <a href="/support">{copy.talk}</a>
         </span>
+        <LegalLinks />
       </main>
     </>
   );

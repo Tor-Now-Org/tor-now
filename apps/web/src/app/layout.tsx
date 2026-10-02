@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { Heebo, Rubik } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { DEFAULT_LANGUAGE, DIRECTION } from "@/lib/i18n/dictionaries.ts";
@@ -8,6 +9,10 @@ import { SessionProvider } from "@/lib/session.tsx";
 import { TermsNotice } from "@/components/legal.tsx";
 import "./globals.css";
 import "./costs.css";
+
+// Downloaded at build and served from our own domain, so no visitor request reaches Google.
+const heebo = Heebo({ subsets: ["hebrew", "latin"], variable: "--font-heebo" });
+const rubik = Rubik({ subsets: ["hebrew", "latin"], variable: "--font-rubik" });
 
 export const metadata: Metadata = {
   title: "תור פנוי · Tor Panuy",
@@ -28,15 +33,7 @@ export const viewport: Viewport = {
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang={DEFAULT_LANGUAGE} dir={DIRECTION[DEFAULT_LANGUAGE]}>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=Heebo:wght@300;400;500;700&display=swap"
-        />
-      </head>
+    <html lang={DEFAULT_LANGUAGE} dir={DIRECTION[DEFAULT_LANGUAGE]} className={`${heebo.variable} ${rubik.variable}`}>
       <body>
         <LanguageProvider>
           <SessionProvider>

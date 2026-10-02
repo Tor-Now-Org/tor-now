@@ -4,7 +4,7 @@
 
 ## 1. General
 
-[Company Name Ltd.], company no. [_________] ("**the Company**"), which operates Tor Panuy, is committed to providing equal service to every user, including people with disabilities. We work to make the website and app accessible in accordance with the Israeli Equal Rights for Persons with Disabilities Law, 5758-1998, and the Equal Rights for Persons with Disabilities (Service Accessibility Adjustments) Regulations, 5773-2013.
+[Full name], exempt dealer (osek patur) no. [_________] ("**the Operator**"), which operates Tor Panuy, is committed to providing equal service to every user, including people with disabilities. We work to make the website and app accessible in accordance with the Israeli Equal Rights for Persons with Disabilities Law, 5758-1998, and the Equal Rights for Persons with Disabilities (Service Accessibility Adjustments) Regulations, 5773-2013.
 
 ## 2. Accessibility level
 
@@ -20,7 +20,7 @@
 - accessible labels (ARIA) on buttons, menus and interactive elements;
 - keyboard navigation with a clear focus indicator;
 - the system's reduced-motion preference is respected;
-- headings in a logical hierarchy, and alternative text for images the Company uploads;
+- headings in a logical hierarchy, and alternative text for images the Operator uploads;
 - login without a password or CAPTCHA, using a numeric code only.
 
 ## 4. Parts that are not fully accessible

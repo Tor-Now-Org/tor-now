@@ -31,7 +31,7 @@ Change legal docs/terms and TERMS_VERSION when:
   - Liability, indemnity or jurisdiction change.
   - The company changes. For example, a new legal entity or ח״פ, or the service transferring to another company.
 
-  Don't change the TERMS_VERSION for:
+Don't change the TERMS_VERSION for:
   - styling, layout or fonts on the legal pages;
   - typos, grammar, or rewording that keeps the meaning;
   - updated contact details, such as a new support email (edit the text, no notice needed);

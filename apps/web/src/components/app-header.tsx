@@ -184,7 +184,7 @@ export const AccountButton = ({
       borderRadius: 999,
       background: initial === undefined ? "var(--raised)" : "var(--accent-soft)",
       color: initial === undefined ? "var(--muted)" : "var(--accent-strong)",
-      fontFamily: "Rubik, sans-serif",
+      fontFamily: "var(--font-rubik), sans-serif",
       border:
         initial === undefined
           ? "1px solid var(--line)"

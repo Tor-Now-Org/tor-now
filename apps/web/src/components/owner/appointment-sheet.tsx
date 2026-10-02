@@ -149,7 +149,7 @@ export const AppointmentSheet = ({
                 borderRadius: 14,
                 background: "var(--accent-soft)",
                 color: "var(--accent-strong)",
-                fontFamily: "Rubik, sans-serif",
+                fontFamily: "var(--font-rubik), sans-serif",
                 fontSize: 17,
               }}
             >
@@ -426,7 +426,7 @@ const FreedHour = ({
               flex: 1,
               minHeight: 38,
               borderRadius: 999,
-              fontFamily: "Rubik, sans-serif",
+              fontFamily: "var(--font-rubik), sans-serif",
               fontSize: 13.5,
               fontWeight: 600,
               background: half.on ? "var(--raised)" : "transparent",

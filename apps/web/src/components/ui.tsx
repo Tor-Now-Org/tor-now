@@ -319,7 +319,7 @@ export const Empty = ({
       textAlign: "center",
     }}
   >
-    <p style={{ margin: 0, fontFamily: "Rubik, sans-serif", fontSize: 19 }}>
+    <p style={{ margin: 0, fontFamily: "var(--font-rubik), sans-serif", fontSize: 19 }}>
       {title}
     </p>
     {body !== undefined && (

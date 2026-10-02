@@ -637,7 +637,7 @@ export const BusinessSearch = ({
                       paddingInlineEnd: 48,
                     }}
                   >
-                    <span style={{ fontFamily: "Rubik, sans-serif", fontWeight: 600, fontSize: 16.5 }}>
+                    <span style={{ fontFamily: "var(--font-rubik), sans-serif", fontWeight: 600, fontSize: 16.5 }}>
                       {business.name}
                     </span>
                     {business.address !== null && (
