@@ -5944,7 +5944,7 @@ test.describe("the switch between customer and management", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  test("the account drawer is untouched, roles and all", async ({ page }) => {
+  test("the account drawer shows only where you are", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `מגירה ${Date.now()}`,
       ownerPhone: uniquePhone(),
@@ -5953,13 +5953,12 @@ test.describe("the switch between customer and management", () => {
     await page.goto("/");
     await ready(page);
 
-    // The switch is the shortcut; the drawer is still the list of everywhere
-    // you can be, with the business badge and the role on each.
+    // Crossing over is the switch's job alone; the drawer names the context
+    // you are in and nothing else.
     await page.getByRole("button", { name: "החשבון שלי" }).click();
     const drawer = page.getByRole("dialog");
-    await expect(drawer.getByText(shop.business.name)).toBeVisible({ timeout: 15_000 });
-    await expect(drawer.getByText(/בעלים/).first()).toBeVisible();
-    await expect(drawer.getByText("כלקוח")).toBeVisible();
+    await expect(drawer.getByText("כלקוח")).toBeVisible({ timeout: 15_000 });
+    await expect(drawer.getByText(shop.business.name)).toHaveCount(0);
   });
 });
 

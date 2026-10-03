@@ -374,23 +374,14 @@ function ManageApp() {
         {...(user === null ? {} : { userName: user.name })}
         labels={{ account: copy.account, signOut: copy.signOut }}
         places={[
-          ...(businesses ?? [business]).map((candidate) => ({
-            key: candidate.id,
-            title: candidate.name,
-            hint: copy[`role${staffRole(candidate)}`],
-            badge: <BuildingIcon />,
-            current: candidate.id === business.id,
-            onClick: () => {
-              chooseBusiness(candidate);
-              setDrawerOpen(false);
-            },
-          })),
+          // Only where you are: crossing over is the header switch's job.
           {
-            key: "customer",
-            title: copy.asCustomer,
-            hint: copy.asCustomerHint,
-            badge: <CalendarIcon />,
-            onClick: () => router.push("/"),
+            key: business.id,
+            title: business.name,
+            hint: copy[`role${staffRole(business)}`],
+            badge: <BuildingIcon />,
+            current: true,
+            onClick: () => setDrawerOpen(false),
           },
         ]}
       />

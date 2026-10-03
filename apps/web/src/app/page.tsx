@@ -6,11 +6,9 @@ import { api } from "@/lib/api/client.ts";
 import type { BusinessDto } from "@/lib/api/types.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
-import { staffRole } from "@/lib/roles.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import {
   BottomNav,
-  BuildingIcon,
   CalendarIcon,
   PeopleIcon,
   ClockIcon,
@@ -84,9 +82,6 @@ const businessIdIn = (pathname: string): string | null => {
 
 function CustomerAppInner() {
   const copy = useCopy("customer");
-  // Only for the role each business is held under: the words live in the owner
-  // dictionary, and one set of them beats two that drift apart.
-  const ownerCopy = useCopy("owner");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -300,8 +295,8 @@ function CustomerAppInner() {
         {...(user === null ? {} : { userName: user.name })}
         labels={{ account: copy.account, signOut: copy.signOut }}
         places={[
-          // With no business there is nothing to switch between, and a list
-          // whose only context is the one you are in answers no question.
+          // Only where you are: crossing over is the header switch's job.
+          // With no business there is no other context, so not even this.
           ...(ownsNothing
             ? []
             : [
@@ -314,18 +309,6 @@ function CustomerAppInner() {
                   onClick: () => setDrawerOpen(false),
                 },
               ]),
-          ...(owned ?? []).map((mine) => ({
-            key: mine.id,
-            title: mine.name,
-            hint: `${ownerCopy[`role${staffRole(mine)}`]} · ${copy.manageIt}`,
-            badge: <BuildingIcon />,
-            onClick: () => {
-              // However somebody crosses over, the switch should open where
-              // they last were.
-              rememberManaged(mine.id);
-              router.push(`/manage?business=${mine.id}`);
-            },
-          })),
           {
             key: "profile",
             title: copy.profile,

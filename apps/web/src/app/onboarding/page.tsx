@@ -7,7 +7,6 @@ import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
-import { staffRole } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { TEXT_RULES, TRIAL_DAYS, type BusinessCategory } from "@tor-now/domain";
@@ -15,7 +14,7 @@ import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.t
 import { AddressAutocomplete } from "@/components/owner/address-autocomplete.tsx";
 import { CategoryAutocomplete } from "@/components/category-autocomplete.tsx";
 import { AccountDrawer } from "@/components/account-drawer.tsx";
-import { BuildingIcon, CalendarIcon, PeopleIcon } from "@/components/bottom-nav.tsx";
+import { CalendarIcon, PeopleIcon } from "@/components/bottom-nav.tsx";
 import {
   blocking,
   checkText,
@@ -38,7 +37,7 @@ import { fillText } from "@/lib/i18n/fill.ts";
 import { usePlans } from "@/lib/use-plans.ts";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
 import { ConsentText, useLegalSheet } from "@/components/legal.tsx";
-import type { BusinessDto, PlanName } from "@/lib/api/types.ts";
+import type { PlanName } from "@/lib/api/types.ts";
 
 // Leaflet reaches for `window`, so the map can only render on the client.
 const LocationPicker = dynamic(
@@ -97,21 +96,11 @@ function OnboardingWizard() {
   const signInCopy = useCopy("signIn");
   // The account drawer is the same dialog everywhere, so it reuses its copy too.
   const customerCopy = useCopy("customer");
-  const ownerCopy = useCopy("owner");
   const router = useRouter();
   const errorText = useErrorText();
   const { token, user, loading, signIn } = useSession();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [owned, setOwned] = useState<BusinessDto[]>([]);
-  useEffect(() => {
-    if (token === null) {
-      setOwned([]);
-      return;
-    }
-    api.myBusinesses(token).then(setOwned).catch(() => setOwned([]));
-  }, [token]);
-
   const [step, setStep] = useState<Step>("details");
   const [name, setName] = useState("");
   const [category, setCategory] = useState<BusinessCategory | null>(null);
@@ -278,13 +267,6 @@ function OnboardingWizard() {
           current: true,
           onClick: () => router.push("/"),
         },
-        ...owned.map((mine) => ({
-          key: mine.id,
-          title: mine.name,
-          hint: `${ownerCopy[`role${staffRole(mine)}`]} · ${customerCopy.manageIt}`,
-          badge: <BuildingIcon />,
-          onClick: () => router.push(`/manage?business=${mine.id}`),
-        })),
         {
           key: "profile",
           title: customerCopy.profile,
