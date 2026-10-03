@@ -1423,6 +1423,7 @@ const owner = {
 const admin = {
   he: {
     "platformAdmin": "הנהלת הפלטפורמה",
+    "adminLink": "אדמין",
     "account": "החשבון שלי",
     "signInOrUp": "כניסה או הרשמה",
     "signOut": "התנתקות",
@@ -1530,6 +1531,7 @@ const admin = {
   },
   en: {
     "platformAdmin": "Platform administration",
+    "adminLink": "Admin",
     "account": "Your account",
     "signInOrUp": "Sign in or sign up",
     "signOut": "Sign out",

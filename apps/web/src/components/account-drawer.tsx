@@ -9,6 +9,7 @@ import { LanguagePill } from "./language-pill.tsx";
 import { SUPPORT_PATH, SupportMark } from "./support-link.tsx";
 import { legalPath } from "@/lib/legal.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
+import { useSession } from "@/lib/session.tsx";
 
 /**
  * One identity, two contexts — and one drawer for both.
@@ -169,6 +170,8 @@ export const AccountDrawer = ({
   // with a single name, so both apps would pass the same string.
   const support = useCopy("support");
   const legal = useCopy("legal");
+  const admin = useCopy("admin");
+  const { user } = useSession();
 
   return (
   <Sheet open={open} onClose={onClose} labelledBy="drawer-title">
@@ -207,6 +210,17 @@ export const AccountDrawer = ({
         </span>
         <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>{legal.title}</span>
       </Link>
+      {/* Only for administrators; the page checks again, this just hides the door. */}
+      {user?.isAdministrator === true && (
+        <Link href="/admin" style={ROW}>
+          <span style={{ ...BADGE, background: "var(--sunken)", color: "var(--accent-strong)" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z" />
+            </svg>
+          </span>
+          <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>{admin.adminLink}</span>
+        </Link>
+      )}
 
       {/* Below the line are the settings of the person rather than places to
           go: leaving, and the language — which has no button in the header, so

@@ -91,6 +91,32 @@ test.describe("who may reach the panel", () => {
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "עסקים" })).toHaveCount(0);
   });
+
+  test("the account drawer offers the panel to an administrator only", async ({ page }) => {
+    const admin = await anAdministrator();
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", admin.token],
+    );
+    await page.goto("/");
+    await ready(page);
+    await page.getByRole("button", { name: "החשבון שלי" }).click();
+    await page.getByRole("dialog").getByRole("link", { name: "אדמין" }).click();
+    await expect(page).toHaveURL(/\/admin$/);
+  });
+
+  test("an ordinary session's drawer has no way to the panel", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({ name: `רגיל ${Date.now()}`, ownerPhone: uniquePhone() });
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto("/");
+    await ready(page);
+    await page.getByRole("button", { name: "החשבון שלי" }).click();
+    await expect(page.getByRole("dialog").getByText("כלקוח")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("dialog").getByRole("link", { name: "אדמין" })).toHaveCount(0);
+  });
 });
 
 test.describe("the panel itself", () => {
