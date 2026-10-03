@@ -20,7 +20,7 @@ const team: PlanVersion = {
   plan: "TEAM",
   number: 1,
   terms: planTerms({
-    features: ["REMINDERS", "CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES"],
+    features: ["REMINDERS", "CUSTOMER_HISTORY", "TEAM_ROLES"],
     resourceAllowance: 5,
     price: money(8900),
   }),
@@ -89,7 +89,7 @@ describe("nextPayment", () => {
       subscription: paid,
       planVersion: solo,
       scheduledVersion: null,
-      holdings: [holding(), holding({ id: asId("h2"), feature: "CUSTOMER_BLOCKING", price: money(900), endsOn: day("2026-11-26"), ending: "CANCELLED" })],
+      holdings: [holding(), holding({ id: asId("h2"), feature: "TEAM_ROLES", price: money(900), endsOn: day("2026-11-26"), ending: "CANCELLED" })],
       daysOwed: [],
       today,
     });

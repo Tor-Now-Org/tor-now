@@ -30,7 +30,7 @@ const edition = (plan: "SOLO" | "TEAM", features: PlanVersion["terms"]["features
 });
 const editions = [
   edition("SOLO", ["REMINDERS"]),
-  edition("TEAM", ["REMINDERS", "CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES"]),
+  edition("TEAM", ["REMINDERS", "CUSTOMER_HISTORY", "TEAM_ROLES"]),
 ];
 
 const offer = (overrides: Partial<AddonOffer> = {}): AddonOffer => ({
@@ -69,13 +69,13 @@ describe("checkAddonSale", () => {
     expect(() => checkAddonSale({ ...sale, feature: "REMINDERS" })).toThrow(/every plan/i);
     expect(() => checkAddonSale({ ...sale, previewing: ["CUSTOMER_HISTORY"] })).toThrow(/preview/i);
     expect(() => checkAddonSale({ ...sale, offers: [offer()] })).toThrow(/already/i);
-    const two = [offer({ feature: "CUSTOMER_BLOCKING" }), offer({ feature: "TEAM_ROLES" })];
+    const two = [offer({ feature: "WAITING_LIST" }), offer({ feature: "TEAM_ROLES" })];
     expect(two).toHaveLength(MAX_ADDONS_ON_SALE);
     expect(() => checkAddonSale({ ...sale, offers: two })).toThrow(/two/i);
   });
 
   it("counts only what is still on sale, and lets a Preview's end open one", () => {
-    const stopped = [offer({ feature: "CUSTOMER_BLOCKING", stoppedOn: day("2026-09-30") }), offer({ feature: "TEAM_ROLES" })];
+    const stopped = [offer({ feature: "REMINDERS", stoppedOn: day("2026-09-30") }), offer({ feature: "TEAM_ROLES" })];
     expect(checkAddonSale({ ...sale, offers: stopped })).toBe(1900);
     expect(checkAddonSale({ ...sale, feature: "WAITING_LIST", previewing: ["WAITING_LIST"], placing: true })).toBe(1900);
   });

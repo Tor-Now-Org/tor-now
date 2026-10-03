@@ -2420,7 +2420,7 @@ export const describeRepositoryContract = (
           price: 4900,
         });
         expect(byPlan["TEAM"]?.terms).toEqual({
-          features: ["REMINDERS", "CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES"],
+          features: ["REMINDERS", "CUSTOMER_HISTORY", "TEAM_ROLES"],
           resourceAllowance: 5,
           price: 8900,
         });
@@ -2706,9 +2706,9 @@ export const describeRepositoryContract = (
           grantedBy: admin.id,
         });
         expect(history).toMatchObject({ businessId: shop, feature: "CUSTOMER_HISTORY", reason: "פיילוט", grantedByName: "הנהלה" });
-        const blocking = await repositories.grants.create({
+        const waiting = await repositories.grants.create({
           businessId: shop,
-          feature: "CUSTOMER_BLOCKING",
+          feature: "WAITING_LIST",
           reason: "הטרדות",
           endsOn: parseLocalDate("2031-03-10"),
           grantedBy: admin.id,
@@ -2724,23 +2724,23 @@ export const describeRepositoryContract = (
         expect(await repositories.grants.findById(history.id)).toEqual(history);
         expect((await repositories.grants.listForBusiness(shop)).map((grant) => grant.feature)).toEqual([
           "CUSTOMER_HISTORY",
-          "CUSTOMER_BLOCKING",
+          "WAITING_LIST",
         ]);
         const running = (await repositories.grants.listRunning(parseLocalDate("2031-03-05"))).map((grant) => grant.id);
         expect(running).toContain(history.id);
-        expect(running).toContain(blocking.id);
+        expect(running).toContain(waiting.id);
         expect((await repositories.grants.listRunning(parseLocalDate("2031-03-11"))).map((grant) => grant.id)).not.toContain(
-          blocking.id,
+          waiting.id,
         );
 
-        const extended = await repositories.grants.update(blocking.id, {
+        const extended = await repositories.grants.update(waiting.id, {
           endsOn: parseLocalDate("2031-04-10"),
           reason: "עוד חודש",
         });
         expect(extended).toMatchObject({ endsOn: "2031-04-10", reason: "עוד חודש", grantedByName: "הנהלה" });
         // What the Entitlement reads sees it too.
         const basis = await repositories.subscriptions.entitlementBasis(shop);
-        expect(basis?.grants).toContainEqual({ feature: "CUSTOMER_BLOCKING", endsOn: "2031-04-10" });
+        expect(basis?.grants).toContainEqual({ feature: "WAITING_LIST", endsOn: "2031-04-10" });
       });
     });
 
@@ -2769,13 +2769,13 @@ export const describeRepositoryContract = (
 
         const stopped = await repositories.addonOffers.put({ ...rising, stoppedOn: parseLocalDate("2031-03-05") });
         expect(stopped.stoppedOn).toBe("2031-03-05");
-        for (const feature of ["CUSTOMER_BLOCKING", "TEAM_ROLES"] as const) {
+        for (const feature of ["TEAM_ROLES", "WAITING_LIST"] as const) {
           await repositories.addonOffers.put({ feature, price: money(900), since, stoppedOn: null, rise: null });
         }
         expect((await repositories.addonOffers.list()).map((offer) => offer.feature)).toEqual([
-          "CUSTOMER_BLOCKING",
           "CUSTOMER_HISTORY",
           "TEAM_ROLES",
+          "WAITING_LIST",
         ]);
 
         // A third on sale is refused. Last, because a refused statement ends the transaction.

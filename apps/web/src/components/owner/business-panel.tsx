@@ -644,7 +644,6 @@ export const BusinessPanel = ({
           token={token}
           billing={billing}
           timeZone={business.timeZone}
-          active={business.active}
           resources={resources}
           onChanged={(changed) => {
             setBilling(changed);

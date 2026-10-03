@@ -127,11 +127,11 @@ describe("noticeText — Grants", () => {
       action: "INCLUDED",
     });
     const several = text(
-      { kind: "FEATURES_GRANTED", features: ["CUSTOMER_HISTORY", "CUSTOMER_BLOCKING"], endsOn: day("2026-12-26") },
+      { kind: "FEATURES_GRANTED", features: ["CUSTOMER_HISTORY", "TEAM_ROLES"], endsOn: day("2026-12-26") },
       "he",
     );
     expect(several.title).toBe("קיבלתם 2 פיצ'רים");
-    expect(several.body).toBe("היסטוריית לקוח וחסימת לקוחות, עד 26 בדצמבר, בלי תשלום נוסף.");
+    expect(several.body).toBe("היסטוריית לקוח ומנהלים ועובדים, עד 26 בדצמבר, בלי תשלום נוסף.");
   });
 
   it("says when Grants end, relative to today, and points at the plans", () => {

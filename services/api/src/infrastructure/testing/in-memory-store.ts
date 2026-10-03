@@ -160,7 +160,7 @@ const initialCatalogue = (today: LocalDate): Pick<Store, "planVersions" | "previ
       plan: "TEAM",
       number: 1,
       terms: planTerms({
-        features: ["REMINDERS", "CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES"],
+        features: ["REMINDERS", "CUSTOMER_HISTORY", "TEAM_ROLES"],
         resourceAllowance: 5,
         price: money(8900),
       }),

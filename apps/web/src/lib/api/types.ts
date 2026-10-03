@@ -63,7 +63,6 @@ export type BusinessDto = {
 export type FeatureName =
   | "REMINDERS"
   | "CUSTOMER_HISTORY"
-  | "CUSTOMER_BLOCKING"
   | "TEAM_ROLES"
   | "WAITING_LIST";
 

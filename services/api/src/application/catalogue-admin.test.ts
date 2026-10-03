@@ -75,7 +75,6 @@ describe("the Catalogue editor: rates and Grants", () => {
       expect(features.map(({ feature, source }) => [feature, source])).toEqual([
         ["REMINDERS", "PLAN"],
         ["CUSTOMER_HISTORY", "GRANT"],
-        ["CUSTOMER_BLOCKING", "NONE"],
         ["TEAM_ROLES", "GRANT"],
         ["WAITING_LIST", "PREVIEW"],
       ]);
@@ -218,17 +217,17 @@ describe("the Catalogue editor: rates and Grants", () => {
       const shop = await aSoloShop();
       const admin = await anAdministrator();
       await test.services.catalogueAdmin.grantFeatures(admin, shop.business.id, {
-        features: ["CUSTOMER_BLOCKING"],
+        features: ["TEAM_ROLES"],
         endsOn,
         reason: "הטרדות חוזרות",
       });
 
       const forAdmin = await test.services.admin.subscriptionFor(admin, shop.business.id);
-      const blocking = forAdmin.features.find((source) => source.feature === "CUSTOMER_BLOCKING");
-      expect(blocking?.grant).toMatchObject({ reason: "הטרדות חוזרות" });
+      const roles = forAdmin.features.find((source) => source.feature === "TEAM_ROLES");
+      expect(roles?.grant).toMatchObject({ reason: "הטרדות חוזרות" });
 
       const forOwner = await test.services.business.subscription(shop.owner.actor, shop.business.id);
-      const owned = forOwner.features.find((source) => source.feature === "CUSTOMER_BLOCKING");
+      const owned = forOwner.features.find((source) => source.feature === "TEAM_ROLES");
       expect(owned).toMatchObject({ source: "GRANT", endsOn });
       expect(owned?.grant).not.toHaveProperty("reason");
     });

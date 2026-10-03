@@ -14,7 +14,6 @@ import { validationFailed } from "../shared/errors.ts";
 export const FEATURES = [
   "REMINDERS",
   "CUSTOMER_HISTORY",
-  "CUSTOMER_BLOCKING",
   "TEAM_ROLES",
   "WAITING_LIST",
 ] as const;

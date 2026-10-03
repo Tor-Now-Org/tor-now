@@ -9,7 +9,7 @@ const team: PlanDto = {
   priceMinor: 8900,
   price: 89,
   resourceAllowance: 5,
-  features: ["REMINDERS", "CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES"],
+  features: ["REMINDERS", "CUSTOMER_HISTORY", "TEAM_ROLES"],
 };
 
 const on = (plan: PlanDto, paidThrough: string | null): SubscriptionDto => ({

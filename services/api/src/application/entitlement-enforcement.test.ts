@@ -245,14 +245,11 @@ describe("customer history and blocking", () => {
     expect(record.noShows).toBe(0);
   });
 
-  it("refuses blocking on Solo, but always lets a block be lifted", async () => {
-    const { shop, customer } = await aCustomerWithABooking("TEAM");
-    await test.services.calendar.setCustomerBlocked(shop.owner.actor, shop.business.id, customer.user.id, true);
-    withoutFeature(test, "TEAM", "CUSTOMER_BLOCKING");
-
+  it("lets every Plan block a customer and lift the block — blocking is not a Feature", async () => {
+    const { shop, customer } = await aCustomerWithABooking("SOLO");
     await expect(
       test.services.calendar.setCustomerBlocked(shop.owner.actor, shop.business.id, customer.user.id, true),
-    ).rejects.toMatchObject({ code: "NOT_ENTITLED", details: { feature: "CUSTOMER_BLOCKING" } });
+    ).resolves.toBeDefined();
     await expect(
       test.services.calendar.setCustomerBlocked(shop.owner.actor, shop.business.id, customer.user.id, false),
     ).resolves.toBeDefined();

@@ -2,11 +2,11 @@
 
 import type { BillingDto, ResourceDto } from "@/lib/api/types.ts";
 import { PlanChooser } from "./plan-chooser.tsx";
-import { daysUntil, deactivationDeadline } from "@/lib/billing-alert.ts";
+import { daysUntil, deactivationDeadline, payTodayNote } from "@/lib/billing-alert.ts";
 import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { fillParts, fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { Card, Critical, Note, Warning } from "@/components/ui.tsx";
+import { Card, Note, Warning } from "@/components/ui.tsx";
 import { NextDate, PlanBadge, StatusBadge } from "@/components/billing-badges.tsx";
 import { IncludedFeatures } from "./included-features.tsx";
 import { AddonsSection } from "./addons-section.tsx";
@@ -15,6 +15,29 @@ import { api } from "@/lib/api/client.ts";
 import { paymentBoardOf } from "@/lib/next-payment.ts";
 import { localDateOf } from "./day-filter.ts";
 import { usePlans } from "@/lib/use-plans.ts";
+
+/**
+ * A lapsed Business is still on until the nightly run turns it off: above every
+ * tab, until paid, the owner is told when. A switched-off one never gets here —
+ * its screen is a sheet saying so.
+ */
+export const PayTodayBanner = ({ billing, timeZone }: { billing: BillingDto; timeZone: string }) => {
+  const words = useCopy("billing");
+  const { language } = useLanguage();
+  const note = payTodayNote(billing);
+  if (note === null) return null;
+  const deadline = deactivationDeadline(timeZone);
+  return (
+    <div style={{ margin: "12px 16px 4px" }}>
+      <Warning>
+        {fillText(words[note], {
+          date: formatLocalDate(deadline.date, language, { day: "numeric", month: "long" }),
+          time: deadline.time,
+        })}
+      </Warning>
+    </div>
+  );
+};
 
 /**
  * What the owner owes the platform, read-only (ADR 0016: the OWNER's alone).
@@ -26,15 +49,12 @@ export const BillingSection = ({
   token,
   billing,
   timeZone,
-  active,
   resources,
   onChanged,
 }: {
   token: string;
   billing: BillingDto;
   timeZone: string;
-  /** Still on while lapsed: the nightly run has not turned it off yet. */
-  active: boolean;
   resources: readonly ResourceDto[];
   onChanged: (billing: BillingDto) => void;
 }) => {
@@ -45,23 +65,12 @@ export const BillingSection = ({
   const plans = usePlans();
   const longDate = (localDate: string) => formatLocalDate(localDate, language, { day: "numeric", month: "long" });
   const board = paymentBoardOf(billing);
-  const deadline = status === "LAPSED" && active ? deactivationDeadline(timeZone) : null;
 
   return (
     <>
       {status === "IN_GRACE" && nextDate !== null && (
         <Warning>
           {fillParts(copy.billingOverdue, { days: String(daysUntil(nextDate, timeZone)) }).map((part) => part.text)}
-        </Warning>
-      )}
-      {status === "LAPSED" && !active && <Critical>{words.lapsedNote}</Critical>}
-      {deadline !== null && (
-        <Warning>
-          {/* No Trial at all means its owner used it on an earlier Business. */}
-          {fillText(subscription.trialEndsOn === null ? words.lapsedSoonNote : words.lapsedSoonPaidNote, {
-            date: longDate(deadline.date),
-            time: deadline.time,
-          })}
         </Warning>
       )}
 

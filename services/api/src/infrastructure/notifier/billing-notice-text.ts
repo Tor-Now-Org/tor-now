@@ -21,7 +21,6 @@ const PLAN_IN_HEBREW: Readonly<Record<Plan, string>> = Object.freeze({ SOLO: "י
 const FEATURE_IN_HEBREW: Readonly<Record<Feature, string>> = Object.freeze({
   REMINDERS: "תזכורות",
   CUSTOMER_HISTORY: "היסטוריית לקוח",
-  CUSTOMER_BLOCKING: "חסימת לקוחות",
   TEAM_ROLES: "מנהלים ועובדים",
   WAITING_LIST: "רשימת המתנה",
 });

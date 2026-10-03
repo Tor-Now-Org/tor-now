@@ -22,7 +22,7 @@ describe("editing Plans", () => {
   const team = {
     priceMinor: 8900,
     resourceAllowance: 5,
-    features: ["REMINDERS", "CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES"] as const,
+    features: ["REMINDERS", "CUSTOMER_HISTORY", "TEAM_ROLES"] as const,
   };
 
   const kindsOf = (shop: Shop): NoticeKind[] =>

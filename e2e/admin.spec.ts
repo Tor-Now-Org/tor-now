@@ -358,7 +358,7 @@ test.describe("the Catalogue", () => {
     // What the Business has some other way cannot be chosen.
     await expect(grant.getByRole("checkbox", { name: /תזכורות/ })).toBeDisabled();
     await grant.getByRole("checkbox", { name: /היסטוריית לקוח/ }).check();
-    await grant.getByRole("checkbox", { name: /חסימת לקוחות/ }).check();
+    await grant.getByRole("checkbox", { name: /מנהלים ועובדים/ }).check();
     await grant.getByRole("button", { name: "30 יום" }).click();
     await grant.getByLabel("סיבה").fill("פיילוט: עוברים ממערכת אחרת");
     await grant.getByRole("button", { name: "הענקת 2 פיצ'רים" }).click();
@@ -374,7 +374,7 @@ test.describe("the Catalogue", () => {
     await extend.getByRole("button", { name: /הארכה עד/ }).click();
     await expect(history.getByText(/״עוד חודשיים״/)).toBeVisible({ timeout: 15_000 });
 
-    const blocking = sheet.locator(".feature-row", { hasText: "חסימת לקוחות" });
+    const blocking = sheet.locator(".feature-row", { hasText: "מנהלים ועובדים" });
     await blocking.getByRole("button", { name: "סיום" }).click();
     await blocking.getByRole("button", { name: "כן, לסיים" }).click();
     await expect(blocking.getByText("לא כלול")).toBeVisible({ timeout: 15_000 });
@@ -521,23 +521,23 @@ test.describe("the Catalogue", () => {
     await asAdministrator(page, admin.token);
     await openFeatures(page);
 
-    const blocking = page.locator(".feature-card", { hasText: "חסימת לקוחות" });
+    const blocking = page.locator(".feature-card", { hasText: "מנהלים ועובדים" });
     await blocking.getByRole("button", { name: "מכירה כתוספת" }).click({ timeout: 15_000 });
-    const sell = page.getByRole("dialog", { name: /מכירה כתוספת — חסימת לקוחות/ });
+    const sell = page.getByRole("dialog", { name: /מכירה כתוספת — מנהלים ועובדים/ });
     await sell.getByLabel("מחיר לחודש (₪)").fill("9");
-    await expect(sell.getByText(/יכולים להוסיף חסימת לקוחות/)).toBeVisible({ timeout: 15_000 });
+    await expect(sell.getByText(/יכולים להוסיף מנהלים ועובדים/)).toBeVisible({ timeout: 15_000 });
     await sell.getByRole("button", { name: "התחלת המכירה" }).click();
     await expect(blocking.getByText(/ביחיד כתוספת/)).toBeVisible({ timeout: 15_000 });
 
     await blocking.getByRole("button", { name: "שינוי מחיר" }).click();
-    const price = page.getByRole("dialog", { name: /מחיר חדש — חסימת לקוחות/ });
+    const price = page.getByRole("dialog", { name: /מחיר חדש — מנהלים ועובדים/ });
     await price.getByLabel("מחיר חדש לחודש (₪)").fill("7");
     await expect(price.getByText("נותן ערך — חל עכשיו")).toBeVisible();
     await price.getByRole("button", { name: "שמירה — חל עכשיו" }).click();
     await expect(blocking.getByText(/ביחיד כתוספת · .*7/)).toBeVisible({ timeout: 15_000 });
 
     await blocking.getByRole("button", { name: "הפסקת המכירה" }).click();
-    const stop = page.getByRole("dialog", { name: /הפסקת המכירה — חסימת לקוחות/ });
+    const stop = page.getByRole("dialog", { name: /הפסקת המכירה — מנהלים ועובדים/ });
     await expect(stop.getByText("לא לוקח מאף אחד")).toBeVisible();
     await stop.getByRole("button", { name: "הפסקת המכירה" }).click();
     await expect(blocking.getByRole("button", { name: "מכירה כתוספת" })).toBeVisible({ timeout: 15_000 });
@@ -546,7 +546,7 @@ test.describe("the Catalogue", () => {
   test("an owner keeps an Add-on after the Trial, sees the next payment, cancels it and takes it back", async ({ page }) => {
     const admin = await anAdministrator();
     await noAddonsOnSale(admin.token);
-    await call("/admin/catalogue/features/CUSTOMER_BLOCKING/addon", { method: "POST", token: admin.token, body: { priceMinor: 900 } });
+    await call("/admin/catalogue/features/TEAM_ROLES/addon", { method: "POST", token: admin.token, body: { priceMinor: 900 } });
     const ownerPhone = uniquePhone();
     const shop = await aBusinessWithOpenHours({ name: `תוספות ${Date.now()}`, ownerPhone, plan: "SOLO" });
     try {
@@ -556,23 +556,23 @@ test.describe("the Catalogue", () => {
       await page.getByRole("button", { name: "העסק", exact: true }).click();
       await page.getByRole("button", { name: "מנוי ותשלומים" }).click();
 
-      const row = page.locator(".addon-row", { hasText: "חסימת לקוחות" });
+      const row = page.locator(".addon-row", { hasText: "מנהלים ועובדים" });
       await expect(row.getByText(/כלולה בניסיון עד/)).toBeVisible({ timeout: 15_000 });
       await row.getByRole("button", { name: "להמשיך אחרי הניסיון" }).click();
-      const add = page.getByRole("dialog", { name: "הוספת חסימת לקוחות" });
+      const add = page.getByRole("dialog", { name: "הוספת מנהלים ועובדים" });
       await expect(add.getByText("זמינה מעכשיו.")).toBeVisible();
       await add.getByRole("button", { name: /הוספה ב־/ }).click();
       await expect(row.getByText("פעיל")).toBeVisible({ timeout: 15_000 });
       await expect(page.locator(".pay-row.total")).toContainText("58");
 
       await row.getByRole("button", { name: "ביטול" }).click();
-      const cancel = page.getByRole("dialog", { name: "ביטול חסימת לקוחות" });
+      const cancel = page.getByRole("dialog", { name: "ביטול מנהלים ועובדים" });
       await cancel.getByRole("button", { name: "ביטול התוספת" }).click();
       await expect(row.getByText(/בוטלה · נשארת עד/)).toBeVisible({ timeout: 15_000 });
       await row.getByRole("button", { name: "חידוש" }).click();
       await expect(row.getByText("פעיל")).toBeVisible({ timeout: 15_000 });
     } finally {
-      await call("/admin/catalogue/features/CUSTOMER_BLOCKING/addon/stop", { method: "POST", token: admin.token }).catch(() => undefined);
+      await call("/admin/catalogue/features/TEAM_ROLES/addon/stop", { method: "POST", token: admin.token }).catch(() => undefined);
     }
   });
 

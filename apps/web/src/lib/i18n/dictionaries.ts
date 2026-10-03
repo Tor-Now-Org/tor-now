@@ -1692,7 +1692,6 @@ const billing = {
     "plans": "מסלול",
     "moveNote": "העסק יעבור למסלול {plan} ב־{date}, בחידוש. עד אז הכול נשאר כמו שהוא.",
     "trialNote": "תקופת הניסיון מסתיימת ב־{date}. כדי להמשיך, יש לשלם עד אז — אחרת העסק יוסר מהחיפוש ולא יקבל תורים חדשים. תורים שכבר נקבעו לא ייפגעו.",
-    "lapsedNote": "המנוי לא שולם, והעסק הוסר מהחיפוש ולא מקבל תורים חדשים. תורים שכבר נקבעו לא נפגעו. אחרי התשלום הכול חוזר.",
     "lapsedSoonNote": "תקופת הניסיון הסתיימה — היא כבר נוצלה בעסק קודם. יש לשלם היום: בלי תשלום, ב־{date} בשעה {time} העסק יוסר מהחיפוש ולא יקבל תורים חדשים.",
     "lapsedSoonPaidNote": "המנוי לא שולם. יש לשלם היום: בלי תשלום, ב־{date} בשעה {time} העסק יוסר מהחיפוש ולא יקבל תורים חדשים.",
     "noPayments": "עדיין אין תשלומים.",
@@ -1700,14 +1699,12 @@ const billing = {
     "featureLine": {
       "REMINDERS": "תזכורות ללקוחות בוואטסאפ",
       "CUSTOMER_HISTORY": "היסטוריית לקוח, ביטולים ואי־הגעות",
-      "CUSTOMER_BLOCKING": "חסימת לקוחות",
       "TEAM_ROLES": "מנהלים ועובדים, עם הרשאות לכל אחד",
       "WAITING_LIST": "רשימת המתנה — הודעה כשמתפנה שעה",
     },
     "featureName": {
       "REMINDERS": "תזכורות",
       "CUSTOMER_HISTORY": "היסטוריית לקוח",
-      "CUSTOMER_BLOCKING": "חסימת לקוחות",
       "TEAM_ROLES": "מנהלים ועובדים",
       "WAITING_LIST": "רשימת המתנה",
     },
@@ -1833,7 +1830,6 @@ const billing = {
     "plans": "Plan",
     "moveNote": "The business moves to {plan} on {date}, at renewal. Until then nothing changes.",
     "trialNote": "Your Trial ends on {date}. To carry on, pay by then. Otherwise the business leaves search and takes no new bookings. Appointments already booked are unaffected.",
-    "lapsedNote": "The subscription is unpaid, so the business is out of search and takes no new bookings. Appointments already booked are unaffected. Paying brings everything back.",
     "lapsedSoonNote": "The trial has ended, since it was used on an earlier business. Pay today: without a payment, on {date} at {time} the business leaves search and takes no new bookings.",
     "lapsedSoonPaidNote": "The subscription is unpaid. Pay today: without a payment, on {date} at {time} the business leaves search and takes no new bookings.",
     "noPayments": "No payments yet.",
@@ -1841,14 +1837,12 @@ const billing = {
     "featureLine": {
       "REMINDERS": "WhatsApp reminders for your customers",
       "CUSTOMER_HISTORY": "Customer history, cancellations and no-shows",
-      "CUSTOMER_BLOCKING": "Blocking customers",
       "TEAM_ROLES": "Managers and workers, with permissions for each",
       "WAITING_LIST": "Waiting list — a message when a time frees",
     },
     "featureName": {
       "REMINDERS": "Reminders",
       "CUSTOMER_HISTORY": "Customer history",
-      "CUSTOMER_BLOCKING": "Blocking customers",
       "TEAM_ROLES": "Managers and workers",
       "WAITING_LIST": "Waiting list",
     },
@@ -2495,7 +2489,6 @@ const catalogue = {
     "featureWhat": {
       "REMINDERS": "תזכורת ללקוח בוואטסאפ יום לפני",
       "CUSTOMER_HISTORY": "תורים קודמים, ביטולים ואי־הגעות",
-      "CUSTOMER_BLOCKING": "חסימת לקוח מלקבוע תורים",
       "TEAM_ROLES": "מנהלים ועובדים, עם הרשאות לכל אחד",
       "WAITING_LIST": "הודעה ללקוחות כשמתפנה שעה",
     },
@@ -2755,7 +2748,6 @@ const catalogue = {
     "featureWhat": {
       "REMINDERS": "A WhatsApp reminder to the customer a day before",
       "CUSTOMER_HISTORY": "Past appointments, cancellations and no-shows",
-      "CUSTOMER_BLOCKING": "Blocking a customer from booking",
       "TEAM_ROLES": "Managers and workers, each with their own permissions",
       "WAITING_LIST": "Telling customers when a time frees up",
     },

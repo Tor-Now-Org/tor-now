@@ -27,7 +27,6 @@ import {
   type ResourceId,
   type User,
   hasFeature,
-  requireFeature,
 } from "@tor-now/domain";
 import { SEARCH } from "../config.ts";
 
@@ -990,10 +989,6 @@ export const calendarService = ({
       const membership = await repositories.memberships.find(customerId, businessId);
       if (membership === null || membership.role !== "CUSTOMER") {
         throw notFound("Customer", customerId);
-      }
-      // Blocking is a Feature; lifting a block never is — it only undoes.
-      if (blocked) {
-        requireFeature(await entitlementToday(repositories, businessId, clock), "CUSTOMER_BLOCKING");
       }
       return repositories.memberships.setBlocked(
         customerId,

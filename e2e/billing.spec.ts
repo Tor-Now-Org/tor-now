@@ -154,7 +154,7 @@ test.describe("Add-ons", () => {
   test("adding back an Add-on that ended says the days owed before anything is added", async ({ page }) => {
     const admin = await anAdministrator();
     await noAddonsOnSale(admin);
-    await call("/admin/catalogue/features/CUSTOMER_BLOCKING/addon", { method: "POST", token: admin, body: { priceMinor: 900 } });
+    await call("/admin/catalogue/features/TEAM_ROLES/addon", { method: "POST", token: admin, body: { priceMinor: 900 } });
     const ownerPhone = uniquePhone();
     const shop = await aBusinessWithOpenHours({ name: `תוספת חוזרת ${Date.now()}`, ownerPhone, plan: "SOLO" });
     try {
@@ -162,17 +162,17 @@ test.describe("Add-ons", () => {
       // Held once and cancelled; it ended last week.
       await database()`
         insert into addon_holding (business_id, feature, added_on, pays_from, price_minor, ends_on, ending)
-        values (${shop.business.id}, 'CUSTOMER_BLOCKING', current_date - 40, current_date - 30, 900,
+        values (${shop.business.id}, 'TEAM_ROLES', current_date - 40, current_date - 30, 900,
                 current_date - 7, 'CANCELLED')`;
-      const owed = (await billingOf(shop)).addons.find((addon) => addon.feature === "CUSTOMER_BLOCKING")?.ifAdded?.owed?.amountMinor ?? 0;
+      const owed = (await billingOf(shop)).addons.find((addon) => addon.feature === "TEAM_ROLES")?.ifAdded?.owed?.amountMinor ?? 0;
       expect(owed).toBeGreaterThan(0);
       await signInDirectly(page, ownerPhone, "בעלים");
       await openBilling(page, shop.business.id);
 
-      const row = page.locator(".addon-row", { hasText: "חסימת לקוחות" });
+      const row = page.locator(".addon-row", { hasText: "מנהלים ועובדים" });
       await expect(row.getByText("הייתה אצלכם · בתשלום מהיום")).toBeVisible({ timeout: 15_000 });
       await row.getByRole("button", { name: "הוספה" }).click();
-      const again = page.getByRole("dialog", { name: "הוספה מחדש: חסימת לקוחות" });
+      const again = page.getByRole("dialog", { name: "הוספה מחדש: מנהלים ועובדים" });
       await expect(again.getByText(/התוספת כבר הייתה אצלכם, ולכן התשלום מתחיל מהיום/)).toBeVisible();
       await again.getByRole("button", { name: /הוספה — .* על הימים שעד התשלום/ }).click();
 
@@ -186,7 +186,7 @@ test.describe("Add-ons", () => {
       ]);
       expect(after.nextPayment.totalMinor).toBe(4_900 + 900 + owed);
     } finally {
-      await call("/admin/catalogue/features/CUSTOMER_BLOCKING/addon/stop", { method: "POST", token: admin }).catch(() => undefined);
+      await call("/admin/catalogue/features/TEAM_ROLES/addon/stop", { method: "POST", token: admin }).catch(() => undefined);
     }
   });
 });

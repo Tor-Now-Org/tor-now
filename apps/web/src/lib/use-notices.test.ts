@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseLocalDate } from "@tor-now/domain";
 import type { NoticeBoardDto, NoticeDto } from "@/lib/api/types.ts";
-import { bannerOf, unreadOf } from "./use-notices.ts";
+import { bannerBeside, bannerOf, unreadOf } from "./use-notices.ts";
 
 const aNotice = (id: string, read: boolean): NoticeDto => ({
   id,
@@ -21,6 +21,21 @@ describe("the board on screen", () => {
 
   it("finds the banner's Notice in the list", () => {
     expect(bannerOf(board)).toEqual({ notice: board.notices[2], othersUnread: 1 });
+  });
+
+  it("gives way to the pay-today banner when that says the same thing", () => {
+    const due: NoticeDto = {
+      ...aNotice("d", false),
+      kind: "PAYMENT_DUE",
+      tone: "caution",
+      facts: { kind: "PAYMENT_DUE", deactivatesOn: parseLocalDate("2026-10-04"), at: "07:00" },
+    };
+    const standing = { notice: due, othersUnread: 0 };
+    expect(bannerBeside(standing, true)).toBeNull();
+    expect(bannerBeside(standing, false)).toBe(standing);
+    const other = { notice: aNotice("a", false), othersUnread: 0 };
+    expect(bannerBeside(other, true)).toBe(other);
+    expect(bannerBeside(null, true)).toBeNull();
   });
 
   it("shows no banner when none stands, or the one named is not in the list", () => {

@@ -23,13 +23,13 @@ describe("pricing at its edges", () => {
   describe("the Add-on catalogue", () => {
     it("says a Feature not on sale is not found, to reprice", async () => {
       const admin = await anAdministrator();
-      await expect(test.services.addonCatalogue.changePrice(admin, "CUSTOMER_BLOCKING", 1_200)).rejects.toMatchObject({
+      await expect(test.services.addonCatalogue.changePrice(admin, "TEAM_ROLES", 1_200)).rejects.toMatchObject({
         code: "NOT_FOUND",
       });
-      await test.services.addonCatalogue.sell(admin, "CUSTOMER_BLOCKING", 900);
-      await test.services.addonCatalogue.stop(admin, "CUSTOMER_BLOCKING");
+      await test.services.addonCatalogue.sell(admin, "TEAM_ROLES", 900);
+      await test.services.addonCatalogue.stop(admin, "TEAM_ROLES");
       // Stopped is not on sale either: its buyers keep it, nobody reprices it.
-      await expect(test.services.addonCatalogue.changePrice(admin, "CUSTOMER_BLOCKING", 1_200)).rejects.toMatchObject({
+      await expect(test.services.addonCatalogue.changePrice(admin, "TEAM_ROLES", 1_200)).rejects.toMatchObject({
         code: "NOT_FOUND",
       });
     });
@@ -45,30 +45,30 @@ describe("pricing at its edges", () => {
     it("refuses an owner an Add-on that is not on sale, and one whose sale has stopped", async () => {
       const shop = await anEstablishedBusiness(test, { plan: "SOLO" });
       await expect(
-        test.services.addons.addMine(shop.owner.actor, shop.business.id, "CUSTOMER_BLOCKING"),
+        test.services.addons.addMine(shop.owner.actor, shop.business.id, "TEAM_ROLES"),
       ).rejects.toMatchObject({ code: "VALIDATION_FAILED", details: { field: "feature" } });
       const admin = await anAdministrator();
-      await test.services.addonCatalogue.sell(admin, "CUSTOMER_BLOCKING", 900);
-      await test.services.addonCatalogue.stop(admin, "CUSTOMER_BLOCKING");
+      await test.services.addonCatalogue.sell(admin, "TEAM_ROLES", 900);
+      await test.services.addonCatalogue.stop(admin, "TEAM_ROLES");
       await expect(
-        test.services.addons.addMine(shop.owner.actor, shop.business.id, "CUSTOMER_BLOCKING"),
+        test.services.addons.addMine(shop.owner.actor, shop.business.id, "TEAM_ROLES"),
       ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
     });
 
     it("shows an administrator the same payment board the owner sees", async () => {
       const admin = await anAdministrator();
       const shop = await anEstablishedBusiness(test, { plan: "SOLO" });
-      await test.services.addonCatalogue.sell(admin, "CUSTOMER_BLOCKING", 900);
+      await test.services.addonCatalogue.sell(admin, "TEAM_ROLES", 900);
       const theirs = await test.services.addons.mine(shop.owner.actor, shop.business.id);
       const ours = await test.services.addons.of(admin, shop.business.id);
       expect(ours).toEqual(theirs);
-      expect(ours.addons.map((addon) => addon.feature)).toContain("CUSTOMER_BLOCKING");
+      expect(ours.addons.map((addon) => addon.feature)).toContain("TEAM_ROLES");
     });
 
     it("says a Business that does not exist is not found, to an administrator acting for it", async () => {
       const admin = await anAdministrator();
       await expect(test.services.addons.of(admin, nowhere)).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(test.services.addons.addFor(admin, nowhere, "CUSTOMER_BLOCKING")).rejects.toMatchObject({
+      await expect(test.services.addons.addFor(admin, nowhere, "TEAM_ROLES")).rejects.toMatchObject({
         code: "NOT_FOUND",
       });
     });

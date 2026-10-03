@@ -22,8 +22,23 @@ export const daysUntil = (localDate: string, timeZone: string): number =>
  * When the nightly run turns a lapsed Business off, on its own clock: the date
  * and time, and whether that is tomorrow rather than later today.
  */
-export const deactivationDeadline = (zone: string): { date: string; tomorrow: boolean; time: string } => {
-  const now = new Date();
+export const deactivationDeadline = (
+  zone: string,
+  now: Date = new Date(),
+): { date: string; tomorrow: boolean; time: string } => {
   const run = nextDeactivationRun(instant(now.getTime()), timeZone(zone));
   return { date: run.date, tomorrow: run.date !== localDateOf(now.toISOString(), zone), time: formatLocalTime(run.time) };
+};
+
+/**
+ * Which sentence the banner above every tab says while a Business is lapsed and
+ * still on; null when it is not lapsed. No Trial at all means its owner used it
+ * on an earlier Business.
+ */
+export const payTodayNote = (billing: {
+  status: string;
+  subscription: { trialEndsOn: string | null };
+}): "lapsedSoonNote" | "lapsedSoonPaidNote" | null => {
+  if (billing.status !== "LAPSED") return null;
+  return billing.subscription.trialEndsOn === null ? "lapsedSoonNote" : "lapsedSoonPaidNote";
 };

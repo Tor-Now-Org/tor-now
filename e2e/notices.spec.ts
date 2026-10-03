@@ -102,7 +102,7 @@ test.describe("notices", () => {
     await call(`/admin/businesses/${shop.business.id}/grants`, {
       method: "POST",
       token: admin.token,
-      body: { features: ["CUSTOMER_HISTORY", "CUSTOMER_BLOCKING"], endsOn, reason: "פיילוט" },
+      body: { features: ["CUSTOMER_HISTORY", "TEAM_ROLES"], endsOn, reason: "פיילוט" },
     });
 
     await signInDirectly(page, ownerPhone, "בעלים");
@@ -117,6 +117,6 @@ test.describe("notices", () => {
       timeout: 15_000,
     });
     await expect(included.locator(".feature-row", { hasText: "היסטוריית לקוח" }).getByText(/קיבלתם · עד/)).toBeVisible();
-    await expect(included.locator(".feature-row", { hasText: "מנהלים ועובדים" }).getByText("במסלול צוות")).toBeVisible();
+    await expect(included.locator(".feature-row", { hasText: "מנהלים ועובדים" }).getByText(/קיבלתם · עד/)).toBeVisible();
   });
 });

@@ -740,7 +740,6 @@ describe("the Catalogue editor over HTTP", () => {
     expect(features.map(({ feature, source }) => `${feature}:${source}`)).toEqual([
       "REMINDERS:PLAN",
       "CUSTOMER_HISTORY:GRANT",
-      "CUSTOMER_BLOCKING:NONE",
       "TEAM_ROLES:GRANT",
       "WAITING_LIST:PREVIEW",
     ]);

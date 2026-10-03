@@ -14,6 +14,12 @@ export const bannerOf = (
   return notice === undefined ? null : { notice, othersUnread };
 };
 
+/** The pay-today banner says what the payment-due Notice says, so not both. */
+export const bannerBeside = <Banner extends { readonly notice: NoticeDto }>(
+  banner: Banner | null,
+  lapsed: boolean,
+): Banner | null => (lapsed && banner?.notice.facts.kind === "PAYMENT_DUE" ? null : banner);
+
 export const unreadOf = (board: NoticeBoardDto | null): number =>
   (board?.notices ?? []).filter((notice) => !notice.read).length;
 

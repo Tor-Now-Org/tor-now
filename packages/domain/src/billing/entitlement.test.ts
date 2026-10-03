@@ -67,11 +67,11 @@ describe("entitlementFor", () => {
   });
 
   it("adds every Add-on on sale while the Trial lasts", () => {
-    const trialAddons = { features: ["CUSTOMER_BLOCKING" as const], endsOn: day("2026-10-20") };
+    const trialAddons = { features: ["TEAM_ROLES" as const], endsOn: day("2026-10-20") };
     const on = (date: string) =>
       entitlementFor({ terms: solo, grants: [], previews: [], addons: [], trialAddons, today: day(date) });
-    expect(hasFeature(on("2026-10-20"), "CUSTOMER_BLOCKING")).toBe(true);
-    expect(hasFeature(on("2026-10-21"), "CUSTOMER_BLOCKING")).toBe(false);
+    expect(hasFeature(on("2026-10-20"), "TEAM_ROLES")).toBe(true);
+    expect(hasFeature(on("2026-10-21"), "TEAM_ROLES")).toBe(false);
   });
 
   it("lists a feature once however many ways it was granted", () => {

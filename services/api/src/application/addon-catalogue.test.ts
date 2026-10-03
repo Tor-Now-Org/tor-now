@@ -59,14 +59,10 @@ describe("selling Add-ons", () => {
     expect(test.store.audit.some((entry) => entry.action === "ADDON_OFFER_CHANGED")).toBe(true);
   });
 
-  it("refuses a Feature every Plan has, one in Preview, and a third on sale", async () => {
+  it("refuses a Feature every Plan has, and one in Preview", async () => {
     const { admin } = await twoShops();
     await expect(test.services.addonCatalogue.sell(admin, "REMINDERS", 900)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
     await expect(test.services.addonCatalogue.sell(admin, "WAITING_LIST", 900)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
-    await test.services.addonCatalogue.sell(admin, "CUSTOMER_HISTORY", 1900);
-    const views = await test.services.addonCatalogue.sell(admin, "CUSTOMER_BLOCKING", 900);
-    expect(viewOf(views, "TEAM_ROLES")).toMatchObject({ canSell: false });
-    await expect(test.services.addonCatalogue.sell(admin, "TEAM_ROLES", 900)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
   });
 
   it("keeps a Feature on sale out of Preview, which would give for nothing what some pay for", async () => {
@@ -190,15 +186,15 @@ describe("selling Add-ons", () => {
     it("leaving one out takes: a new edition, with thirty days' Notice on WhatsApp too", async () => {
       const { admin, team } = await twoShops();
 
-      const views = await test.services.addonCatalogue.setPlans(admin, "CUSTOMER_BLOCKING", []);
+      const views = await test.services.addonCatalogue.setPlans(admin, "CUSTOMER_HISTORY", []);
 
-      expect(viewOf(views, "CUSTOMER_BLOCKING")).toMatchObject({
+      expect(viewOf(views, "CUSTOMER_HISTORY")).toMatchObject({
         plans: [
           { plan: "SOLO", number: 1, included: false },
           { plan: "TEAM", number: 2, included: false },
         ],
       });
-      expect(factsOf(team, "EDITION_ANNOUNCED")).toMatchObject({ plan: "TEAM", lost: ["CUSTOMER_BLOCKING"] });
+      expect(factsOf(team, "EDITION_ANNOUNCED")).toMatchObject({ plan: "TEAM", lost: ["CUSTOMER_HISTORY"] });
       expect(whatsappKinds()).toContain("EDITION_ANNOUNCED");
     });
 

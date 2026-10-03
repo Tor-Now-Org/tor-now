@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
-import type { BusinessDto, ResourceDto } from "@/lib/api/types.ts";
+import type { BillingDto, BusinessDto, ResourceDto } from "@/lib/api/types.ts";
 import { staffRole } from "@/lib/roles.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
@@ -16,6 +16,7 @@ import {
   PeopleIcon,
 } from "@/components/bottom-nav.tsx";
 import { BusinessPanel, isPanel, type Panel } from "@/components/owner/business-panel.tsx";
+import { PayTodayBanner } from "@/components/owner/billing-section.tsx";
 import { CalendarDay } from "@/components/owner/calendar-day.tsx";
 import { Customers } from "@/components/owner/customers.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
@@ -30,7 +31,7 @@ import {
 } from "@/lib/last-managed.ts";
 import { Button, Empty, Spinner } from "@/components/ui.tsx";
 import { BUSINESS_DEFAULTS } from "@tor-now/domain";
-import { useNotices } from "@/lib/use-notices.ts";
+import { bannerBeside, useNotices } from "@/lib/use-notices.ts";
 import {
   NoticeBanner,
   NoticeBell,
@@ -173,6 +174,25 @@ function ManageApp() {
   // ADR 0020: what the platform told the owner — a bell, one banner, a list.
   // Billing is the OWNER's alone (ADR 0016); for anybody else there is none.
   const notices = useNotices(token, business);
+  // Read once per business, for the banner every tab shows while it is unpaid.
+  // Like the Notices, the OWNER's alone, and a failed read shows nothing.
+  const [billing, setBilling] = useState<BillingDto | null>(null);
+  const ownsActive = business !== null && business.active && (business.role ?? "OWNER") === "OWNER";
+  const billingBusinessId = business?.id ?? null;
+  useEffect(() => {
+    setBilling(null);
+    if (token === null || billingBusinessId === null || !ownsActive) return;
+    let stale = false;
+    api
+      .subscription(token, billingBusinessId)
+      .then((next) => {
+        if (!stale) setBilling(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [token, billingBusinessId, ownsActive]);
   const noticeContext = useNoticeContext(business?.timeZone ?? BUSINESS_DEFAULTS.timeZone);
   const [noticesOpen, setNoticesOpen] = useState(false);
   /** What was unread when the list opened, so reading it does not reshuffle it. */
@@ -267,7 +287,7 @@ function ManageApp() {
   // A WORKER reaching a tab they may not have — an old link, a role changed
   // under them — sees their calendar rather than an empty screen.
   const shown: Tab = manages || tab === "day" || tab === "schedule" ? tab : "day";
-  const banner = notices.banner;
+  const banner = bannerBeside(notices.banner, billing?.status === "LAPSED");
 
   return (
     <>
@@ -289,6 +309,7 @@ function ManageApp() {
       />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0 }}>
+        {billing !== null && <PayTodayBanner billing={billing} timeZone={business.timeZone} />}
         {banner !== null && (
           <NoticeBanner
             notice={banner.notice}

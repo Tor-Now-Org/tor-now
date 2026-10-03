@@ -31,7 +31,6 @@ describe("featureSources", () => {
     expect(sources.map(({ feature, source, endsOn }) => ({ feature, source, endsOn }))).toEqual([
       { feature: "REMINDERS", source: "PLAN", endsOn: null },
       { feature: "CUSTOMER_HISTORY", source: "GRANT", endsOn: "2026-10-02" },
-      { feature: "CUSTOMER_BLOCKING", source: "NONE", endsOn: null },
       { feature: "TEAM_ROLES", source: "NONE", endsOn: null },
       { feature: "WAITING_LIST", source: "PREVIEW", endsOn: "2026-11-25" },
     ]);
@@ -40,7 +39,7 @@ describe("featureSources", () => {
   it("carries the Grant it comes from, the longest running of several", () => {
     const short = { feature: "TEAM_ROLES" as const, endsOn: day("2026-10-01"), id: "a" };
     const long = { feature: "TEAM_ROLES" as const, endsOn: day("2026-12-01"), id: "b" };
-    const [, , , teamRoles] = featureSources({ ...noAddons, terms: solo, grants: [short, long], previews: [], today });
+    const [, , teamRoles] = featureSources({ ...noAddons, terms: solo, grants: [short, long], previews: [], today });
     expect(teamRoles?.grant).toBe(long);
   });
 
@@ -60,11 +59,10 @@ describe("featureSources", () => {
     expect(sources.map(({ feature, source, endsOn }) => ({ feature, source, endsOn }))).toEqual([
       { feature: "REMINDERS", source: "PLAN", endsOn: null },
       { feature: "CUSTOMER_HISTORY", source: "ADDON", endsOn: null },
-      { feature: "CUSTOMER_BLOCKING", source: "NONE", endsOn: null },
       { feature: "TEAM_ROLES", source: "NONE", endsOn: null },
       { feature: "WAITING_LIST", source: "ADDON", endsOn: "2026-10-10" },
     ]);
-    expect(grantableFeatures(sources)).toEqual(["CUSTOMER_BLOCKING", "TEAM_ROLES"]);
+    expect(grantableFeatures(sources)).toEqual(["TEAM_ROLES"]);
   });
 
   it("forgets a Grant or a Preview once it has ended", () => {
@@ -75,7 +73,7 @@ describe("featureSources", () => {
       previews: [{ feature: "WAITING_LIST", endsOn: day("2026-09-26") }],
       today,
     });
-    expect(grantableFeatures(sources)).toEqual(["CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES", "WAITING_LIST"]);
+    expect(grantableFeatures(sources)).toEqual(["CUSTOMER_HISTORY", "TEAM_ROLES", "WAITING_LIST"]);
   });
 });
 

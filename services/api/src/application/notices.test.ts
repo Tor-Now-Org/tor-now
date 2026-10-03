@@ -190,7 +190,7 @@ describe("Notices", () => {
         by: "OWNER",
         priceMinor: 8900,
         resourceAllowance: 5,
-        gained: ["CUSTOMER_HISTORY", "CUSTOMER_BLOCKING", "TEAM_ROLES"],
+        gained: ["CUSTOMER_HISTORY", "TEAM_ROLES"],
         lost: [],
       });
       expect(changes.map((facts) => facts.kind === "PLAN_CHANGED" && facts.by)).toEqual(["OWNER", "ADMINISTRATOR", "OWNER"]);
