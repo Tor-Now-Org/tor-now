@@ -73,6 +73,8 @@ const blankToNull = (value: string | null | undefined): string | null =>
   value === null || value === undefined || value.trim() === "" ? null : value.trim();
 import { Button, Card, Critical, Field, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
 import { NumberField } from "../number-field.tsx";
+import { BufferChoice, BufferPill } from "./buffer-choice.tsx";
+import { followersOf } from "./buffer.ts";
 
 // Leaflet reaches for `window`, so the map can only render on the client.
 const LocationPicker = dynamic(
@@ -291,9 +293,8 @@ export const BusinessPanel = ({
                 <span className="hint tab" style={service.active ? undefined : { opacity: 0.7 }}>
                   {service.durationMinutes} {copy.minutesShort} ·{" "}
                   {formatPrice(service.priceMinor, language, "—")}
-                  {service.bufferMinutes !== null &&
-                    ` · ${copy.buffer} ${service.bufferMinutes} ${copy.minutesShort}`}
                 </span>
+                <BufferPill value={service.bufferMinutes} businessDefault={business.defaultBufferMinutes} />
               </span>
               {/* A service's standing is a thing the owner changes, not a label
                   they read. Hiding used to be reachable only through "remove"
@@ -578,6 +579,18 @@ export const BusinessPanel = ({
             <NumberField id="s-buffer" label={`${copy.fBuffer} (${copy.unitMinutes})`} hint={copy.fBufferHint}
               value={settings.defaultBufferMinutes} fallback={0}
               onValue={(v) => { setSettings({ ...settings, defaultBufferMinutes: v ?? 0 }); setSaved(false); }} />
+            {/* Who the default reaches, as it is being typed: a number with no
+                services named under it was a setting nobody could place. */}
+            {services !== null && followersOf(services, settings.defaultBufferMinutes).length > 0 && (
+              <div className="buffer-followers">
+                {followersOf(services, settings.defaultBufferMinutes).map((one) => (
+                  <div key={one.id}>
+                    {one.name}
+                    <small>{fillText(one.follows ? copy.bufferFollowsLine : copy.bufferOwnLine, { n: String(one.minutes) })}</small>
+                  </div>
+                ))}
+              </div>
+            )}
             <NumberField id="s-cancel" label={`${copy.fCancel} (${copy.unitHours})`} hint={copy.fCancelHint}
               value={settings.cancellationWindowHours} fallback={0}
               onValue={(v) => { setSettings({ ...settings, cancellationWindowHours: v ?? 0 }); setSaved(false); }} />
@@ -684,11 +697,25 @@ export const BusinessPanel = ({
             <NumberField id="svc-price" label={copy.price} placeholder={copy.pricePlaceholder} hint={copy.priceHint}
               value={(editing.priceMinor ?? 0) / MINOR_UNITS_PER_MAJOR} fallback={0}
               onValue={(v) => setEditing({ ...editing, priceMinor: Math.round((v ?? 0) * MINOR_UNITS_PER_MAJOR) })} />
-            {/* Empty means "whatever the business says", so it stays empty. */}
-            <NumberField id="svc-buffer" label={copy.buffer} hint={copy.bufferHint}
-              value={editing.bufferMinutes ?? null} fallback={null}
-              placeholder={copy.defaultBuffer}
-              onValue={(v) => setEditing({ ...editing, bufferMinutes: v })} />
+            <BufferChoice
+              id="svc-buffer"
+              durationMinutes={editing.durationMinutes ?? 30}
+              value={editing.bufferMinutes ?? null}
+              businessDefault={business.defaultBufferMinutes}
+              onChange={(bufferMinutes) => setEditing({ ...editing, bufferMinutes })}
+              footer={
+                <button
+                  type="button"
+                  className="buffer-link"
+                  onClick={() => {
+                    setEditing(null);
+                    onPanel("settings");
+                  }}
+                >
+                  {copy.bufferDefaultLink} ›
+                </button>
+              }
+            />
             <Button
               busy={busy}
               onClick={() =>

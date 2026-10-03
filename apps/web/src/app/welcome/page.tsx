@@ -24,7 +24,7 @@ import { LegalLinks } from "@/components/legal.tsx";
  */
 
 const CUSTOMER_STEPS = ["c1", "c2", "c3", "c4", "c5"] as const;
-const OWNER_STEPS = ["o1", "o2", "o3", "o4", "o5"] as const;
+const OWNER_STEPS = ["o1", "o2", "o3", "o4", "o5", "o6"] as const;
 
 /**
  * What the hero cycles.
@@ -63,6 +63,7 @@ const screens = (language: Language) => {
     o3: { film: of("o3-booking.mp4"), poster: of("o3-booking-poster.jpg") },
     o4: { still: of("o4-customers.jpg") },
     o5: { still: of("o5-panel.jpg") },
+    o6: { still: of("o6-stats.jpg") },
   } as const satisfies Record<string, Shot>;
 };
 
@@ -195,8 +196,8 @@ export default function Welcome() {
             onPick={setOwnerAt}
             steps={OWNER_STEPS.map((step, i) => ({
               key: step,
-              title: [copy.o1t, copy.o2t, copy.o3t, copy.o4t, copy.o5t][i] ?? "",
-              body: [copy.o1b, copy.o2b, copy.o3b, copy.o4b, copy.o5b][i] ?? "",
+              title: [copy.o1t, copy.o2t, copy.o3t, copy.o4t, copy.o5t, copy.o6t][i] ?? "",
+              body: [copy.o1b, copy.o2b, copy.o3b, copy.o4b, copy.o5b, copy.o6b][i] ?? "",
               shot: SHOT[step],
             }))}
           />

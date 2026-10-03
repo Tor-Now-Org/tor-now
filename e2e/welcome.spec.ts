@@ -34,7 +34,7 @@ test.describe("the welcome page", () => {
   });
 
   /**
-   * Eight captions, eight different pictures.
+   * Every caption, its own picture.
    *
    * The first cut of this page shipped with two steps pointing at the same
    * file: the capture that was meant to produce the second had a click that
@@ -62,7 +62,7 @@ test.describe("the welcome page", () => {
       }
     }
 
-    expect(shown).toHaveLength(10);
+    expect(shown).toHaveLength(11);
     expect(new Set(shown).size, `two steps share a screen: ${shown.join(", ")}`)
       .toBe(shown.length);
   });
@@ -78,9 +78,13 @@ test.describe("the welcome page", () => {
     await expect(page.locator("#how .lp-phone img")).toHaveAttribute("src", /c5-mine/);
 
     const owner = page.locator("#owners .lp-step");
-    await expect(owner).toHaveCount(5);
+    await expect(owner).toHaveCount(6);
     await owner.nth(4).click();
     await expect(page.locator("#owners .lp-phone img")).toHaveAttribute("src", /o5-panel/);
+    // The month in numbers, last: the statistics page, photographed.
+    await owner.nth(5).click();
+    await expect(owner.nth(5)).toContainText("החודש במספרים");
+    await expect(page.locator("#owners .lp-phone img")).toHaveAttribute("src", /o6-stats/);
   });
 
   test("turns into English, and back", async ({ page }) => {

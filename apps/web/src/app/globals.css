@@ -1241,6 +1241,29 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
 /* ---------------------------------------------------------------------------
    The Features tab and Previews (ADR 0020).
    --------------------------------------------------------------------------- */
+/* A service's recovery time (the Buffer): the business's, or its own — and
+   what that keeps of the calendar, drawn to scale. */
+.buffer-choice{display:flex;flex-direction:column;gap:8px}
+.buffer-label{font-size:14px;font-weight:600}
+.buffer-options{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.buffer-options button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:50px;
+  border-radius:12px;border:1px solid var(--line);background:var(--raised);font-size:14px;font-weight:600;color:var(--muted)}
+.buffer-options button small{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums}
+.buffer-options button[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent-strong)}
+.buffer-track{display:flex;height:26px;border-radius:8px;overflow:hidden;font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.buffer-track .service{flex-basis:0;background:var(--event-1-soft);color:var(--event-1);border-inline-start:3px solid var(--event-1);
+  display:flex;align-items:center;padding-inline:8px}
+.buffer-track .recovery{flex-basis:0;min-width:26px;display:flex;align-items:center;justify-content:center;color:var(--muted);
+  background:repeating-linear-gradient(-45deg,var(--sunken),var(--sunken) 4px,var(--line) 4px,var(--line) 8px)}
+.buffer-sum{margin:0;font-size:12.5px;color:var(--muted);line-height:1.5}
+.buffer-link{align-self:flex-start;font-size:13px;font-weight:600;color:var(--accent);min-height:32px;text-align:start}
+.buffer-pill{align-self:flex-start;font-size:11.5px;font-weight:600;padding:0 8px;border-radius:999px;background:var(--sunken);color:var(--muted);white-space:nowrap}
+.buffer-pill.own{background:var(--caution-soft);color:oklch(45% 0.1 65)}
+.buffer-followers{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.buffer-followers div{display:flex;gap:8px;align-items:center;padding:8px 12px;font-size:13.5px}
+.buffer-followers div + div{border-top:1px solid var(--line)}
+.buffer-followers small{margin-inline-start:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+
 /* Add-ons on the subscription page (ADR 0021). */
 .addons-card{padding:0 16px}
 .addon-row{display:flex;gap:12px;align-items:center;padding:13px 0}

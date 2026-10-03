@@ -10,7 +10,8 @@ import { useSession } from "@/lib/session.tsx";
 import { deactivationDeadline } from "@/lib/billing-alert.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
-import { TEXT_RULES, TRIAL_DAYS, type BusinessCategory } from "@tor-now/domain";
+import { BUSINESS_DEFAULTS, TEXT_RULES, TRIAL_DAYS, type BusinessCategory } from "@tor-now/domain";
+import { BufferChoice } from "@/components/owner/buffer-choice.tsx";
 import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
 import { AddressAutocomplete } from "@/components/owner/address-autocomplete.tsx";
 import { CategoryAutocomplete } from "@/components/category-autocomplete.tsx";
@@ -88,6 +89,8 @@ const isPlanName = (value: string | null): value is PlanName => value === "SOLO"
 
 function OnboardingWizard() {
   const copy = useCopy("onboarding");
+  // The recovery-time choice is the business panel's, words and all.
+  const ownerCopy = useCopy("owner");
   const billingCopy = useCopy("billing");
   const noticeCopy = useCopy("notices");
   const params = useSearchParams();
@@ -557,23 +560,17 @@ function OnboardingWizard() {
                     }
                   />
                 </div>
-                <Field
+                {/* A business opens with no recovery time of its own; the
+                    choice says so, and where it can be set later. */}
+                <BufferChoice
                   id={`service-buffer-${position}`}
-                  label={copy.buffer}
-                  hint={copy.bufferHint}
-                  type="number"
-                  inputMode="numeric"
-                  value={service.bufferMinutes ?? ""}
-                  placeholder={copy.defaultBuffer}
-                  onChange={(event) =>
-                    setServices(
-                      services.map((s, i) =>
-                        i === position
-                          ? { ...s, bufferMinutes: event.target.value === "" ? null : Number(event.target.value) }
-                          : s,
-                      ),
-                    )
+                  durationMinutes={service.durationMinutes}
+                  value={service.bufferMinutes}
+                  businessDefault={BUSINESS_DEFAULTS.defaultBufferMinutes}
+                  onChange={(bufferMinutes) =>
+                    setServices(services.map((s, i) => (i === position ? { ...s, bufferMinutes } : s)))
                   }
+                  footer={<p className="buffer-sum">{ownerCopy.bufferDefaultLater}</p>}
                 />
                 {services.length > 1 && (
                   <button

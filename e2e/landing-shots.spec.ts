@@ -4,7 +4,8 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { aDayFromNow, anInstantAt, call, ready } from "./support.ts";
+import { anAdministrator } from "./cost-support.ts";
+import { aDayFromNow, anInstantAt, call, database, ready } from "./support.ts";
 import { TONGUES, type Person, type Tongue, type Trade } from "./landing-street.ts";
 
 /**
@@ -139,7 +140,7 @@ const bookFrom = async (
   resourceName: string,
   day: string,
   notBefore: string,
-): Promise<void> => {
+): Promise<string> => {
   const service = shop.services.find((one) => one.name === serviceName);
   const resource = shop.resources.find((one) => one.name === resourceName);
   expect(service, `no service ${serviceName}`).toBeDefined();
@@ -161,7 +162,7 @@ const bookFrom = async (
     `${serviceName} with ${resourceName} has nothing from ${notBefore} on ${day}`,
   ).toBeDefined();
 
-  await call("/appointments", {
+  const made = await call<{ id: string }>("/appointments", {
     method: "POST",
     token: customerToken,
     body: {
@@ -172,6 +173,22 @@ const bookFrom = async (
       customerNote: null,
     },
   });
+  return made.id;
+};
+
+/** The first of a month, so many months before this one, in the shop's own calendar. */
+const firstOfMonthsAgo = (back: number): string => {
+  const [year = 0, month = 0] = aDayFromNow(0).split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1 - back, 1)).toISOString().slice(0, 10);
+};
+
+/** Every date from one day up to, and not including, another. */
+const datesFrom = (first: string, before: string): string[] => {
+  const dates: string[] = [];
+  for (let at = new Date(`${first}T12:00:00Z`); at.toISOString().slice(0, 10) < before; at.setUTCDate(at.getUTCDate() + 1)) {
+    dates.push(at.toISOString().slice(0, 10));
+  }
+  return dates;
 };
 
 /**
@@ -409,6 +426,13 @@ for (const tongue of TONGUES) {
     }
   };
 
+  /**
+   * A tab of the bottom bar. By its bar: the header's customer and business
+   * switch says "Business" too, in English.
+   */
+  const bottomTab = (page: Page, name: string) =>
+    page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name });
+
   const fakePhone = (n: number) => `${tongue.dial}${String(n).padStart(2, "0")}`;
 
   /** A stretch of free time on the day timeline — the word and its separator. */
@@ -541,6 +565,68 @@ for (const tongue of TONGUES) {
         },
       });
 
+      // The two months before this one, worked — what the statistics page
+      // reads. A shop opened this morning has no past, and time cannot be
+      // waited for, so each sitting is booked at a free hour weeks ahead and
+      // moved back to the day it belongs to, the way movedIntoThePast does for
+      // one appointment; and the day it was booked is set days before it, as
+      // people book. The earlier month is quieter, so the trend has a slope.
+      // The regulars started then; last month they came back, and new faces
+      // came too. A few never turned up, and a few called off late.
+      const HISTORY_HOURS = ["09:00", "10:00", "11:00", "12:30", "14:00", "15:00", "16:30", "18:00"];
+      const LEADS = [0, 1, 2, 3, 5, 7, 10, 14];
+      const parked = aDayFromNow(45);
+      const sql = database();
+      let sitting = 0;
+      for (const back of [2, 1]) {
+        for (const [i, date] of datesFrom(firstOfMonthsAgo(back), firstOfMonthsAgo(back - 1)).entries()) {
+          // Four to eight a day across the two chairs last month, three to five
+          // the month before; never two in one chair at one hour.
+          for (let nth = 0; nth < (back === 2 ? 3 + (i % 3) : 5 + (i % 4)); nth += 1) {
+            sitting += 1;
+            // Somebody new, now and then, last month only: each of them once.
+            const passing = back === 1 && nth === 4 && i % 4 === 1 ? Math.floor(i / 4) : null;
+            const who =
+              passing !== null && passing < street.passing.length
+                ? street.passing[passing]!
+                : street.regulars[(i * 3 + nth) % street.regulars.length]!;
+            const phone =
+              passing !== null && passing < street.passing.length
+                ? fakePhone(60 + passing)
+                : fakePhone(20 + street.day.findIndex((one) => one.who.givenName === who.givenName));
+            const id = await bookFrom(
+              barber,
+              await signIn(phone, who),
+              street.cuts[(i + nth) % street.cuts.length]!,
+              street.barber.resourceNames[nth % 2]!,
+              parked,
+              "09:00",
+            );
+            const startAt = anInstantAt(
+              date,
+              HISTORY_HOURS[(Math.floor(nth / 2) * 2 + (i % 2)) % HISTORY_HOURS.length]!,
+            );
+            const lead = LEADS[(i + nth) % LEADS.length]!;
+            await sql`
+              update appointment
+              set end_at = ${startAt}::timestamptz + (end_at - start_at),
+                  occupied_until = ${startAt}::timestamptz + (occupied_until - start_at),
+                  start_at = ${startAt}::timestamptz,
+                  created_at = ${startAt}::timestamptz - make_interval(days => ${lead}, hours => 3)
+              where id = ${id}`;
+            if (sitting % 29 === 4) {
+              await sql`update appointment set status = 'NO_SHOW' where id = ${id}`;
+            } else if (sitting % 37 === 9) {
+              await sql`
+                update appointment
+                set status = 'CANCELLED', cancelled_by = 'CUSTOMER', cancelled_at = start_at - interval '2 hours'
+                where id = ${id}`;
+            }
+          }
+        }
+      }
+      await sql`update business set created_at = ${firstOfMonthsAgo(2)}::date - 5 where id = ${barber.id}`;
+
       // And the customer whose screens these are. Three shops rather than one:
       // what "my appointments" is for is the diary somebody keeps across the
       // businesses they use.
@@ -624,7 +710,7 @@ for (const tongue of TONGUES) {
       // Who comes here, and what they have had. Booking somebody in is filmed
       // rather than photographed: it is a sequence, and the still that stood
       // for it could only ever be one moment out of five.
-      await page.getByRole("button", { name: words.tabCustomers }).click();
+      await bottomTab(page, words.tabCustomers).click();
       // Whoever the list puts at the top, rather than one named person: the
       // order is the product's business — most recent first — and naming a
       // customer here made the picture depend on where that one happened to
@@ -638,10 +724,25 @@ for (const tongue of TONGUES) {
 
       await page.goto(`/manage?business=${barber.id}`);
       await ready(page);
-      await page.getByRole("button", { name: words.tabBusiness }).click();
+      await bottomTab(page, words.tabBusiness).click();
       const priced = page.getByText(street.barber.services[1]!.name).first();
       await expect(priced).toBeVisible({ timeout: 15_000 });
       await photograph(page, into, "o5-panel", priced);
+
+      // The month in numbers: the last one, worked to its end. Statistics is
+      // given only now — with it, the customers move from the bottom bar into
+      // the business panel, and the picture of them above is of the bar.
+      await call(`/admin/businesses/${barber.id}/grants`, {
+        method: "POST",
+        token: await anAdministrator(),
+        body: { features: ["STATISTICS"], endsOn: aDayFromNow(60), reason: "landing" },
+      });
+      await acknowledgeTheBanners(barber);
+      await page.goto(`/manage?business=${barber.id}&tab=statistics&month=${firstOfMonthsAgo(1).slice(0, 7)}`);
+      await ready(page);
+      const tiles = page.locator(".st-tiles");
+      await expect(tiles).toBeVisible({ timeout: 15_000 });
+      await photograph(page, into, "o6-stats", tiles);
     });
 
     test("searching and filtering, filmed", async ({ browser }) => {
@@ -778,7 +879,7 @@ for (const tongue of TONGUES) {
     });
 
     /**
-     * Ten captions, ten different screens.
+     * Eleven captions, eleven different screens.
      *
      * A click that misses is silent — the screen simply stays where it was, the
      * next capture photographs it again, and the page ends up showing the same
@@ -787,7 +888,7 @@ for (const tongue of TONGUES) {
      */
     test("every screen is a different screen", async () => {
       const stills = ["c2-map", "c3-business", "c5-mine", "o1-month", "o2-day",
-                      "o4-customers", "o5-panel"];
+                      "o4-customers", "o5-panel", "o6-stats"];
       const films = ["c1-search", "c4-book", "o3-booking"];
 
       const seen = new Map<string, string>();

@@ -116,6 +116,10 @@ test.describe("opening a business", () => {
     // 4 — services
     await expect(page.getByText("מה אתם נותנים")).toBeVisible();
     await page.getByLabel("שם השירות").fill("ייעוץ");
+    // A new business keeps no recovery time, and the choice says so in minutes.
+    const recovery = page.getByRole("group", { name: "זמן התאוששות אחרי התור" });
+    await expect(recovery.getByRole("button", { name: /כמו בעסק\s*בלי/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(recovery.getByText("בלי זמן התאוששות: כל תור תופס ביומן 30 דק׳.")).toBeVisible();
     await page.getByRole("button", { name: "המשך" }).click();
 
     // 5 — hours, then live
@@ -5718,6 +5722,99 @@ test.describe("booking a customer in", () => {
  * deliberately invisible to the customer: they see a time offered or not
  * offered, never the reason.
  */
+/**
+ * The recovery time as an owner sets it (item 3): the business's number is on
+ * the choice, the calendar it keeps is said, and the default says who follows it.
+ */
+test.describe("setting the recovery time", () => {
+  const openServices = async (page: Page, shop: { business: { id: string }; owner: { token: string } }) => {
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}&tab=business`);
+    await ready(page);
+  };
+  const serviceOf = async (shop: { business: { id: string }; service: { id: string }; owner: { token: string } }) =>
+    (
+      await call<{ id: string; bufferMinutes: number | null }[]>(`/businesses/${shop.business.id}/services`, {
+        token: shop.owner.token,
+      })
+    ).find((service) => service.id === shop.service.id);
+
+  test("a service follows the business at its stated time, or keeps one of its own", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({ name: `התאוששות ${Date.now()}`, ownerPhone: uniquePhone(), durationMinutes: 30 });
+    await call(`/businesses/${shop.business.id}`, { method: "PATCH", token: shop.owner.token, body: { defaultBufferMinutes: 10 } });
+    await openServices(page, shop);
+
+    const row = page.locator(".card", { hasText: shop.service.name }).first();
+    await expect(row.getByText("התאוששות 10 דק׳ · של העסק")).toBeVisible({ timeout: 15_000 });
+    await row.getByRole("button", { name: "עריכת שירות" }).click();
+
+    const sheet = page.getByRole("dialog");
+    const recovery = sheet.getByRole("group", { name: "זמן התאוששות אחרי התור" });
+    // The business's number, on the choice itself.
+    await expect(recovery.getByRole("button", { name: /כמו בעסק\s*10 דק׳/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(recovery.getByText("כל תור תופס ביומן 40 דק׳. הלקוח רואה רק את 30 הדקות של השירות.")).toBeVisible();
+
+    // Its own: the minutes are asked for, and the sum follows them.
+    await recovery.getByRole("button", { name: /זמן אחר/ }).click();
+    await recovery.getByLabel(/זמן התאוששות אחרי התור/).fill("15");
+    await expect(recovery.getByText("כל תור תופס ביומן 45 דק׳. הלקוח רואה רק את 30 הדקות של השירות.")).toBeVisible();
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+    await expect.poll(async () => (await serviceOf(shop))?.bufferMinutes, { timeout: 15_000 }).toBe(15);
+    await expect(row.getByText("התאוששות 15 דק׳", { exact: true })).toBeVisible();
+
+    // And back to the business's: saved as "follow", not as a copy of ten.
+    await row.getByRole("button", { name: "עריכת שירות" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /כמו בעסק/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+    await expect.poll(async () => (await serviceOf(shop))?.bufferMinutes, { timeout: 15_000 }).toBeNull();
+    await expect(row.getByText("התאוששות 10 דק׳ · של העסק")).toBeVisible();
+  });
+
+  test("a time of its own of nought is no recovery at all", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({ name: `בלי התאוששות ${Date.now()}`, ownerPhone: uniquePhone(), durationMinutes: 30 });
+    await call(`/businesses/${shop.business.id}`, { method: "PATCH", token: shop.owner.token, body: { defaultBufferMinutes: 10 } });
+    await openServices(page, shop);
+    await page.locator(".card", { hasText: shop.service.name }).first().getByRole("button", { name: "עריכת שירות" }).click({ timeout: 15_000 });
+
+    const recovery = page.getByRole("dialog").getByRole("group", { name: "זמן התאוששות אחרי התור" });
+    await recovery.getByRole("button", { name: /זמן אחר/ }).click();
+    await recovery.getByLabel(/זמן התאוששות אחרי התור/).fill("0");
+    await expect(recovery.getByText("בלי זמן התאוששות: כל תור תופס ביומן 30 דק׳.")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await expect.poll(async () => (await serviceOf(shop))?.bufferMinutes, { timeout: 15_000 }).toBe(0);
+  });
+
+  test("the default is one tap from the service, and says which services follow it", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({ name: `ברירת מחדל ${Date.now()}`, ownerPhone: uniquePhone(), durationMinutes: 30 });
+    await call(`/businesses/${shop.business.id}`, { method: "PATCH", token: shop.owner.token, body: { defaultBufferMinutes: 10 } });
+    await call(`/businesses/${shop.business.id}/services`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "צבע ופן", durationMinutes: 60, priceMinor: 25000, bufferMinutes: 15 },
+    });
+    await openServices(page, shop);
+
+    await page.locator(".card", { hasText: shop.service.name }).first().getByRole("button", { name: "עריכת שירות" }).click({ timeout: 15_000 });
+    await page.getByRole("button", { name: /ברירת המחדל של העסק נקבעת בהגדרות העסק/ }).click();
+
+    // The settings, at the default, with each service and whose time it keeps.
+    const followers = page.locator(".buffer-followers");
+    await expect(followers).toBeVisible({ timeout: 15_000 });
+    await expect(followers.locator("div", { hasText: shop.service.name })).toContainText("לפי ברירת המחדל · 10 דק׳");
+    await expect(followers.locator("div", { hasText: "צבע ופן" })).toContainText("זמן משלו · 15 דק׳");
+
+    // Typing a new default moves the services that follow it, and only them.
+    await page.getByLabel(/זמן התאוששות אחרי תור — ברירת המחדל/).fill("20");
+    await expect(followers.locator("div", { hasText: shop.service.name })).toContainText("לפי ברירת המחדל · 20 דק׳");
+    await expect(followers.locator("div", { hasText: "צבע ופן" })).toContainText("זמן משלו · 15 דק׳");
+  });
+});
+
 test.describe("the recovery time after an appointment", () => {
   const clockIn = (instant: string) =>
     new Intl.DateTimeFormat("en-GB", {

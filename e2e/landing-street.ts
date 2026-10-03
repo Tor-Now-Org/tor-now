@@ -48,6 +48,11 @@ export type Street = {
   /** Who fills the rest of the month, and with what. */
   regulars: Person[];
   cuts: string[];
+  /**
+   * Who came once in the months before this one: a shop's statistics are
+   * about new faces as much as regular ones.
+   */
+  passing: Person[];
   /** Known to the shop, and deliberately absent from the composed day. */
   newcomer: Person;
   /** Whose customer screens these are, and what she has booked where. */
@@ -202,6 +207,16 @@ const HEBREW_STREET: Street = {
     { givenName: "דור", familyName: "שלו" },
   ],
   cuts: ["תספורת גבר", "תספורת וזקן", "עיצוב זקן", "תספורת ילד"],
+  passing: [
+    { givenName: "נדב", familyName: "ברק" },
+    { givenName: "אלון", familyName: "קרמר" },
+    { givenName: "יואב", familyName: "חדד" },
+    { givenName: "מתן", familyName: "גולן" },
+    { givenName: "שחר", familyName: "לוין" },
+    { givenName: "בן", familyName: "אזולאי" },
+    { givenName: "עידו", familyName: "נחום" },
+    { givenName: "תום", familyName: "ביטון" },
+  ],
   newcomer: { givenName: "אמיר", familyName: "טל" },
   her: { givenName: "דנה", familyName: "כהן" },
   atTheSalon: "צבע ופן",
@@ -314,6 +329,16 @@ const ENGLISH_STREET: Street = {
     { givenName: "Dor", familyName: "Shalev" },
   ],
   cuts: ["Men's cut", "Cut and beard", "Beard trim", "Kids' cut"],
+  passing: [
+    { givenName: "Nadav", familyName: "Barak" },
+    { givenName: "Alon", familyName: "Kramer" },
+    { givenName: "Yoav", familyName: "Hadad" },
+    { givenName: "Matan", familyName: "Golan" },
+    { givenName: "Shahar", familyName: "Levin" },
+    { givenName: "Ben", familyName: "Azoulay" },
+    { givenName: "Ido", familyName: "Nahum" },
+    { givenName: "Tom", familyName: "Biton" },
+  ],
   newcomer: { givenName: "Amir", familyName: "Tal" },
   her: { givenName: "Dana", familyName: "Cohen" },
   atTheSalon: "Colour and blow-dry",
