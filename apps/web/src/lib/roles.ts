@@ -1,4 +1,5 @@
 import type { BusinessDto } from "./api/types.ts";
+import { includes } from "./entitlement.ts";
 
 /**
  * What this person may do here.
@@ -33,3 +34,27 @@ export const staffRole = (business: BusinessDto): "OWNER" | "MANAGER" | "WORKER"
   const role = roleOf(business);
   return role === "CUSTOMER" ? "WORKER" : role;
 };
+
+/** The bottom bar's tabs, in the order it shows them. */
+export const SECTIONS = ["day", "schedule", "business", "customers", "statistics"] as const;
+export type Section = (typeof SECTIONS)[number];
+
+/** Statistics is the plan's to give (ADR 0019) and the OWNER's alone to read. */
+export const readsStatistics = (business: BusinessDto): boolean =>
+  roleOf(business) === "OWNER" && includes(business, "STATISTICS");
+
+/**
+ * Where the plan gives Statistics, the customer list is a panel of the
+ * Business tab, so the bar keeps four tabs. Elsewhere it is a tab of its own.
+ */
+export const customersInBusiness = (business: BusinessDto): boolean =>
+  manages(business) && includes(business, "STATISTICS");
+
+/** What the bottom bar offers this person here; any other tab opens the calendar instead. */
+export const sectionsFor = (business: BusinessDto): Section[] => [
+  "day",
+  "schedule",
+  ...(manages(business) ? (["business"] as const) : []),
+  ...(manages(business) && !customersInBusiness(business) ? (["customers"] as const) : []),
+  ...(readsStatistics(business) ? (["statistics"] as const) : []),
+];

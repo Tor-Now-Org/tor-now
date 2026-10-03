@@ -16,6 +16,8 @@ import { BillingSection } from "./billing-section.tsx";
 import { Locked, SmallLock, useLockText } from "@/components/locked.tsx";
 import { PlanBadge } from "@/components/billing-badges.tsx";
 import { calendarsFull } from "@/lib/entitlement.ts";
+import { customersInBusiness } from "@/lib/roles.ts";
+import { Customers } from "./customers.tsx";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
@@ -78,7 +80,7 @@ const LocationPicker = dynamic(
   { ssr: false },
 );
 
-export const PANELS = ["services", "resources", "photos", "settings", "team", "billing"] as const;
+export const PANELS = ["services", "resources", "photos", "settings", "team", "customers", "billing"] as const;
 export type Panel = (typeof PANELS)[number];
 
 export const isPanel = (value: string | null): value is Panel =>
@@ -154,7 +156,13 @@ export const BusinessPanel = ({
   const pausedAny = resources.some((resource) => resource.active && resource.paused === true);
   // Billing, carried over from a business they own into one they only manage,
   // would be a sub-tab with no chip and nothing under it.
-  const panel: Panel = requestedPanel === "billing" && !isOwner ? "services" : requestedPanel;
+  // The customer list moves here only where the plan gives Statistics, which
+  // takes its place in the bottom bar; elsewhere it is still a tab of its own.
+  const customersHere = customersInBusiness(business);
+  const panel: Panel =
+    (requestedPanel === "billing" && !isOwner) || (requestedPanel === "customers" && !customersHere)
+      ? "services"
+      : requestedPanel;
 
   const load = useCallback(async () => {
     try {
@@ -214,6 +222,7 @@ export const BusinessPanel = ({
             "photos",
             "settings",
             "team",
+            ...(customersHere ? (["customers"] as const) : []),
             ...(isOwner ? (["billing"] as const) : []),
           ] as const
         ).map((candidate) => (
@@ -233,6 +242,7 @@ export const BusinessPanel = ({
               : candidate === "photos" ? copy.photos
               : candidate === "settings" ? copy.settings
               : candidate === "team" ? copy.team
+              : candidate === "customers" ? copy.tabCustomers
               : copy.billing}
           </button>
         ))}
@@ -636,6 +646,12 @@ export const BusinessPanel = ({
             onChanged={onTeamChanged ?? (() => {})}
             onSeePlans={isOwner ? () => onPanel("billing") : undefined}
           />
+        </div>
+      )}
+
+      {panel === "customers" && (
+        <div style={{ marginTop: -16, marginInline: -18, paddingInline: 18 }}>
+          <Customers token={token} business={business} />
         </div>
       )}
 

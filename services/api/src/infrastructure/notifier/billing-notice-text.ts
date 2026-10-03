@@ -23,6 +23,7 @@ const FEATURE_IN_HEBREW: Readonly<Record<Feature, string>> = Object.freeze({
   CUSTOMER_HISTORY: "היסטוריית לקוח",
   TEAM_ROLES: "מנהלים ועובדים",
   WAITING_LIST: "רשימת המתנה",
+  STATISTICS: "סטטיסטיקות",
 });
 
 const shekels = (minor: number): string => `₪${Math.round(minor / 100)}`;

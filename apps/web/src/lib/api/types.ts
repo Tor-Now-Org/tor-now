@@ -64,7 +64,8 @@ export type FeatureName =
   | "REMINDERS"
   | "CUSTOMER_HISTORY"
   | "TEAM_ROLES"
-  | "WAITING_LIST";
+  | "WAITING_LIST"
+  | "STATISTICS";
 
 export type EntitlementDto = {
   features: FeatureName[];
@@ -146,6 +147,52 @@ export type BusinessDayDto = {
     appointments: CalendarAppointmentDto[];
     blocks: BlockDto[];
   }[];
+};
+
+/** The month's headline numbers. Revenue is in agorot. */
+export type StatisticsTotalsDto = {
+  revenue: number;
+  completed: number;
+  /** 0–1; null when nothing was open yet. */
+  utilization: number | null;
+  newCustomers: number;
+};
+
+/** A Business's month in numbers, for its owner. */
+export type StatisticsDto = {
+  month: string;
+  firstMonth: string;
+  currentMonth: string;
+  totals: StatisticsTotalsDto;
+  previous: StatisticsTotalsDto | null;
+  trend: { month: string; totals: StatisticsTotalsDto }[];
+  days: { date: string; completed: number; lost: number; upcoming: number; open: boolean }[];
+  services: { name: string; revenue: number; completed: number }[];
+  calendars: {
+    resourceId: string;
+    name: string;
+    completed: number;
+    revenue: number;
+    noShows: number;
+    utilization: number | null;
+  }[];
+  customers: {
+    seen: number;
+    returning: number;
+    new: number;
+    top: { customerId: string; visits: number }[];
+  };
+  outcomes: {
+    completed: number;
+    noShow: number;
+    lateCancellation: number;
+    cancelledOnTime: number;
+    cancelledByBusiness: number;
+  };
+  repeatMisses: { customerId: string; times: number }[];
+  /** Same day, next day, 2–3, 4–7, 8–14, 15+ days ahead. */
+  leadTime: number[];
+  customerNames: Record<string, string>;
 };
 
 /** The whole business's month: every calendar, and the decisions spanning days. */

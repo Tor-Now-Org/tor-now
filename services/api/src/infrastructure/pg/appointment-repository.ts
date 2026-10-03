@@ -258,6 +258,28 @@ export const appointmentRepository = (
   },
 
   /**
+   * The earliest attended appointment per customer, then only those that fall
+   * in the span — `distinct on` picks the first, the outer filter the span.
+   */
+  async firstVisitsBetween(businessId, from, to, now) {
+    const rows = await tx<Row[]>`
+      select customer_id, resource_id, start_at from (
+        select distinct on (customer_id) customer_id, resource_id, start_at
+        from appointment
+        where business_id = ${businessId}
+          and status in ('CONFIRMED', 'COMPLETED')
+          and end_at <= ${asDate(now)}
+        order by customer_id, start_at
+      ) as first_visit
+      where start_at >= ${asDate(from)} and start_at < ${asDate(to)}`;
+    return rows.map((row) => ({
+      customerId: asId(String(row["customer_id"])),
+      resourceId: asId(String(row["resource_id"])),
+      firstAt: instant(new Date(row["start_at"] as string).getTime()),
+    }));
+  },
+
+  /**
    * One query rather than one per appointment: a reminder names the customer
    * and the business, and the job may be handling a hundred of them.
    *

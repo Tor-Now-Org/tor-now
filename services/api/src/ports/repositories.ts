@@ -35,6 +35,7 @@ import type {
   Payment,
   PhotoSlot,
   Feature,
+  FirstVisit,
   Plan,
   PlanTerms,
   PreviewPlacement,
@@ -711,6 +712,18 @@ export type AppointmentRepository = {
    * (CONTEXT.md), so booking is what this asks about.
    */
   customerIdsFor(businessId: BusinessId): Promise<readonly UserId[]>;
+  /**
+   * Each customer's first attended Appointment here — neither cancelled nor a
+   * No Show, and over by `now` — for those whose first one starts inside the
+   * span. What makes a customer new in a month, which the month's own rows
+   * cannot tell: the first visit may be years before them.
+   */
+  firstVisitsBetween(
+    businessId: BusinessId,
+    from: Instant,
+    to: Instant,
+    now: Instant,
+  ): Promise<readonly FirstVisit[]>;
   /**
    * Appointments still to come on this calendar. Asked before a calendar is
    * taken away, because "this has four people booked on it" is the thing an

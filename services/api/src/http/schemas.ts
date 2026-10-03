@@ -413,6 +413,11 @@ export const calendarMonthSchema = z.object({
   }),
 });
 
+/** A month of statistics, for the whole Business or one calendar. */
+export const statisticsSchema = calendarMonthSchema.extend({
+  resourceId: uuidSchema.optional(),
+});
+
 /** Both or neither; a half-given range is a mistake, not a default. */
 export const optionalDateRangeSchema = z
   .object({

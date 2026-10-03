@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { FROZEN_NOW } from "../infrastructure/testing/harness.ts";
 import {
   A_BUSINESS,
   httpHarness,
@@ -699,6 +700,80 @@ describe("an owner's Notices", () => {
   });
 });
 
+describe("statistics over HTTP", () => {
+  /** An owner on Team with Statistics granted, whose business opened on the harness's clock. */
+  const anOwnerWithStatistics = async (api: HttpHarness, grant = true) => {
+    const owner = await signInOverHttp(api, "+972500000001", "רן");
+    const businessId = ((await api.post("/businesses", { ...A_BUSINESS, plan: "TEAM" }, owner.token)).body as {
+      id: string;
+    }).id;
+    // The in-memory store dates a business by the wall clock, not the harness's.
+    api.store.businesses = api.store.businesses.map((business) => ({ ...business, createdAt: FROZEN_NOW }));
+    if (grant) {
+      const admin = await signInAsAdministratorOverHttp(api, "+972500000000");
+      await api.post(
+        `/admin/businesses/${businessId}/grants`,
+        { features: ["STATISTICS"], endsOn: "2026-11-23", reason: "פיילוט" },
+        admin.token,
+      );
+    }
+    return { owner, businessId };
+  };
+
+  it("answers the owner a month: every day of it, the totals, and no figure for a month before", async () => {
+    const api = httpHarness();
+    const { owner, businessId } = await anOwnerWithStatistics(api);
+
+    const month = await api.get(`/businesses/${businessId}/statistics?firstOfMonth=2026-08-01`, owner.token);
+    expect(month.status).toBe(200);
+    expect(month.body).toMatchObject({
+      month: "2026-08-01",
+      firstMonth: "2026-08-01",
+      currentMonth: "2026-08-01",
+      previous: null,
+      totals: { revenue: 0, completed: 0, newCustomers: 0 },
+      customerNames: {},
+    });
+    expect((month.body as { days: unknown[] }).days).toHaveLength(31);
+    expect((month.body as { leadTime: unknown[] }).leadTime).toHaveLength(6);
+  });
+
+  it("refuses a month given by any day but its first, and a calendar that is not an id", async () => {
+    const api = httpHarness();
+    const { owner, businessId } = await anOwnerWithStatistics(api);
+
+    for (const query of ["firstOfMonth=2026-08-15", "firstOfMonth=2026-08-01&resourceId=chair", ""]) {
+      const refused = await api.get(`/businesses/${businessId}/statistics?${query}`, owner.token);
+      expect(refused.status, query).toBe(400);
+    }
+  });
+
+  it("asks who is calling, and what their plan includes", async () => {
+    const api = httpHarness();
+    const { owner, businessId } = await anOwnerWithStatistics(api, false);
+
+    expect((await api.get(`/businesses/${businessId}/statistics?firstOfMonth=2026-08-01`)).status).toBe(401);
+    const unpaid = await api.get(`/businesses/${businessId}/statistics?firstOfMonth=2026-08-01`, owner.token);
+    expect(unpaid.status).toBe(402);
+    expect(unpaid.body).toMatchObject({ error: { code: "NOT_ENTITLED" } });
+  });
+
+  it("does not read another business's calendar", async () => {
+    const api = httpHarness();
+    const { owner, businessId } = await anOwnerWithStatistics(api);
+    const stranger = await signInOverHttp(api, "+972500000009", "זר");
+    const theirs = ((await api.post("/businesses", { ...A_BUSINESS, phone: "+972500000009" }, stranger.token))
+      .body as { id: string }).id;
+    const theirCalendar = ((await api.get(`/businesses/${theirs}/resources`, stranger.token)).body as { id: string }[])[0]!.id;
+
+    const refused = await api.get(
+      `/businesses/${businessId}/statistics?firstOfMonth=2026-08-01&resourceId=${theirCalendar}`,
+      owner.token,
+    );
+    expect(refused.status).toBe(404);
+  });
+});
+
 describe("the Catalogue editor over HTTP", () => {
   it("corrects a rate and lists it, dated and sourced", async () => {
     const api = httpHarness();
@@ -742,6 +817,7 @@ describe("the Catalogue editor over HTTP", () => {
       "CUSTOMER_HISTORY:GRANT",
       "TEAM_ROLES:GRANT",
       "WAITING_LIST:PREVIEW",
+      "STATISTICS:NONE",
     ]);
     const grantId = features.find((source) => source.feature === "TEAM_ROLES")?.grant?.id ?? "";
 

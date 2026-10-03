@@ -17,6 +17,7 @@ import { fairUseService } from "./application/fair-use-service.ts";
 import { addonService } from "./application/addon-service.ts";
 import { discoveryService } from "./application/discovery-service.ts";
 import { reviewService } from "./application/review-service.ts";
+import { statisticsService } from "./application/statistics-service.ts";
 import { noticeService } from "./application/notice-service.ts";
 import { outboxWorker } from "./application/outbox-worker.ts";
 import { reminderService } from "./application/reminder-service.ts";
@@ -127,6 +128,7 @@ export const compose = (
     booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
     business: businessService({ unitOfWork, clock, photos }),
     calendar: calendarService({ unitOfWork, clock }),
+    statistics: statisticsService({ unitOfWork, clock }),
     notices: noticeService({ unitOfWork, clock }),
     catalogueAdmin: catalogueAdminService({ unitOfWork, clock }),
     planCatalogue: planCatalogueService({ unitOfWork, clock }),

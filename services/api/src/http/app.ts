@@ -779,6 +779,18 @@ const ownerRoutes = (services: Services) => {
     return context.json(wire.businessMonthOut(month));
   });
 
+  // A month in numbers, for the owner of a Business whose plan includes it.
+  owner.get("/:businessId/statistics", async (context) => {
+    const { firstOfMonth, resourceId } = parseQuery(context, schema.statisticsSchema);
+    const page = await services.statistics.month(
+      actorOf(context),
+      idParam(context, "businessId"),
+      firstOfMonth,
+      resourceId ?? null,
+    );
+    return context.json(page);
+  });
+
   owner.get("/:businessId/resources/:resourceId/calendar/month", async (context) => {
     const { firstOfMonth } = parseQuery(context, schema.calendarMonthSchema);
     const days = await services.calendar.month(

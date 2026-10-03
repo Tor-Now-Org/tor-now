@@ -1255,6 +1255,25 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           ),
         ];
       },
+      async firstVisitsBetween(businessId, from, to, now) {
+        const first = new Map<string, Appointment>();
+        for (const appointment of store.appointments) {
+          if (appointment.businessId !== businessId) continue;
+          if (appointment.status !== "CONFIRMED" && appointment.status !== "COMPLETED") continue;
+          if (appointment.endAt > now) continue;
+          const known = first.get(appointment.customerId);
+          if (known === undefined || appointment.startAt < known.startAt) {
+            first.set(appointment.customerId, appointment);
+          }
+        }
+        return [...first.values()]
+          .filter((appointment) => appointment.startAt >= from && appointment.startAt < to)
+          .map((appointment) => ({
+            customerId: appointment.customerId,
+            resourceId: appointment.resourceId,
+            firstAt: appointment.startAt,
+          }));
+      },
       async dueForReminder(from, to, limit) {
         return store.appointments
           .filter(

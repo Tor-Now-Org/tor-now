@@ -16,6 +16,7 @@ export const FEATURES = [
   "CUSTOMER_HISTORY",
   "TEAM_ROLES",
   "WAITING_LIST",
+  "STATISTICS",
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];

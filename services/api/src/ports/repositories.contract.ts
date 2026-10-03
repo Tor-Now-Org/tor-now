@@ -1505,6 +1505,42 @@ export const describeRepositoryContract = (
       });
     });
 
+    it("finds a customer's first attended visit, and only inside the span", async () => {
+      await withRepositories(async (repositories) => {
+        const context = await aBookableBusiness(repositories, "7109");
+        // Cancelled, so it was never a visit; the one after it is the first.
+        const calledOff = await repositories.appointments.create(
+          anAppointmentAt(context, "2026-08-10T09:00:00Z", "2026-08-10T09:30:00Z", "2026-08-10T09:40:00Z"),
+        );
+        await repositories.appointments.update(calledOff.id, {
+          status: "CANCELLED",
+          cancelledAt: AT("2026-08-01T09:00:00Z"),
+          cancelledBy: "CUSTOMER",
+        });
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-09-16T09:00:00Z", "2026-09-16T09:30:00Z", "2026-09-16T09:40:00Z"),
+        );
+        await repositories.appointments.create(
+          anAppointmentAt(context, "2026-10-16T09:00:00Z", "2026-10-16T09:30:00Z", "2026-10-16T09:40:00Z"),
+        );
+        const now = AT("2026-11-01T00:00:00Z");
+
+        expect(
+          await repositories.appointments.firstVisitsBetween(
+            context.business.id, AT("2026-09-01T00:00:00Z"), AT("2026-10-01T00:00:00Z"), now,
+          ),
+        ).toEqual([
+          { customerId: context.owner.id, resourceId: context.resource.id, firstAt: AT("2026-09-16T09:00:00Z") },
+        ]);
+        // October holds a visit, but not the first.
+        expect(
+          await repositories.appointments.firstVisitsBetween(
+            context.business.id, AT("2026-10-01T00:00:00Z"), AT("2026-11-01T00:00:00Z"), now,
+          ),
+        ).toEqual([]);
+      });
+    });
+
     it("lists and deletes a block, an override and a working-hours range", async () => {
       await withRepositories(async (repositories) => {
         const context = await aBookableBusiness(repositories, "7105");

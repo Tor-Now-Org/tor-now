@@ -77,6 +77,7 @@ describe("the Catalogue editor: rates and Grants", () => {
         ["CUSTOMER_HISTORY", "GRANT"],
         ["TEAM_ROLES", "GRANT"],
         ["WAITING_LIST", "PREVIEW"],
+        ["STATISTICS", "NONE"],
       ]);
       expect(features[1]?.grant).toMatchObject({ reason: "פיילוט", grantedByName: "שקד", endsOn });
       expect(test.store.grants).toHaveLength(2);

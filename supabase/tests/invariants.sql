@@ -57,7 +57,9 @@ begin
   v_failed := false;
   begin
     delete from resource where id = v_res;
-  exception when foreign_key_violation then v_failed := true;
+  -- Postgres 18 reports ON DELETE RESTRICT as restrict_violation; earlier
+  -- versions as foreign_key_violation. Either is the refusal being proved.
+  exception when foreign_key_violation or restrict_violation then v_failed := true;
   end;
   if not v_failed then
     raise exception 'INVARIANT BROKEN: deleting a booked calendar took its appointments';
@@ -182,7 +184,7 @@ begin
 
   -- ADR 0021: never more than two Add-ons on sale at once, however they are written.
   insert into addon_offer (feature, price_minor, since) values ('CUSTOMER_HISTORY', 1900, current_date);
-  insert into addon_offer (feature, price_minor, since) values ('CUSTOMER_BLOCKING', 900, current_date);
+  insert into addon_offer (feature, price_minor, since) values ('WAITING_LIST', 900, current_date);
   v_failed := false;
   begin
     insert into addon_offer (feature, price_minor, since) values ('TEAM_ROLES', 900, current_date);

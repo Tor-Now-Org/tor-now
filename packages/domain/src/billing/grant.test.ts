@@ -33,6 +33,7 @@ describe("featureSources", () => {
       { feature: "CUSTOMER_HISTORY", source: "GRANT", endsOn: "2026-10-02" },
       { feature: "TEAM_ROLES", source: "NONE", endsOn: null },
       { feature: "WAITING_LIST", source: "PREVIEW", endsOn: "2026-11-25" },
+      { feature: "STATISTICS", source: "NONE", endsOn: null },
     ]);
   });
 
@@ -61,8 +62,9 @@ describe("featureSources", () => {
       { feature: "CUSTOMER_HISTORY", source: "ADDON", endsOn: null },
       { feature: "TEAM_ROLES", source: "NONE", endsOn: null },
       { feature: "WAITING_LIST", source: "ADDON", endsOn: "2026-10-10" },
+      { feature: "STATISTICS", source: "NONE", endsOn: null },
     ]);
-    expect(grantableFeatures(sources)).toEqual(["TEAM_ROLES"]);
+    expect(grantableFeatures(sources)).toEqual(["TEAM_ROLES", "STATISTICS"]);
   });
 
   it("forgets a Grant or a Preview once it has ended", () => {
@@ -73,7 +75,7 @@ describe("featureSources", () => {
       previews: [{ feature: "WAITING_LIST", endsOn: day("2026-09-26") }],
       today,
     });
-    expect(grantableFeatures(sources)).toEqual(["CUSTOMER_HISTORY", "TEAM_ROLES", "WAITING_LIST"]);
+    expect(grantableFeatures(sources)).toEqual(["CUSTOMER_HISTORY", "TEAM_ROLES", "WAITING_LIST", "STATISTICS"]);
   });
 });
 

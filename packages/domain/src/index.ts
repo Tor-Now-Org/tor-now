@@ -29,6 +29,8 @@ export * from "./booking/booking.ts";
 export * from "./booking/cancellation.ts";
 export * from "./booking/outcome.ts";
 
+export * from "./statistics/monthly.ts";
+
 export * from "./billing/feature.ts";
 export * from "./billing/plan.ts";
 export * from "./billing/entitlement.ts";

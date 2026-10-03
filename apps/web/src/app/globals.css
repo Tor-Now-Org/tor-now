@@ -319,6 +319,47 @@ input,select{font:inherit;color:inherit}
 .navbtn span.lbl{font-size:11px;font-weight:600;font-family:var(--font-rubik),sans-serif;letter-spacing:-.01em}
 /* The wordmark carries its own direction, set per language on the element: a
    name is not a sentence to be mirrored. */
+/* Statistics: a month in numbers. Logical properties throughout, so Hebrew
+   mirrors without a second sheet; the day chart mirrors itself in code. */
+.st-month{flex:1;min-width:0;min-height:34px;border:0;background:transparent;color:var(--ink);
+  font:inherit;font-weight:600;text-align:center;text-align-last:center;cursor:pointer}
+.st-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.st-tile{display:flex;flex-direction:column;gap:4px;padding:14px;min-width:0}
+.st-value{font-family:var(--font-rubik),sans-serif;font-size:24px;font-weight:600;line-height:1.15}
+.st-tile-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:22px}
+.st-spark{width:64px;height:22px;flex:none}
+[dir="rtl"] .st-spark{transform:scaleX(-1)}
+.st-delta{font-weight:600;border-radius:6px;padding:1px 6px;white-space:nowrap;background:var(--sunken);color:var(--muted)}
+.st-delta.good{background:var(--positive-soft);color:var(--positive)}
+.st-delta.bad{background:var(--critical-soft);color:var(--critical)}
+.st-so-far{margin:0}
+.st-card{display:flex;flex-direction:column;gap:12px;padding:16px;min-width:0}
+.st-card h3{margin:0;font-size:15px;font-weight:600}
+.st-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.st-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.st-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:5px;vertical-align:-1px}
+.st-legend i.st-ahead{background:var(--accent-soft);outline:1px dashed var(--accent)}
+.st-daily{width:100%;min-width:520px;height:auto;direction:ltr}
+.st-daily text{fill:var(--faint);font-size:11px}
+.st-bar{display:grid;grid-template-columns:minmax(80px,120px) 1fr auto;align-items:center;gap:10px;font-size:13.5px}
+.st-track{height:10px;background:var(--sunken);border-radius:4px;overflow:hidden}
+.st-track div{height:100%;background:var(--accent);border-start-end-radius:4px;border-end-end-radius:4px}
+.st-amount{color:var(--muted);font-size:12.5px;text-align:end}
+.st-amount b{color:var(--ink);font-weight:600}
+.st-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:520px}
+.st-table th{font-size:12px;font-weight:500;color:var(--faint);text-align:start;padding-block:0 8px;padding-inline:0 8px}
+.st-table td{padding-block:10px;padding-inline:0 8px;border-top:1px solid var(--line)}
+.st-trio{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.st-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.st-pair div{display:flex;flex-direction:column}
+.st-pair b{font-family:var(--font-rubik),sans-serif;font-size:20px;font-weight:600}
+.st-split{display:flex;height:12px;border-radius:5px;overflow:hidden;gap:2px}
+.st-rows{display:flex;flex-direction:column}
+.st-rows div{display:flex;justify-content:space-between;gap:12px;padding-block:7px;font-size:13.5px;border-bottom:1px dashed var(--line)}
+.st-rows div:last-child{border-bottom:0}
+.st-people{display:flex;flex-direction:column;gap:2px}
+.st-people button{display:flex;justify-content:space-between;gap:8px;padding-block:5px;border:0;background:none;
+  color:var(--ink);font:inherit;font-size:13px;text-align:start;cursor:pointer}
 .wordmark{display:inline-flex;align-items:baseline;gap:5px;font-family:var(--font-rubik),sans-serif;font-weight:600;letter-spacing:-.02em;line-height:1;white-space:nowrap}
 .wordmark-lead{color:#0A2450}
 .wordmark-trail{background:linear-gradient(90deg,#1470AA,#22BFD4);-webkit-background-clip:text;background-clip:text;color:transparent}

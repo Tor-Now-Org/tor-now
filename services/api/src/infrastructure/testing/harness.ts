@@ -12,6 +12,7 @@ import { availabilityService } from "../../application/availability-service.ts";
 import { bookingService } from "../../application/booking-service.ts";
 import { businessService } from "../../application/business-service.ts";
 import { calendarService } from "../../application/calendar-service.ts";
+import { statisticsService } from "../../application/statistics-service.ts";
 import { closureService } from "../../application/closure-service.ts";
 import { catalogueService } from "../../application/catalogue-service.ts";
 import { discoveryService } from "../../application/discovery-service.ts";
@@ -299,6 +300,7 @@ export const harness = (options: { now?: Instant } = {}) => {
       booking: bookingService({ unitOfWork, clock, strategy: greedyWalk }),
       business: businessService({ unitOfWork, clock, photos }),
       calendar: calendarService({ unitOfWork, clock }),
+      statistics: statisticsService({ unitOfWork, clock }),
       notices: noticeService({ unitOfWork, clock }),
       catalogueAdmin: catalogueAdminService({ unitOfWork, clock }),
       planCatalogue: planCatalogueService({ unitOfWork, clock }),

@@ -8,6 +8,7 @@ import type {
   BlockDto,
   BusinessDayDto,
   BusinessMonthDto,
+  StatisticsDto,
   BusinessDto,
   BusinessPhotoDto,
   BusinessProfileDto,
@@ -746,6 +747,13 @@ export const api = {
   /** What the owner owes the platform. Read-only: only an administrator writes. */
   subscription: (token: string, businessId: string) =>
     request<BillingDto>(`/businesses/${businessId}/subscription`, { token }),
+
+  /** A month in numbers, for the whole business or one calendar. */
+  statistics: (token: string, businessId: string, firstOfMonth: string, resourceId: string | null) =>
+    request<StatisticsDto>(`/businesses/${businessId}/statistics`, {
+      token,
+      query: { firstOfMonth, resourceId: resourceId ?? undefined },
+    }),
 
   listCustomers: (token: string, businessId: string) =>
     request<CustomerDto[]>(`/businesses/${businessId}/customers`, { token }),

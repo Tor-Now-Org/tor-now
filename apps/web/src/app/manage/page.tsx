@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import type { BillingDto, BusinessDto, ResourceDto } from "@/lib/api/types.ts";
-import { staffRole } from "@/lib/roles.ts";
+import { customersInBusiness, SECTIONS, sectionsFor, staffRole, type Section } from "@/lib/roles.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
@@ -12,6 +12,7 @@ import {
   BottomNav,
   BuildingIcon,
   CalendarIcon,
+  ChartIcon,
   ClockIcon,
   PeopleIcon,
 } from "@/components/bottom-nav.tsx";
@@ -19,6 +20,7 @@ import { BusinessPanel, isPanel, type Panel } from "@/components/owner/business-
 import { PayTodayBanner } from "@/components/owner/billing-section.tsx";
 import { CalendarDay } from "@/components/owner/calendar-day.tsx";
 import { Customers } from "@/components/owner/customers.tsx";
+import { Statistics } from "@/components/owner/statistics.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
 import { AccountDrawer } from "@/components/account-drawer.tsx";
 import { ContextSwitch } from "@/components/context-switch.tsx";
@@ -39,8 +41,8 @@ import {
   useNoticeContext,
 } from "@/components/owner/notices.tsx";
 
-const TABS = ["day", "schedule", "business", "customers"] as const;
-type Tab = (typeof TABS)[number];
+const TABS = SECTIONS;
+type Tab = Section;
 /** One empty list, so screens keyed on `resources` don't refetch on every render. */
 const NONE: ResourceDto[] = [];
 
@@ -211,6 +213,17 @@ function ManageApp() {
     setTab("business");
   };
 
+  // Where the plan gives Statistics, the customer list is a panel of the
+  // Business tab — so a way back to the old tab (the customer page leaves from
+  // the list) lands on that panel instead.
+  useEffect(() => {
+    if (tab !== "customers" || business === null) return;
+    if (customersInBusiness(business)) {
+      setPanel("customers");
+      setTab("business");
+    }
+  }, [tab, business]);
+
   // The chrome stays while the answer is fetched. Replacing the whole page
   // with a spinner is what made crossing over look like a reload: the header
   // and the bar vanished, the screen went white, and the switch you had just
@@ -281,12 +294,10 @@ function ManageApp() {
     );
   }
 
-  // Absent means an API deployed before roles existed, where anybody staffing
-  // was an owner (ADR 0016).
-  const manages = (business.role ?? "OWNER") !== "WORKER";
-  // A WORKER reaching a tab they may not have — an old link, a role changed
-  // under them — sees their calendar rather than an empty screen.
-  const shown: Tab = manages || tab === "day" || tab === "schedule" ? tab : "day";
+  const sections = sectionsFor(business);
+  // A tab they may not have — an old link, a role or a plan changed under
+  // them — shows their calendar rather than an empty screen.
+  const shown: Tab = sections.includes(tab) ? tab : "day";
   const banner = bannerBeside(notices.banner, billing?.status === "LAPSED");
 
   return (
@@ -359,6 +370,9 @@ function ManageApp() {
           />
         )}
         {shown === "customers" && <Customers token={token} business={business} />}
+        {shown === "statistics" && (
+          <Statistics key={business.id} token={token} business={business} resources={resources} />
+        )}
       </main>
 
       <BottomNav
@@ -367,16 +381,16 @@ function ManageApp() {
           setEditingCalendar(null);
           setTab(id as Tab);
         }}
-        items={[
-          { id: "day", label: copy.tabDay, icon: <CalendarIcon /> },
-          { id: "schedule", label: copy.tabSchedule, icon: <ClockIcon /> },
-          ...(manages
-            ? [
-                { id: "business", label: copy.tabBusiness, icon: <BuildingIcon /> },
-                { id: "customers", label: copy.tabCustomers, icon: <PeopleIcon /> },
-              ]
-            : []),
-        ]}
+        items={sections.map((id) => ({
+          id,
+          ...{
+            day: { label: copy.tabDay, icon: <CalendarIcon /> },
+            schedule: { label: copy.tabSchedule, icon: <ClockIcon /> },
+            business: { label: copy.tabBusiness, icon: <BuildingIcon /> },
+            customers: { label: copy.tabCustomers, icon: <PeopleIcon /> },
+            statistics: { label: copy.tabStatistics, icon: <ChartIcon /> },
+          }[id],
+        }))}
       />
 
       <NoticeSheet
