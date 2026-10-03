@@ -20,6 +20,7 @@ import {
   signInDirectly,
   uniquePhone,
 } from "./support.ts";
+import { anAdministrator } from "./cost-support.ts";
 
 /**
  * The owner artboards: onboarding, the day, the three schedule layers, the
@@ -5942,6 +5943,34 @@ test.describe("the switch between customer and management", () => {
     await expect(
       page.getByRole("group", { name: "מעבר בין לקוח לניהול" }).getByText(second.business.name),
     ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("an inactive business says so on the page, and the switch still leads out", async ({
+    page,
+  }) => {
+    const ownerPhone = uniquePhone();
+    const live = await aBusinessWithOpenHours({ name: `פעיל ${Date.now()}`, ownerPhone });
+    const off = await aBusinessWithOpenHours({ name: `מושבת ${Date.now()}`, ownerPhone });
+    await call(`/admin/businesses/${off.business.id}/active`, {
+      method: "PATCH",
+      body: { active: false },
+      token: await anAdministrator(),
+    });
+
+    await signedInAt(page, live);
+    await page.goto(`/manage?business=${off.business.id}`);
+    await ready(page);
+
+    // Said in the page, not a dialog over it: the switch must stay reachable.
+    await expect(page.getByText("העסק אינו פעיל")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    const switcher = page.getByRole("group", { name: "מעבר בין לקוח לניהול" });
+    await switcher.getByText(off.business.name).click();
+    await page.getByRole("dialog").getByText(live.business.name).click();
+
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+    await expect(switcher.getByText(live.business.name)).toBeVisible();
   });
 
   test("the account drawer shows only where you are", async ({ page }) => {

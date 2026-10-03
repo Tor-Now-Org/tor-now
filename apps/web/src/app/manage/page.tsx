@@ -28,7 +28,7 @@ import {
   rememberBusinesses,
   rememberManaged,
 } from "@/lib/last-managed.ts";
-import { Button, Empty, Sheet, Spinner } from "@/components/ui.tsx";
+import { Button, Empty, Spinner } from "@/components/ui.tsx";
 import { BUSINESS_DEFAULTS } from "@tor-now/domain";
 import { useNotices } from "@/lib/use-notices.ts";
 import {
@@ -239,18 +239,24 @@ function ManageApp() {
     );
   }
 
+  // The way out of any business, including one that is not active: the switch
+  // must stay on screen there, or a person who opened it has nowhere to go.
+  const switcher = (
+    <ContextSwitch
+      businesses={businesses ?? [business]}
+      current={business}
+      onCustomer={() => router.push("/")}
+      onManage={chooseBusiness}
+    />
+  );
+
   if (!business.active) {
     return (
       <>
-        <AppHeader title={business.name} />
-        <main style={{ flex: 1, padding: 24 }} />
-        <Sheet open onClose={() => router.push("/")} labelledBy="inactive-title">
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 id="inactive-title" style={{ fontSize: 19 }}>{copy.businessInactiveTitle}</h2>
-            <p style={{ margin: 0 }}>{copy.businessInactiveBody}</p>
-            <Button onClick={() => router.push("/")}>{copy.asCustomer}</Button>
-          </div>
-        </Sheet>
+        <AppHeader switcher={switcher} />
+        <main style={{ flex: 1, padding: 24 }}>
+          <Empty title={copy.businessInactiveTitle} body={copy.businessInactiveBody} />
+        </main>
       </>
     );
   }
@@ -267,14 +273,7 @@ function ManageApp() {
     <>
       <AppHeader
         // The mark, as on the home screen: the switch beside it is the way back.
-        switcher={
-          <ContextSwitch
-            businesses={businesses ?? [business]}
-            current={business}
-            onCustomer={() => router.push("/")}
-            onManage={chooseBusiness}
-          />
-        }
+        switcher={switcher}
         trailing={
           user !== null ? (
             <>

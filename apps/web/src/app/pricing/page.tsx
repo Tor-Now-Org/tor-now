@@ -255,7 +255,7 @@ export default function PricingPage() {
         </div>
 
         <span style={{ textAlign: "center", fontSize: 12.5, color: "var(--faint)" }}>
-          {copy.vat} · {copy.questions} <a href="/support">{copy.talk}</a>
+          {copy.questions} <a href="/support">{copy.talk}</a>
         </span>
         <LegalLinks />
       </main>
