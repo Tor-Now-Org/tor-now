@@ -48,6 +48,8 @@ const summaryOf = (facts: BillingNoticePayload["facts"]): string => {
       return `תקופת הניסיון נגמרת ב־${longDate(facts.trialEndsOn)}. בלי תשלום עד אז, העסק יוסר מהחיפוש.`;
     case "PAYMENT_LATE":
       return `התשלום על המנוי באיחור. העסק נשאר בחיפוש עד ${longDate(facts.graceEndsOn)}, ואחרי זה יוסר ממנו.`;
+    case "PAYMENT_DUE":
+      return `תקופת הניסיון הסתיימה — היא כבר נוצלה בעסק קודם. יש לשלם היום: בלי תשלום, ב־${longDate(facts.deactivatesOn)} בשעה ${facts.at} העסק יוסר מהחיפוש ולא יקבל תורים חדשים.`;
     case "DEACTIVATED":
       return "המנוי לא שולם, והעסק הוסר מהחיפוש. תורים שכבר נקבעו לא נפגעו, ואחרי התשלום הכול חוזר.";
     case "PAYMENT_RECORDED":

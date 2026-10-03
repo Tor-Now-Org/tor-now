@@ -40,6 +40,7 @@ describe("what goes to WhatsApp", () => {
     expect(NOTICE_KINDS.filter(goesToWhatsApp)).toEqual([
       "TRIAL_ENDING",
       "PAYMENT_LATE",
+      "PAYMENT_DUE",
       "DEACTIVATED",
       "PAYMENT_RECORDED",
       "EDITION_ANNOUNCED",
@@ -80,6 +81,7 @@ describe("how each kind is drawn", () => {
       "TRIAL_STARTED",
       "TRIAL_ENDING",
       "PAYMENT_LATE",
+      "PAYMENT_DUE",
       "DEACTIVATED",
     ]);
     expect(noticesCleared("CALENDARS_RESUMED")).toEqual(["CALENDARS_PAUSED"]);
@@ -274,6 +276,7 @@ describe("parseNoticeFacts", () => {
     { kind: "TRIAL_STARTED", plan: "TEAM", trialEndsOn: day("2026-10-26") },
     { kind: "TRIAL_ENDING", trialEndsOn: day("2026-10-26") },
     { kind: "PAYMENT_LATE", graceEndsOn: day("2026-11-07") },
+    { kind: "PAYMENT_DUE", deactivatesOn: day("2026-10-04"), at: "07:00" },
     { kind: "DEACTIVATED", on: today },
     { kind: "PAYMENT_RECORDED", paidThrough: day("2026-11-23") },
     {

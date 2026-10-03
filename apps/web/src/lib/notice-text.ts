@@ -120,6 +120,12 @@ export const noticeText = (facts: NoticeFacts, context: NoticeContext): NoticeTe
         body: fillText(words.paymentLateBody, { date: date(facts.graceEndsOn) }),
         action: "PAY",
       };
+    case "PAYMENT_DUE":
+      return {
+        title: words.paymentDueTitle,
+        body: fillText(words.paymentDueBody, { date: date(facts.deactivatesOn), time: facts.at }),
+        action: null,
+      };
     case "DEACTIVATED":
       return { title: words.deactivatedTitle, body: words.deactivatedBody, action: "PAY" };
     case "PAYMENT_RECORDED":

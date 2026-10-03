@@ -1,7 +1,8 @@
 import type { BusinessId, PaymentId, PlanVersionId, SubscriptionId, UserId } from "../model/ids.ts";
 import type { Money } from "../model/money.ts";
 import { addDays, compareLocalDate, type LocalDate } from "../time/local-date.ts";
-import type { Instant } from "../time/instant.ts";
+import { instant, type Instant } from "../time/instant.ts";
+import { instantToZoned, type TimeZone, type ZonedDateTime } from "../time/zone.ts";
 import { isUpgrade, type PlanVersion } from "./plan.ts";
 
 /**
@@ -98,6 +99,19 @@ export const subscriptionStateOn = (subscription: Standing, today: LocalDate): S
  */
 export const shouldDeactivate = (subscription: Standing, today: LocalDate): boolean =>
   subscriptionStateOn(subscription, today) === "LAPSED";
+
+/**
+ * The hour, UTC, of the nightly run that deactivates — the '0 4 * * *' job in
+ * supabase/migrations/20260901001300_scheduled_work.sql. Change both together.
+ */
+export const DEACTIVATION_RUN_UTC_HOUR = 4;
+
+/** When the next nightly run turns a lapsed Business off, on the Business's own clock. */
+export const nextDeactivationRun = (now: Instant, zone: TimeZone): ZonedDateTime => {
+  const at = new Date(now);
+  const run = Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate(), DEACTIVATION_RUN_UTC_HOUR);
+  return instantToZoned(instant(run > now ? run : run + 24 * 60 * 60 * 1000), zone);
+};
 
 /** The date the next period is owed from; null when nothing was ever covered. */
 export const renewalOn = (subscription: Standing): LocalDate | null => {

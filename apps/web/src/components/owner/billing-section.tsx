@@ -2,7 +2,7 @@
 
 import type { BillingDto, ResourceDto } from "@/lib/api/types.ts";
 import { PlanChooser } from "./plan-chooser.tsx";
-import { daysUntil } from "@/lib/billing-alert.ts";
+import { daysUntil, deactivationDeadline } from "@/lib/billing-alert.ts";
 import { formatLocalDate, formatPrice } from "@/lib/format.ts";
 import { fillParts, fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
@@ -26,12 +26,15 @@ export const BillingSection = ({
   token,
   billing,
   timeZone,
+  active,
   resources,
   onChanged,
 }: {
   token: string;
   billing: BillingDto;
   timeZone: string;
+  /** Still on while lapsed: the nightly run has not turned it off yet. */
+  active: boolean;
   resources: readonly ResourceDto[];
   onChanged: (billing: BillingDto) => void;
 }) => {
@@ -42,6 +45,7 @@ export const BillingSection = ({
   const plans = usePlans();
   const longDate = (localDate: string) => formatLocalDate(localDate, language, { day: "numeric", month: "long" });
   const board = paymentBoardOf(billing);
+  const deadline = status === "LAPSED" && active ? deactivationDeadline(timeZone) : null;
 
   return (
     <>
@@ -50,7 +54,16 @@ export const BillingSection = ({
           {fillParts(copy.billingOverdue, { days: String(daysUntil(nextDate, timeZone)) }).map((part) => part.text)}
         </Warning>
       )}
-      {status === "LAPSED" && <Critical>{words.lapsedNote}</Critical>}
+      {status === "LAPSED" && !active && <Critical>{words.lapsedNote}</Critical>}
+      {deadline !== null && (
+        <Warning>
+          {/* No Trial at all means its owner used it on an earlier Business. */}
+          {fillText(subscription.trialEndsOn === null ? words.lapsedSoonNote : words.lapsedSoonPaidNote, {
+            date: longDate(deadline.date),
+            time: deadline.time,
+          })}
+        </Warning>
+      )}
 
       <Card style={{ display: "flex", flexDirection: "column", gap: 11 }}>
         <Row label={copy.plan}>

@@ -68,6 +68,9 @@ describe("the billing Notice", () => {
     expect(rendered(aNotice({ kind: "PAYMENT_LATE", graceEndsOn: parseLocalDate("2026-11-07") }))).toContain(
       "התשלום על המנוי באיחור. העסק נשאר בחיפוש עד 7 בנובמבר",
     );
+    expect(
+      rendered(aNotice({ kind: "PAYMENT_DUE", deactivatesOn: parseLocalDate("2026-10-04"), at: "07:00" })),
+    ).toContain("תקופת הניסיון הסתיימה — היא כבר נוצלה בעסק קודם. יש לשלם היום: בלי תשלום, ב־4 באוקטובר בשעה 07:00");
     expect(rendered(aNotice({ kind: "DEACTIVATED", on: parseLocalDate("2026-11-08") }))).toContain(
       "העסק הוסר מהחיפוש. תורים שכבר נקבעו לא נפגעו",
     );

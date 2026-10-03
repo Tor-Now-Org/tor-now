@@ -7,6 +7,7 @@ import {
   GRACE_PERIOD_DAYS,
   graceEndsOn,
   moveTakesEffectOn,
+  nextDeactivationRun,
   NOTICE_DAYS,
   renewalOn,
   scheduleMove,
@@ -18,6 +19,9 @@ import {
 } from "./subscription.ts";
 import { planTerms, type PlanVersion } from "./plan.ts";
 import { asId } from "../model/ids.ts";
+import { parseInstant } from "../time/instant.ts";
+import { formatLocalTime } from "../time/local-time.ts";
+import { instantToZoned, timeZone } from "../time/zone.ts";
 import { money } from "../model/money.ts";
 import { parseLocalDate } from "../time/local-date.ts";
 
@@ -238,5 +242,26 @@ describe("scheduleMove and applyDueMove", () => {
   it("leaves a subscription with nothing scheduled as it is", () => {
     const untouched = paid();
     expect(applyDueMove(untouched, day("2030-01-01"))).toBe(untouched);
+  });
+});
+
+describe("nextDeactivationRun", () => {
+  const jerusalem = timeZone("Asia/Jerusalem");
+  const at = (iso: string) => instantToZoned(parseInstant(iso), jerusalem);
+
+  it("is the coming morning for a Business opened in the afternoon", () => {
+    expect(nextDeactivationRun(parseInstant("2026-10-03T11:00:00.000Z"), jerusalem)).toEqual(
+      at("2026-10-04T04:00:00.000Z"),
+    );
+  });
+
+  it("is the same morning for one opened after midnight, before the run", () => {
+    const run = nextDeactivationRun(parseInstant("2026-10-03T23:30:00.000Z"), jerusalem);
+    expect(run).toEqual(at("2026-10-04T04:00:00.000Z"));
+    expect(formatLocalTime(run.time)).toBe("07:00");
+  });
+
+  it("moves an hour earlier on the clock once Israel leaves summer time", () => {
+    expect(formatLocalTime(nextDeactivationRun(parseInstant("2026-11-03T11:00:00.000Z"), jerusalem).time)).toBe("06:00");
   });
 });

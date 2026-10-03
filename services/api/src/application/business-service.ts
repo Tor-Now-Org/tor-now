@@ -12,6 +12,9 @@ import {
   requireFeature,
   requireRoomForResource,
   todayIn,
+  type TimeZone,
+  formatLocalTime,
+  nextDeactivationRun,
   trialEndsOn,
   type Entitlement,
   type Plan,
@@ -48,11 +51,11 @@ import { notificationFor } from "./notifications.ts";
 import { paymentBoard } from "./addon-service.ts";
 import { entitlementOf, entitlementToday, ownerFeatures, subscriptionView } from "./billing.ts";
 import { movePlan } from "./plan-move.ts";
-import { tell } from "./notices.ts";
+import { announce, tell } from "./notices.ts";
 import { TEMPLATES } from "../ports/notifier.ts";
 import type { PhotoStore } from "../ports/photo-store.ts";
 import type { Repositories } from "../ports/repositories.ts";
-import { actorUserId, type Actor, type UnitOfWork } from "../ports/unit-of-work.ts";
+import { actorUserId, type Actor, type Session, type UnitOfWork } from "../ports/unit-of-work.ts";
 import {
   loadOwnedBusiness,
   loadOwnedResource,
@@ -331,16 +334,18 @@ const setAssignments = async (
  * a second Business opened by the same owner starts with payment due.
  */
 const startSubscription = async (
-  repositories: Repositories,
+  session: Pick<Session, "repositories" | "outbox">,
   opening: {
     ownerId: UserId;
     businessId: BusinessId;
+    timeZone: TimeZone;
     plan: Plan | undefined;
     calendars: number;
     today: LocalDate;
     now: Instant;
   },
 ): Promise<void> => {
+  const { repositories } = session;
   const current = await repositories.planVersions.listCurrent();
   // Unnamed, the cheapest Plan that fits — or, when none does, the roomiest,
   // so the refusal below names the most the platform offers.
@@ -368,6 +373,14 @@ const startSubscription = async (
       facts: { kind: "TRIAL_STARTED", plan: version.plan, trialEndsOn: trialEnd },
       at: opening.now,
     });
+  } else {
+    // No Trial: it owes from today, and the nightly run turns it off unless paid by then.
+    const run = nextDeactivationRun(opening.now, opening.timeZone);
+    await announce(session, {
+      businessId: opening.businessId,
+      facts: { kind: "PAYMENT_DUE", deactivatesOn: run.date, at: formatLocalTime(run.time) },
+      at: opening.now,
+    });
   }
 };
 
@@ -392,7 +405,8 @@ export const businessService = ({
       throw validationFailed("A business needs at least one calendar");
     }
 
-    return unitOfWork.run(actor, async ({ repositories }) => {
+    return unitOfWork.run(actor, async (session) => {
+      const { repositories } = session;
       const business = await repositories.businesses.create({
         name: input.name,
         phone: input.phone,
@@ -405,9 +419,10 @@ export const businessService = ({
       });
 
       await repositories.memberships.create(userId, business.id, "OWNER");
-      await startSubscription(repositories, {
+      await startSubscription(session, {
         ownerId: userId,
         businessId: business.id,
+        timeZone: business.timeZone,
         plan: input.plan,
         calendars: input.resourceNames.length,
         today: todayIn(clock.now(), business.timeZone),
@@ -593,6 +608,12 @@ export const businessService = ({
     return unitOfWork.run(actor, async ({ repositories }) =>
       (await repositories.memberships.listForUser(userId)).some(isStaff),
     );
+  },
+
+  /** The Trial is once per owner, so the wizard must not promise a second one. */
+  async hadTrial(actor: Actor): Promise<boolean> {
+    const userId = requireUser(actor);
+    return unitOfWork.run(actor, async ({ repositories }) => (await repositories.users.trialTakenOn(userId)) !== null);
   },
 
   // -------------------------------------------------------------------------

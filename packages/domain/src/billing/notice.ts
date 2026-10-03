@@ -2,6 +2,7 @@ import type { BusinessId, NoticeId } from "../model/ids.ts";
 import { validationFailed } from "../shared/errors.ts";
 import type { Instant } from "../time/instant.ts";
 import { daysBetween, parseLocalDate, type LocalDate } from "../time/local-date.ts";
+import { parseLocalTime } from "../time/local-time.ts";
 import type { GrantTerm } from "./entitlement.ts";
 import { FEATURES, parseFeature, type Feature } from "./feature.ts";
 import { PLANS, type Plan } from "./plan.ts";
@@ -24,6 +25,7 @@ export const NOTICE_KINDS = [
   "TRIAL_STARTED",
   "TRIAL_ENDING",
   "PAYMENT_LATE",
+  "PAYMENT_DUE",
   "DEACTIVATED",
   "PAYMENT_RECORDED",
   "PLAN_CHANGED",
@@ -64,6 +66,12 @@ export type NoticeFacts =
   | { readonly kind: "TRIAL_STARTED"; readonly plan: Plan; readonly trialEndsOn: LocalDate }
   | { readonly kind: "TRIAL_ENDING"; readonly trialEndsOn: LocalDate }
   | { readonly kind: "PAYMENT_LATE"; readonly graceEndsOn: LocalDate }
+  /**
+   * A Business opened with no Trial — its owner had theirs — owes from the
+   * first day, and the nightly run turns it off unless paid by then. When, on
+   * the Business's clock: the time as "HH:MM".
+   */
+  | { readonly kind: "PAYMENT_DUE"; readonly deactivatesOn: LocalDate; readonly at: string }
   | { readonly kind: "DEACTIVATED"; readonly on: LocalDate }
   | { readonly kind: "PAYMENT_RECORDED"; readonly paidThrough: LocalDate }
   | {
@@ -199,15 +207,16 @@ const RULES: Readonly<Record<NoticeKind, KindRule>> = Object.freeze({
   TRIAL_STARTED: { tone: "good", banner: true, clears: [] },
   TRIAL_ENDING: { tone: "caution", banner: true, clears: ["TRIAL_STARTED"] },
   PAYMENT_LATE: { tone: "caution", banner: true, clears: [] },
+  PAYMENT_DUE: { tone: "caution", banner: true, clears: [] },
   DEACTIVATED: {
     tone: "critical",
     banner: true,
-    clears: ["TRIAL_STARTED", "TRIAL_ENDING", "PAYMENT_LATE"],
+    clears: ["TRIAL_STARTED", "TRIAL_ENDING", "PAYMENT_LATE", "PAYMENT_DUE"],
   },
   PAYMENT_RECORDED: {
     tone: "good",
     banner: false,
-    clears: ["TRIAL_STARTED", "TRIAL_ENDING", "PAYMENT_LATE", "DEACTIVATED"],
+    clears: ["TRIAL_STARTED", "TRIAL_ENDING", "PAYMENT_LATE", "PAYMENT_DUE", "DEACTIVATED"],
   },
   PLAN_CHANGED: { tone: "info", banner: false, clears: ["MOVE_SOON"] },
   MOVE_SCHEDULED: { tone: "info", banner: false, clears: ["MOVE_SOON"] },
@@ -250,6 +259,7 @@ export const standsAsBanner = (kind: NoticeKind): boolean => RULES[kind].banner;
 const SENT_ON_WHATSAPP = [
   "TRIAL_ENDING",
   "PAYMENT_LATE",
+  "PAYMENT_DUE",
   "DEACTIVATED",
   "PAYMENT_RECORDED",
   "EDITION_ANNOUNCED",
@@ -299,6 +309,7 @@ export const noticeKey = (facts: NoticeFacts): string | null => {
 /** The order banners take when more than one stands: what costs the most to miss first. */
 const BANNER_ORDER: readonly NoticeKind[] = [
   "DEACTIVATED",
+  "PAYMENT_DUE",
   "PAYMENT_LATE",
   "TRIAL_ENDING",
   "MOVE_SOON",
@@ -482,6 +493,11 @@ export const parseNoticeFacts = (value: unknown): NoticeFacts => {
       return { kind, trialEndsOn: dateOf(facts, "trialEndsOn") };
     case "PAYMENT_LATE":
       return { kind, graceEndsOn: dateOf(facts, "graceEndsOn") };
+    case "PAYMENT_DUE": {
+      const at = textOf(facts, "at");
+      parseLocalTime(at);
+      return { kind, deactivatesOn: dateOf(facts, "deactivatesOn"), at };
+    }
     case "DEACTIVATED":
       return { kind, on: dateOf(facts, "on") };
     case "PAYMENT_RECORDED":

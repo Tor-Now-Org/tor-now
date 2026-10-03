@@ -84,11 +84,13 @@ describe("who may call what", () => {
     const person = await signInOverHttp(api, "+972500000001");
     expect((await api.get("/me", person.token)).body).toMatchObject({
       isHasBusinesses: false,
+      hadTrial: false,
     });
 
     await api.post("/businesses", A_BUSINESS, person.token);
     expect((await api.get("/me", person.token)).body).toMatchObject({
       isHasBusinesses: true,
+      hadTrial: true,
     });
   });
 

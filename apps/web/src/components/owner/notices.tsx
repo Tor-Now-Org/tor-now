@@ -18,6 +18,7 @@ const ICON_OF: Readonly<Record<NoticeKind, keyof typeof ICONS>> = {
   TRIAL_STARTED: "spark",
   TRIAL_ENDING: "clock",
   PAYMENT_LATE: "alert",
+  PAYMENT_DUE: "clock",
   DEACTIVATED: "alert",
   PAYMENT_RECORDED: "check",
   PLAN_CHANGED: "swap",

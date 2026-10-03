@@ -7,6 +7,7 @@ import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
+import { deactivationDeadline } from "@/lib/billing-alert.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import { TEXT_RULES, TRIAL_DAYS, type BusinessCategory } from "@tor-now/domain";
@@ -88,6 +89,7 @@ const isPlanName = (value: string | null): value is PlanName => value === "SOLO"
 function OnboardingWizard() {
   const copy = useCopy("onboarding");
   const billingCopy = useCopy("billing");
+  const noticeCopy = useCopy("notices");
   const params = useSearchParams();
   const plans = usePlans();
   const locks = useLockText();
@@ -127,6 +129,8 @@ function OnboardingWizard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
+  // Read when the business opens: the owner had their Trial before, so this one owes from today.
+  const [payBy, setPayBy] = useState<{ tomorrow: boolean; time: string } | null>(null);
   // The plan is chosen once, on the pricing page, and arrives in the address.
   // Without one there is nothing to open a Business on, so the owner is sent
   // to choose it — never asked a second time here.
@@ -244,6 +248,7 @@ function OnboardingWizard() {
             .catch(() => null),
         ),
       );
+      if (user?.hadTrial === true) setPayBy(deactivationDeadline(business.timeZone));
       setLive(business.id);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
@@ -282,6 +287,10 @@ function OnboardingWizard() {
   );
 
   if (live !== null) {
+    const payByWords = {
+      when: payBy?.tomorrow === true ? noticeCopy.tomorrow : noticeCopy.today,
+      time: payBy?.time ?? "",
+    };
     return (
       <>
         <AppHeader
@@ -298,11 +307,19 @@ function OnboardingWizard() {
           }
         />
         <main className="scroll" style={{ flex: 1, padding: "40px 20px", display: "flex", flexDirection: "column", gap: 16, alignItems: "center", textAlign: "center" }}>
-          <span className="chip" style={{ background: "var(--positive-soft)", color: "var(--positive)", border: "1px solid var(--positive)" }}>
-            {copy.live}
-          </span>
+          {payBy === null ? (
+            <span className="chip" style={{ background: "var(--positive-soft)", color: "var(--positive)", border: "1px solid var(--positive)" }}>
+              {copy.live}
+            </span>
+          ) : (
+            <span className="chip" style={{ background: "var(--caution-soft)", color: "var(--caution)", border: "1px solid var(--caution)" }}>
+              {fillText(copy.liveUntil, payByWords)}
+            </span>
+          )}
           <h1 style={{ fontSize: 24 }}>{name}</h1>
-          <p className="hint" style={{ margin: 0 }}>{copy.liveBody}</p>
+          <p className="hint" style={{ margin: 0 }}>
+            {payBy === null ? copy.liveBody : fillText(copy.liveBodyNoTrial, payByWords)}
+          </p>
           <Button onClick={() => router.push(`/manage?business=${live}`)}>{copy.done}</Button>
         </main>
         {accountDrawer}
@@ -334,7 +351,7 @@ function OnboardingWizard() {
 
         <div className="plan-line">
           <span>
-            {fillText(billingCopy.planLine, {
+            {fillText(user?.hadTrial === true ? billingCopy.planLineNoTrial : billingCopy.planLine, {
               plan: billingCopy.plan[plan],
               days: String(TRIAL_DAYS),
             })}

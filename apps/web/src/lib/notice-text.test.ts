@@ -36,6 +36,17 @@ describe("noticeText", () => {
     });
   });
 
+  it("tells a Business opened with no Trial when it goes off, with no button", () => {
+    const due: NoticeFacts = { kind: "PAYMENT_DUE", deactivatesOn: day("2026-10-20"), at: "07:00" };
+    // Word for word what WhatsApp says.
+    expect(text(due, "he")).toEqual({
+      title: "יש לשלם היום",
+      body: "תקופת הניסיון הסתיימה — היא כבר נוצלה בעסק קודם. יש לשלם היום: בלי תשלום, ב־20 באוקטובר בשעה 07:00 העסק יוסר מהחיפוש ולא יקבל תורים חדשים.",
+      action: null,
+    });
+    expect(text(due).body).toContain("on 20 October at 07:00 the business leaves search");
+  });
+
   it("points everything about paying at how to pay, except a payment received", () => {
     expect(text({ kind: "PAYMENT_LATE", graceEndsOn: day("2026-11-07") }).action).toBe("PAY");
     expect(text({ kind: "DEACTIVATED", on: day("2026-11-08") }).action).toBe("PAY");

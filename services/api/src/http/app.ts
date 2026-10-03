@@ -109,14 +109,15 @@ export const createApp = (services: Services) => {
     const result = await services.auth.verifyCode(body.phone, body.code, body.name);
     // The same shape `/me` answers with, so a session opened here and a session
     // restored from a stored token know the same things about the person.
-    const isHasBusinesses = await services.business.hasAny({
-      kind: "USER",
-      userId: result.user.id,
-    });
+    const actor = { kind: "USER", userId: result.user.id } as const;
+    const [isHasBusinesses, hadTrial] = await Promise.all([
+      services.business.hasAny(actor),
+      services.business.hadTrial(actor),
+    ]);
     return context.json({
       token: result.token,
       isNewUser: result.isNewUser,
-      user: wire.meOut(result.user, isHasBusinesses),
+      user: wire.meOut(result.user, isHasBusinesses, hadTrial),
     });
   });
 
@@ -125,30 +126,33 @@ export const createApp = (services: Services) => {
   // ---------------------------------------------------------------------------
   app.get("/me", async (context) => {
     const actor = actorOf(context);
-    const [user, isHasBusinesses] = await Promise.all([
+    const [user, isHasBusinesses, hadTrial] = await Promise.all([
       services.profile.me(actor),
       services.business.hasAny(actor),
+      services.business.hadTrial(actor),
     ]);
-    return context.json(wire.meOut(user, isHasBusinesses));
+    return context.json(wire.meOut(user, isHasBusinesses, hadTrial));
   });
 
   app.patch("/me", async (context) => {
     const changes = await parseBody(context, schema.updateProfileSchema);
     const actor = actorOf(context);
-    const [user, isHasBusinesses] = await Promise.all([
+    const [user, isHasBusinesses, hadTrial] = await Promise.all([
       services.profile.updateProfile(actor, changes),
       services.business.hasAny(actor),
+      services.business.hadTrial(actor),
     ]);
-    return context.json(wire.meOut(user, isHasBusinesses));
+    return context.json(wire.meOut(user, isHasBusinesses, hadTrial));
   });
 
   app.post("/me/terms", async (context) => {
     const actor = actorOf(context);
-    const [user, isHasBusinesses] = await Promise.all([
+    const [user, isHasBusinesses, hadTrial] = await Promise.all([
       services.profile.acceptTerms(actor),
       services.business.hasAny(actor),
+      services.business.hadTrial(actor),
     ]);
-    return context.json(wire.meOut(user, isHasBusinesses));
+    return context.json(wire.meOut(user, isHasBusinesses, hadTrial));
   });
 
   app.delete("/me", async (context) => {

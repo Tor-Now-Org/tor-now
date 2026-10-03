@@ -86,6 +86,33 @@ describe("Notices", () => {
       });
     });
 
+    it("is had once, so a second Business is told to pay before the nightly run", async () => {
+      const first = await anEstablishedBusiness(test);
+      const second = await test.services.business.register(first.owner.actor, {
+        name: "מספרת רן 2",
+        phone: "+972500000001",
+        description: null,
+        address: "רחוב הרצל 2",
+        latitude: 32.0853,
+        longitude: 34.7818,
+        category: "barbershop",
+        plan: "SOLO",
+        resourceNames: ["רן"],
+        services: [],
+        workingHours: [],
+      });
+      const notices = () => test.store.notices.filter((entry) => entry.notice.businessId === second.id);
+
+      // Opened at 12:00 in Jerusalem; the 04:00 UTC run is 07:00 there the next morning.
+      expect(notices().map((entry) => entry.notice.facts)).toEqual([
+        { kind: "PAYMENT_DUE", deactivatesOn: "2026-08-26", at: "07:00" },
+      ]);
+      expect(whatsappKinds()).toEqual(["PAYMENT_DUE"]);
+
+      await pay({ ...first, business: second });
+      expect(notices()[0]?.notice.clearedAt).not.toBeNull();
+    });
+
     it("ends unpaid with the Business out of search, told on WhatsApp", async () => {
       const shop = await anEstablishedBusiness(test);
       on("2026-09-24");

@@ -352,6 +352,8 @@ export type MeDto = UserDto & {
   /** The terms version last agreed to; older than TERMS_VERSION shows the notice. */
   termsVersion: string | null;
   isHasBusinesses: boolean;
+  /** The Trial is once per owner: true means a new Business starts with payment due. */
+  hadTrial: boolean;
 };
 
 export type WorkingHoursDto = {

@@ -370,4 +370,54 @@ describe("administrator scope", () => {
       shop.business.id,
     ]);
   });
+
+  describe("a Payment after Deactivation", () => {
+    const isActive = (businessId: string) =>
+      test.store.businesses.find((business) => business.id === businessId)?.active;
+
+    it("brings a lapsed Business back, as the banner promises", async () => {
+      const shop = await anEstablishedBusiness(test);
+      const admin = await signIn(test, "+972500000000");
+      test.travelTo(parseInstant("2026-09-25T08:00:00.000Z"));
+      await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" });
+      expect(isActive(shop.business.id)).toBe(false);
+
+      await test.services.admin.recordPayment(admin.administrator, shop.business.id, {
+        amountMinor: 4900,
+        paidOn: "2026-09-25",
+        note: null,
+      });
+
+      expect(isActive(shop.business.id)).toBe(true);
+    });
+
+    it("leaves off a Business an administrator switched off while it owed nothing", async () => {
+      const shop = await anEstablishedBusiness(test);
+      const admin = await signIn(test, "+972500000000");
+      await test.services.admin.setBusinessActive(admin.administrator, shop.business.id, false);
+
+      await test.services.admin.recordPayment(admin.administrator, shop.business.id, {
+        amountMinor: 4900,
+        paidOn: "2026-09-10",
+        note: null,
+      });
+
+      expect(isActive(shop.business.id)).toBe(false);
+    });
+
+    it("leaves it off when the Payment, backdated, still does not cover today", async () => {
+      const shop = await anEstablishedBusiness(test);
+      const admin = await signIn(test, "+972500000000");
+      test.travelTo(parseInstant("2026-12-20T08:00:00.000Z"));
+      await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" });
+
+      await test.services.admin.recordPayment(admin.administrator, shop.business.id, {
+        amountMinor: 4900,
+        paidOn: "2026-10-01",
+        note: null,
+      });
+
+      expect(isActive(shop.business.id)).toBe(false);
+    });
+  });
 });

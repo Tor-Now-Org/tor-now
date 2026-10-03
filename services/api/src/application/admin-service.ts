@@ -375,6 +375,13 @@ export const adminService = (dependencies: {
         // are one act, so they commit together.
         const paidThrough = paidThroughAfter(subscription, paidOn);
         await repositories.subscriptions.update(businessId, { paidThrough });
+        // A Business off because it lapsed comes back once paid; one an
+        // administrator switched off while it owed nothing stays off.
+        const today = parseLocalDate(new Date(clock.now()).toISOString().slice(0, 10));
+        if (shouldDeactivate(subscription, today) && !shouldDeactivate({ ...subscription, paidThrough }, today)) {
+          const business = await repositories.businesses.findById(businessId);
+          if (business?.active === false) await repositories.businesses.setActive(businessId, true);
+        }
         // The days owed were part of it, and the Plan it paid for is held.
         await repositories.daysOwed.settle(businessId, payment.id);
         const version = await repositories.planVersions.findById(subscription.planVersionId);
