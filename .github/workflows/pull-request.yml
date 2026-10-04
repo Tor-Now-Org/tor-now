@@ -188,7 +188,9 @@ jobs:
             > /tmp/web.log 2>&1 &
           npx wait-on -t 60000 http://127.0.0.1:3100
 
-      - run: npx playwright test
+      # The suite, as `npm run test:e2e` defines it: the @shots captures make the
+      # landing page's pictures and films on demand (`npm run shots`), and are not checks.
+      - run: npx playwright test --grep-invert @shots
 
       - if: failure()
         run: |
