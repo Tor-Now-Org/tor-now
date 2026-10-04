@@ -138,20 +138,69 @@ export const swallowedBy = (folds: readonly Span[], minute: number): boolean =>
 
 export type Band<T> =
   | { readonly kind: "free"; readonly start: number; readonly end: number }
+  /** Inside the day drawn, but not in this calendar's hours: a break, never time to book. */
+  | { readonly kind: "closed"; readonly start: number; readonly end: number }
   | { readonly kind: "item"; readonly start: number; readonly end: number; readonly item: T };
 
-/** One lane's contents in order, with the holes between them named. */
-export const bandsOf = <T extends Span>(window: Span, items: readonly T[]): Band<T>[] => {
+/** What of a span is not covered by some ranges, in order. */
+const outside = (span: Span, ranges: readonly Span[]): Span[] => {
+  const ordered = [...ranges].sort((left, right) => left.start - right.start);
+  const out: Span[] = [];
+  let cursor = span.start;
+  for (const range of ordered) {
+    if (range.end <= cursor || range.start >= span.end) continue;
+    if (range.start > cursor) out.push({ start: cursor, end: range.start });
+    cursor = Math.max(cursor, range.end);
+  }
+  if (cursor < span.end) out.push({ start: cursor, end: span.end });
+  return out;
+};
+
+/** A gap between two things in a lane, told apart into the hours worked and the hours not. */
+const gapBands = <T>(gap: Span, open: readonly Span[] | undefined): Band<T>[] => {
+  if (open === undefined) return [{ kind: "free", ...gap }];
+  const closed = outside(gap, open);
+  const free = outside(gap, closed);
+  return [
+    ...free.map((span) => ({ kind: "free" as const, ...span })),
+    ...closed.map((span) => ({ kind: "closed" as const, ...span })),
+  ].sort((left, right) => left.start - right.start);
+};
+
+/**
+ * One lane's contents in order, with the holes between them named — free where
+ * the calendar works, closed where it does not. A lunch break inside the day is
+ * not free time: drawn as free it was counted, folded over, and offered for a
+ * booking nobody could make. Without hours given, the whole window counts as worked.
+ */
+export const bandsOf = <T extends Span>(window: Span, items: readonly T[], open?: readonly Span[]): Band<T>[] => {
   const ordered = [...items].sort((left, right) => left.start - right.start);
   const out: Band<T>[] = [];
   let cursor = window.start;
   ordered.forEach((item) => {
-    if (item.start > cursor) out.push({ kind: "free", start: cursor, end: item.start });
+    if (item.start > cursor) out.push(...gapBands<T>({ start: cursor, end: item.start }, open));
     out.push({ kind: "item", start: item.start, end: item.end, item });
     cursor = Math.max(cursor, item.end);
   });
-  if (cursor < window.end) out.push({ kind: "free", start: cursor, end: window.end });
+  if (cursor < window.end) out.push(...gapBands<T>({ start: cursor, end: window.end }, open));
   return out;
+};
+
+/** The hours of the day drawn that no lane works. */
+export const closedWithin = (window: Span, lanes: readonly (readonly Span[])[]): Span[] =>
+  outside(window, lanes.flat());
+
+/** The hours of the day drawn that some lane does not work: a fold, which covers every lane, may not cover them. */
+export const closedInAny = (window: Span, lanes: readonly (readonly Span[])[]): Span[] => {
+  const each = lanes.flatMap((open) => outside(window, open)).sort((left, right) => left.start - right.start);
+  return each.reduce<Span[]>((merged, span) => {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && span.start <= last.end) {
+      merged[merged.length - 1] = { start: last.start, end: Math.max(last.end, span.end) };
+      return merged;
+    }
+    return [...merged, span];
+  }, []);
 };
 
 /**

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   BOX_MINIMUM,
+  closedInAny,
+  closedWithin,
   holdsAnAppointment,
   FOLD_HEIGHT,
   MINUTES_IN_A_DAY,
@@ -317,5 +319,63 @@ describe("whether a free stretch can hold an appointment", () => {
 
   it("can, before the services are known, rather than hiding booking from everybody", () => {
     expect(holdsAnAppointment(20, null)).toBe(true);
+  });
+});
+
+describe("hours a calendar does not work, inside the day drawn", () => {
+  const window = span("09:00", "19:00");
+  const splitDay = [span("09:00", "13:00"), span("14:00", "19:00")];
+
+  it("are a break, not free time", () => {
+    expect(bandsOf(window, [], splitDay)).toEqual([
+      { kind: "free", start: at("09:00"), end: at("13:00") },
+      { kind: "closed", start: at("13:00"), end: at("14:00") },
+      { kind: "free", start: at("14:00"), end: at("19:00") },
+    ]);
+  });
+
+  it("split a free stretch around what is booked, and keep the closed part apart", () => {
+    const item = { ...span("10:00", "10:30") };
+    expect(bandsOf(window, [item], splitDay).map((band) => [band.kind, band.start, band.end])).toEqual([
+      ["free", at("09:00"), at("10:00")],
+      ["item", at("10:00"), at("10:30")],
+      ["free", at("10:30"), at("13:00")],
+      ["closed", at("13:00"), at("14:00")],
+      ["free", at("14:00"), at("19:00")],
+    ]);
+  });
+
+  it("leave something booked in closed hours drawn as it is", () => {
+    const item = { ...span("12:30", "14:30") };
+    expect(bandsOf(window, [item], splitDay).map((band) => band.kind)).toEqual(["free", "item", "free"]);
+  });
+
+  it("are everything around a day with no hours at all", () => {
+    expect(bandsOf(span("09:00", "10:00"), [], [])).toEqual([{ kind: "closed", start: at("09:00"), end: at("10:00") }]);
+  });
+
+  it("treat the whole window as open when no hours are given, as before", () => {
+    expect(bandsOf(window, [])).toEqual([{ kind: "free", start: at("09:00"), end: at("19:00") }]);
+  });
+
+  it("are never folded into free time", () => {
+    // Other hours of 09:00–11:00 and 16:00–18:00: five hours between them nobody works.
+    const otherHours = [span("09:00", "11:00"), span("16:00", "18:00")];
+    const closed = closedWithin(span("09:00", "18:00"), [otherHours]);
+    expect(closed).toEqual([span("11:00", "16:00")]);
+    // Two free hours either side may fold; nothing folds across the hours between.
+    expect(foldsIn(span("09:00", "18:00"), closed, [])).toEqual([span("09:00", "11:00"), span("16:00", "18:00")]);
+  });
+
+  it("count as closed only where every lane is closed, for what may fold", () => {
+    // Lane one breaks for lunch; lane two works straight through.
+    expect(closedWithin(window, [splitDay, [span("09:00", "19:00")]])).toEqual([]);
+    expect(closedWithin(window, [splitDay, [span("09:00", "13:00"), span("14:30", "19:00")]])).toEqual([span("13:00", "14:00")]);
+    // A fold may not cover lane one's break either, because there it is not free.
+    expect(closedInAny(window, [splitDay, [span("09:00", "19:00")]])).toEqual([span("13:00", "14:00")]);
+    expect(closedInAny(window, [[span("09:00", "12:00")], [span("10:00", "19:00")]])).toEqual([
+      span("09:00", "10:00"),
+      span("12:00", "19:00"),
+    ]);
   });
 });

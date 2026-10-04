@@ -421,7 +421,7 @@ describe("who may change a change", () => {
   });
 });
 
-describe("other hours that change nothing", () => {
+describe("a change that changes nothing", () => {
   const day = (overrides: Partial<Draft> = {}): Draft => ({
     ...draftFor({ kind: "days", from: "2026-10-06", to: "2026-10-06", resourceId: "a" }, owner, TODAY),
     outcome: "OTHER_HOURS",
@@ -429,23 +429,36 @@ describe("other hours that change nothing", () => {
     ...overrides,
   });
 
-  it("are said to change nothing, for one day or several", () => {
-    expect(noChangeOf(day(), true)).toEqual({ key: "sameAsUsualDay", backToUsual: false });
-    expect(noChangeOf(day({ toDate: "2026-10-08" }), true)).toEqual({ key: "sameAsUsualDays", backToUsual: false });
+  it("is other hours that are the usual ones, for one day or several", () => {
+    expect(noChangeOf(day(), { sameAsUsual: true })).toEqual({ key: "sameAsUsualDay", backToUsual: false });
+    expect(noChangeOf(day({ toDate: "2026-10-08" }), { sameAsUsual: true })).toEqual({ key: "sameAsUsualDays", backToUsual: false });
   });
 
-  it("point to removing the change when it is an edit", () => {
-    expect(noChangeOf(day({ replacing: "hours:a:2026-10-06:2026-10-06" }), true)).toEqual({ key: "sameAsUsualDay", backToUsual: true });
+  it("points to removing a change when it is an edit, or the days already carry one", () => {
+    expect(noChangeOf(day({ replacing: "hours:a:2026-10-06:2026-10-06" }), { sameAsUsual: true })).toEqual({ key: "sameAsUsualDay", backToUsual: true });
+    expect(noChangeOf(day(), { sameAsUsual: true, replaces: [{}] })).toEqual({ key: "sameAsUsualDay", backToUsual: true });
   });
 
-  it("say nothing when the hours differ, or before the answer is known", () => {
-    expect(noChangeOf(day(), false)).toBeNull();
+  it("is a day off nobody works anyway, for one day or several", () => {
+    expect(noChangeOf(day({ outcome: "OFF_ALL_DAY", ranges: [] }), { notWorkingAnyway: true })).toEqual({ key: "notWorkingDay", backToUsual: false });
+    expect(noChangeOf(day({ outcome: "OFF_ALL_DAY", ranges: [], toDate: "2026-10-07" }), { notWorkingAnyway: true })).toEqual({
+      key: "notWorkingDays",
+      backToUsual: false,
+    });
+  });
+
+  it("is hours off nobody works anyway", () => {
+    expect(noChangeOf(day({ outcome: "OFF_PART" }), { notWorkingAnyway: true })).toEqual({ key: "notWorkingHours", backToUsual: false });
+  });
+
+  it("is nothing when the answer says it changes something, or before there is an answer", () => {
+    expect(noChangeOf(day(), { sameAsUsual: false, notWorkingAnyway: false })).toBeNull();
     expect(noChangeOf(day(), undefined)).toBeNull();
+    expect(noChangeOf(day({ outcome: null }), { sameAsUsual: true, notWorkingAnyway: true })).toBeNull();
   });
 
-  it("say nothing for the other outcomes", () => {
-    expect(noChangeOf(day({ outcome: "OFF_PART" }), true)).toBeNull();
-    expect(noChangeOf(day({ outcome: "OFF_ALL_DAY", ranges: [] }), true)).toBeNull();
-    expect(noChangeOf(day({ outcome: null }), true)).toBeNull();
+  it("never mixes the two: usual hours say nothing of a day off, and the other way round", () => {
+    expect(noChangeOf(day({ outcome: "OFF_ALL_DAY", ranges: [] }), { sameAsUsual: true })).toBeNull();
+    expect(noChangeOf(day(), { notWorkingAnyway: true })).toBeNull();
   });
 });

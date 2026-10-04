@@ -77,8 +77,12 @@ export type ChangePreview = {
   readonly replaces: readonly CalendarChange[];
   /** What the first day usually keeps, for this scope: where "other hours" starts from. */
   readonly usual: readonly LocalTimeRangeValue[];
+  /** What these days usually keep when every calendar keeps the same on every one of them; null when they differ. */
+  readonly usualEverywhere: readonly LocalTimeRangeValue[] | null;
   /** Other hours that are exactly what every calendar keeps on every one of these days anyway. */
   readonly sameAsUsual: boolean;
+  /** A day off, or hours off, when nobody works those days or hours anyway. */
+  readonly notWorkingAnyway: boolean;
 };
 
 export type ChangeResult = {
@@ -257,6 +261,35 @@ const shapeOf = (ranges: readonly { start: number; end: number }[]) =>
     .join(",");
 
 /**
+ * What these calendars usually keep on these days, when it is one answer for
+ * all of them — so "instead of" is only ever said of hours that really were the
+ * usual ones on every day the change covers.
+ */
+const usualEverywhere = async (
+  repositories: Repositories,
+  targets: readonly ResourceId[],
+  dates: readonly LocalDate[],
+): Promise<LocalTimeRangeValue[] | null> => {
+  const week = await repositories.workingHours.listForResources(targets);
+  const shapes = new Set(
+    targets.flatMap((resourceId) =>
+      dates.map((date) =>
+        shapeOf(week.filter((entry) => entry.resourceId === resourceId && entry.dayOfWeek === dayOfWeekOf(date))),
+      ),
+    ),
+  );
+  if (shapes.size !== 1) return null;
+  const first = dates[0];
+  const one = targets[0];
+  if (first === undefined || one === undefined) return null;
+  return normalize(
+    week
+      .filter((entry) => entry.resourceId === one && entry.dayOfWeek === dayOfWeekOf(first))
+      .map((entry) => interval(entry.start, entry.end)),
+  ).map((range) => ({ start: range.start, end: range.end }));
+};
+
+/**
  * Whether these hours are what each of these calendars keeps on each of these
  * days by its usual week — in which case "other hours" would change nothing.
  */
@@ -272,6 +305,52 @@ const keepsTheUsual = async (
     dates.every((date) => {
       const weekday = dayOfWeekOf(date);
       return shapeOf(week.filter((entry) => entry.resourceId === resourceId && entry.dayOfWeek === weekday)) === wanted;
+    }),
+  );
+};
+
+/**
+ * Whether nobody works these days, or these hours of them, anyway — so a day
+ * off or hours off would change nothing. Read against what each day keeps now:
+ * its own change if it has one, else the usual week. The change being edited
+ * does not count, since saving the edit replaces it.
+ */
+const notWorkingAnyway = async (
+  repositories: Repositories,
+  context: Context,
+  plan: Pick<ChangePlan, "scope" | "outcome">,
+  checked: Checked,
+  replacing: CalendarChange | null,
+): Promise<boolean> => {
+  if (plan.outcome === "OTHER_HOURS") return false;
+  const targets = targetsOf(context, plan.scope);
+  const first = checked.dates[0];
+  const last = checked.dates[checked.dates.length - 1];
+  if (first === undefined || last === undefined) return false;
+  const [week, overrides] = await Promise.all([
+    repositories.workingHours.listForResources(targets),
+    repositories.dateOverrides.listForResources(targets, first, last),
+  ]);
+  const ref = replacing === null ? null : parseChangeId(replacing.id);
+  const replaced = new Set(
+    ref === null || ref.kind === "BLOCKS"
+      ? []
+      : (ref.kind === "CLOSURE" ? context.calendars : [ref.resourceId]).flatMap((resourceId) =>
+          replacing!.days.map((day) => `${resourceId}@${day.date}`),
+        ),
+  );
+  return targets.every((resourceId) =>
+    checked.dates.every((date) => {
+      const own = overrides.find(
+        (override) => override.resourceId === resourceId && override.date === date && !replaced.has(`${resourceId}@${date}`),
+      );
+      const open =
+        own?.ranges ??
+        week
+          .filter((entry) => entry.resourceId === resourceId && entry.dayOfWeek === dayOfWeekOf(date))
+          .map((entry) => ({ start: entry.start, end: entry.end }));
+      if (plan.outcome === "OFF_ALL_DAY") return open.length === 0;
+      return open.every((range) => checked.hours.every((hours) => hours.end <= range.start || hours.start >= range.end));
     }),
   );
 };
@@ -490,19 +569,32 @@ export const changeService = ({ unitOfWork, clock }: { unitOfWork: UnitOfWork; c
         const targets = targetsOf(context, plan.scope);
         const first = parseLocalDate(plan.fromDate);
         const usual = await usualHours(repositories, targets, first);
+        const span = datesBetween(first, parseLocalDate(plan.toDate)).slice(0, MAX_CHANGE_DAYS);
+        const everywhere = span.length === 0 ? null : await usualEverywhere(repositories, targets, span);
         if (plan.outcome === null) {
-          const days = datesBetween(first, parseLocalDate(plan.toDate)).length;
-          return { days, calendars: targets.length, appointments: [], replaces: [], usual, sameAsUsual: false };
+          return {
+            days: span.length,
+            calendars: targets.length,
+            appointments: [],
+            replaces: [],
+            usual,
+            usualEverywhere: everywhere,
+            sameAsUsual: false,
+            notWorkingAnyway: false,
+          };
         }
         const full = { ...plan, outcome: plan.outcome, note: null };
         const checked = check(full, todayFor(context.business));
+        const old = replacing === null ? null : await findChange(repositories, context, replacing);
         return {
           days: checked.dates.length,
           calendars: targets.length,
           appointments: await namedFor(repositories, [...(await stranded(repositories, context, full, checked))]),
           replaces: await overwritten(repositories, context, full, checked, replacing),
           usual,
+          usualEverywhere: everywhere,
           sameAsUsual: full.outcome === "OTHER_HOURS" && (await keepsTheUsual(repositories, targets, checked.dates, checked.hours)),
+          notWorkingAnyway: await notWorkingAnyway(repositories, context, full, checked, old),
         };
       });
     },
@@ -529,9 +621,12 @@ export const changeService = ({ unitOfWork, clock }: { unitOfWork: UnitOfWork; c
         if (plan.outcome === "OTHER_HOURS" && (await keepsTheUsual(session.repositories, targetsOf(context, plan.scope), checked.dates, checked.hours))) {
           throw validationFailed("Those are the usual hours: nothing would change");
         }
-        if (replacing !== null) {
-          const old = await findChange(session.repositories, context, replacing);
-          authorize(context, old.scope);
+        const old = replacing === null ? null : await findChange(session.repositories, context, replacing);
+        if (old !== null) authorize(context, old.scope);
+        if (await notWorkingAnyway(session.repositories, context, plan, checked, old)) {
+          throw validationFailed("Nobody works then anyway: nothing would change");
+        }
+        if (old !== null) {
           // What has already happened stays as it was lived.
           const ahead = old.days.map((day) => day.date).filter((date) => compareLocalDate(date, today) >= 0);
           await removeDays(session.repositories, context, old, ahead);

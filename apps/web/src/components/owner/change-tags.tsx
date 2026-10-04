@@ -4,6 +4,7 @@ import type { ChangeDto, ResourceDto } from "@/lib/api/types.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { hoursText, markOf } from "./change-model.ts";
+import { WithClocks } from "./clock-text.tsx";
 
 /**
  * The changes that reshape the day being read, as tags at its top: other hours
@@ -50,9 +51,11 @@ export const ChangeTags = ({
             className={business ? "change-tag business" : "change-tag"}
             onClick={() => onOpen(change)}
           >
-            {[fillText(copy.todayTag, { mark: copy[`mark${markOf(change)}`] }), whose, hours, change.note]
-              .filter((part): part is string => part !== null && part !== "")
-              .join(" · ")}
+            <WithClocks
+              text={[fillText(copy.todayTag, { mark: copy[`mark${markOf(change)}`] }), whose, hours, change.note]
+                .filter((part): part is string => part !== null && part !== "")
+                .join(" · ")}
+            />
           </button>
         );
       })}

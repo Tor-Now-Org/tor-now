@@ -157,6 +157,16 @@ export const Month = ({
   /** A week whose decisions did not all fit under it, opened as a list. */
   const [openWeek, setOpenWeek] = useState<number | null>(null);
 
+  // Days chosen belong to the question they answered. Once it is answered or
+  // dropped, the next one starts with nothing picked: a first tap left behind
+  // turned the next single day into a range ending on it.
+  const askingForDays = choosing !== null;
+  useEffect(() => {
+    if (askingForDays) return;
+    setFrom(null);
+    setTo(null);
+  }, [askingForDays]);
+
   const onOffer = resources.filter((resource) => resource.active !== false);
 
   /**

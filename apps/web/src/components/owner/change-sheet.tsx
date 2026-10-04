@@ -27,6 +27,7 @@ import {
   type Who,
 } from "./change-model.ts";
 import { StrandedList } from "./stranded-list.tsx";
+import { WithClocks } from "./clock-text.tsx";
 
 const OUTCOMES: readonly ChangeOutcome[] = ["OFF_ALL_DAY", "OFF_PART", "OTHER_HOURS"];
 /** Typing a time asks again after a pause rather than on every key. */
@@ -130,11 +131,12 @@ const ChangeForm = ({
   }, [asked, token, business.id]);
 
   // Only an answer to the plan on screen may say it changes nothing.
-  const noChange = noChangeOf(draft, answered !== null && answered.asked === asked ? preview?.sameAsUsual : undefined);
+  const noChange = noChangeOf(draft, answered !== null && answered.asked === asked ? (preview ?? undefined) : undefined);
   const stranded = draft.outcome === null || hoursProblem ? 0 : (preview?.appointments.length ?? 0);
   const label = saveLabel(draft, stranded);
   const sentence = sentenceOf(
-    { ...draft, ranges: draft.ranges, usual, calendars: who.calendars.length },
+    // "Instead of" only of hours that were the usual ones on every day, for every calendar.
+    { ...draft, ranges: draft.ranges, usual: preview?.usualEverywhere ?? [], calendars: who.calendars.length },
     copy,
     language,
     names,
@@ -295,16 +297,16 @@ const ChangeForm = ({
         <ChangeSentence sentence={sentence} />
       )}
 
-      {preview !== null && preview.replaces.length > 0 && draft.outcome !== null && (
+      {preview !== null && preview.replaces.length > 0 && draft.outcome !== null && noChange === null && (
         <p className="change-replaces" role="note" style={{ margin: 0 }}>
-          {fillText(single ? copy.replacesDay : copy.replacesDays, {
+          <WithClocks text={fillText(single ? copy.replacesDay : copy.replacesDays, {
             what: preview.replaces
               .map((one) => {
                 const row = rowOf(one, copy, language);
                 return row.note === null ? row.what : `${row.what} · ${row.note}`;
               })
               .join(" / "),
-          })}
+          })} />
         </p>
       )}
 
@@ -318,7 +320,7 @@ const ChangeForm = ({
         />
       )}
 
-      {draft.outcome !== null && preview !== null && !hoursProblem && (
+      {draft.outcome !== null && preview !== null && !hoursProblem && noChange === null && (
         <StrandedList
           appointments={preview.appointments}
           timeZone={business.timeZone}
@@ -351,7 +353,15 @@ const ChangeForm = ({
 export const ChangeSentence = ({ sentence }: { sentence: Sentence }) => (
   <p className="change-sentence" aria-live="polite" style={{ margin: 0 }}>
     {fillParts(sentence.template, sentence.values).map((part, index) =>
-      part.filled && sentence.filled.includes(part.text) ? <b key={index}>{part.text}</b> : <span key={index}>{part.text}</span>,
+      part.filled && sentence.filled.includes(part.text) ? (
+        <b key={index}>
+          <WithClocks text={part.text} />
+        </b>
+      ) : (
+        <span key={index}>
+          <WithClocks text={part.text} />
+        </span>
+      ),
     )}
   </p>
 );

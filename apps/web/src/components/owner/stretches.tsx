@@ -309,6 +309,7 @@ export const Clock = ({
   const usable = isClock(value) && !wrong;
   return (
     <span
+      className="clock-box"
       style={{
         position: "relative",
         flex: 1,

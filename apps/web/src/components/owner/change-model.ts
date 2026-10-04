@@ -408,15 +408,34 @@ export const mayChange = (change: Pick<ChangeDto, "scope">, who: Who): boolean =
     : who.calendars.some((calendar) => calendar.id === (change.scope as { resourceId: string }).resourceId);
 
 /**
- * Other hours that are the very hours the days usually keep change nothing, and
- * saving them would only write a day identical to itself. The sheet says so in
- * place of the sentence, and holds saving back; an edit is pointed at removing
- * the change, which is what giving a day back its usual hours is.
+ * A change that would change nothing: other hours that are the very hours the
+ * days usually keep, or a day off or hours off nobody works anyway. The sheet
+ * says so in place of the sentence and holds saving back. Usual hours over an
+ * existing change — an edit, or a change these days already carry — point at
+ * removing it, which is what giving a day back its usual hours is.
  */
+export type NoChange = {
+  readonly key: "sameAsUsualDay" | "sameAsUsualDays" | "notWorkingDay" | "notWorkingDays" | "notWorkingHours";
+  readonly backToUsual: boolean;
+};
+
 export const noChangeOf = (
   draft: Pick<Draft, "outcome" | "fromDate" | "toDate" | "replacing">,
-  sameAsUsual: boolean | undefined,
-): { readonly key: "sameAsUsualDay" | "sameAsUsualDays"; readonly backToUsual: boolean } | null =>
-  draft.outcome === "OTHER_HOURS" && sameAsUsual === true
-    ? { key: draft.fromDate === draft.toDate ? "sameAsUsualDay" : "sameAsUsualDays", backToUsual: draft.replacing !== null }
-    : null;
+  answer: { readonly sameAsUsual?: boolean; readonly notWorkingAnyway?: boolean; readonly replaces?: readonly unknown[] } | undefined,
+): NoChange | null => {
+  if (answer === undefined || draft.outcome === null) return null;
+  const single = draft.fromDate === draft.toDate;
+  if (draft.outcome === "OTHER_HOURS" && answer.sameAsUsual === true) {
+    return {
+      key: single ? "sameAsUsualDay" : "sameAsUsualDays",
+      backToUsual: draft.replacing !== null || (answer.replaces?.length ?? 0) > 0,
+    };
+  }
+  if (draft.outcome !== "OTHER_HOURS" && answer.notWorkingAnyway === true) {
+    return {
+      key: draft.outcome === "OFF_PART" ? "notWorkingHours" : single ? "notWorkingDay" : "notWorkingDays",
+      backToUsual: false,
+    };
+  }
+  return null;
+};

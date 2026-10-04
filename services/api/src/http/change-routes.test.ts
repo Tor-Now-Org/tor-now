@@ -79,7 +79,7 @@ describe("the change routes", () => {
       token,
     );
     expect(status).toBe(200);
-    expect(body).toEqual({ days: 1, calendars: 1, appointments: [], replaces: [], usual: [{ start: "09:00", end: "17:00" }], sameAsUsual: false });
+    expect(body).toEqual({ days: 1, calendars: 1, appointments: [], replaces: [], usual: [{ start: "09:00", end: "17:00" }], usualEverywhere: [{ start: "09:00", end: "17:00" }], sameAsUsual: false, notWorkingAnyway: false });
   });
 
   it("says when other hours are the usual ones, and refuses to save them", async () => {

@@ -165,3 +165,30 @@ export const save = async (page: Page, sheet: Locator, label: string | RegExp = 
   expect((await written).status()).toBe(201);
   await expect(sheet).toBeHidden({ timeout: 15_000 });
 };
+
+/** Sunday to Thursday 09:00–13:00 and 14:00–19:00, Friday 09:00–13:00: a split week with a short Friday. */
+export const aSplitWeekOn = (shop: { business: { id: string }; owner: { token: string } }, resourceId: string) =>
+  call(`/businesses/${shop.business.id}/resources/${resourceId}/working-hours`, {
+    method: "PUT",
+    token: shop.owner.token,
+    body: {
+      week: [
+        ...[0, 1, 2, 3, 4].flatMap((dayOfWeek) => [
+          { dayOfWeek, start: "09:00", end: "13:00" },
+          { dayOfWeek, start: "14:00", end: "19:00" },
+        ]),
+        { dayOfWeek: 5, start: "09:00", end: "13:00" },
+      ],
+    },
+  });
+
+/** The first date in the next few weeks falling on a weekday (0 Sunday … 6 Saturday), with the day after in the same month. */
+export const aWeekdayAhead = (weekday: number, earliest = 2): string => {
+  for (let ahead = earliest; ahead < earliest + 35; ahead += 1) {
+    const date = aDayFromNow(ahead);
+    if (new Date(`${date}T00:00:00Z`).getUTCDay() === weekday && aDayFromNow(ahead + 1).slice(0, 7) === date.slice(0, 7)) {
+      return date;
+    }
+  }
+  throw new Error(`No weekday ${weekday} ahead`);
+};

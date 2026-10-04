@@ -5,6 +5,7 @@ import { formatLocalDate } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { laneColourOf } from "./event-colour.ts";
 import { markOf, rowOf } from "./change-model.ts";
+import { WithClocks } from "./clock-text.tsx";
 import {
   DAYS_IN_A_WEEK,
   BAND_ROWS_IN_A_WEEK,
@@ -195,7 +196,9 @@ export const WeekChanges = ({
               style={{ width: 9, height: 9, borderRadius: 999, flexShrink: 0, background: at < 0 ? "var(--closed)" : laneColourOf(at) }}
             />
             <span className="what">
-              <b>{change.note ?? row.what}</b>
+              <b>
+                <WithClocks text={change.note ?? row.what} />
+              </b>
               <small>
                 {formatLocalDate(change.fromDate, language)}
                 {change.toDate !== change.fromDate ? ` – ${formatLocalDate(change.toDate, language)}` : ""}

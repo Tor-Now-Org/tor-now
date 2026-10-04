@@ -10,6 +10,7 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { Button, Critical, Empty, Spinner } from "../ui.tsx";
 import { useCalendarChanges } from "./change-host.tsx";
 import { calendarPhrase, rowOf } from "./change-model.ts";
+import { WithClocks } from "./clock-text.tsx";
 import { emptyWeek, rangesFor, weekFromRanges, WeeklyHours, type DayHours } from "./weekly-hours.tsx";
 import { weekIsUsable } from "./usual-week.ts";
 
@@ -232,7 +233,9 @@ export const Schedule = ({
                       <button className="change-row" onClick={() => sheets.showChange(change, null)}>
                         <span className="when">{row.when}</span>
                         <span className="what">
-                          <b>{row.what}</b>
+                          <b>
+                            <WithClocks text={row.what} />
+                          </b>
                           {row.note !== null && <small>{row.note}</small>}
                         </span>
                       </button>

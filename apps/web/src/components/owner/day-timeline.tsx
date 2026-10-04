@@ -12,6 +12,7 @@ import {
   FOLD_HEIGHT,
   WORDS_MINIMUM,
   bandsOf,
+  closedInAny,
   clockOf,
   columnsOf,
   foldsIn,
@@ -148,7 +149,11 @@ export const DayTimeline = ({
     shown.flatMap((calendar) => calendar.open),
     everything,
   );
-  const folds = foldsIn(window, everything, opened);
+  /** Each lane's working hours, which is what makes the rest of its day a break rather than free time. */
+  const openOf = (calendar: (typeof shown)[number]) =>
+    calendar.open.map((range) => ({ start: minutesOf(range.start), end: minutesOf(range.end) }));
+  // A fold says "free" across every lane, so it may cover only hours every lane works.
+  const folds = foldsIn(window, [...everything, ...closedInAny(window, shown.map(openOf))], opened);
   const scale = scaleOf(window, folds);
 
   const hours: number[] = [];
@@ -208,7 +213,7 @@ export const DayTimeline = ({
         <div style={{ flex: 1, position: "relative", display: "flex", gap: 5 }}>
           {shown.map((calendar, laneIndex) => {
             const mine = itemsOf(calendar);
-            const bands = bandsOf(window, mine);
+            const bands = bandsOf(window, mine, openOf(calendar));
             // Things happening at once share the width, so a day off and the
             // appointment inside it are both visible and both the right length.
             const columns = columnsOf(mine);
@@ -249,6 +254,9 @@ export const DayTimeline = ({
                     return null;
                   }
                   const place = placeOf(bands, index, scale);
+                  if (band.kind === "closed") {
+                    return <ClosedSpace key={`closed-${band.start}`} place={place} label={copy.breakOf} />;
+                  }
                   return band.kind === "free" ? (
                     <FreeSpace
                       key={`free-${band.start}`}
@@ -527,3 +535,18 @@ const ItemBand = ({
 
 /** Whose it is: the same initial, in the same colour, everywhere. */
 
+
+/**
+ * Hours inside the day drawn that this calendar does not work — a lunch break,
+ * the gap between other hours. Drawn so the day keeps its shape, and offered
+ * for nothing: there is nobody to book then.
+ */
+const ClosedSpace = ({ place, label }: { place: { top: number; height: number }; label: string }) => (
+  <div
+    aria-hidden="true"
+    className="closed-space"
+    style={{ position: "absolute", insetInline: 3, top: place.top, height: place.height }}
+  >
+    {place.height >= WORDS_MINIMUM && <span>{label}</span>}
+  </div>
+);

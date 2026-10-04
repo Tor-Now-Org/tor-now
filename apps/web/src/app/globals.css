@@ -1380,3 +1380,16 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
   font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;background:var(--caution-soft);color:oklch(45% 0.1 65)}
 .change-tag.business{background:var(--closed);color:var(--on-accent)}
 .change-same{padding:9px 11px;border-radius:10px;background:var(--sunken);border:1px dashed var(--line);font-size:13px;line-height:1.55;color:var(--muted)}
+.closed-space{border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:var(--faint);
+  background:repeating-linear-gradient(-45deg,transparent,transparent 5px,var(--line) 5px,var(--line) 6px)}
+
+/* A time field's own text is hidden and its value drawn by a 24-hour face over
+   it (see ClockFace in components/ui.tsx). The browser still paints the segment
+   being edited in its own highlight colours, which put "13" over "13:00" while
+   typing — and ignores colours set on that segment — so the editing area itself
+   is invisible (it still takes the keys and the picker), and the box shows the focus. */
+input[type="time"]::-webkit-datetime-edit{opacity:0}
+input[type="time"]::selection{background:transparent;color:transparent}
+.clock-box:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.nowrap{white-space:nowrap}
+.change-row .when{width:auto;min-width:64px;white-space:nowrap}

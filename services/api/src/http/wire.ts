@@ -223,7 +223,9 @@ export const changePreviewOut = (preview: ChangePreview) => ({
   appointments: preview.appointments.map(strandedOut),
   replaces: preview.replaces.map(changeOut),
   usual: rangesOut(preview.usual),
+  usualEverywhere: preview.usualEverywhere === null ? null : rangesOut(preview.usualEverywhere),
   sameAsUsual: preview.sameAsUsual,
+  notWorkingAnyway: preview.notWorkingAnyway,
 });
 
 export const impactOut = (impact: Impact) => ({

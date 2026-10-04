@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   aBookingAt,
   aChange,
+  aSplitWeekOn,
+  aWeekdayAhead,
   aMember,
   aTwoCalendarShop,
   changeFromThePlus,
@@ -306,8 +308,10 @@ test.describe("over, and instead of, an earlier change", () => {
     const sheet = await changeFromThePlus(page, day);
     await forWhom(sheet).getByRole("button", { name: "כל העסק" }).click();
     await outcome(sheet, "עובדים בשעות אחרות").click();
-    await expect(sheet.getByRole("note")).toContainText('ביום הזה כבר יש שינוי: "עובדים 09:00–14:00 · ערב חג". השינוי החדש יחליף אותו.');
+    // It opens on the usual day, which over an existing change points at removing it instead.
+    await expect(sheet.getByText(/כדי להחזיר לשעות הרגילות, מוחקים את השינוי/)).toBeVisible();
     await typeHours(sheet, "09:00", "13:00");
+    await expect(sheet.getByRole("note")).toContainText('ביום הזה כבר יש שינוי: "עובדים 09:00–14:00 · ערב חג". השינוי החדש יחליף אותו.');
     await save(page, sheet);
 
     expect(await changesOf(shop, day, day)).toMatchObject([{ outcome: "OTHER_HOURS", ranges: [{ start: "09:00", end: "13:00" }] }]);
@@ -662,5 +666,201 @@ test.describe("the schedule's layout", () => {
     await page.getByRole("tab", { name: "שינויים" }).click();
     await expect(page.getByRole("group", { name: "של מי השינויים" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "שינוי ביומן א" })).toBeVisible();
+  });
+});
+
+/**
+ * Found on a second look, in the browser, at the sheet's harder cases: what
+ * the sentence says across days and calendars that keep different hours, a
+ * change that would change nothing, the clocks while typing, a choice of days
+ * left behind, and a day with a break in it.
+ */
+test.describe("the sentence's usual hours", () => {
+  test("are said only when every day of the change keeps them", async ({ page }) => {
+    const shop = await aTwoCalendarShop("ימים שונים");
+    await aSplitWeekOn(shop, shop.resource.id);
+    const thursday = aWeekdayAhead(4);
+    const friday = aDayFromNow(Math.round((Date.parse(`${thursday}T00:00:00Z`) - Date.parse(`${aDayFromNow(0)}T00:00:00Z`)) / 86_400_000) + 1);
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+
+    // Thursday alone: its usual day, said.
+    let sheet = await changeFromThePlus(page, thursday);
+    await outcome(sheet, "עובדים בשעות אחרות").click();
+    await typeHours(sheet, "09:00", "12:00", 0);
+    await expect(theSentence(sheet)).toContainText("במקום 09:00–13:00, 14:00–19:00");
+    await sheet.getByRole("button", { name: "ביטול", exact: true }).click();
+
+    // Thursday and Friday, whose usual days differ: nothing is said to be replaced.
+    sheet = await changeFromThePlus(page, thursday, friday);
+    await outcome(sheet, "עובדים בשעות אחרות").click();
+    await typeHours(sheet, "09:00", "12:00", 0);
+    await expect(theSentence(sheet)).toContainText("ביומן א רק 09:00–12:00");
+    await expect(theSentence(sheet)).not.toContainText("במקום");
+  });
+
+  test("are not said of the whole business when its calendars keep different hours", async ({ page }) => {
+    const shop = await aTwoCalendarShop("עסק שונה");
+    await aSplitWeekOn(shop, shop.resource.id);
+    const day = aWeekdayAhead(1);
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    const sheet = await changeFromThePlus(page, day);
+    await forWhom(sheet).getByRole("button", { name: "כל העסק" }).click();
+    await outcome(sheet, "עובדים בשעות אחרות").click();
+    await typeHours(sheet, "10:00", "12:00", 0);
+    await expect(theSentence(sheet)).toContainText("העסק פתוח רק 10:00");
+    await expect(theSentence(sheet)).not.toContainText("במקום");
+  });
+
+  test("keep each range of hours on one line", async ({ page }) => {
+    const shop = await aTwoCalendarShop("שורה");
+    await aSplitWeekOn(shop, shop.resource.id);
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    const sheet = await changeFromThePlus(page, aWeekdayAhead(2));
+    await outcome(sheet, "עובדים בשעות אחרות").click();
+    await typeHours(sheet, "09:00", "12:00", 0);
+    for (const range of ["09:00–12:00", "14:00–19:00", "09:00–13:00"]) {
+      await expect(theSentence(sheet).locator(".nowrap", { hasText: range }).first()).toHaveCSS("white-space", "nowrap");
+    }
+  });
+});
+
+test.describe("a change that would change nothing", () => {
+  test("a day off on a day nobody works says so, and is not saved", async ({ page }) => {
+    const shop = await aTwoCalendarShop("שבת");
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    // The fixture's calendars work every day, so the second gets Saturday off in its week.
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`, {
+      method: "PUT",
+      token: shop.owner.token,
+      body: { week: [0, 1, 2, 3, 4, 5].map((dayOfWeek) => ({ dayOfWeek, start: "09:00", end: "17:00" })) },
+    });
+    const sheet = await changeFromThePlus(page, aWeekdayAhead(6));
+    await outcome(sheet, "לא עובדים כל היום").click();
+    await expect(sheet.getByText("ממילא לא עובדים ביום הזה — אין כאן שינוי.")).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "שמירת השינוי" })).toBeDisabled();
+    // Nothing else contradicts it on the way down.
+    await expect(sheet.getByText(/אין תורים/)).toHaveCount(0);
+    await expect(theSentence(sheet)).toHaveCount(0);
+  });
+
+  test("hours off that are already outside the hours worked say so — a break included", async ({ page }) => {
+    const shop = await aTwoCalendarShop("הפסקה");
+    await aSplitWeekOn(shop, shop.resource.id);
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    const sheet = await changeFromThePlus(page, aWeekdayAhead(1));
+    await outcome(sheet, "לא עובדים בחלק מהיום").click();
+    await typeHours(sheet, "13:00", "14:00", 0);
+    await expect(sheet.getByText("ממילא לא עובדים בשעות האלה — אין כאן שינוי.")).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "שמירת השינוי" })).toBeDisabled();
+    // Reach into the afternoon and it is a change again.
+    await typeHours(sheet, "13:00", "15:00", 0);
+    await expect(sheet.getByText(/אין כאן שינוי/)).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: "שמירת השינוי" })).toBeEnabled();
+  });
+
+  test("usual hours over a change the day already carries point at removing that change", async ({ page }) => {
+    const shop = await aTwoCalendarShop("מעל שינוי");
+    const day = aWeekdayAhead(2);
+    await aChange(shop, { scope: { kind: "CALENDAR", resourceId: shop.resource.id }, outcome: "OTHER_HOURS", fromDate: day, ranges: [{ start: "09:00", end: "12:00" }] });
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    const sheet = await changeFromThePlus(page, day);
+    await outcome(sheet, "עובדים בשעות אחרות").click();
+    await sheet.getByRole("button", { name: "כמו בדרך כלל" }).click();
+    await expect(sheet.getByText("אלה השעות הרגילות של היום הזה — אין כאן שינוי. כדי להחזיר לשעות הרגילות, מוחקים את השינוי.")).toBeVisible();
+    // The line saying the new change replaces the old one would contradict it.
+    await expect(sheet.getByRole("note")).toHaveCount(0);
+  });
+
+  test("is refused by the API", async () => {
+    const shop = await aTwoCalendarShop("שרת כלום");
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`, {
+      method: "PUT",
+      token: shop.owner.token,
+      body: { week: [{ dayOfWeek: 1, start: "09:00", end: "17:00" }] },
+    });
+    await expect(
+      aChange(shop, { scope: { kind: "CALENDAR", resourceId: shop.resource.id }, outcome: "OFF_ALL_DAY", fromDate: aWeekdayAhead(6) }),
+    ).rejects.toThrow(/400/);
+    await expect(
+      aChange(shop, { scope: { kind: "CALENDAR", resourceId: shop.resource.id }, outcome: "OFF_PART", fromDate: aWeekdayAhead(1), ranges: [{ start: "18:00", end: "19:00" }] }),
+    ).rejects.toThrow(/400/);
+  });
+});
+
+test.describe("the clocks while typing", () => {
+  test("show only the face and a focus ring, never the browser's own digits over it", async ({ page }) => {
+    const shop = await aTwoCalendarShop("שעון");
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    const sheet = await changeFromThePlus(page, aWeekdayAhead(2));
+    await outcome(sheet, "לא עובדים בחלק מהיום").click();
+    const until = sheet.getByLabel("עד", { exact: true }).first();
+    const box = until.locator("xpath=ancestor::span[contains(@class, \"clock-box\")][1]");
+    await until.focus();
+    await page.keyboard.press("ArrowUp");
+    // The browser paints the segment being edited in its own colours whatever
+    // the field's text colour is, so its editing area is made invisible — it
+    // still takes the keys and the picker — and the face shows the time.
+    const hidden = await page.evaluate(() =>
+      Array.from(document.styleSheets).some((sheet) =>
+        Array.from(sheet.cssRules).some(
+          (rule) =>
+            rule instanceof CSSStyleRule &&
+            rule.selectorText.includes("::-webkit-datetime-edit") &&
+            !rule.selectorText.includes("-field") &&
+            rule.style.opacity === "0",
+        ),
+      ),
+    );
+    expect(hidden).toBe(true);
+    // And the face says the value the arrow key set.
+    await expect(box).toContainText(await until.inputValue());
+    // The focus is shown by the box itself, round it.
+    await expect(box).toHaveCSS("outline-style", "solid");
+  });
+});
+
+test.describe("choosing days again", () => {
+  test("starts with nothing picked after the last sheet was cancelled, or saved", async ({ page }) => {
+    const shop = await aTwoCalendarShop("שוב");
+    const [first, , third] = daysInOneMonth(3, 2) as [string, string, string];
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    let sheet = await changeFromThePlus(page, first);
+    await sheet.getByRole("button", { name: "ביטול", exact: true }).click();
+    // One tap, one day: the first day of the last choice is not still there to make a range.
+    sheet = await changeFromThePlus(page, third);
+    await outcome(sheet, "לא עובדים כל היום").click();
+    await expect(theSentence(sheet)).toContainText(/^ב־\d+ ב/);
+    await expect(theSentence(sheet)).not.toContainText("בין");
+    await save(page, sheet);
+    sheet = await changeFromThePlus(page, first);
+    await outcome(sheet, "לא עובדים כל היום").click();
+    await expect(theSentence(sheet)).not.toContainText("בין");
+  });
+});
+
+test.describe("a day with a break in it", () => {
+  test("draws the break as a break, counts only free hours, and offers nothing in it", async ({ page }) => {
+    const shop = await aTwoCalendarShop("יום מפוצל");
+    await aSplitWeekOn(shop, shop.resource.id);
+    const day = aWeekdayAhead(1);
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    await openTheDayOf(page, day);
+    await expect(page.getByText("הפסקה", { exact: true })).toBeVisible({ timeout: 15_000 });
+    // Two folds, each its own free hours — not one fold across lunch.
+    await expect(page.getByRole("button", { name: /09:00–13:00 · פנוי · 4 שעות/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /14:00–19:00 · פנוי · 5 שעות/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /09:00–19:00/ })).toHaveCount(0);
+    // The break is not a control.
+    await expect(page.getByRole("button", { name: /^הפסקה/ })).toHaveCount(0);
+  });
+
+  test("other hours with a gap between them are drawn the same way", async ({ page }) => {
+    const shop = await aTwoCalendarShop("שעות עם פער");
+    const day = aWeekdayAhead(2);
+    await aChange(shop, { scope: { kind: "CALENDAR", resourceId: shop.resource.id }, outcome: "OTHER_HOURS", fromDate: day, ranges: [{ start: "09:00", end: "11:00" }, { start: "16:00", end: "18:00" }] });
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    await openTheDayOf(page, day);
+    await expect(page.getByText("הפסקה", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /09:00–18:00/ })).toHaveCount(0);
   });
 });
