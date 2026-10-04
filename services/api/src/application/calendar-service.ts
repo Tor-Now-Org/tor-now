@@ -1,13 +1,10 @@
 import {
-  absorbBlockages,
-  cancelAppointment,
   compareByName,
   dayOfWeekOf,
   manages,
   displayName,
   END_OF_DAY,
   instantToZoned,
-  interval,
   MIDNIGHT,
   minutesBetweenInstants,
   notFound,
@@ -76,12 +73,11 @@ export type BusinessMonth = {
 };
 import { closureBandsOf, type ClosureBand } from "./closure-bands.ts";
 import { entitlementToday } from "./billing.ts";
-import { notificationFor } from "./notifications.ts";
-import { namedFor, stillToCome, type Impact, type Upcoming } from "./stranded.ts";
-import { TEMPLATES } from "../ports/notifier.ts";
+import { namedFor, type Impact, type Upcoming } from "./stranded.ts";
 import type { BookedAppointment } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 import { markSpanForRecheck } from "./waiting-service.ts";
+import { bookedInside, cancelAndTell, writeBlocks } from "./schedule-writes.ts";
 
 /**
  * How long the month containing this date is. Derived rather than tabulated, so
@@ -192,8 +188,6 @@ export type MonthDay = {
 /** Enough to answer a phone call without becoming a page of its own. */
 const SEARCH_RESULTS = 25;
 
-/** Nothing is booked for longer than this, which is what makes the reach below enough. */
-const A_DAY = 24 * 60 * 60 * 1000;
 
 /** The spans a blockage was asked for, checked before any of them is written. */
 const spansOf = (
@@ -209,42 +203,6 @@ const spansOf = (
     }
     return { resourceId, businessId, startAt, endAt, reason: span.reason };
   });
-
-/**
- * What is booked underneath a blockage.
- *
- * Overlap rather than containment: a blockage from two o'clock catches the
- * appointment that started at half past one and runs into it, which is exactly
- * the one somebody would otherwise turn up for.
- */
-const bookedInside = async (
-  repositories: Parameters<typeof loadManagedBusiness>[0],
-  businessId: BusinessId,
-  spans: readonly { resourceId: ResourceId; startAt: number; endAt: number }[],
-  now: number,
-): Promise<readonly Appointment[]> => {
-  if (spans.length === 0) return [];
-  const from = Math.min(...spans.map((span) => span.startAt));
-  const to = Math.max(...spans.map((span) => span.endAt));
-  const booked = await repositories.appointments.listForBusinessBetween(
-    businessId,
-    // The query selects on when an appointment *starts*, so it reaches back a
-    // day: the one that began at half past one and runs into a two o'clock
-    // blockage is the very one somebody would otherwise turn up for.
-    (from - A_DAY) as never,
-    to as never,
-  );
-  return booked.filter(
-    (appointment) =>
-      stillToCome(appointment, now) &&
-      spans.some(
-        (span) =>
-          appointment.resourceId === span.resourceId &&
-          appointment.startAt < span.endAt &&
-          span.startAt < appointment.endAt,
-      ),
-  );
-};
 
 export const calendarService = ({
   unitOfWork,
@@ -675,63 +633,19 @@ export const calendarService = ({
       // asks, and answered the same way: the caller says, and this obeys.
       if (upcoming === "CANCEL") {
         const stranded = await bookedInside(repositories, businessId, wanted, clock.now());
-        for (const appointment of stranded) {
-          const outcome = cancelAppointment(appointment, business, "BUSINESS", clock.now());
-          const cancelled = await repositories.appointments.update(appointment.id, {
-            status: "CANCELLED",
-            ...outcome,
-          });
-          const customer = await repositories.users.findById(appointment.customerId);
-          if (customer !== null) {
-            await session.outbox.enqueue(
-              notificationFor(TEMPLATES.bookingCancelled, cancelled, business, customer),
-            );
-          }
-        }
+        await cancelAndTell(session, business, stranded, clock.now());
       }
-
-      // A new blockage absorbs the ones it meets rather than lying on top of
-      // them. Two blockages over the same hour is one hour kept free said
-      // twice, and removing either of them gives back nothing — which is how a
-      // calendar stops being something anybody trusts.
-      const reach = {
-        from: Math.min(...wanted.map((span) => span.startAt)) - A_DAY,
-        to: Math.max(...wanted.map((span) => span.endAt)) + A_DAY,
-      };
-      const nearby = await repositories.blocks.listForResourceBetween(
-        resourceId,
-        reach.from as never,
-        reach.to as never,
-      );
-      const { removed, spans: kept } = absorbBlockages(
-        nearby,
-        wanted.map((span) => interval(span.startAt, span.endAt)),
-      );
-      for (const block of removed) await repositories.blocks.delete(block.id);
-
-      // What it is called: what this decision said, or — when it said nothing —
-      // whatever the blockage it swallowed was already called.
-      const reason =
-        wanted.find((span) => span.reason.trim() !== "")?.reason.trim() ??
-        removed.find((block) => block.reason.trim() !== "")?.reason.trim() ??
-        "";
 
       // One decision, one group — including a blockage of a single day, so
       // "what did this tap create" always has a truthful answer.
-      const groupId = crypto.randomUUID();
-      const made: Block[] = [];
-      for (const span of kept) {
-        made.push(
-          await repositories.blocks.create({
-            resourceId,
-            businessId,
-            startAt: span.start,
-            endAt: span.end,
-            reason,
-            groupId,
-          }),
-        );
-      }
+      const made = await writeBlocks(
+        repositories,
+        businessId,
+        resourceId,
+        wanted,
+        wanted.find((span) => span.reason.trim() !== "")?.reason ?? "",
+        crypto.randomUUID(),
+      );
       return made;
     });
   },

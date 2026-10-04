@@ -8,6 +8,7 @@ import { colourOf } from "./event-colour.ts";
 import { Mark } from "./lane-mark.tsx";
 import {
   BOX_MINIMUM,
+  holdsAnAppointment,
   FOLD_HEIGHT,
   WORDS_MINIMUM,
   bandsOf,
@@ -72,6 +73,7 @@ export const DayTimeline = ({
   timeZone,
   lanes,
   offered,
+  durations,
   onPick,
 }: {
   day: BusinessDayDto;
@@ -83,6 +85,8 @@ export const DayTimeline = ({
    * colour is taken from — the same order on Tuesday as on Thursday.
    */
   offered: readonly string[];
+  /** How long each service on offer takes; null until known. A gap shorter than all of them cannot be booked. */
+  durations: readonly number[] | null;
   onPick: (picked: Picked) => void;
 }) => {
   const copy = useCopy("owner");
@@ -252,6 +256,7 @@ export const DayTimeline = ({
                       place={place}
                       words={words}
                       label={copy.freeWord}
+                      bookable={holdsAnAppointment(band.end - band.start, durations)}
                       onClick={() =>
                         onPick({
                           kind: "free",
@@ -326,16 +331,36 @@ const FreeSpace = ({
   place,
   words,
   label,
+  bookable,
   onClick,
 }: {
   band: Extract<Band<Item>, { kind: "free" }>;
   place: { top: number; height: number };
   words: Parameters<typeof spokenLength>[1];
   label: string;
+  /** Long enough for the shortest service: only then is the seam an invitation. */
+  bookable: boolean;
   onClick: () => void;
 }) => {
   const length = band.end - band.start;
   const said = `${label} · ${spokenLength(length, words)}`;
+
+  // A seam too short for any appointment is only a seam: a "+" there offered a
+  // booking nobody could make. The gap is still drawn, because it is there.
+  if (place.height < BOX_MINIMUM && !bookable) {
+    return (
+      <i
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          insetInline: 3,
+          top: place.top + place.height / 2,
+          height: 1,
+          background: "var(--line)",
+        }}
+      />
+    );
+  }
 
   // Too little room for a box: a seam between the two things either side, which
   // is what ten minutes between appointments actually is.

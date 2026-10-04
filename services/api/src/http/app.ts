@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { asId, forbidden, microShekels, parseLocalDate, type BusinessId } from "@tor-now/domain";
+import { asId, forbidden, microShekels, parseLocalDate, type BusinessId, type ChangeScope } from "@tor-now/domain";
 import type { Services } from "../composition.ts";
 import {
   parseBody,
@@ -398,6 +398,13 @@ export const createApp = (services: Services) => {
 // Owner routes. Every one of these authorizes against a Membership explicitly
 // (ADR 0007) on top of the Row Level Security that already covers them.
 // -----------------------------------------------------------------------------
+
+/** A change's scope off the wire, its calendar named as one. */
+const scopeOf = (
+  scope: { kind: "BUSINESS" } | { kind: "CALENDAR"; resourceId: string },
+): ChangeScope =>
+  scope.kind === "BUSINESS" ? scope : { kind: "CALENDAR", resourceId: asId<"Resource">(scope.resourceId) };
+
 const ownerRoutes = (services: Services) => {
   const owner = new Hono<{ Variables: { actor: Actor } }>();
   const actorOf = (context: { get: (key: "actor") => Actor }) => context.get("actor");
@@ -711,6 +718,60 @@ const ownerRoutes = (services: Services) => {
       idParam(context, "businessId"),
       from,
       to,
+    );
+    return context.json({ removed });
+  });
+
+  /**
+   * "שינוי ביומן": one way to change a day. Permission is by who it is for — the
+   * whole business is an owner's or a manager's, a calendar whoever keeps it —
+   * and an edit is one replacement, never two writes.
+   */
+  owner.get("/:businessId/changes", async (context) => {
+    const { from, to } = parseQuery(context, schema.dateRangeSchema);
+    const changes = await services.changes.list(actorOf(context), idParam(context, "businessId"), from, to);
+    return context.json(changes.map(wire.changeOut));
+  });
+
+  owner.get("/:businessId/changes/:changeId", async (context) => {
+    const change = await services.changes.get(
+      actorOf(context),
+      idParam(context, "businessId"),
+      context.req.param("changeId"),
+    );
+    return context.json(wire.changeOut(change));
+  });
+
+  owner.post("/:businessId/changes/preview", async (context) => {
+    const { replacing, ...plan } = await parseBody(context, schema.changePreviewSchema);
+    const preview = await services.changes.preview(
+      actorOf(context),
+      idParam(context, "businessId"),
+      { ...plan, scope: scopeOf(plan.scope) },
+      replacing,
+    );
+    return context.json(wire.changePreviewOut(preview));
+  });
+
+  owner.post("/:businessId/changes", async (context) => {
+    const { upcoming, replacing, ...plan } = await parseBody(context, schema.changeSchema);
+    const outcome = await services.changes.apply(
+      actorOf(context),
+      idParam(context, "businessId"),
+      { ...plan, scope: scopeOf(plan.scope) },
+      upcoming,
+      replacing,
+    );
+    return context.json(outcome, 201);
+  });
+
+  owner.delete("/:businessId/changes/:changeId", async (context) => {
+    const { date } = parseQuery(context, schema.changeRemovalSchema);
+    const removed = await services.changes.remove(
+      actorOf(context),
+      idParam(context, "businessId"),
+      context.req.param("changeId"),
+      date ?? null,
     );
     return context.json({ removed });
   });

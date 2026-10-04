@@ -1,43 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
-import type {
-  BlockDto,
-  BusinessDto,
-  OverrideDto,
-  ResourceDto,
-  WorkingHoursDto,
-} from "@/lib/api/types.ts";
-import { addDaysTo, dateIn, formatLocalDate, timeIn, todayIn } from "@/lib/format.ts";
+import type { BusinessDto, ChangeDto, ResourceDto, WorkingHoursDto } from "@/lib/api/types.ts";
+import { addDaysTo, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { mergedRanges, TEXT_RULES, type TimeRange } from "@tor-now/domain";
-import { canCloseBusiness } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { useFieldProblem } from "@/lib/use-field-problem.ts";
-import { Button, Card, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
-import { Stretches } from "./stretches.tsx";
-import { isUsable } from "./usual-week.ts";
-import { spansOf } from "./blockage.ts";
-import { shopWideDates } from "./shop-days.ts";
-import {
-  emptyWeek,
-  rangesFor,
-  weekFromRanges,
-  WeeklyHours,
-  type DayHours,
-} from "./weekly-hours.tsx";
+import { Button, Critical, Empty, Spinner } from "../ui.tsx";
+import { useCalendarChanges } from "./change-host.tsx";
+import { calendarPhrase, rowOf } from "./change-model.ts";
+import { emptyWeek, rangesFor, weekFromRanges, WeeklyHours, type DayHours } from "./weekly-hours.tsx";
 import { weekIsUsable } from "./usual-week.ts";
 
 /**
- * The three schedule layers of ADR 0002, as three tabs — because each has
- * exactly one meaning and mixing them in one editor is what produced the
- * ambiguity the ADR removed.
+ * The schedule: the usual week, and the changes to it.
+ *
+ * "שעות קבועות" is ADR 0002's recurring layer, edited as a week. "שינויים" is
+ * every change to a day — a day off, some hours off, other hours — for one
+ * calendar or for the whole business, in one list, each row the same sentence
+ * shortened. A calendar shows only its own changes; the business's are under
+ * "כל העסק", where a worker reads them and an owner or manager also makes them.
  */
-type Layer = "hours" | "overrides" | "blocks";
+type Tab = "usual" | "changes";
 
-const OVERRIDE_WINDOW_DAYS = 90;
+/** What the list reads ahead: the longest change made at once. */
+const CHANGES_AHEAD_DAYS = 365;
+
+const BUSINESS = "BUSINESS";
 
 export const Schedule = ({
   token,
@@ -52,207 +42,99 @@ export const Schedule = ({
   openOn?: string;
 }) => {
   const copy = useCopy("owner");
+  const changeCopy = useCopy("change");
   const { language } = useLanguage();
   const errorText = useErrorText();
-  const problem = useFieldProblem();
 
-  const [layer, setLayer] = useState<Layer>("hours");
-  const [resource, setResource] = useState<ResourceDto | null>(null);
-
-  // Resources are fetched by the parent and arrive after this mounts, so the
-  // selection cannot come from the initial render alone — it has to follow the
-  // list. Without this the screen waits forever for a calendar it already has.
-  //
-  // `openOn` is the calendar somebody asked for by name, arriving from the
-  // calendars panel: it wins over both the current selection and the default,
-  // because a person who pressed "edit" on one row means that row.
-  useEffect(() => {
-    setResource((current) => {
-      const asked =
-        openOn === undefined
-          ? undefined
-          : resources.find((candidate) => candidate.id === openOn);
-      if (asked !== undefined) return asked;
-      return current !== null && resources.some((candidate) => candidate.id === current.id)
-        ? current
-        : (resources[0] ?? null);
-    });
-  }, [resources, openOn]);
+  const [tab, setTab] = useState<Tab>("usual");
+  /** The calendar on screen, or the whole business — which only the changes have. */
+  const [scope, setScope] = useState<string | null>(null);
   const [hours, setHours] = useState<WorkingHoursDto[] | null>(null);
   const [week, setWeek] = useState<DayHours[]>(emptyWeek);
   const [saved, setSaved] = useState(false);
-  /**
-   * Every calendar's special days, raw. Business-wide and calendar-independent,
-   * so it is fetched on its own rather than with the chosen calendar's week —
-   * switching chairs changes nothing about it and used to refetch it anyway.
-   * `null` is "not read yet", which an empty list is not.
-   */
-  const [everyOverride, setEveryOverride] = useState<OverrideDto[] | null>(null);
-  const [blocks, setBlocks] = useState<BlockDto[]>([]);
+  const [changes, setChanges] = useState<readonly ChangeDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [freshness, setFreshness] = useState(0);
 
-  const [editingRange, setEditingRange] = useState<{ id: string | null; dayOfWeek: number; start: string; end: string } | null>(null);
-  /**
-   * A special day: which date, and the stretches it is open for. An empty list
-   * of stretches is not the same as none — "closed" is the absence of them,
-   * which is what ADR 0002 stores, so the two are one choice with a list under
-   * it rather than two independent fields.
-   */
-  const [editingOverride, setEditingOverride] = useState<{
-    date: string;
-    ranges: TimeRange[];
-  } | null>(null);
-  /**
-   * A blockage: the days it covers, and the hours of each of them. A week away
-   * is one decision, and so is an hour kept free every day of that week.
-   */
-  const [editingBlock, setEditingBlock] = useState<{
-    from: string;
-    to: string;
-    allDay: boolean;
-    ranges: TimeRange[];
-    reason: string;
-  } | null>(null);
+  const onOffer = resources.filter((resource) => resource.active !== false);
+  const many = onOffer.length > 1;
+  const resource =
+    scope === null || scope === BUSINESS ? null : (onOffer.find((one) => one.id === scope) ?? null);
 
-  const load = useCallback(
-    async (isStale: () => boolean = () => false) => {
-    if (resource === null) return;
-    const from = todayIn(business.timeZone);
-    const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
-    try {
-      const [loadedHours, loadedBlocks] = await Promise.all([
-        api.listWorkingHours(token, business.id, resource.id),
-        // The same span the special days are read over. This used to read the
-        // day the screen opened on, so a blockage made for later was missing
-        // from the list that exists to show it — and it came back with a day of
-        // appointments, customers' names and numbers included, that this screen
-        // never draws.
-        api.listBlocks(token, business.id, resource.id, { from, to }),
-      ]);
-      // Switched calendars while this was in flight: the answer is for the one
-      // being left, and writing the week from it would throw away whatever has
-      // been typed into the one now on screen.
-      if (isStale()) return;
-      setHours(loadedHours);
-      setWeek(weekFromRanges(loadedHours));
-      setBlocks(loadedBlocks);
-    } catch (cause) {
-      if (isStale()) return;
-      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
-    }
-    },
-    [token, business.id, business.timeZone, resource, errorText],
-  );
+  // Resources arrive after this mounts, so the selection follows the list.
+  // `openOn` is the calendar somebody asked for by name, and wins.
+  useEffect(() => {
+    setScope((current) => {
+      const asked = openOn === undefined ? undefined : onOffer.find((one) => one.id === openOn);
+      if (asked !== undefined) return asked.id;
+      if (current === BUSINESS && many) return current;
+      return current !== null && onOffer.some((one) => one.id === current) ? current : (onOffer[0]?.id ?? null);
+    });
+    // onOffer is derived from resources on every render; resources is what changes.
+  }, [resources, openOn]);
 
-  /**
-   * The special days of every calendar, in one request. Deliberately not keyed
-   * on the chosen calendar: a day the shop closed is one Override per calendar,
-   * and telling that from one chair's day off needs all of them — the same
-   * answer whichever chair is on screen.
-   */
-  const loadOverrides = useCallback(
-    async (isStale: () => boolean = () => false) => {
-      const from = todayIn(business.timeZone);
-      const to = addDaysTo(from, OVERRIDE_WINDOW_DAYS);
-      try {
-        const everyone = await api.listAllOverrides(token, business.id, { from, to });
-        if (isStale()) return;
-        setEveryOverride(everyone);
-      } catch (cause) {
-        if (isStale()) return;
-        setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
-      }
-    },
-    [token, business.id, business.timeZone, errorText],
-  );
-
-  const overrides = useMemo(
-    () =>
-      resource === null
-        ? []
-        : (everyOverride ?? []).filter((override) => override.resourceId === resource.id),
-    [everyOverride, resource],
-  );
-
-  /** The dates on which an override is the shop's decision, not this chair's. */
-  const shopDates = useMemo(
-    // One list per calendar, taken from the calendars on screen rather than
-    // from the rows: a calendar with no special day has to count as agreeing
-    // to nothing, and built the other way round it would drop out and change
-    // what "every calendar said the same" means.
-    () =>
-      shopWideDates(
-        resources.map((one) =>
-          (everyOverride ?? []).filter((override) => override.resourceId === one.id),
-        ),
-        resources.length,
-      ),
-    [everyOverride, resources],
-  );
+  const sheets = useCalendarChanges({
+    token,
+    business,
+    resources: onOffer,
+    onChanged: () => setFreshness((key) => key + 1),
+  });
 
   /**
    * A calendar's week belongs to that calendar. Leaving it on screen while the
-   * next one is fetched let the hours of one chair be read — and edited, and
-   * saved — as if they were another's, which on a slow answer is a week
-   * overwritten with a week that was never on the screen it was typed into.
+   * next one is fetched let one chair's hours be edited and saved as another's.
    */
-  useEffect(() => {
-    setHours(null);
-    setWeek(emptyWeek);
-  }, [resource?.id]);
+  const loadWeek = useCallback(
+    async (isStale: () => boolean) => {
+      if (resource === null) return;
+      setHours(null);
+      setWeek(emptyWeek);
+      try {
+        const loaded = await api.listWorkingHours(token, business.id, resource.id);
+        if (isStale()) return;
+        setHours(loaded);
+        setWeek(weekFromRanges(loaded));
+      } catch (cause) {
+        if (!isStale()) setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+      }
+    },
+    [token, business.id, resource, errorText],
+  );
 
   useEffect(() => {
     let stale = false;
-    void load(() => stale);
+    void loadWeek(() => stale);
     return () => {
       stale = true;
     };
-  }, [load]);
+  }, [loadWeek]);
 
+  // Every change this person may see, read once for the whole list and
+  // narrowed by the chip; read again whenever a change is made or removed.
   useEffect(() => {
-    let stale = false;
-    void loadOverrides(() => stale);
+    let current = true;
+    const from = todayIn(business.timeZone);
+    api
+      .listChanges(token, business.id, { from, to: addDaysTo(from, CHANGES_AHEAD_DAYS) })
+      .then((found) => {
+        if (current) setChanges(found);
+      })
+      .catch((cause: unknown) => {
+        if (current) setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+      });
     return () => {
-      stale = true;
+      current = false;
     };
-  }, [loadOverrides]);
+  }, [token, business.id, business.timeZone, freshness, errorText]);
 
-  const act = async (action: () => Promise<unknown>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await action();
-      setEditingRange(null);
-      setEditingOverride(null);
-      setEditingBlock(null);
-      await Promise.all([load(), loadOverrides()]);
-    } catch (cause) {
-      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /**
-   * The week as edited, in place of the week that was there.
-   *
-   * Replacing rather than reconciling: the editor speaks in days, the store
-   * speaks in ranges, and there is no correspondence between the two to
-   * preserve — a day that lost its break has one range where it had two.
-   */
+  /** The week as edited, in place of the week that was there. */
   const saveWeek = async () => {
     if (resource === null || hours === null) return;
     setBusy(true);
     setError(null);
     try {
-      await api.replaceWorkingHours(
-        token,
-        business.id,
-        resource.id,
-        week.flatMap((day, dayOfWeek) => rangesFor(day, dayOfWeek)),
-      );
-      await load();
+      await api.replaceWorkingHours(token, business.id, resource.id, week.flatMap((day, dayOfWeek) => rangesFor(day, dayOfWeek)));
       setSaved(true);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
@@ -261,383 +143,146 @@ export const Schedule = ({
     }
   };
 
-  // What the tab on screen is still waiting for. The special days are read
-  // once for the whole business, so that tab has nothing to wait for when the
-  // chosen calendar changes — only the week and the blockages do.
-  const pending = layer === "overrides" ? everyOverride === null : hours === null;
+  if (scope === null) return <Spinner />;
 
-  if (resource === null) return <Spinner />;
+  const shown = (changes ?? []).filter((change) =>
+    scope === BUSINESS ? change.scope.kind === "BUSINESS" : change.scope.kind === "CALENDAR" && change.scope.resourceId === scope,
+  );
+  const mayAdd = scope !== BUSINESS || sheets.who.manages;
 
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
-      {resources.length > 1 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {resources.map((candidate) => (
-            <button
-              key={candidate.id}
-              className="chip"
-              onClick={() => setResource(candidate)}
-              aria-pressed={candidate.id === resource.id}
-              style={{
-                background: candidate.id === resource.id ? "var(--accent)" : "var(--raised)",
-                color: candidate.id === resource.id ? "var(--on-accent)" : "var(--ink)",
-                border: `1px solid ${candidate.id === resource.id ? "var(--accent)" : "var(--line)"}`,
-              }}
-            >
+      {many && (
+        <div role="group" aria-label={changeCopy.scopeLabel} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {tab === "changes" && (
+            <ScopeChip chosen={scope === BUSINESS} business onClick={() => setScope(BUSINESS)}>
+              {changeCopy.wholeBusiness}
+            </ScopeChip>
+          )}
+          {onOffer.map((candidate) => (
+            <ScopeChip key={candidate.id} chosen={candidate.id === scope} onClick={() => setScope(candidate.id)}>
               {candidate.name}
-            </button>
+            </ScopeChip>
           ))}
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 6 }}>
-        {(["hours", "overrides", "blocks"] as const).map((candidate) => (
+      <div role="tablist" style={{ display: "flex", gap: 6 }}>
+        {(["usual", "changes"] as const).map((candidate) => (
           <button
             key={candidate}
+            role="tab"
+            aria-selected={tab === candidate}
             className="chip"
-            onClick={() => setLayer(candidate)}
-            aria-pressed={layer === candidate}
+            onClick={() => {
+              setTab(candidate);
+              // The usual week is a calendar's; the business has none of its own.
+              if (candidate === "usual" && scope === BUSINESS) setScope(onOffer[0]?.id ?? null);
+            }}
             style={{
               flex: 1,
-              background: layer === candidate ? "var(--accent-soft)" : "transparent",
-              color: layer === candidate ? "var(--accent-strong)" : "var(--muted)",
-              border: `1px solid ${layer === candidate ? "var(--accent)" : "var(--line)"}`,
+              background: tab === candidate ? "var(--accent-soft)" : "transparent",
+              color: tab === candidate ? "var(--accent-strong)" : "var(--muted)",
+              border: `1px solid ${tab === candidate ? "var(--accent)" : "var(--line)"}`,
             }}
           >
-            {candidate === "hours" ? copy.tabHours : candidate === "overrides" ? copy.tabOverrides : copy.tabBlocks}
+            {candidate === "usual" ? changeCopy.tabUsual : changeCopy.tabChanges}
           </button>
         ))}
       </div>
 
       {error !== null && <Critical>{error}</Critical>}
 
-      {/* ponytail: only the layer below waits for the new calendar — the
-          picker and the tabs stay put, so switching calendars does not blank
-          the page out from under the hand that pressed it. */}
-      {pending && <Spinner />}
-
-      {!pending && layer === "hours" && (
-        <>
-          {/* The same editor the wizard uses. A business described its week
-              once in plain words and then edited it, ever after, as a list of
-              ranges with an add and a delete — the same week in two different
-              languages, the second one ADR 0002's storage rather than anybody's
-              idea of a Tuesday. */}
-          {/* Keyed on the calendar: the editor holds which days the owner has
-              pulled out of the usual, and that answer belongs to the week in
-              front of them, not to the next calendar they switch to. */}
-          <WeeklyHours key={resource.id} hours={week} setHours={setWeek} />
-          {saved && (
-            <p className="hint" role="status" style={{ margin: 0 }}>
-              {copy.settingsSaved}
-            </p>
-          )}
-          {/* A half-typed time is not a shorter day: saving it would drop the
-              stretch it belongs to without saying so. */}
-          {!weekIsUsable(week) && <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>}
-          <Button busy={busy} disabled={!weekIsUsable(week)} onClick={() => void saveWeek()}>
-            {copy.save}
-          </Button>
-        </>
-      )}
-
-      {!pending && layer === "overrides" && (
-        <>
-          {/* ADR 0002: an override replaces the weekday's rules entirely. */}
-          <Note>{copy.overrideNote}</Note>
-          {overrides.length === 0 && <Empty title={copy.noHoursYet} />}
-          {overrides.map((override) => {
-            // A day the whole shop was given is removed as the whole shop's,
-            // or it is not removed at all: taking this calendar's copy away
-            // used to leave the others shut, invisibly.
-            const shopWide = shopDates.has(override.date);
-            return (
-              <Card key={override.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span
-                    style={{ fontWeight: 500, display: "flex", alignItems: "center", gap: 7 }}
-                  >
-                    {formatLocalDate(override.date, language)}
-                    {shopWide && resources.length > 1 && (
-                      <span
-                        style={{
-                          fontSize: 9.5,
-                          fontWeight: 600,
-                          padding: "2px 7px",
-                          borderRadius: 999,
-                          background: "var(--closed-soft)",
-                          color: "var(--closed)",
-                        }}
-                      >
-                        {copy.wholeBusiness}
-                      </span>
-                    )}
-                  </span>
-                  <span className="hint">
-                    {override.closed
-                      ? copy.closedAllDay
-                      : override.ranges.map((r) => `${r.start}–${r.end}`).join(", ")}
-                    {override.note === null ? "" : ` · ${override.note}`}
-                  </span>
-                </span>
-                {/* A day the whole shop is shut is the business speaking, and
-                    giving it back is a manager's to do — so a worker is not
-                    offered a button that could only be refused. Their own
-                    calendar's special days they may remove. */}
-                {(!shopWide || canCloseBusiness(business)) && (
-                <button
-                  onClick={() =>
-                    act(() =>
-                      shopWide
-                        ? api.reopenBusiness(token, business.id, override.date, override.date)
-                        : api.deleteOverride(token, business.id, override.id),
-                    )
-                  }
-                  style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
-                >
-                  {copy.delete}
-                </button>
-                )}
-              </Card>
-            );
-          })}
-          <Button
-            intent="quiet"
-            onClick={() =>
-              setEditingOverride({
-                date: todayIn(business.timeZone),
-                ranges: [{ start: "10:00", end: "14:00" }],
-              })
-            }
-          >
-            {copy.addOverride}
-          </Button>
-        </>
-      )}
-
-      {!pending && layer === "blocks" && (
-        <>
-          <Note>{copy.blockNote}</Note>
-          {blocks.length === 0 && <Empty title={copy.noBlocks} body={copy.blockFormHint} />}
-          {blocks.map((block) => {
-            const from = timeIn(block.startAt, business.timeZone, language);
-            const until = timeIn(block.endAt, business.timeZone, language);
-            // ponytail: a blockage spanning the whole day is stored as 00:00–23:59
-            // (see spansOf); those two clocks say "closed" to nobody.
-            const wholeDay = from === "00:00" && until === "23:59";
-            return (
-            <Card key={block.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontWeight: 500 }}>{block.reason || copy.blockedWord}</span>
-                <span className="hint tab">
-                  {dateIn(block.startAt, business.timeZone, language)} ·{" "}
-                  {wholeDay ? copy.closedAllDay : `${from}–${until}`}
-                </span>
-              </span>
-              <button
-                // The decision, not one day of it — the same thing the band in
-                // the month removes. Deleting a single span of a week away
-                // leaves six days of it behind, in a list that only ever shows
-                // one day and so cannot show what was left.
-                onClick={() =>
-                  act(() =>
-                    block.groupId === null || block.groupId === undefined
-                      ? api.deleteBlock(token, business.id, block.id)
-                      : api.deleteBlockGroup(token, business.id, block.groupId),
-                  )
-                }
-                style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
-              >
-                {copy.delete}
-              </button>
-            </Card>
-            );
-          })}
-          <Button
-            intent="quiet"
-            onClick={() =>
-              setEditingBlock({
-                from: todayIn(business.timeZone),
-                to: todayIn(business.timeZone),
-                allDay: false,
-                ranges: [{ start: "12:00", end: "13:00" }],
-                reason: "",
-              })
-            }
-          >
-            {copy.addBlock}
-          </Button>
-        </>
-      )}
-
-      {/* --- Forms ---------------------------------------------------------- */}
-
-      <Sheet open={editingRange !== null} onClose={() => setEditingRange(null)}>
-        {editingRange !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 style={{ fontSize: 19 }}>{editingRange.id === null ? copy.newRange : copy.editRange}</h2>
-            <Note>{copy.rangeHint}</Note>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <Field id="range-from" label={copy.from} type="time" value={editingRange.start}
-                onChange={(e) => setEditingRange({ ...editingRange, start: e.target.value })} />
-              <Field id="range-to" label={copy.to} type="time" value={editingRange.end}
-                onChange={(e) => setEditingRange({ ...editingRange, end: e.target.value })} />
-            </div>
-            {editingRange.end <= editingRange.start && <Critical>{copy.rangeInvalid}</Critical>}
-            <Button
-              busy={busy}
-              disabled={editingRange.end <= editingRange.start}
-              onClick={() =>
-                act(() =>
-                  editingRange.id === null
-                    ? api.addWorkingHours(token, business.id, resource.id, {
-                        dayOfWeek: editingRange.dayOfWeek,
-                        start: editingRange.start,
-                        end: editingRange.end,
-                      })
-                    : api.updateWorkingHours(token, business.id, editingRange.id, {
-                        start: editingRange.start,
-                        end: editingRange.end,
-                      }),
-                )
-              }
-            >
-              {copy.save}
-            </Button>
-          </div>
-        )}
-      </Sheet>
-
-      <Sheet open={editingOverride !== null} onClose={() => setEditingOverride(null)}>
-        {editingOverride !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 style={{ fontSize: 19 }}>{copy.addOverride}</h2>
-            <Note>{copy.overrideFormHint}</Note>
-            <Field id="override-date" label={copy.date} type="date" value={editingOverride.date}
-              onChange={(e) => setEditingOverride({ ...editingOverride, date: e.target.value })} />
-            {/* ponytail: this calendar's special day only ever gives other
-                hours. Shutting a day outright is the shop's decision, made
-                from the month — so the choice is not offered here. */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {/* The same editor the week uses: a special day is a day, and a
-                  day that shuts for lunch has two stretches whichever layer
-                  it belongs to. */}
-              <Stretches
-                id="override"
-                ranges={editingOverride.ranges}
-                setRanges={(ranges) => setEditingOverride({ ...editingOverride, ranges })}
-                namesTheGap={false}
-              />
-            </div>
-            <Note>{copy.overrideReplaces}</Note>
-            {!editingOverride.ranges.every(isUsable) && (
-              <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>
+      {tab === "usual" &&
+        (hours === null || resource === null ? (
+          <Spinner />
+        ) : (
+          <>
+            {/* Keyed on the calendar: which days were pulled out of the usual
+                belongs to the week in front of the owner. */}
+            <WeeklyHours key={resource.id} hours={week} setHours={setWeek} />
+            {saved && (
+              <p className="hint" role="status" style={{ margin: 0 }}>
+                {copy.settingsSaved}
+              </p>
             )}
-            <Button
-              busy={busy}
-              disabled={!editingOverride.ranges.every(isUsable)}
-              onClick={() =>
-                act(() =>
-                  api.putOverride(token, business.id, resource.id, {
-                    date: editingOverride.date,
-                    note: null,
-                    // Merged on the way out, so two stretches the owner ran
-                    // together are the one stretch they describe rather than a
-                    // refusal.
-                    ranges: mergedRanges(editingOverride.ranges),
-                  }),
-                )
-              }
-            >
+            {!weekIsUsable(week) && <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>}
+            <Button busy={busy} disabled={!weekIsUsable(week)} onClick={() => void saveWeek()}>
               {copy.save}
             </Button>
-          </div>
-        )}
-      </Sheet>
+          </>
+        ))}
 
-      <Sheet open={editingBlock !== null} onClose={() => setEditingBlock(null)}>
-        {editingBlock !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 style={{ fontSize: 19 }}>{copy.addBlock}</h2>
-            <Note>{copy.blockFormHint}</Note>
-            {/* From and to, defaulting to the same day: a week away is one
-                decision, and making it seven was the reason nobody made it. */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <Field
-                id="block-from-date"
-                label={copy.fromDate}
-                type="date"
-                value={editingBlock.from}
-                onChange={(e) =>
-                  setEditingBlock({
-                    ...editingBlock,
-                    from: e.target.value,
-                    // A range that ends before it starts is a slip, not an
-                    // instruction: the far end follows the near one.
-                    to: editingBlock.to < e.target.value ? e.target.value : editingBlock.to,
+      {tab === "changes" &&
+        (changes === null ? (
+          <Spinner />
+        ) : (
+          <>
+            {shown.length === 0 ? (
+              <Empty title={changeCopy.noChanges} />
+            ) : (
+              <ul aria-label={changeCopy.listLabel} style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                {shown.map((change) => {
+                  const row = rowOf(change, changeCopy, language);
+                  return (
+                    <li key={change.id}>
+                      <button className="change-row" onClick={() => sheets.showChange(change, null)}>
+                        <span className="when">{row.when}</span>
+                        <span className="what">
+                          <b>{row.what}</b>
+                          {row.note !== null && <small>{row.note}</small>}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {mayAdd && (
+              <Button
+                intent="quiet"
+                onClick={() =>
+                  sheets.openSheet({
+                    kind: "typed",
+                    date: todayIn(business.timeZone),
+                    scope: scope === BUSINESS ? { kind: "BUSINESS" } : { kind: "CALENDAR", resourceId: scope },
                   })
                 }
-              />
-              <Field
-                id="block-to-date"
-                label={copy.toDate}
-                type="date"
-                value={editingBlock.to}
-                onChange={(e) => setEditingBlock({ ...editingBlock, to: e.target.value })}
-              />
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {[true, false].map((allDay) => (
-                <button
-                  key={String(allDay)}
-                  className="chip"
-                  onClick={() => setEditingBlock({ ...editingBlock, allDay })}
-                  aria-pressed={editingBlock.allDay === allDay}
-                  style={{
-                    flex: 1,
-                    background: editingBlock.allDay === allDay ? "var(--accent)" : "var(--raised)",
-                    color: editingBlock.allDay === allDay ? "var(--on-accent)" : "var(--ink)",
-                    border: "1px solid var(--line)",
-                  }}
-                >
-                  {allDay ? copy.allDay : copy.partOfDay}
-                </button>
-              ))}
-            </div>
-            {!editingBlock.allDay && (
-              <Stretches
-                id="block"
-                ranges={editingBlock.ranges}
-                setRanges={(ranges) => setEditingBlock({ ...editingBlock, ranges })}
-                namesTheGap={false}
-              />
+              >
+                {scope === BUSINESS
+                  ? changeCopy.addForBusiness
+                  : changeCopy.addFor.replace("{calendar}", calendarPhrase(resource?.name ?? "", changeCopy))}
+              </Button>
             )}
-            {!editingBlock.allDay && !editingBlock.ranges.every(isUsable) && (
-              <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>
-            )}
-            <Field id="block-reason" label={copy.reason} placeholder={copy.reasonPlaceholder} value={editingBlock.reason}
-              problem={problem.text(editingBlock.reason, TEXT_RULES.reason)}
-              onChange={(e) => setEditingBlock({ ...editingBlock, reason: e.target.value })} hint={copy.reasonHint} />
-            <Button
-              busy={busy}
-              disabled={!editingBlock.allDay && !editingBlock.ranges.every(isUsable)}
-              onClick={() =>
-                act(() =>
-                  api.createBlocks(
-                    token,
-                    business.id,
-                    resource.id,
-                    spansOf(editingBlock, business.timeZone),
-                  ),
-                )
-              }
-            >
-              {copy.save}
-            </Button>
-          </div>
-        )}
-      </Sheet>
+          </>
+        ))}
+
+      {sheets.sheets}
     </div>
   );
 };
 
+const ScopeChip = ({
+  chosen,
+  business = false,
+  onClick,
+  children,
+}: {
+  chosen: boolean;
+  business?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) => (
+  <button
+    className={business ? "chip change-business" : "chip"}
+    onClick={onClick}
+    aria-pressed={chosen}
+    style={{
+      background: chosen ? "var(--accent)" : "var(--raised)",
+      color: chosen ? "var(--on-accent)" : "var(--ink)",
+      border: `1px solid ${chosen ? "var(--accent)" : "var(--line)"}`,
+    }}
+  >
+    {children}
+  </button>
+);

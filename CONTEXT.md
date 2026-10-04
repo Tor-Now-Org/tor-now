@@ -114,6 +114,14 @@ An ad-hoc interval carved out of a Resource's otherwise open time, with a reason
 Used for one-off unavailability that does not change the schedule itself.
 _Avoid_: Break, hold, busy, unavailability
 
+**Change** ("שינוי ביומן"):
+What an owner changes about some days, for one Resource or for the whole
+Business: not working all day, not working some hours of them, or working other
+hours. Not stored as such (ADR 0025): it is read from the Blocks and Date
+Overrides that carry it, and written as them. The whole Business's is an owner's
+or a manager's; a Resource's, whoever keeps that Resource.
+_Avoid_: Blockage, special day, exception, closure (as words on screen)
+
 **Local Time**:
 A wall-clock time in the Business's own timezone, with no date attached. The unit
 of every recurring rule: Working Hours, Breaks, and the times inside an Override.

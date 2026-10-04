@@ -24,6 +24,16 @@ export const WORDS_MINIMUM = 34;
 
 export type Span = { readonly start: number; readonly end: number };
 
+/**
+ * Whether a free stretch can hold an appointment at all: as long as the
+ * shortest service on offer. A gap of ten minutes between two haircuts is free
+ * time, but offering to book somebody into it is offering something that
+ * cannot be done. Before the services are known booking stays offered, rather
+ * than vanishing from every gap while they load.
+ */
+export const holdsAnAppointment = (minutes: number, durations: readonly number[] | null): boolean =>
+  durations === null || (durations.length > 0 && minutes >= Math.min(...durations));
+
 export const minutesOf = (clock: string): number => {
   const [hour, minute] = clock.split(":").map(Number);
   return (hour ?? 0) * 60 + (minute ?? 0);

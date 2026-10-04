@@ -7,12 +7,12 @@ import type {
   BusinessDto,
   BusinessDayDto,
   CalendarAppointmentDto,
+  ChangeDto,
   ResourceDto,
 } from "@/lib/api/types.ts";
 import { addDaysTo, monthName, todayIn, weekName, whenIn } from "@/lib/format.ts";
 import { countOf } from "@/lib/i18n/counts.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { canCloseBusiness } from "@/lib/roles.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppointmentSheet } from "./appointment-sheet.tsx";
 import { CalendarScope } from "./calendar-scope.tsx";
@@ -30,8 +30,11 @@ import {
   useAppointmentSearch,
 } from "./day-search.ts";
 import { DayTimeline, type Picked } from "./day-timeline.tsx";
-import { DayActionSheet } from "./day-actions.tsx";
-import { AddButton, FinishAim, type Aim } from "./day-add.tsx";
+import { DayActionSheet, minutesNowOn } from "./day-actions.tsx";
+import { clockOf } from "./day-model.ts";
+import { AddButton, type Aim } from "./day-add.tsx";
+import { ChangeTags } from "./change-tags.tsx";
+import { useCalendarChanges } from "./change-host.tsx";
 import { Button, Card, Critical, Empty, Note, Spinner } from "../ui.tsx";
 import {
   DAYS_IN_A_WEEK,
@@ -61,6 +64,7 @@ export const CalendarDay = ({
   resources: readonly ResourceDto[];
 }) => {
   const copy = useCopy("owner");
+  const changeCopy = useCopy("change");
   const { language } = useLanguage();
   const errorText = useErrorText();
 
@@ -79,6 +83,8 @@ export const CalendarDay = ({
   const [date, setDate] = useState(() => todayIn(business.timeZone));
   /** The same day across every calendar, which is what the timeline draws. */
   const [wholeDay, setWholeDay] = useState<BusinessDayDto | null>(null);
+  /** The changes standing on the day being read, for its tag and its closed panel. */
+  const [dayChanges, setDayChanges] = useState<readonly ChangeDto[]>([]);
   /** What a tap on the timeline opened: an item, or a stretch of free time. */
   const [picked, setPicked] = useState<Picked | null>(null);
   /** Reading every calendar at once, which only means anything past one. */
@@ -146,7 +152,6 @@ export const CalendarDay = ({
    * its own.
    */
   const [aimedCustomer, setAimedCustomer] = useState<ChosenCustomer | null>(null);
-  const [aimedAt, setAimedAt] = useState<readonly string[]>([]);
   /**
    * Everything the named customer has, fetched by their number rather than read
    * off the search box — editing or clearing the query used to empty the very
@@ -179,13 +184,21 @@ export const CalendarDay = ({
    * between one Tuesday and the next.
    */
   const [offered, setOffered] = useState<readonly string[]>([]);
+  /**
+   * How long each service on offer takes, so a gap too short for every one of
+   * them is not offered for booking. Null until known — and left null when the
+   * list cannot be read, so booking is never hidden by a failed request.
+   */
+  const [durations, setDurations] = useState<readonly number[] | null>(null);
 
   useEffect(() => {
     let current = true;
     api
       .listServices(token, business.id)
       .then((services) => {
-        if (current) setOffered(services.map((one) => one.name));
+        if (!current) return;
+        setOffered(services.map((one) => one.name));
+        setDurations(services.filter((one) => one.active !== false).map((one) => one.durationMinutes));
       })
       .catch(() => {
         // Colour falls back to a hash of the name, which is stable enough to
@@ -205,7 +218,12 @@ export const CalendarDay = ({
       // well was both a second request per tap and a second answer that could
       // disagree with the first — which is what made an appointment in another
       // lane unopenable: it was looked up in a day that did not contain it.
-      setWholeDay(await api.businessDay(token, business.id, date));
+      const [day, changes] = await Promise.all([
+        api.businessDay(token, business.id, date),
+        api.listChanges(token, business.id, { from: date, to: date }),
+      ]);
+      setWholeDay(day);
+      setDayChanges(changes);
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
@@ -245,7 +263,6 @@ export const CalendarDay = ({
           phone: record.user.phone,
         });
         setAim("appointment");
-        setAimedAt([]);
       })
       .catch(() => {
         // Nothing worth an error on a calendar: without the customer this is
@@ -320,18 +337,13 @@ export const CalendarDay = ({
     await load();
   }, [load]);
 
-  const act = async (work: () => Promise<unknown>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await work();
-      await refreshEverything();
-    } catch (cause) {
-      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
-    } finally {
-      setBusy(false);
-    }
-  };
+  /** The one sheet every door opens, and the detail of a change already made. */
+  const changes = useCalendarChanges({
+    token,
+    business,
+    resources,
+    onChanged: () => void refreshEverything(),
+  });
 
   /** The month unfolding the week opens: the day being read's, when it is in the week. */
   const unfoldsTo =
@@ -663,7 +675,7 @@ export const CalendarDay = ({
                   // One day, because that is what an appointment happens on.
                   single: true,
                 }
-              : { title: aim === "block" ? copy.aimBlock : copy.aimSpecial }
+              : { title: changeCopy.chooseDays }
         }
         onChosen={(dates) => {
           // An appointment has nothing further to decide about the days, so
@@ -673,7 +685,6 @@ export const CalendarDay = ({
             const chosen = dates[0];
             if (chosen === undefined) return;
             setAim(null);
-            setAimedAt([]);
             setBooking({
               date: chosen,
               // Nothing was tapped, so neither the calendar nor an hour is
@@ -685,14 +696,20 @@ export const CalendarDay = ({
             setAimedCustomer(null);
             return;
           }
-          setAimedAt(dates);
+          // Every door opens the same complete sheet; the month only brings the days.
+          setAim(null);
+          changes.openSheet({
+            kind: "days",
+            from: dates[0] ?? date,
+            to: dates[dates.length - 1] ?? date,
+            resourceId: showEveryone ? null : (resource?.id ?? null),
+          });
         }}
         onCancelChoosing={() => {
           setAim(null);
-          setAimedAt([]);
           setAimedCustomer(null);
         }}
-        onChanged={() => void load()}
+        onOpenChange={(change) => changes.showChange(change, null)}
         onReady={monthDrew}
         firstOfMonth={firstOfMonth}
         firstOfWeek={firstOfWeek}
@@ -713,30 +730,34 @@ export const CalendarDay = ({
           note={shut.note}
           date={date}
           copy={copy}
+          changeCopy={changeCopy}
           language={language}
-          mayReopen={canCloseBusiness(business)}
-          busy={busy}
-          onReopen={() =>
-            void act(() => api.reopenBusiness(token, business.id, date, date))
-          }
-          onDescribe={(said) =>
-            void act(() =>
-              api.describeClosure(token, business.id, {
-                fromDate: date,
-                toDate: date,
-                note: said.trim() === "" ? null : said.trim(),
-              }),
-            )
-          }
+          onOpenChange={(() => {
+            // The change that shut every calendar on screen: the business's, or this calendar's own.
+            const behind =
+              dayChanges.find((one) => one.scope.kind === "BUSINESS" && one.outcome === "OFF_ALL_DAY") ??
+              dayChanges.find((one) => one.outcome === "OFF_ALL_DAY") ??
+              null;
+            return behind === null ? null : () => changes.showChange(behind, date);
+          })()}
         />
       ) : (
         // The day as it will be lived: everything in one column against the
         // hours, with the free stretches tappable — they are the part an owner
         // wants to fill, and they used to be the part that was not there.
+        <>
+        <ChangeTags
+          date={date}
+          changes={dayChanges}
+          lanes={resource === null ? [] : resources.length > 1 && showEveryone ? resources.map((one) => one.id) : [resource.id]}
+          calendars={resources}
+          onOpen={(change) => changes.showChange(change, date)}
+        />
         <DayTimeline
           day={wholeDay}
           timeZone={business.timeZone}
           offered={offered}
+          durations={durations}
           lanes={
             resource === null
               ? []
@@ -753,21 +774,34 @@ export const CalendarDay = ({
               setSelected(found);
               return;
             }
+            // A blocked stretch is a change: it opens that change, the same
+            // detail its band on the month opens.
+            if (entry.kind === "block") {
+              if (entry.groupId !== null) changes.openChange(`blocks:${entry.groupId}`, date);
+              return;
+            }
             setPicked(entry);
           }}
         />
+        </>
       )}
 
       <DayActionSheet
-        picked={picked}
-        token={token}
-        business={business}
-        date={date}
+        picked={picked?.kind === "free" ? picked : null}
         past={date < todayIn(business.timeZone)}
+        minutesNow={minutesNowOn(business.timeZone, date)}
+        durations={durations}
         onClose={() => setPicked(null)}
-        onChanged={() => {
+        onChange={(span, resourceId) => {
           setPicked(null);
-          void refreshEverything();
+          changes.openSheet({
+            kind: "stretch",
+            date,
+            resourceId,
+            start: clockOf(span.start),
+            // A stretch running to midnight ends at its last minute, not at "00:00".
+            end: clockOf(Math.min(span.end, 24 * 60 - 1)),
+          });
         }}
         onBook={(span, resourceId) => {
           // The stretch sheet steps aside for the booking sheet rather than
@@ -783,30 +817,10 @@ export const CalendarDay = ({
         // Sheets take care of themselves now; what is left is the one state
         // that is not a sheet — the grid waiting for days to be chosen.
         hidden={aim !== null}
-        canCloseBusiness={canCloseBusiness(business)}
-        onAim={(chosen) => {
-          setAim(chosen);
-          setAimedAt([]);
-        }}
+        onAim={setAim}
       />
 
-      <FinishAim
-        aim={aim}
-        dates={aimedAt}
-        token={token}
-        business={business}
-        resource={resource}
-        onClose={() => setAimedAt([])}
-        onCancel={() => {
-          setAim(null);
-          setAimedAt([]);
-        }}
-        onDone={() => {
-          setAim(null);
-          setAimedAt([]);
-          void refreshEverything();
-        }}
-      />
+      {changes.sheets}
 
       <BookCustomerSheet
         open={booking !== null}
@@ -846,7 +860,6 @@ export const CalendarDay = ({
           setSearching(false);
           setAimedCustomer(customer);
           setAim("appointment");
-          setAimedAt([]);
         }}
       />
     </div>

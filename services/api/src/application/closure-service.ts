@@ -1,17 +1,9 @@
 import {
   addDays,
-  cancelAppointment,
-  instantToZoned,
   interval,
   parseLocalDate,
   parseLocalTime,
-  survivesHours,
   validationFailed,
-  zonedToInstant,
-  END_OF_DAY,
-  MIDNIGHT,
-  type Appointment,
-  type Business,
   type BusinessId,
   type Clock,
   type LocalDate,
@@ -20,9 +12,8 @@ import {
 } from "@tor-now/domain";
 import { loadManagedBusiness } from "./authorization.ts";
 import { markManyForRecheck } from "./waiting-service.ts";
-import { namedFor, stillToCome, type Impact, type Upcoming } from "./stranded.ts";
-import { notificationFor } from "./notifications.ts";
-import { TEMPLATES } from "../ports/notifier.ts";
+import { namedFor, type Impact, type Upcoming } from "./stranded.ts";
+import { cancelAndTell, strandedByHours, writeOverrides } from "./schedule-writes.ts";
 import type { Repositories } from "../ports/repositories.ts";
 import type { Actor, UnitOfWork } from "../ports/unit-of-work.ts";
 
@@ -83,35 +74,6 @@ const hoursOf = (ranges: readonly { start: string; end: string }[]): LocalInterv
     return interval(start, end);
   });
 
-/** One Override per calendar per date: the shop's decision, in ADR 0002's terms. */
-const writeOverrides = async (
-  repositories: Repositories,
-  businessId: BusinessId,
-  calendars: readonly Resource[],
-  dates: readonly LocalDate[],
-  note: string | null,
-  hours: readonly LocalInterval[],
-): Promise<void> => {
-  const ranges = hours.map((range) => ({
-    startMinutes: range.start,
-    endMinutes: range.end,
-  }));
-  // One write for the decision. A fortnight across four chairs is still one
-  // Override per calendar per date — ADR 0002 leaves no other way to say it —
-  // but they are written together rather than one round trip at a time.
-  await repositories.dateOverrides.putMany(
-    calendars.flatMap((calendar) =>
-      dates.map((date) => ({
-        resourceId: calendar.id,
-        businessId,
-        date,
-        note,
-        ranges,
-      })),
-    ),
-  );
-};
-
 const onOfferIn = async (
   repositories: Repositories,
   businessId: BusinessId,
@@ -134,36 +96,21 @@ export const closureService = ({
    * warned about and what is acted on cannot drift apart — the warning is the
    * same question, not a second opinion about it.
    */
-  const strandedBy = async (
+  const strandedBy = (
     repositories: Repositories,
-    business: Business,
+    business: Parameters<typeof strandedByHours>[1],
+    calendars: readonly Resource[],
     dates: readonly LocalDate[],
     hours: readonly LocalInterval[],
-  ): Promise<readonly Appointment[]> => {
-    const first = dates[0];
-    const last = dates[dates.length - 1];
-    if (first === undefined || last === undefined) return [];
-
-    const booked = await repositories.appointments.listForBusinessBetween(
-      business.id,
-      zonedToInstant(first, MIDNIGHT, business.timeZone),
-      // The window ends at the end of the last day rather than at its start,
-      // or a closure's final evening would be answered for by nobody.
-      zonedToInstant(last, END_OF_DAY, business.timeZone),
+  ) =>
+    strandedByHours(
+      repositories,
+      business,
+      calendars.map((calendar) => calendar.id),
+      dates,
+      hours,
+      clock.now(),
     );
-
-    const covered = new Set<string>(dates);
-
-    return booked.filter((appointment) => {
-      // A day that has already happened happened. Cancelling what is behind us
-      // would rewrite the record and message people about it afterwards.
-      if (!stillToCome(appointment, clock.now())) return false;
-      const from = instantToZoned(appointment.startAt, business.timeZone);
-      const to = instantToZoned(appointment.endAt, business.timeZone);
-      if (!covered.has(from.date)) return false;
-      return !survivesHours(interval(from.time, to.time), hours);
-    });
-  };
 
   return {
     /**
@@ -186,6 +133,7 @@ export const closureService = ({
         const stranded = await strandedBy(
           repositories,
           business,
+          calendars,
           dates,
           hoursOf(plan.ranges),
         );
@@ -225,26 +173,21 @@ export const closureService = ({
 
         const stranded =
           upcoming === "CANCEL"
-            ? await strandedBy(repositories, business, dates, hours)
+            ? await strandedBy(repositories, business, calendars, dates, hours)
             : [];
 
         // Answered for first, written second: a failure to tell somebody stops
         // the closure rather than leaving them uninvited to a shut shop.
-        for (const appointment of stranded) {
-          const outcome = cancelAppointment(appointment, business, "BUSINESS", clock.now());
-          const cancelled = await repositories.appointments.update(appointment.id, {
-            status: "CANCELLED",
-            ...outcome,
-          });
-          const customer = await repositories.users.findById(appointment.customerId);
-          if (customer !== null) {
-            await session.outbox.enqueue(
-              notificationFor(TEMPLATES.bookingCancelled, cancelled, business, customer),
-            );
-          }
-        }
+        await cancelAndTell(session, business, stranded, clock.now());
 
-        await writeOverrides(repositories, businessId, calendars, dates, plan.note, hours);
+        await writeOverrides(
+          repositories,
+          businessId,
+          calendars.map((calendar) => calendar.id),
+          dates,
+          plan.note,
+          hours,
+        );
 
         return {
           days: dates.length,

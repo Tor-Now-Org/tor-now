@@ -7,6 +7,7 @@ import {
   MAX_CATEGORIES,
   PHONE_PATTERN,
   BILLING_FLAGS,
+  CHANGE_OUTCOMES,
   BILLING_STATUSES,
   COST_UNITS,
   FEATURES,
@@ -457,6 +458,47 @@ export const blockNoteSchema = z.object({
 
 /** The same question without the answer: what would closing these days cost? */
 export const closurePreviewSchema = closureSchema.omit({ note: true, upcoming: true });
+
+/**
+ * "שינוי ביומן": who it is for, the days, and what happens on them. The hours are
+ * checked by the service, which says what is wrong with them in one place.
+ */
+const changeScopeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("BUSINESS") }),
+  z.object({ kind: z.literal("CALENDAR"), resourceId: uuidSchema }),
+]);
+
+const changeRangesSchema = z
+  .array(z.object({ start: localTimeSchema, end: localTimeSchema }))
+  .max(12)
+  .default([]);
+
+/** The change being edited, by the id a list or a detail gave. */
+const replacingSchema = z.string().min(1).max(200).nullable().default(null);
+
+export const changePreviewSchema = z.object({
+  scope: changeScopeSchema,
+  fromDate: localDateSchema,
+  toDate: localDateSchema,
+  // Still unanswered while the sheet is opening; the usual hours come back regardless.
+  outcome: z.enum(CHANGE_OUTCOMES).nullable().default(null),
+  ranges: changeRangesSchema,
+  replacing: replacingSchema,
+});
+
+export const changeSchema = z.object({
+  scope: changeScopeSchema,
+  fromDate: localDateSchema,
+  toDate: localDateSchema,
+  outcome: z.enum(CHANGE_OUTCOMES),
+  ranges: changeRangesSchema,
+  note: text(TEXT_RULES.reason).nullable().default(null),
+  upcoming: z.enum(["KEEP", "CANCEL"]),
+  replacing: replacingSchema,
+});
+
+/** Removing one day of a change rather than all of it. */
+export const changeRemovalSchema = z.object({ date: localDateSchema.optional() });
 
 export const dateRangeSchema = z.object({
   from: localDateSchema,

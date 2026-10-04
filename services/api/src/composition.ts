@@ -7,6 +7,7 @@ import { bookingService } from "./application/booking-service.ts";
 import { businessService } from "./application/business-service.ts";
 import { calendarService } from "./application/calendar-service.ts";
 import { closureService } from "./application/closure-service.ts";
+import { changeService } from "./application/change-service.ts";
 import { catalogueService } from "./application/catalogue-service.ts";
 import { catalogueAdminService } from "./application/catalogue-admin.ts";
 import { planCatalogueService } from "./application/plan-catalogue.ts";
@@ -138,6 +139,7 @@ export const compose = (
     fairUse: fairUseService({ unitOfWork, clock }),
     addons: addonService({ unitOfWork, clock }),
     closures: closureService({ unitOfWork, clock }),
+    changes: changeService({ unitOfWork, clock }),
     admin,
 
     outboxWorker: outboxWorker({ unitOfWork, notifier, clock }),

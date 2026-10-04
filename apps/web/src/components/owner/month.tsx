@@ -6,33 +6,24 @@ import { isApiError } from "@/lib/api/errors.ts";
 import type {
   BusinessDto,
   BusinessMonthDto,
-  ClosureBandDto,
+  ChangeDto,
   ResourceDto,
 } from "@/lib/api/types.ts";
 import { formatLocalDate, monthName, todayIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { canCloseBusiness } from "@/lib/roles.ts";
 import { laneColourOf } from "./event-colour.ts";
-import { RenameNote } from "./rename-note.tsx";
-import { Button, Card, Critical, Note, Sheet, Spinner } from "../ui.tsx";
+import { Button, Card, Critical, Sheet, Spinner } from "../ui.tsx";
+import { BAND_AREA, ChangeBands, changesFor, WeekChanges } from "./change-bands.tsx";
 import {
-  DAYS_IN_A_WEEK,
   datesBetween,
   factsOn,
-  BAND_ROWS_IN_A_WEEK,
-  labelFitting,
   mergeMonths,
-  mergeOverlapping,
   monthsOf,
   nothingKnown,
   worksOn,
-  packBands,
-  segmentIn,
   weekFrom,
   weeksOf,
-  type Merged,
-  type Segment,
 } from "./month-model.ts";
 
 /**
@@ -81,7 +72,7 @@ export const Month = ({
   choosing,
   onChosen,
   onCancelChoosing,
-  onChanged,
+  onOpenChange,
   onReady,
 }: {
   token: string;
@@ -133,14 +124,8 @@ export const Month = ({
   } | null;
   onChosen: (dates: readonly string[]) => void;
   onCancelChoosing: () => void;
-  /**
-   * Something here changed the calendar.
-   *
-   * The month reloads itself, but the day below it is a different read of the
-   * same thing — taking a blockage off here used to leave it sitting on the
-   * open day until the screen was reopened.
-   */
-  onChanged: () => void;
+  /** A change's band was tapped: the screen opens its detail, the same one every door opens. */
+  onOpenChange: (change: ChangeDto) => void;
   /**
    * The grid has an answer to draw.
    *
@@ -164,20 +149,15 @@ export const Month = ({
    * see it. A late answer to a question nobody is asking any more is dropped
    * for the same reason.
    */
-  const [month, setMonth] = useState<{ of: string; data: BusinessMonthDto } | null>(null);
+  const [month, setMonth] = useState<{ of: string; data: BusinessMonthDto; changes: readonly ChangeDto[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   /** The two taps. The second one turns a day into a range. */
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
-  const [openGroup, setOpenGroup] = useState<BusinessMonthDto["blockages"][number] | null>(null);
-  /** A run of shut days, opened to be read or given back. */
-  const [openClosure, setOpenClosure] = useState<ClosureBandDto | null>(null);
   /** A week whose decisions did not all fit under it, opened as a list. */
   const [openWeek, setOpenWeek] = useState<number | null>(null);
 
   const onOffer = resources.filter((resource) => resource.active !== false);
-  const many = onOffer.length > 1;
 
   /**
    * The month the screen is on right now, readable from inside an answer that
@@ -192,15 +172,21 @@ export const Month = ({
     setError(null);
     const asked = firstOfWeek ?? firstOfMonth;
     try {
-      const data = mergeMonths(
-        await Promise.all(
+      // The changes over exactly the days on screen, read once whichever months they fall in.
+      const shown = (firstOfWeek === null ? weeksOf(firstOfMonth).flat() : weekFrom(firstOfWeek)).filter(
+        (date): date is string => date !== null,
+      );
+      const [months, changes] = await Promise.all([
+        Promise.all(
           (firstOfWeek === null ? [firstOfMonth] : monthsOf(weekFrom(firstOfWeek))).map(
             (month) => api.businessMonth(token, business.id, month),
           ),
         ),
-      );
+        api.listChanges(token, business.id, { from: shown[0] ?? firstOfMonth, to: shown.at(-1) ?? firstOfMonth }),
+      ]);
+      const data = mergeMonths(months);
       if (wanted.current === asked) {
-        setMonth({ of: asked, data });
+        setMonth({ of: asked, data, changes });
         onReady?.();
       }
     } catch (cause) {
@@ -212,31 +198,12 @@ export const Month = ({
     void load();
   }, [load, reloadKey]);
 
-  const act = async (work: () => Promise<unknown>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await work();
-      setFrom(null);
-      setTo(null);
-      setOpenGroup(null);
-      setOpenClosure(null);
-      setOpenWeek(null);
-      await load();
-      // The day below is another read of what just changed.
-      onChanged();
-    } catch (cause) {
-      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   if (month === null) return <Spinner page />;
 
   // Until the answer for this month arrives, the squares are drawn with nothing
   // said about them rather than with what was true of another month.
   const known = month.of === reading ? month.data : null;
+  const shownChanges = month.of === reading ? changesFor(month.changes, scope) : [];
 
   const chosen = from === null ? [] : datesBetween(from, to ?? from);
   const weeks = firstOfWeek === null ? weeksOf(firstOfMonth) : [weekFrom(firstOfWeek)];
@@ -317,18 +284,12 @@ export const Month = ({
                 them, so the month has exactly one rhythm whether or not
                 anything is happening. Two lines fit in that strip; anything
                 else becomes a count that opens the week. */}
-            <WeekBands
+            <ChangeBands
               week={week}
               row={row}
-              closures={known?.closures ?? []}
-              blockages={(known?.blockages ?? []).filter(
-                (blockage) => scope === null || blockage.resourceId === scope,
-              )}
+              changes={shownChanges}
               calendars={onOffer}
-              many={many}
-              copy={copy}
-              onOpenClosure={setOpenClosure}
-              onOpenBlockage={setOpenGroup}
+              onOpen={onOpenChange}
               onOpenWeek={() => setOpenWeek(row)}
             />
           </div>
@@ -402,498 +363,20 @@ export const Month = ({
           glance and start hiding the days they describe. */}
       <Sheet open={openWeek !== null} onClose={() => setOpenWeek(null)}>
         {openWeek !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <h2 style={{ fontSize: 18 }}>{copy.thatWeek}</h2>
-            {thingsIn(weeks[openWeek] ?? [], known, scope).map((thing) => (
-              <button
-                key={"kind" in thing ? `c-${thing.fromDate}` : thing.groupId}
-                onClick={() => {
-                  setOpenWeek(null);
-                  if ("kind" in thing) setOpenClosure(thing);
-                  else setOpenGroup(thing);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 9,
-                  padding: "10px 11px",
-                  borderRadius: 11,
-                  border: "1px solid var(--line)",
-                  background: "var(--raised)",
-                  textAlign: "start",
-                  width: "100%",
-                }}
-              >
-                <i
-                  aria-hidden="true"
-                  style={{
-                    width: 9,
-                    height: 9,
-                    borderRadius: 999,
-                    flexShrink: 0,
-                    background:
-                      "kind" in thing
-                        ? thing.kind === "SHUT"
-                          ? "var(--closed)"
-                          : "var(--accent)"
-                        : laneColourOf(indexOfCalendar(onOffer, thing.resourceId)),
-                  }}
-                />
-                <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                  <b style={{ fontWeight: 600, fontSize: 13.5 }}>
-                    {"kind" in thing
-                      ? (thing.note ??
-                        (thing.kind === "SHUT" ? copy.closedWord : copy.differentHours))
-                      : thing.reason || copy.blockedWord}
-                  </b>
-                  <span className="hint">
-                    {formatLocalDate(thing.fromDate, language, {
-                      day: "numeric",
-                      month: "long",
-                    })}
-                    {thing.days > 1
-                      ? ` – ${formatLocalDate(thing.toDate, language, {
-                          day: "numeric",
-                          month: "long",
-                        })}`
-                      : ""}
-                    {" · "}
-                    {"kind" in thing
-                      ? copy.allCalendars
-                      : (onOffer.find((one) => one.id === thing.resourceId)?.name ?? "")}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </Sheet>
-
-      {/* A closure, as the one decision it was — and the way back out of it. */}
-      <Sheet open={openClosure !== null} onClose={() => setOpenClosure(null)}>
-        {openClosure !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {/* A shortened day is named by what it is, the way its band in the
-                month names it, and the words somebody put on it read as the
-                subtitle underneath. */}
-            <h2 style={{ fontSize: 18 }}>
-              {openClosure.kind === "SHUT"
-                ? (openClosure.note ?? copy.closedWord)
-                : copy.shortDayWord}
-            </h2>
-            {openClosure.kind !== "SHUT" && openClosure.note !== null && (
-              <p className="hint" style={{ margin: 0 }}>{openClosure.note}</p>
-            )}
-            {/* What the shop is actually doing that day — the half-day was the
-                case with nothing to read at all. */}
-            <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }} className="tab">
-              {openClosure.kind === "SHUT"
-                ? copy.closedAllDay
-                : openClosure.hours
-                    .map((range) => `${range.start}–${range.end}`)
-                    .join(" · ")}
-            </p>
-            <p className="hint" style={{ margin: 0 }}>
-              {formatLocalDate(openClosure.fromDate, language, { day: "numeric", month: "long" })}
-              {" – "}
-              {formatLocalDate(openClosure.toDate, language, { day: "numeric", month: "long" })}
-              {" · "}
-              {openClosure.days} {copy.daysWord}
-              {" · "}
-              {copy.allCalendars}
-            </p>
-            {/* Re-opening the days does not un-cancel what closing them called
-                off — those customers were told — and saying so here is better
-                than an owner finding out by looking. */}
-            {canCloseBusiness(business) && (
-              <RenameNote
-                note={openClosure.note}
-                busy={busy}
-                onSave={(said) =>
-                  void act(() =>
-                    api.describeClosure(token, business.id, {
-                      fromDate: openClosure.fromDate,
-                      toDate: openClosure.toDate,
-                      note: said.trim() === "" ? null : said.trim(),
-                    }),
-                  )
-                }
-              />
-            )}
-
-            <Note>{copy.reopenKeepsCancellations}</Note>
-            {canCloseBusiness(business) && (
-              <Button
-                intent="danger"
-                busy={busy}
-                onClick={() =>
-                  void act(() =>
-                    api.reopenBusiness(
-                      token,
-                      business.id,
-                      openClosure.fromDate,
-                      openClosure.toDate,
-                    ),
-                  )
-                }
-              >
-                {openClosure.days === 1
-                  ? copy.reopenOneDay
-                  : copy.reopenDays.replace("{days}", String(openClosure.days))}
-              </Button>
-            )}
-          </div>
-        )}
-      </Sheet>
-
-      {/* A blockage, as the one thing it was. */}
-      <Sheet open={openGroup !== null} onClose={() => setOpenGroup(null)}>
-        {openGroup !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <h2 style={{ fontSize: 18 }}>{openGroup.reason || copy.blockedWord}</h2>
-            {/* Whose calendar it is, said before anything else: "away" is not
-                an answer in a shop with three chairs. */}
-            <p style={{ margin: 0, display: "flex", alignItems: "center", gap: 7 }}>
-              <i
-                aria-hidden="true"
-                style={{
-                  width: 11,
-                  height: 11,
-                  borderRadius: 999,
-                  background: laneColourOf(
-                    onOffer.findIndex((one) => one.id === openGroup.resourceId),
-                  ),
-                }}
-              />
-              <b style={{ fontWeight: 600, fontSize: 14 }}>
-                {onOffer.find((one) => one.id === openGroup.resourceId)?.name ?? ""}
-              </b>
-            </p>
-            {/* One day is a date, not a range from itself to itself. */}
-            <p className="hint" style={{ margin: 0 }}>
-              {openGroup.days === 1
-                ? formatLocalDate(openGroup.fromDate, language, {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  })
-                : `${formatLocalDate(openGroup.fromDate, language, {
-                    day: "numeric",
-                    month: "long",
-                  })} – ${formatLocalDate(openGroup.toDate, language, {
-                    day: "numeric",
-                    month: "long",
-                  })} · ${openGroup.days} ${copy.daysWord}`}
-            </p>
-            <RenameNote
-              note={openGroup.reason}
-              busy={busy}
-              onSave={(said) =>
-                void act(() =>
-                  api.renameBlockGroup(token, business.id, openGroup.groupId, said),
-                )
-              }
-            />
-
-            <Button
-              intent="danger"
-              busy={busy}
-              onClick={() =>
-                void act(() => api.deleteBlockGroup(token, business.id, openGroup.groupId))
-              }
-            >
-              {openGroup.days === 1
-                ? copy.removeBlockage
-                : copy.removeWholeBlockage.replace("{days}", String(openGroup.days))}
-            </Button>
-          </div>
+          <WeekChanges
+            week={weeks[openWeek] ?? []}
+            changes={shownChanges}
+            calendars={onOffer}
+            onOpen={(change) => {
+              setOpenWeek(null);
+              onOpenChange(change);
+            }}
+          />
         )}
       </Sheet>
     </div>
   );
 };
-
-/**
- * A week's decisions, laid out under the days they describe.
- *
- * Closures lead: they cover every calendar, so they are the widest claim being
- * made about those days, and a blockage sits inside one. Everything that does
- * not overlap shares a line, and anything past two lines becomes a count that
- * opens the week — a month grid can carry two bars per row and stay a glance.
- */
-/** The two things a week can be told about: the shop's days, and a calendar's. */
-type WeekThing = ClosureBandDto | BusinessMonthDto["blockages"][number];
-
-const WeekBands = ({
-  week,
-  row,
-  closures,
-  blockages,
-  calendars,
-  many,
-  copy,
-  onOpenClosure,
-  onOpenBlockage,
-  onOpenWeek,
-}: {
-  week: readonly (string | null)[];
-  row: number;
-  closures: readonly ClosureBandDto[];
-  blockages: BusinessMonthDto["blockages"];
-  calendars: readonly ResourceDto[];
-  /** More than one calendar, which is what makes "whose" worth saying. */
-  many: boolean;
-  copy: ReturnType<typeof useCopy<"owner">>;
-  onOpenClosure: (closure: ClosureBandDto) => void;
-  onOpenBlockage: (blockage: BusinessMonthDto["blockages"][number]) => void;
-  onOpenWeek: () => void;
-}) => {
-  const shopDays = closures
-    .map((closure) => segmentIn<WeekThing>(week, closure))
-    .filter((segment): segment is Segment<WeekThing> => segment !== null);
-
-  // One bar per calendar per run of days. A chair with five separate blockages
-  // on one Sunday is one thing to somebody reading a month — that chair is
-  // away — and five bars on one square is how a month stops being readable.
-  const away = calendars.flatMap((calendar) =>
-    mergeOverlapping(
-      blockages
-        .filter((blockage) => blockage.resourceId === calendar.id)
-        .map((blockage) => segmentIn<WeekThing>(week, blockage))
-        .filter((segment): segment is Segment<WeekThing> => segment !== null),
-    ),
-  );
-
-  const here: Merged<WeekThing>[] = [
-    ...shopDays.map((segment) => ({ ...segment, count: 1 })),
-    ...away,
-  ];
-
-  if (here.length === 0) return null;
-
-  const packed = packBands(here);
-  // The count needs the end of the last line to itself, or it would sit on top
-  // of whatever band finishes the week.
-  const crowded = packed.folded.length > 0;
-  const rows = crowded
-    ? packed.rows.map((line, at) =>
-        at === packed.rows.length - 1
-          ? line.filter((one) => one.column > 0)
-          : line,
-      )
-    : packed.rows;
-  const folded =
-    packed.folded.length +
-    packed.rows.flat().length -
-    rows.flat().length;
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        insetInline: 0,
-        bottom: BAND_FOOT,
-        display: "flex",
-        flexDirection: "column",
-        gap: BAND_GAP,
-        pointerEvents: "none",
-      }}
-    >
-      {rows.map((line, at) => (
-        <div key={at} style={{ position: "relative", height: BAND_HEIGHT }}>
-          {line.map(({ span, column, width, count }) =>
-            "kind" in span ? (
-              <Band
-                key={`closed-${span.fromDate}-${row}`}
-                column={column}
-                width={width}
-                ground="var(--raised)"
-                ink={span.kind === "SHUT" ? "var(--closed)" : "var(--accent-strong)"}
-                edge={span.kind === "SHUT" ? "var(--closed)" : "var(--accent)"}
-                dot={span.kind === "SHUT" ? "var(--closed)" : "var(--accent)"}
-                label={labelOfClosure(span, width, copy)}
-                onClick={() => onOpenClosure(span)}
-              />
-            ) : (
-              <Band
-                key={`${span.groupId}-${row}`}
-                column={column}
-                width={width}
-                dot={many ? laneColourOf(indexOfCalendar(calendars, span.resourceId)) : null}
-                ground="var(--raised)"
-                ink="var(--ink)"
-                edge={laneColourOf(indexOfCalendar(calendars, span.resourceId))}
-                label={labelOfBlockage(span, width, calendars, many, copy)}
-                // One bar standing in for several decisions cannot open any one
-                // of them, so it opens the list of what is in the week.
-                onClick={() => (count > 1 ? onOpenWeek() : onOpenBlockage(span))}
-              />
-            ),
-          )}
-
-          {/* The rest, counted rather than drawn. A third line would cost the
-              week the days underneath it; this opens the week instead. */}
-          {crowded && at === rows.length - 1 && (
-            <button
-              onClick={onOpenWeek}
-              // The words are the label a reader hears; the pill itself has one
-              // day's width to live in, and "+2" is what fits there.
-              aria-label={copy.moreThatWeek.replace("{count}", String(folded))}
-              style={{
-                position: "absolute",
-                insetInlineStart: 2,
-                top: 0,
-                height: BAND_HEIGHT,
-                width: `calc(${(1 / DAYS_IN_A_WEEK) * 100}% - 4px)`,
-                display: "grid",
-                placeItems: "center",
-                borderRadius: 999,
-                background: "var(--raised)",
-                border: "1px dashed var(--faint)",
-                color: "var(--muted)",
-                fontSize: 9,
-                fontWeight: 600,
-                pointerEvents: "auto",
-              }}
-            >
-              {`+${folded}`}
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-/**
- * What a band says: what kind of thing it is, and whose.
- *
- * Short on purpose. A bar is twelve pixels tall and often one day wide, and it
- * is there to be understood at a glance rather than read — "חסום (שקד)" is the
- * whole of what a month needs to say about a blockage. The reason behind it,
- * the hours a shortened day keeps and the dates it covers are all in the sheet
- * the bar opens, where there is room to say them properly.
- */
-const labelOfBlockage = (
-  blockage: BusinessMonthDto["blockages"][number],
-  width: number,
-  calendars: readonly ResourceDto[],
-  many: boolean,
-  copy: ReturnType<typeof useCopy<"owner">>,
-) => {
-  const named = calendars.find((one) => one.id === blockage.resourceId)?.name ?? "";
-  return labelFitting(
-    many && named !== ""
-      ? [`${copy.blockedShort} (${named})`, copy.blockedShort]
-      : [copy.blockedShort],
-    width,
-  );
-};
-
-const labelOfClosure = (
-  closure: ClosureBandDto,
-  width: number,
-  copy: ReturnType<typeof useCopy<"owner">>,
-) =>
-  // A closure is the whole shop's, so there is no "whose" to add — and the
-  // hours a shortened day keeps are eleven characters that would not fit and
-  // are in the sheet anyway.
-  labelFitting([closure.kind === "SHUT" ? copy.closedWord : copy.shortDayWord], width);
-
-const indexOfCalendar = (calendars: readonly ResourceDto[], resourceId: string) =>
-  calendars.findIndex((one) => one.id === resourceId);
-
-/** Everything decided about one week, closures first, in date order. */
-const thingsIn = (
-  week: readonly (string | null)[],
-  month: BusinessMonthDto | null,
-  scope: string | null,
-): WeekThing[] =>
-  month === null
-    ? []
-    : [
-    ...month.closures.map((closure) => segmentIn<WeekThing>(week, closure)),
-    ...month.blockages
-      .filter((blockage) => scope === null || blockage.resourceId === scope)
-      .map((blockage) => segmentIn<WeekThing>(week, blockage)),
-  ]
-    .filter((segment): segment is Segment<WeekThing> => segment !== null)
-    .map((segment) => segment.span);
-
-/**
- * What a decision looks like on the grid: a bar across the days it covers.
- *
- * One shape for both kinds, because they are the same idea to a reader — a
- * stretch of days with something true about them — and they differ only in
- * what they say and who they belong to.
- */
-const Band = ({
-  column,
-  width,
-  label,
-  dot,
-  ground,
-  ink,
-  edge,
-  onClick,
-}: {
-  column: number;
-  width: number;
-  label: string;
-  /** Whose it is, or what kind it is — said in colour, so the words can be why. */
-  dot: string | null;
-  ground: string;
-  ink: string;
-  edge: string;
-  onClick: () => void;
-}) => (
-  <button
-    onClick={onClick}
-    style={{
-      position: "absolute",
-      insetInlineStart: `calc(${(column / DAYS_IN_A_WEEK) * 100}% + 2px)`,
-      width: `calc(${(width / DAYS_IN_A_WEEK) * 100}% - 4px)`,
-      height: BAND_HEIGHT,
-      borderRadius: 999,
-      background: ground,
-      color: ink,
-      border: `1px solid ${edge}`,
-      fontSize: 9,
-      fontWeight: 600,
-      padding: "0 5px",
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      whiteSpace: "nowrap",
-      overflow: "hidden",
-      pointerEvents: "auto",
-    }}
-  >
-    {dot !== null && width > 1 && (
-      <i
-        aria-hidden="true"
-        style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, background: dot }}
-      />
-    )}
-    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-      {label}
-    </span>
-  </button>
-);
-
-/**
- * The strip every square keeps at its foot for the bands written across it.
- *
- * Fixed, and reserved whether or not there is anything to put in it, because a
- * month whose rows change height as things are added is a month that moves
- * under the finger. Two lines is what it holds; past that the week is counted
- * rather than grown.
- */
-const BAND_HEIGHT = 12;
-const BAND_GAP = 2;
-/** How far the strip sits above the bottom edge of a square. */
-const BAND_FOOT = 4;
-const BAND_AREA = BAND_HEIGHT * BAND_ROWS_IN_A_WEEK + BAND_GAP + BAND_FOOT;
 
 /**
  * One square. The shop's own weather is the fill, because that is what a

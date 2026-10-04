@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BOX_MINIMUM,
+  holdsAnAppointment,
   FOLD_HEIGHT,
   MINUTES_IN_A_DAY,
   bandsOf,
@@ -296,5 +297,25 @@ describe("a span that runs past the end of the day", () => {
 
   it("does the same for a zero-length span, which cannot be drawn either", () => {
     expect(withinTheDay(600, 600)).toEqual({ start: 600, end: MINUTES_IN_A_DAY });
+  });
+});
+
+describe("whether a free stretch can hold an appointment", () => {
+  it("can when it is at least as long as the shortest service", () => {
+    expect(holdsAnAppointment(30, [30, 60])).toBe(true);
+    expect(holdsAnAppointment(45, [60, 30])).toBe(true);
+  });
+
+  it("cannot when it is shorter than every service", () => {
+    expect(holdsAnAppointment(20, [30, 60])).toBe(false);
+    expect(holdsAnAppointment(0, [15])).toBe(false);
+  });
+
+  it("cannot when the business offers nothing to book", () => {
+    expect(holdsAnAppointment(600, [])).toBe(false);
+  });
+
+  it("can, before the services are known, rather than hiding booking from everybody", () => {
+    expect(holdsAnAppointment(20, null)).toBe(true);
   });
 });

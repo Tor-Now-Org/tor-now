@@ -266,6 +266,34 @@ export type ClosureOutcomeDto = {
   cancelled: number;
 };
 
+/** "שינוי ביומן": what happens on the days of a change. */
+export type ChangeOutcome = "OFF_ALL_DAY" | "OFF_PART" | "OTHER_HOURS";
+
+export type ChangeScopeDto = { kind: "BUSINESS" } | { kind: "CALENDAR"; resourceId: string };
+
+export type ClockRange = { start: string; end: string };
+
+/** One change to the calendar, however it is stored underneath. */
+export type ChangeDto = {
+  id: string;
+  scope: ChangeScopeDto;
+  outcome: ChangeOutcome;
+  fromDate: string;
+  toDate: string;
+  /** Hours off for OFF_PART, hours kept for OTHER_HOURS, none for OFF_ALL_DAY. */
+  days: { date: string; ranges: ClockRange[] }[];
+  /** The hours when every day has the same ones; null when they differ. */
+  ranges: ClockRange[] | null;
+  note: string | null;
+};
+
+export type ChangePreviewDto = ClosureImpactDto & {
+  /** Earlier changes on these days the new one would write over. */
+  replaces: ChangeDto[];
+  /** What the first day usually keeps, for this scope. */
+  usual: ClockRange[];
+};
+
 export type SlotDto = { startAt: string; endAt: string };
 
 /** ADR 0012: why a day is empty decides what the interface offers instead. */

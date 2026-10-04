@@ -291,7 +291,7 @@ export const Stretches = ({
  * with a caption beside another field with a caption said the same thing in
  * the browser's own voice, which is the one voice the product does not use.
  */
-const Clock = ({
+export const Clock = ({
   id,
   label,
   value,

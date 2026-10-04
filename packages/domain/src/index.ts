@@ -18,6 +18,7 @@ export * from "./model/review.ts";
 export * from "./schedule/blockage.ts";
 export * from "./schedule/closure.ts";
 export * from "./schedule/open-hours.ts";
+export * from "./schedule/calendar-change.ts";
 
 export * from "./booking/booking-window.ts";
 export * from "./booking/free-intervals.ts";

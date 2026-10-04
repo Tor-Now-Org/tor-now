@@ -308,24 +308,28 @@ test.describe("the schedule layers", () => {
     );
     await expect(page.getByText("ימים אחרים")).toHaveCount(0);
 
-    // Overrides: replace the weekday entirely.
-    await page.getByRole("button", { name: "ימים חריגים" }).click();
-    await expect(page.getByText(/יום חריג מחליף/)).toBeVisible();
-    await page.getByRole("button", { name: "הוספת יום חריג" }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
+    // Other hours for one day replace the weekday entirely: "שינויים", then
+    // the same sheet every door opens, with the dates typed.
+    await page.getByRole("tab", { name: "שינויים" }).click();
+    await expect(page.getByText("אין שינויים קרובים")).toBeVisible();
+    await page.getByRole("button", { name: "שינוי ביומן א" }).click();
+    const sheet = page.getByRole("dialog");
     // Tomorrow, not today: late in the evening today is already empty because
     // the minimum notice has run past closing, and the shorter day under test
     // would be hidden behind TOO_SOON.
     const shortDay = aDayFromNow(1);
-    await page.getByLabel("תאריך").fill(shortDay);
-    // This tab only gives a day other hours — shutting one outright is the
-    // shop's own decision, made from the month.
-    await expect(page.getByRole("button", { name: "סגור כל היום" })).toHaveCount(0);
-    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await sheet.getByLabel("מתאריך").fill(shortDay);
+    await sheet.getByLabel("עד תאריך").fill(shortDay);
+    await sheet.getByRole("radio", { name: /^עובדים בשעות אחרות/ }).click();
+    // It starts from the usual day, which is what is then shortened.
+    await expect(sheet.getByLabel("מ־", { exact: true })).toHaveValue("08:00");
+    await sheet.getByLabel("מ־", { exact: true }).fill("10:00");
+    await sheet.getByLabel("עד", { exact: true }).fill("14:00");
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     // The sheet closing is what says the save went through: reading the
     // availability before the override had landed is what used to flake.
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
-    await expect(page.getByText("10:00–14:00").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("עובדים 10:00–14:00").first()).toBeVisible({ timeout: 15_000 });
 
     // The day keeps the override's hours, not the week's 08:00–20:00: every
     // time it offers starts inside 10:00–14:00, and some do.
@@ -725,8 +729,8 @@ test.describe("the month", () => {
     // What, then when, then the details: the + names the action, the grid asks
     // which days, and only the last step asks anything that needs both.
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
-    await expect(page.getByText("בחירת ימים לחסימה")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
+    await expect(page.getByText("בחירת ימים לשינוי")).toBeVisible();
 
     await pickDay(page, first);
     await pickDay(page, last);
@@ -734,9 +738,10 @@ test.describe("the month", () => {
     await page.getByRole("button", { name: "המשך" }).click();
 
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText(/3 ימים/)).toBeVisible();
-    await sheet.getByRole("button", { name: "כל היום" }).click();
-    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await sheet.getByRole("radio", { name: /^לא עובדים כל היום/ }).click();
+    // The sentence says the run of days before anything is saved.
+    await expect(sheet.locator(".change-sentence")).toContainText("בין");
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Three days of the customer's month are gone, from one gesture.
@@ -766,23 +771,23 @@ test.describe("the month", () => {
 
     const [first, second] = inOneMonth([1, 2]);
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     await pickDay(page, first);
     await pickDay(page, second);
     await page.getByRole("button", { name: "המשך" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "כל היום" }).click();
+    await page.getByRole("dialog").getByRole("radio", { name: /^לא עובדים כל היום/ }).click();
     await page.getByRole("dialog").getByLabel("הערה (לא חובה)").fill("ספק");
-    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
-    // One band for the whole thing, not a mark per day.
-    const band = page.getByRole("button", { name: "חסום", exact: true }).first();
+    // One band for the whole thing, not a mark per day, named by what happens.
+    const band = page.getByRole("button", { name: "סגור", exact: true }).first();
     await expect(band).toBeVisible({ timeout: 15_000 });
     await band.click();
 
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText(/2 ימים/)).toBeVisible();
-    await sheet.getByRole("button", { name: /הסרה של כל/ }).click();
+    await expect(sheet.getByRole("heading", { name: "ספק" })).toBeVisible();
+    await sheet.getByRole("button", { name: "מחיקה · 2 הימים חוזרים לשעות הרגילות" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Both days come back, because the group went as one.
@@ -850,34 +855,36 @@ test.describe("the month", () => {
     const first = aDayFromNow(1);
     const last = aDayFromNow(8);
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     await weekWith(first);
     await dayCell(page, first).click();
     await weekWith(last);
     await dayCell(page, last).click();
     await expect(page.getByText(/8 ימים/).first()).toBeVisible();
     await page.getByRole("button", { name: "המשך" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "כל היום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await page.getByRole("dialog").getByRole("radio", { name: /^לא עובדים כל היום/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "חסום", exact: true }).first()).toBeVisible({
+    await expect(page.getByRole("button", { name: "סגור", exact: true }).first()).toBeVisible({
       timeout: 15_000,
     });
     for (const date of [first, aDayFromNow(4), last]) {
       await expect.poll(async () => offered(date), { timeout: 15_000 }).toBe(0);
     }
 
-    // A special day, aimed from the week too.
+    // Other hours, aimed from the week too.
     const special = aDayFromNow(9);
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /יום מיוחד/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     await weekWith(special);
     await dayCell(page, special).click();
     await page.getByRole("button", { name: "המשך" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "סגור כל היום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await page.getByRole("dialog").getByRole("radio", { name: /^עובדים בשעות אחרות/ }).click();
+    await page.getByRole("dialog").getByLabel("מ־", { exact: true }).fill("16:00");
+    await page.getByRole("dialog").getByLabel("עד", { exact: true }).fill("16:30");
+    await page.getByRole("dialog").getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
-    await expect.poll(async () => offered(special), { timeout: 15_000 }).toBe(0);
+    await expect.poll(async () => offered(special), { timeout: 15_000 }).toBe(1);
 
     // And back to the month.
     await page.getByRole("button", { name: "הצגת חודש" }).click();
@@ -927,10 +934,13 @@ test.describe("the day timeline", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await expect(sheet.getByText(shop.resource.name)).toBeVisible();
-    // The sheet offers the two things a gap is for; blocking is the second.
-    await sheet.getByRole("button", { name: "חסימה", exact: true }).click();
-    // The whole stretch is what the form arrives with, so one tap blocks it.
-    await sheet.getByRole("button", { name: /^חסימה ·/ }).click();
+    // The sheet offers the two things a gap is for; a change is the second.
+    await sheet.getByRole("button", { name: /שינוי ביומן/ }).click();
+    // The whole stretch is what the sheet arrives with, so part of the day takes it.
+    await sheet.getByRole("radio", { name: /^לא עובדים בחלק מהיום/ }).click();
+    await expect(sheet.getByLabel("מ־", { exact: true })).toHaveValue("09:00");
+    await expect(sheet.getByLabel("עד", { exact: true })).toHaveValue("17:00");
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // The day is gone for a customer, because the whole of it was free.
@@ -972,14 +982,16 @@ test.describe("the day timeline", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
 
-    // The hours are not asked for until blocking is what this is about — a gap
+    // The hours are not asked for until a change is what this is about — a gap
     // is tapped to fill it far more often than to shut it.
-    await sheet.getByRole("button", { name: "חסימה", exact: true }).click();
+    await sheet.getByRole("button", { name: /שינוי ביומן/ }).click();
+    await sheet.getByRole("radio", { name: /^לא עובדים בחלק מהיום/ }).click();
 
     // An empty day is eight hours long and almost nobody means all of it. The
-    // ordinary lengths are one tap, and the button then says what it will do.
+    // ordinary lengths are one tap, and the sentence then says what it will do.
     await sheet.getByRole("button", { name: "שעה", exact: true }).click();
-    await sheet.getByRole("button", { name: /^חסימה ·/ }).click();
+    await expect(sheet.locator(".change-sentence")).toContainText("09:00–10:00");
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // The hour is gone and the rest of the day is not: blocking a stretch no
@@ -1347,8 +1359,8 @@ test.describe("adding to a day", () => {
 
     // It stays away while days are being picked, too — the screen is asking a
     // question, and the button that asked it would only get in the way.
-    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
-    await expect(page.getByText("בחירת ימים לחסימה")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
+    await expect(page.getByText("בחירת ימים לשינוי")).toBeVisible();
     await expect(plus).toHaveCount(0);
 
     // And it comes back the moment the question is dropped.
@@ -1364,7 +1376,7 @@ test.describe("adding to a day", () => {
     await openAt(page, shop, aDayFromNow(1));
 
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     await expect(page.getByText(/אי אפשר לשנות ימים שכבר עברו/)).toBeVisible();
 
     // Yesterday's square refuses the tap — looked for on its own month, which
@@ -1387,15 +1399,15 @@ test.describe("adding to a day", () => {
     await openAt(page, shop, date);
 
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /^חסימה/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     await page.getByRole("button", { name: date }).click();
     await page.getByRole("button", { name: "המשך" }).click();
 
     const sheet = page.getByRole("dialog");
-    await sheet.getByRole("button", { name: "חלק מהיום" }).click();
-    await sheet.locator('input[type="time"]').first().fill("10:00");
-    await sheet.locator('input[type="time"]').nth(1).fill("12:00");
-    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await sheet.getByRole("radio", { name: /^לא עובדים בחלק מהיום/ }).click();
+    await sheet.getByLabel("מ־", { exact: true }).fill("10:00");
+    await sheet.getByLabel("עד", { exact: true }).fill("12:00");
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Those two hours gone from what a customer is offered, and the rest still there.
@@ -1417,27 +1429,26 @@ test.describe("adding to a day", () => {
     await openAt(page, shop, date);
 
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /יום מיוחד/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     await page.getByRole("button", { name: date }).click();
     await page.getByRole("button", { name: "המשך" }).click();
 
     const sheet = page.getByRole("dialog");
-    await sheet.getByRole("button", { name: "סגור כל היום" }).click();
-    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await sheet.getByRole("radio", { name: /^לא עובדים כל היום/ }).click();
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     await expect.poll(async () => offeredOn(shop, date), { timeout: 15_000 }).toBe(0);
 
-    // And the same day given hours instead: the special day replaces itself.
-    await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /יום מיוחד/ }).click();
-    await page.getByRole("button", { name: date }).click();
-    await page.getByRole("button", { name: "המשך" }).click();
+    // The day now says it is closed, and the change behind it is edited into other hours.
+    await expect(page.getByText("סגור כל היום").first()).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "פרטי השינוי" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "עריכה" }).click();
     const again = page.getByRole("dialog");
-    await again.getByRole("button", { name: "שעות אחרות" }).click();
-    await again.locator('input[type="time"]').first().fill("10:00");
-    await again.locator('input[type="time"]').nth(1).fill("12:00");
-    await again.getByRole("button", { name: "שמירה" }).click();
+    await again.getByRole("radio", { name: /^עובדים בשעות אחרות/ }).click();
+    await again.getByLabel("מ־", { exact: true }).fill("10:00");
+    await again.getByLabel("עד", { exact: true }).fill("12:00");
+    await again.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Open again, and only in the hours it was given.
@@ -1461,11 +1472,8 @@ test.describe("special days and blockages", () => {
       hours: { start: "08:00", end: "20:00" },
     });
 
-  const openTheLayer = async (
-    page: Page,
-    shop: { business: { id: string }; owner: { token: string } },
-    layer: string,
-  ) => {
+  /** The schedule's "שינויים", and the sheet its button opens for the one calendar. */
+  const openTheChanges = async (page: Page, shop: { business: { id: string }; owner: { token: string } }) => {
     await page.addInitScript(
       ([key, token]) => window.localStorage.setItem(key as string, token as string),
       ["tor-now.session", shop.owner.token],
@@ -1473,7 +1481,9 @@ test.describe("special days and blockages", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await page.getByRole("button", { name: "לוח זמנים" }).click();
-    await page.getByRole("button", { name: layer }).click();
+    await page.getByRole("tab", { name: "שינויים" }).click();
+    await page.getByRole("button", { name: "שינוי ביומן א" }).click();
+    return page.getByRole("dialog");
   };
 
   const offeredOn = async (
@@ -1497,29 +1507,27 @@ test.describe("special days and blockages", () => {
 
   test("a special day can be open twice with a break between", async ({ page }) => {
     const shop = await anOwnerAt("יום חריג");
-    await openTheLayer(page, shop, "ימים חריגים");
+    const sheet = await openTheChanges(page, shop);
 
     const day = aDayFromNow(1);
-    await page.getByRole("button", { name: "הוספת יום חריג" }).click();
-    const sheet = page.getByRole("dialog");
-    await expect(sheet).toBeVisible();
-    await sheet.getByLabel("תאריך").fill(day);
-    // Straight to the hours: a calendar's special day only ever gives other
-    // hours, so there is no "closed all day" to choose between.
+    await sheet.getByLabel("מתאריך").fill(day);
+    await sheet.getByLabel("עד תאריך").fill(day);
+    await sheet.getByRole("radio", { name: /^עובדים בשעות אחרות/ }).click();
 
-    // Morning, then a break, then the evening — one form, not two special days
-    // (which the store could not have held anyway: one override per date).
-    await sheet.locator('input[type="time"]').first().fill("09:00");
-    await sheet.locator('input[type="time"]').nth(1).fill("11:00");
-    await sheet.getByRole("button", { name: "הוספת טווח שעות" }).click();
-    await sheet.locator('input[type="time"]').nth(2).fill("17:00");
-    await sheet.locator('input[type="time"]').nth(3).fill("19:00");
-    // No "break" between them here: on a special day the owner is saying which
-    // hours are open, and the gap is simply the hours that are not. The word
-    // belongs to the weekly hours, where it names a real thing.
-    await expect(sheet.getByText(/הפסקה/)).toHaveCount(0);
+    // Morning, then a gap, then the evening — one change, not two (which the
+    // store could not have held anyway: one override per date).
+    await sheet.getByLabel("מ־", { exact: true }).first().fill("09:00");
+    await sheet.getByLabel("עד", { exact: true }).first().fill("11:00");
+    await sheet.getByRole("button", { name: "+ עוד טווח" }).click();
+    await sheet.getByLabel("מ־", { exact: true }).nth(1).fill("17:00");
+    await sheet.getByLabel("עד", { exact: true }).nth(1).fill("19:00");
+    // No "break" named between them here: the owner is saying which hours are
+    // open, and the gap is simply the hours that are not. The word belongs to
+    // the weekly hours, where it names a real thing.
+    await expect(sheet.getByText(/^הפסקה ·/)).toHaveCount(0);
+    await expect(sheet.locator(".change-sentence")).toContainText("09:00–11:00, 17:00–19:00");
 
-    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     await expect
@@ -1532,17 +1540,15 @@ test.describe("special days and blockages", () => {
 
   test("a blockage covers a range of days in one go", async ({ page }) => {
     const shop = await anOwnerAt("חופשה");
-    await openTheLayer(page, shop, "חסימות");
+    const sheet = await openTheChanges(page, shop);
 
     const first = aDayFromNow(1);
     const last = aDayFromNow(2);
-    await page.getByRole("button", { name: "הוספת חסימה" }).click();
-    const sheet = page.getByRole("dialog");
     await sheet.getByLabel("מתאריך").fill(first);
     await sheet.getByLabel("עד תאריך").fill(last);
-    await sheet.getByRole("button", { name: "כל היום" }).click();
-    await sheet.getByLabel("סיבה").fill("חופשה");
-    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await sheet.getByRole("radio", { name: /^לא עובדים כל היום/ }).click();
+    await sheet.getByLabel("הערה (לא חובה)").fill("חופשה");
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Both days are gone for a customer, from one form.
@@ -1555,43 +1561,41 @@ test.describe("special days and blockages", () => {
 
   test("lists a blockage made for a later day, not only today's", async ({ page }) => {
     const shop = await anOwnerAt("רשימת חסימות");
-    await openTheLayer(page, shop, "חסימות");
+    const sheet = await openTheChanges(page, shop);
 
     // Two days out: the list is a list of standing decisions, and the day the
     // screen happens to be open on says nothing about which of them exist.
     const later = aDayFromNow(2);
-    await page.getByRole("button", { name: "הוספת חסימה" }).click();
-    const sheet = page.getByRole("dialog");
     await sheet.getByLabel("מתאריך").fill(later);
     await sheet.getByLabel("עד תאריך").fill(later);
-    await sheet.locator('input[type="time"]').first().fill("10:30");
-    await sheet.locator('input[type="time"]').nth(1).fill("11:00");
-    await sheet.getByLabel("סיבה").fill("פגישה עם ספק");
-    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await sheet.getByRole("radio", { name: /^לא עובדים בחלק מהיום/ }).click();
+    await sheet.getByLabel("מ־", { exact: true }).fill("10:30");
+    await sheet.getByLabel("עד", { exact: true }).fill("11:00");
+    await sheet.getByLabel("הערה (לא חובה)").fill("פגישה עם ספק");
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // It is on the list that exists to show it, without going anywhere.
     await expect(page.getByText("פגישה עם ספק")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("10:30–11:00")).toBeVisible();
+    await expect(page.getByText("לא עובדים 10:30–11:00")).toBeVisible();
   });
 
   test("and can keep the same hours free on each of those days", async ({ page }) => {
     const shop = await anOwnerAt("שעה קבועה");
-    await openTheLayer(page, shop, "חסימות");
+    const sheet = await openTheChanges(page, shop);
 
     const first = aDayFromNow(1);
     const last = aDayFromNow(2);
-    await page.getByRole("button", { name: "הוספת חסימה" }).click();
-    const sheet = page.getByRole("dialog");
     await sheet.getByLabel("מתאריך").fill(first);
     await sheet.getByLabel("עד תאריך").fill(last);
-    await sheet.locator('input[type="time"]').first().fill("10:00");
-    await sheet.locator('input[type="time"]').nth(1).fill("11:00");
-    await sheet.getByRole("button", { name: "הוספת טווח שעות" }).click();
-    await sheet.locator('input[type="time"]').nth(2).fill("14:00");
-    await sheet.locator('input[type="time"]').nth(3).fill("15:00");
-    await sheet.getByLabel("סיבה").fill("שיעור");
-    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await sheet.getByRole("radio", { name: /^לא עובדים בחלק מהיום/ }).click();
+    await sheet.getByLabel("מ־", { exact: true }).first().fill("10:00");
+    await sheet.getByLabel("עד", { exact: true }).first().fill("11:00");
+    await sheet.getByRole("button", { name: "+ עוד טווח" }).click();
+    await sheet.getByLabel("מ־", { exact: true }).nth(1).fill("14:00");
+    await sheet.getByLabel("עד", { exact: true }).nth(1).fill("15:00");
+    await sheet.getByLabel("הערה (לא חובה)").fill("שיעור");
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Two hours on each of two days: four blocks from one form, and the rest of
@@ -1944,7 +1948,7 @@ test.describe("the business panel", () => {
     await expect(
       page.getByRole("button", { name: "כיסא שני", pressed: true }),
     ).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "ימים חריגים" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "שינויים" })).toBeVisible();
   });
 
   test("hides a calendar from customers, and brings it back", async ({ page }) => {
@@ -2773,15 +2777,23 @@ test.describe("closing the business", () => {
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
   };
 
-  /** The + names the action, then the grid asks which days, then the details. */
-  const aimAtDays = async (page: Page, what: string, days: readonly string[]) => {
+  /** A second calendar, so "the whole business" is a choice of its own. */
+  const withASecondCalendar = async (shop: { business: { id: string }; owner: { token: string } }) =>
+    call(`/businesses/${shop.business.id}/resources`, { method: "POST", token: shop.owner.token, body: { name: "כיסא שני" } });
+
+  /** The + opens "שינוי ביומן", the grid asks which days, then the sheet: the whole business, closed all day. */
+  const aimAtDays = async (page: Page, days: readonly string[]) => {
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("button", { name: new RegExp(what) }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     for (const day of days) {
       await showTheMonthOf(page, day);
       await page.getByRole("button", { name: day }).click();
     }
     await page.getByRole("button", { name: "המשך" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("group", { name: "למי" }).getByRole("button", { name: "כל העסק" }).click();
+    await sheet.getByRole("radio", { name: /^לא עובדים כל היום/ }).click();
+    return sheet;
   };
 
   const slotsOn = async (
@@ -2801,6 +2813,7 @@ test.describe("closing the business", () => {
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
+    await withASecondCalendar(shop);
     const [first, middle, last] = inOneMonth([2, 3, 4]);
     const onFirst = anInstantAt(first, "10:00");
     const { token: theirs, appointment } = await aCustomerWithABooking(
@@ -2810,16 +2823,13 @@ test.describe("closing the business", () => {
     );
 
     await openTheCalendar(page, shop, shop.owner.token);
-    await aimAtDays(page, "יום מיוחד לעסק", [first, last]);
-
-    const sheet = page.getByRole("dialog");
-    await expect(sheet).toBeVisible();
+    const sheet = await aimAtDays(page, [first, last]);
     // The warning names the person, because "1 appointment" is not the
     // decision the owner is being asked to make.
     await expect(sheet.getByText("נועה שדה")).toBeVisible({ timeout: 15_000 });
-    await expect(sheet.getByText(/יש כבר 1 תורים/)).toBeVisible();
+    await expect(sheet.getByText("תור אחד בימים האלה")).toBeVisible();
 
-    await sheet.getByRole("button", { name: /^סגירה וביטול/ }).click();
+    await sheet.getByRole("button", { name: "סגירת העסק וביטול תור אחד" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Every day of the range is shut for customers, not only the first.
@@ -2840,6 +2850,7 @@ test.describe("closing the business", () => {
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
+    await withASecondCalendar(shop);
     const day = aDayFromNow(2);
     const { token: theirs, appointment } = await aCustomerWithABooking(
       shop,
@@ -2848,10 +2859,10 @@ test.describe("closing the business", () => {
     );
 
     await openTheCalendar(page, shop, shop.owner.token);
-    await aimAtDays(page, "יום מיוחד לעסק", [day]);
-
-    const sheet = page.getByRole("dialog");
-    await sheet.getByRole("button", { name: "סגירה בלי לבטל תורים" }).click();
+    const sheet = await aimAtDays(page, [day]);
+    await expect(sheet.getByText("רון לוי")).toBeVisible({ timeout: 15_000 });
+    await sheet.getByRole("radio", { name: "להשאיר אותו, אדבר איתו בעצמי" }).click();
+    await sheet.getByRole("button", { name: "סגירת העסק ליום הזה" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     await expect.poll(async () => slotsOn(shop, day), { timeout: 15_000 }).toBe(0);
@@ -2868,15 +2879,14 @@ test.describe("closing the business", () => {
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
+    await withASecondCalendar(shop);
     const [first, last] = inOneMonth([2, 4]);
 
     await openTheCalendar(page, shop, shop.owner.token);
-    await aimAtDays(page, "יום מיוחד לעסק", [first, last]);
-
-    const sheet = page.getByRole("dialog");
+    const sheet = await aimAtDays(page, [first, last]);
     await expect(sheet.getByText("אין תורים בימים האלה.")).toBeVisible({ timeout: 15_000 });
     await sheet.getByLabel("הערה (לא חובה)").fill("חופשה");
-    await sheet.getByRole("button", { name: "שמירה", exact: true }).click();
+    await sheet.getByRole("button", { name: "סגירת העסק לימים האלה" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // One band across the three days rather than three squares each saying so.
@@ -2886,9 +2896,9 @@ test.describe("closing the business", () => {
 
     await band.first().click();
     const closure = page.getByRole("dialog");
-    await expect(closure.getByText("חופשה")).toBeVisible();
-    await expect(closure.getByText(/· 3 ימים/).first()).toBeVisible();
-    await closure.getByRole("button", { name: /^ביטול השינוי/ }).click();
+    await expect(closure.getByRole("heading", { name: "חופשה" })).toBeVisible();
+    await expect(closure.locator(".change-sentence")).toContainText("העסק סגור");
+    await closure.getByRole("button", { name: "מחיקה · 3 הימים חוזרים לשעות הרגילות" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // The days are bookable again — and the band is gone with them.
@@ -2896,12 +2906,13 @@ test.describe("closing the business", () => {
     await expect(page.getByRole("button", { name: "סגור", exact: true })).toHaveCount(0);
   });
 
-  test("is not offered to a worker, who may still block their own calendar", async ({ page }) => {
+  test("is not offered to a worker, who may still change their own calendar", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `הרשאות ${Date.now()}`,
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
+    await withASecondCalendar(shop);
     const worker = uniquePhone();
     await call(`/businesses/${shop.business.id}/users`, {
       method: "POST",
@@ -2921,10 +2932,15 @@ test.describe("closing the business", () => {
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("button", { name: "הוספה ליום" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
+    const day = aDayFromNow(2);
+    await showTheMonthOf(page, day);
+    await page.getByRole("button", { name: day }).click();
+    await page.getByRole("button", { name: "המשך" }).click();
     const sheet = page.getByRole("dialog");
     // Their own time is theirs to keep; the shop's days are not theirs to say.
-    await expect(sheet.getByText("חסימה")).toBeVisible();
-    await expect(sheet.getByText("יום מיוחד לעסק")).toHaveCount(0);
+    await expect(sheet.getByText("ביומן א", { exact: true })).toBeVisible();
+    await expect(sheet.getByText("כל העסק")).toHaveCount(0);
   });
 
   test("refuses a worker at the API, not only in the interface", async () => {
@@ -2954,7 +2970,14 @@ test.describe("closing the business", () => {
       body: { phone, code, name: { givenName: "עובדת", familyName: null } },
     });
 
-    // A hidden button is a courtesy; this is the rule.
+    // A hidden button is a courtesy; this is the rule — on the old route and the new one.
+    await expect(
+      call(`/businesses/${shop.business.id}/changes`, {
+        method: "POST",
+        token,
+        body: { scope: { kind: "BUSINESS" }, fromDate: aDayFromNow(2), toDate: aDayFromNow(2), outcome: "OFF_ALL_DAY", ranges: [], upcoming: "KEEP" },
+      }),
+    ).rejects.toThrow(/403/);
     await expect(
       call(`/businesses/${shop.business.id}/closures`, {
         method: "POST",
@@ -3128,10 +3151,10 @@ test.describe("reading a day at a glance", () => {
       timeout: 15_000,
     });
 
-    // The band in the month, which is where a blockage spanning days is undone.
-    await page.getByRole("button", { name: "חסום", exact: true }).first().click();
+    // The band in the month, which is where a change spanning days is undone.
+    await page.getByRole("button", { name: "חלק מהיום", exact: true }).first().click();
     const sheet = page.getByRole("dialog");
-    await sheet.getByRole("button", { name: /^הסרה של כל/ }).click();
+    await sheet.getByRole("button", { name: "מחיקה · 2 הימים חוזרים לשעות הרגילות" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // The day below the month is another read of the same thing, and it used
@@ -3175,14 +3198,18 @@ test.describe("blocking time out", () => {
     return { token, appointment };
   };
 
-  const aimAt = async (page: Page, what: string, days: readonly string[]) => {
+  /** "שינוי ביומן" from the +, aimed at days, as a whole day off for the calendar on screen. */
+  const aimAt = async (page: Page, days: readonly string[]) => {
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("button", { name: new RegExp(what) }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     for (const day of days) {
       await showTheMonthOf(page, day);
       await page.getByRole("button", { name: day }).click();
     }
     await page.getByRole("button", { name: "המשך" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("radio", { name: /^לא עובדים כל היום/ }).click();
+    return sheet;
   };
 
   test("names what it would sit on top of, and can call it off", async ({ page }) => {
@@ -3206,11 +3233,10 @@ test.describe("blocking time out", () => {
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
 
-    await aimAt(page, "חסימה", [day]);
-    const sheet = page.getByRole("dialog");
+    const sheet = await aimAt(page, [day]);
     // The same warning the shop closing gives, because it costs the same thing.
     await expect(sheet.getByText("מיכל אבן")).toBeVisible({ timeout: 15_000 });
-    await sheet.getByRole("button", { name: /^חסימה וביטול/ }).click();
+    await sheet.getByRole("button", { name: "שמירה וביטול תור אחד" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     const mine = await call<{ id: string; status: string }[]>("/me/appointments", {
@@ -3240,9 +3266,10 @@ test.describe("blocking time out", () => {
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
 
-    await aimAt(page, "חסימה", [day]);
-    const sheet = page.getByRole("dialog");
-    await sheet.getByRole("button", { name: "חסימה בלי לבטל תורים" }).click();
+    const sheet = await aimAt(page, [day]);
+    await expect(sheet.getByText("אורי גל")).toBeVisible({ timeout: 15_000 });
+    await sheet.getByRole("radio", { name: "להשאיר אותו, אדבר איתו בעצמי" }).click();
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     const mine = await call<{ id: string; status: string }[]>("/me/appointments", {
@@ -3267,13 +3294,12 @@ test.describe("blocking time out", () => {
     await ready(page);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
 
-    await aimAt(page, "יום מיוחד לעסק", [day]);
-    const sheet = page.getByRole("dialog");
+    const sheet = await aimAt(page, [day]);
     await expect(sheet).toBeVisible();
 
     // A sheet whose only exits are "do it" and a tap on the backdrop is one
     // people learn to distrust.
-    await sheet.getByRole("button", { name: "ביטול הבחירה" }).click();
+    await sheet.getByRole("button", { name: "ביטול", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Nothing was written, and the + is back rather than the grid still
@@ -3327,13 +3353,13 @@ test.describe("blocking time out", () => {
     await showTheMonthOf(page, days[0]);
     // The band says what it is and whose it is — short enough to be taken in
     // at a glance, with the reason in the sheet behind it.
-    const band = page.getByRole("button", { name: "חסום (יומן א)" });
+    const band = page.getByRole("button", { name: "חלק מהיום (יומן א)" });
     await expect(band.first()).toBeVisible({ timeout: 15_000 });
 
     await band.first().click();
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("יומן א")).toBeVisible();
-    await expect(sheet.getByText("מילואים")).toBeVisible();
+    await expect(sheet.locator(".change-scope").first()).toHaveText("יומן א");
+    await expect(sheet.getByRole("heading", { name: "מילואים" })).toBeVisible();
   });
 });
 
@@ -3394,15 +3420,15 @@ test.describe("a day the shop keeps its own hours", () => {
 
     // It used to be a slightly paler square and nothing else: no band, nothing
     // to tap, and the only way to find it was the schedule screen.
-    const band = page.getByRole("button", { name: "שעות עבודה אחרות" });
+    const band = page.getByRole("button", { name: "שעות אחרות", exact: true });
     await expect(band.first()).toBeVisible({ timeout: 15_000 });
 
     await band.first().click();
     const sheet = page.getByRole("dialog");
     // The hours are in the sheet, which is where there is room for them.
-    await expect(sheet.getByText("09:00–12:00")).toBeVisible();
-    await expect(sheet.getByText("ערב חג")).toBeVisible();
-    await sheet.getByRole("button", { name: /^ביטול השינוי/ }).click();
+    await expect(sheet.locator(".change-sentence")).toContainText("09:00–12:00");
+    await expect(sheet.getByRole("heading", { name: "ערב חג" })).toBeVisible();
+    await sheet.getByRole("button", { name: "מחיקה · היום חוזר לשעות הרגילות" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Back on its usual hours: the afternoon is bookable again.
@@ -3447,13 +3473,16 @@ test.describe("a day the shop keeps its own hours", () => {
 
     await openCalendar(page, shop, shop.owner.token);
     await page.getByRole("button", { name: "לוח זמנים" }).click();
-    await page.getByRole("button", { name: "ימים חריגים" }).click();
+    await page.getByRole("tab", { name: "שינויים" }).click();
 
-    await expect(page.getByText("כל העסק")).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: "מחיקה" }).first().click();
+    // A calendar's list does not carry the shop's day; the business's does.
+    await expect(page.getByText("אין שינויים קרובים")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("group", { name: "של מי השינויים" }).getByRole("button", { name: "כל העסק" }).click();
+    await page.getByRole("list", { name: "השינויים" }).getByRole("button").first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "מחיקה · היום חוזר לשעות הרגילות" }).click();
 
     // Gone for every calendar, in one go — and gone from this list with it.
-    await expect(page.getByText("כל העסק")).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByText("אין שינויים קרובים")).toBeVisible({ timeout: 15_000 });
     const resources = await call<{ id: string }[]>(
       `/businesses/${shop.business.id}/resources`,
       { token: shop.owner.token },
@@ -3472,6 +3501,12 @@ test.describe("a day the shop keeps its own hours", () => {
       name: `יומנים ${Date.now()}`,
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
+    });
+    // Two calendars, which is when "whose chair" is worth saying.
+    await call(`/businesses/${shop.business.id}/resources`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: { name: "יומן ב" },
     });
     const day = aDayFromNow(2);
     const phone = uniquePhone();
@@ -3497,13 +3532,15 @@ test.describe("a day the shop keeps its own hours", () => {
 
     await openCalendar(page, shop, shop.owner.token);
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("button", { name: /יום מיוחד לעסק/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     await openTheDayOf(page, day);
     await page.getByRole("button", { name: "המשך" }).click();
 
     // Whose chair it is, because closing touches every calendar and a list of
     // names says nothing about which of them loses their afternoon.
     const sheet = page.getByRole("dialog");
+    await sheet.getByRole("group", { name: "למי" }).getByRole("button", { name: "כל העסק" }).click();
+    await sheet.getByRole("radio", { name: /^לא עובדים כל היום/ }).click();
     await expect(sheet.getByText("שירה כהן")).toBeVisible({ timeout: 15_000 });
     await expect(sheet.getByText(new RegExp(`· ${shop.resource.name}`))).toBeVisible();
   });
@@ -3580,14 +3617,14 @@ test.describe("a month with a lot decided about it", () => {
     for (const date of days) {
       await expect(page.getByRole("button", { name: date })).toBeVisible();
     }
-    await expect(page.getByRole("button", { name: "חסום", exact: true })).toHaveCount(2, {
+    await expect(page.getByRole("button", { name: "חלק מהיום", exact: true })).toHaveCount(2, {
       timeout: 15_000,
     });
     // One line holds both, so nothing had to fold.
     await expect(page.getByRole("button", { name: /עוד \d+ בשבוע/ })).toHaveCount(0);
 
     // And both are still openable, because nothing is buried.
-    await page.getByRole("button", { name: "חסום", exact: true }).first().click();
+    await page.getByRole("button", { name: "חלק מהיום", exact: true }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
   });
 
@@ -3614,7 +3651,7 @@ test.describe("a month with a lot decided about it", () => {
     await openMonth(page, shop);
     await showTheMonthOf(page, days[0]!);
 
-    const bar = page.getByRole("button", { name: "חסום", exact: true });
+    const bar = page.getByRole("button", { name: "חלק מהיום", exact: true });
     await expect(bar).toBeVisible({ timeout: 15_000 });
     // It stands in for four decisions, so it opens the list of them.
     await bar.click();
@@ -3836,14 +3873,14 @@ test.describe("what the month draws", () => {
     await showTheMonthOf(page, day);
 
     // Two bars, one per chair — not five, and nothing folded away.
-    const bands = page.getByRole("button", { name: "חסום", exact: true });
+    const bands = page.getByRole("button", { name: "חלק מהיום", exact: true });
     await expect(bands).toHaveCount(2, { timeout: 15_000 });
     await expect(page.getByRole("button", { name: /עוד \d+ בשבוע/ })).toHaveCount(0);
 
-    // And each one opens the blockage it stands for, because there is one.
+    // And each one opens the change it stands for, because there is one.
     await bands.first().click();
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByRole("button", { name: /^הסרת החסימה/ })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "מחיקה · היום חוזר לשעות הרגילות" })).toBeVisible();
   });
 
   test("draws appointments as dots on the day, never as a band", async ({ page }) => {
@@ -3896,7 +3933,7 @@ test.describe("what the month draws", () => {
       (node) => window.getComputedStyle(node).backgroundColor,
     );
     expect(filled).not.toBe("rgba(0, 0, 0, 0)");
-    await expect(page.getByRole("button", { name: "חסום", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^(סגור|חלק מהיום|שעות אחרות)( \(|$)/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "לקוחה בדיקה" })).toHaveCount(0);
 
     // The day itself is where they are read.
@@ -4055,13 +4092,14 @@ test.describe("what a decision is called", () => {
 
     await openCalendar(page, shop, shop.owner.token);
     await showTheMonthOf(page, days[0]);
-    await page.getByRole("button", { name: "חסום", exact: true }).first().click();
+    await page.getByRole("button", { name: "חלק מהיום", exact: true }).first().click();
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("רופה")).toBeVisible();
+    await expect(sheet.getByRole("heading", { name: "רופה" })).toBeVisible();
 
-    await sheet.getByRole("button", { name: "שינוי ההערה" }).click();
+    // Its words are edited in the same sheet it was made in, and saved as one change.
+    await sheet.getByRole("button", { name: "עריכה" }).click();
     await sheet.getByLabel("הערה (לא חובה)").fill("רופא שיניים");
-    await sheet.getByRole("button", { name: "שמירה", exact: true }).click();
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // Both days, because the words belong to the decision rather than to each
@@ -4092,9 +4130,9 @@ test.describe("what a decision is called", () => {
     await showTheMonthOf(page, first);
     await page.getByRole("button", { name: "סגור", exact: true }).first().click();
     const sheet = page.getByRole("dialog");
-    await sheet.getByRole("button", { name: "שינוי ההערה" }).click();
+    await sheet.getByRole("button", { name: "עריכה" }).click();
     await sheet.getByLabel("הערה (לא חובה)").fill("שיפוץ");
-    await sheet.getByRole("button", { name: "שמירה", exact: true }).click();
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // The words changed; the days are still shut.
@@ -4111,7 +4149,7 @@ test.describe("what a decision is called", () => {
       )
       .toBe(0);
     await page.getByRole("button", { name: "סגור", exact: true }).first().click();
-    await expect(page.getByRole("dialog").getByText("שיפוץ")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "שיפוץ" })).toBeVisible({ timeout: 15_000 });
   });
 
   test("is not offered to a worker for the shop's own days", async ({ page }) => {
@@ -4120,6 +4158,8 @@ test.describe("what a decision is called", () => {
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
+    // Two calendars, so the shop's day is the shop's and not this worker's own calendar's.
+    await call(`/businesses/${shop.business.id}/resources`, { method: "POST", token: shop.owner.token, body: { name: "כיסא שני" } });
     const day = aDayFromNow(2);
     await call(`/businesses/${shop.business.id}/closures`, {
       method: "POST",
@@ -4146,10 +4186,11 @@ test.describe("what a decision is called", () => {
 
     await page.getByRole("button", { name: "סגור", exact: true }).first().click();
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("חופשה")).toBeVisible();
+    await expect(sheet.getByRole("heading", { name: "חופשה" })).toBeVisible();
     // They can read what the shop decided; saying it differently is not theirs.
-    await expect(sheet.getByRole("button", { name: "שינוי ההערה" })).toHaveCount(0);
-    await expect(sheet.getByRole("button", { name: /^ביטול השינוי/ })).toHaveCount(0);
+    await expect(sheet.getByText("שינוי של כל העסק. רק בעלים או מנהל יכולים לשנות אותו.")).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "עריכה" })).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: /^מחיקה/ })).toHaveCount(0);
   });
 });
 
@@ -4181,8 +4222,9 @@ test.describe("a day the shop is closed on", () => {
     await expect(page.getByText("יום כיפור")).toBeVisible();
     await expect(aFreeStretch(page)).toHaveCount(0);
 
-    // And the way back out is right there.
-    await page.getByRole("button", { name: "ביטול הסגירה" }).click();
+    // And the way back out is right there: the change behind it, and giving the day back.
+    await page.getByRole("button", { name: "פרטי השינוי" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "מחיקה · היום חוזר לשעות הרגילות" }).click();
     await expect(aFreeStretch(page).first()).toBeVisible({
       timeout: 15_000,
     });
@@ -4206,17 +4248,18 @@ test.describe("the note on something being made", () => {
 
     const aim = async (day: string, note: string) => {
       await page.getByRole("button", { name: "הוספה ליום" }).click();
-      await page.getByRole("button", { name: /חסימה/ }).first().click();
+      await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
       await openTheDayOf(page, day);
       await page.getByRole("button", { name: "המשך" }).click();
       const sheet = page.getByRole("dialog");
+      await sheet.getByRole("radio", { name: /^לא עובדים כל היום/ }).click();
       await expect(sheet.getByLabel("הערה (לא חובה)")).toHaveValue("");
       if (note !== "") await sheet.getByLabel("הערה (לא חובה)").fill(note);
       return sheet;
     };
 
     const first = await aim(aDayFromNow(2), "רופא");
-    await first.getByRole("button", { name: "שמירה", exact: true }).click();
+    await first.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // The words belonged to the thing that was made. Left behind, they turn up
@@ -4338,9 +4381,10 @@ test.describe("the calendar, altogether", () => {
     // Standing on the day itself, the words are right there rather than up in
     // the month's band — and so is putting them right.
     await expect(page.getByText("יום כיפור")).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: "שינוי ההערה" }).click();
+    await page.getByRole("button", { name: "פרטי השינוי" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "עריכה" }).click();
     await page.getByLabel("הערה (לא חובה)").fill("ערב חג");
-    await page.getByRole("button", { name: "שמירה", exact: true }).click();
+    await page.getByRole("button", { name: "שמירת השינוי" }).click();
 
     await expect(page.getByText("ערב חג")).toBeVisible({ timeout: 15_000 });
     // Still shut: saying it differently is not giving the day back.
@@ -4363,12 +4407,15 @@ test.describe("the calendar, altogether", () => {
 
     await openCalendar(page, shop, shop.owner.token);
     await page.getByRole("button", { name: "הוספה ליום" }).click();
-    await page.getByRole("button", { name: /חסימה/ }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: /שינוי ביומן/ }).click();
     await openTheDayOf(page, day);
     await page.getByRole("button", { name: "המשך" }).click();
     const sheet = page.getByRole("dialog");
-    await sheet.getByRole("button", { name: "כל היום" }).click();
-    await sheet.getByRole("button", { name: "שמירה", exact: true }).click();
+    // Some hours, over the earlier two and past them on both sides.
+    await sheet.getByRole("radio", { name: /^לא עובדים בחלק מהיום/ }).click();
+    await sheet.getByLabel("מ־", { exact: true }).fill("09:00");
+    await sheet.getByLabel("עד", { exact: true }).fill("18:00");
+    await sheet.getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // One blockage, not two lying on top of each other — and removing it gives
@@ -4426,20 +4473,23 @@ test.describe("the calendar, altogether", () => {
     await openCalendar(page, shop, shop.owner.token);
     await showTheMonthOf(page, day);
 
-    // The month says the shop keeps its own hours that day.
-    await expect(page.getByRole("button", { name: "שעות עבודה אחרות" })).toBeVisible({ timeout: 15_000 });
+    // The month says the shop keeps other hours that day.
+    await expect(page.getByRole("button", { name: "שעות אחרות", exact: true })).toBeVisible({ timeout: 15_000 });
 
-    // The schedule screen says the same, and names it the whole business's.
+    // The schedule's list of changes says the same, in the same words.
     await page.getByRole("button", { name: "לוח זמנים" }).click();
-    await page.getByRole("button", { name: "ימים חריגים" }).click();
-    await expect(page.getByText("09:00–12:00")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("ערב חג")).toBeVisible();
+    await page.getByRole("tab", { name: "שינויים" }).click();
+    const row = page.getByRole("list", { name: "השינויים" }).getByRole("button").first();
+    await expect(row).toContainText("עובדים 09:00–12:00", { timeout: 15_000 });
+    await expect(row).toContainText("ערב חג");
 
-    // And removing it there removes the shop's decision, not one calendar's
-    // copy of it — so the month agrees again straight away.
-    await page.getByRole("button", { name: "מחיקה" }).first().click();
+    // And removing it there removes the decision — so the month agrees again
+    // straight away.
+    await row.click();
+    await page.getByRole("dialog").getByRole("button", { name: "מחיקה · היום חוזר לשעות הרגילות" }).click();
+    await expect(page.getByText("אין שינויים קרובים")).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "היומן" }).click();
-    await expect(page.getByRole("button", { name: "שעות עבודה אחרות" })).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "שעות אחרות", exact: true })).toHaveCount(0, { timeout: 15_000 });
   });
 });
 
@@ -4600,8 +4650,10 @@ test.describe("the day as long as it really is", () => {
     // the hours it covers — which is the window, said out loud. It used to read
     // 08:00–13:00: the same eight-to-five shape as any other day, so the one
     // thing making this day special was the one thing not on the screen.
-    await expect(page.getByText("09:00–12:00")).toBeVisible({ timeout: 15_000 });
+    await expect(aFreeStretch(page).filter({ hasText: "09:00–12:00" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("08:00–13:00")).toHaveCount(0);
+    // And the day says why, in a tag that opens the change.
+    await expect(page.getByRole("button", { name: "שעות אחרות היום · 09:00–12:00 · ערב חג" })).toBeVisible();
   });
 
   test("a blockage reaching closing time does not push the day past it", async ({ page }) => {
@@ -4712,7 +4764,7 @@ test.describe("a day nobody works, and why nobody works it", () => {
     // The two controls that used to be here matched no closure — there is no
     // decision about this Saturday to name or to undo — so they did nothing at
     // all, twice, in silence.
-    await expect(page.getByRole("button", { name: "ביטול הסגירה" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "פרטי השינוי" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "שמירה" })).toHaveCount(0);
     await expect(page.getByText("סגור כל היום")).toHaveCount(0);
   });
@@ -4749,15 +4801,16 @@ test.describe("a day nobody works, and why nobody works it", () => {
     await expect(page.getByText("חופשה")).toBeVisible();
 
     // The words change, and stay changed.
-    await page.getByRole("button", { name: /חופשה|שינוי/ }).first().click();
-    const note = page.getByRole("textbox").last();
-    await note.fill("חופשה משפחתית");
-    await page.getByRole("button", { name: "שמירה" }).click();
+    await page.getByRole("button", { name: "פרטי השינוי" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "עריכה" }).click();
+    await page.getByRole("dialog").getByLabel("הערה (לא חובה)").fill("חופשה משפחתית");
+    await page.getByRole("dialog").getByRole("button", { name: "שמירת השינוי" }).click();
     await expect(page.getByText("חופשה משפחתית")).toBeVisible({ timeout: 15_000 });
 
     // And the closure comes off, leaving an ordinary day behind it — one a
     // customer can book again.
-    await page.getByRole("button", { name: "ביטול הסגירה" }).click();
+    await page.getByRole("button", { name: "פרטי השינוי" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "מחיקה · היום חוזר לשעות הרגילות" }).click();
     await expect(page.getByText("סגור כל היום")).toHaveCount(0, { timeout: 15_000 });
     await expect
       .poll(
@@ -5482,7 +5535,7 @@ test.describe("booking a customer in", () => {
     await expect.poll(() => bookedOn(shop, later), { timeout: 15_000 }).toEqual(["10:00 תמר בן דוד"]);
   });
 
-  test("a tapped gap offers booking first, and asks the hours only for a blockage", async ({
+  test("a tapped gap offers booking first, and asks the hours only for a change", async ({
     page,
   }) => {
     const shop = await aBusinessWithOpenHours({
@@ -5500,23 +5553,28 @@ test.describe("booking a customer in", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
 
-    // Two plain choices, and none of the blockage's machinery until it is
+    // Two plain choices, and none of the change's machinery until it is
     // asked for: no time fields, no length chips, no note.
-    await expect(sheet.getByRole("button", { name: "תור ללקוח" })).toBeVisible();
-    await expect(sheet.getByRole("button", { name: "חסימה", exact: true })).toBeVisible();
-    await expect(sheet.getByLabel("מ")).toHaveCount(0);
-    await expect(sheet.getByLabel("עד")).toHaveCount(0);
-    await expect(sheet.getByRole("button", { name: "כל הטווח" })).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: "תור ללקוח בשעה שנבחרה" })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: /שינוי ביומן/ })).toBeVisible();
+    await expect(sheet.getByLabel("מ־", { exact: true })).toHaveCount(0);
+    await expect(sheet.getByLabel("עד", { exact: true })).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: "שעה", exact: true })).toHaveCount(0);
 
-    // Asking for a blockage brings them out.
-    await sheet.getByRole("button", { name: "חסימה", exact: true }).click();
-    await expect(sheet.getByRole("button", { name: "כל הטווח" })).toBeVisible();
-    await expect(sheet.getByRole("button", { name: /^חסימה ·/ })).toBeVisible();
+    // Asking for a change opens the whole sheet, and the hours come with part of the day.
+    await sheet.getByRole("button", { name: /שינוי ביומן/ }).click();
+    await expect(sheet.getByRole("heading", { name: "שינוי ביומן" })).toBeVisible();
+    await sheet.getByRole("radio", { name: /^לא עובדים בחלק מהיום/ }).click();
+    await expect(sheet.getByRole("button", { name: "שעה", exact: true })).toBeVisible();
+    await expect(sheet.getByLabel("מ־", { exact: true })).toBeVisible();
 
-    // And the way back leaves the two choices as they were.
-    await sheet.getByRole("button", { name: "חזרה" }).click();
-    await expect(sheet.getByRole("button", { name: "תור ללקוח" })).toBeVisible();
-    await expect(sheet.getByRole("button", { name: "כל הטווח" })).toHaveCount(0);
+    // And walking away writes nothing.
+    await sheet.getByRole("button", { name: "ביטול", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    const days = await call<{ slots: unknown[] }[]>(
+      `/businesses/${shop.business.id}/availability?serviceId=${shop.service.id}&resourceId=${shop.resource.id}&from=${day}&to=${day}`,
+    );
+    expect((days[0]?.slots ?? []).length).toBe(16);
   });
 
   /**
@@ -6466,5 +6524,64 @@ test.describe("choosing a plan", () => {
       { token: shop.owner.token },
     );
     expect(calendars.find((calendar) => calendar.name === "כיסא שני")?.paused).toBe(true);
+  });
+});
+
+/**
+ * A gap between two things on the day is free time, but only a gap at least as
+ * long as the shortest service can hold an appointment — so only such a gap is
+ * offered for booking. The "+" on a ten-minute seam offered something nobody
+ * could do.
+ */
+test.describe("a gap too short for any appointment", () => {
+  test("is drawn, and offers no booking; a gap that fits does", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({
+      name: `פערים ${Date.now()}`,
+      ownerPhone: uniquePhone(),
+      hours: { start: "09:00", end: "17:00" },
+      durationMinutes: 30,
+    });
+    const day = aDayFromNow(3);
+    // Free: 09:00–10:00, 11:00–11:10, 13:00–13:20 and 15:00–15:30.
+    await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
+      method: "POST",
+      token: shop.owner.token,
+      body: {
+        blocks: [
+          ["10:00", "11:00"],
+          ["11:10", "13:00"],
+          ["13:20", "15:00"],
+          ["15:30", "17:00"],
+        ].map(([from, until]) => ({ startAt: anInstantAt(day, from!), endAt: anInstantAt(day, until!), reason: "" })),
+        upcoming: "KEEP",
+      },
+    });
+    await page.addInitScript(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      ["tor-now.session", shop.owner.token],
+    );
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await openTheDayOf(page, day);
+    await expect(aFreeStretch(page).first()).toBeVisible({ timeout: 15_000 });
+
+    // Ten minutes: a seam, and nothing to tap.
+    await expect(page.getByRole("button", { name: /פנוי · 10 דק׳/ })).toHaveCount(0);
+
+    // Twenty minutes: room to draw, not to book — it can still become a change.
+    await page.getByRole("button", { name: /פנוי · 20 דק׳/ }).click();
+    let sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: "13:00–13:20" })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "תור ללקוח בשעה שנבחרה" })).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: /שינוי ביומן/ })).toBeVisible();
+    await expect(sheet.getByText("הפער קצר מ־30 דקות — השירות הקצר ביותר")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+
+    // Exactly the shortest service: bookable.
+    await page.getByRole("button", { name: /פנוי · 30 דק׳/ }).click();
+    sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("button", { name: "תור ללקוח בשעה שנבחרה" })).toBeVisible();
+    await expect(sheet.getByText(/הפער קצר/)).toHaveCount(0);
   });
 });

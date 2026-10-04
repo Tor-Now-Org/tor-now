@@ -14,6 +14,7 @@ import { businessService } from "../../application/business-service.ts";
 import { calendarService } from "../../application/calendar-service.ts";
 import { statisticsService } from "../../application/statistics-service.ts";
 import { closureService } from "../../application/closure-service.ts";
+import { changeService } from "../../application/change-service.ts";
 import { catalogueService } from "../../application/catalogue-service.ts";
 import { discoveryService } from "../../application/discovery-service.ts";
 import { reviewService } from "../../application/review-service.ts";
@@ -310,6 +311,7 @@ export const harness = (options: { now?: Instant } = {}) => {
       fairUse: fairUseService({ unitOfWork, clock }),
       addons: addonService({ unitOfWork, clock }),
       closures: closureService({ unitOfWork, clock }),
+      changes: changeService({ unitOfWork, clock }),
       admin,
       outboxWorker: outboxWorker({ unitOfWork, notifier, clock }),
       reminders: reminderService({ unitOfWork, clock }),

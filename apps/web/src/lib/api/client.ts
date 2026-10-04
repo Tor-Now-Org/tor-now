@@ -1,11 +1,14 @@
 import { ApiError, type ApiErrorCode } from "./errors.ts";
 import type {
-  ClosureImpactDto,
+  ChangeDto,
+  ChangeOutcome,
+  ChangePreviewDto,
+  ChangeScopeDto,
+  ClockRange,
   ClosureOutcomeDto,
   AllowlistEntryDto,
   AppointmentDto,
   AuditEntryDto,
-  BlockDto,
   BusinessDayDto,
   BusinessMonthDto,
   StatisticsDto,
@@ -35,7 +38,6 @@ import type {
   CustomerDto,
   DayAvailabilityDto,
   MyAppointmentDto,
-  OverrideDto,
   PaymentDto,
   PlatformStatsDto,
   MeDto,
@@ -560,50 +562,6 @@ export const api = {
       token,
     }),
 
-  listOverrides: (
-    token: string,
-    businessId: string,
-    resourceId: string,
-    range: { from: string; to: string },
-  ) =>
-    request<OverrideDto[]>(
-      `/businesses/${businessId}/resources/${resourceId}/overrides`,
-      { token, query: range },
-    ),
-
-  /** ADR 0002: an override replaces the whole date; an empty list is a day off. */
-  putOverride: (
-    token: string,
-    businessId: string,
-    resourceId: string,
-    input: {
-      date: string;
-      note: string | null;
-      ranges: { start: string; end: string }[];
-    },
-  ) =>
-    request<OverrideDto>(
-      `/businesses/${businessId}/resources/${resourceId}/overrides`,
-      { method: "PUT", body: input, token },
-    ),
-
-  /** Every readable calendar's special days, for telling a chair's day from the shop's. */
-  listAllOverrides: (
-    token: string,
-    businessId: string,
-    range: { from: string; to: string },
-  ) =>
-    request<OverrideDto[]>(
-      `/businesses/${businessId}/overrides?from=${range.from}&to=${range.to}`,
-      { token },
-    ),
-
-  deleteOverride: (token: string, businessId: string, id: string) =>
-    request<void>(`/businesses/${businessId}/overrides/${id}`, {
-      method: "DELETE",
-      token,
-    }),
-
   calendarDay: (
     token: string,
     businessId: string,
@@ -615,26 +573,6 @@ export const api = {
       { token, query: { date } },
     ),
 
-  /**
-   * A blockage, which is one decision and may be several spans: days away are
-   * a span each, and an hour kept free across a fortnight is fourteen.
-   */
-  createBlocks: (
-    token: string,
-    businessId: string,
-    resourceId: string,
-    blocks: { startAt: string; endAt: string; reason: string }[],
-    /** What becomes of the appointments already inside it. */
-    upcoming: "KEEP" | "CANCEL" = "KEEP",
-  ) =>
-    request<BlockDto[]>(`/businesses/${businessId}/resources/${resourceId}/blocks`, {
-      method: "POST",
-      body: { blocks, upcoming },
-      token,
-    }),
-
-  /** A whole blockage — every day one decision made. */
-  /** One day across every calendar, for the timeline that draws them as lanes. */
   businessDay: (token: string, businessId: string, date: string) =>
     request<BusinessDayDto>(`/businesses/${businessId}/calendar/day?date=${date}`, { token }),
 
@@ -645,107 +583,50 @@ export const api = {
       { token },
     ),
 
-  /**
-   * The shop's own days, rather than one calendar's.
-   *
-   * Separate from `putOverride` on purpose, and not a loop over it: closing is
-   * one decision about the whole business, it is manager-and-up work, and it
-   * has to answer for the appointments already inside those days — none of
-   * which a per-calendar write can do.
-   */
-  previewClosure: (
-    token: string,
-    businessId: string,
-    plan: { fromDate: string; toDate: string; ranges: { start: string; end: string }[] },
-  ) =>
-    request<ClosureImpactDto>(`/businesses/${businessId}/closures/preview`, {
-      method: "POST",
-      body: plan,
-      token,
-    }),
+  listChanges: (token: string, businessId: string, range: { from: string; to: string }) =>
+    request<ChangeDto[]>(`/businesses/${businessId}/changes`, { query: range, token }),
 
-  closeBusiness: (
+  getChange: (token: string, businessId: string, changeId: string) =>
+    request<ChangeDto>(`/businesses/${businessId}/changes/${encodeURIComponent(changeId)}`, { token }),
+
+  /** Who a change would strand, what it would write over, and what the first day usually keeps. */
+  previewChange: (
     token: string,
     businessId: string,
     plan: {
+      scope: ChangeScopeDto;
       fromDate: string;
       toDate: string;
-      note: string | null;
-      ranges: { start: string; end: string }[];
-      upcoming: "KEEP" | "CANCEL";
+      outcome: ChangeOutcome | null;
+      ranges: ClockRange[];
+      replacing: string | null;
     },
-  ) =>
-    request<ClosureOutcomeDto>(`/businesses/${businessId}/closures`, {
-      method: "POST",
-      body: plan,
-      token,
-    }),
+  ) => request<ChangePreviewDto>(`/businesses/${businessId}/changes/preview`, { method: "POST", body: plan, token }),
 
-  /** Only the words: the days keep their hours and nothing booked is touched. */
-  describeClosure: (
+  /** A change made, or — given the one it replaces — an edit, saved as one replacement. */
+  applyChange: (
     token: string,
     businessId: string,
-    plan: { fromDate: string; toDate: string; note: string | null },
-  ) =>
-    request<{ renamed: number }>(`/businesses/${businessId}/closures`, {
-      method: "PATCH",
-      body: plan,
-      token,
-    }),
+    plan: {
+      scope: ChangeScopeDto;
+      fromDate: string;
+      toDate: string;
+      outcome: ChangeOutcome;
+      ranges: ClockRange[];
+      note: string | null;
+      upcoming: "KEEP" | "CANCEL";
+      replacing: string | null;
+    },
+  ) => request<ClosureOutcomeDto>(`/businesses/${businessId}/changes`, { method: "POST", body: plan, token }),
 
-  renameBlockGroup: (token: string, businessId: string, groupId: string, reason: string) =>
-    request<{ renamed: number }>(`/businesses/${businessId}/block-groups/${groupId}`, {
-      method: "PATCH",
-      body: { reason },
-      token,
-    }),
-
-  reopenBusiness: (token: string, businessId: string, from: string, to: string) =>
-    request<{ removed: number }>(
-      `/businesses/${businessId}/closures?from=${from}&to=${to}`,
-      { method: "DELETE", token },
-    ),
-
-  /** What a blockage would sit on top of, before it is made. */
-  previewBlocks: (
-    token: string,
-    businessId: string,
-    resourceId: string,
-    blocks: { startAt: string; endAt: string; reason: string }[],
-  ) =>
-    request<ClosureImpactDto>(
-      `/businesses/${businessId}/resources/${resourceId}/blocks/preview`,
-      { method: "POST", body: { blocks }, token },
-    ),
-
-  /** The blockages a calendar holds across a span, for the list that shows them. */
-  listBlocks: (
-    token: string,
-    businessId: string,
-    resourceId: string,
-    range: { from: string; to: string },
-  ) =>
-    request<BlockDto[]>(
-      `/businesses/${businessId}/resources/${resourceId}/blocks?from=${range.from}&to=${range.to}`,
-      { token },
-    ),
-
-  blockGroup: (token: string, businessId: string, groupId: string) =>
-    request<BlockDto[]>(`/businesses/${businessId}/block-groups/${groupId}`, { token }),
-
-  deleteBlockGroup: (token: string, businessId: string, groupId: string) =>
-    request<{ removed: number }>(`/businesses/${businessId}/block-groups/${groupId}`, {
+  /** A change given back, whole or for one of its days. */
+  removeChange: (token: string, businessId: string, changeId: string, date: string | null) =>
+    request<{ removed: number }>(`/businesses/${businessId}/changes/${encodeURIComponent(changeId)}`, {
       method: "DELETE",
+      ...(date === null ? {} : { query: { date } }),
       token,
     }),
 
-  deleteBlock: (token: string, businessId: string, blockId: string) =>
-    request<void>(`/businesses/${businessId}/blocks/${blockId}`, {
-      method: "DELETE",
-      token,
-    }),
-
-  /** What the owner owes the platform. Read-only: only an administrator writes. */
   subscription: (token: string, businessId: string) =>
     request<BillingDto>(`/businesses/${businessId}/subscription`, { token }),
 

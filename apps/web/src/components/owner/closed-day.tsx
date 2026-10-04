@@ -3,7 +3,6 @@
 import { formatLocalDate } from "@/lib/format.ts";
 import type { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { Button, Card } from "../ui.tsx";
-import { RenameNote } from "./rename-note.tsx";
 
 /**
  * A day nobody works, and why nobody works it.
@@ -23,18 +22,17 @@ import { RenameNote } from "./rename-note.tsx";
  * for a closure to remove and removed none. Neither said so.
  *
  * The way to change a rest day is to change the week, which is a different
- * screen, so this one says that instead of pretending.
+ * screen, so this one says that instead of pretending. A closure opens the
+ * change behind it, where it is described, edited or given back by whoever may.
  */
 export const ClosedDay = ({
   decided,
   note,
   date,
   copy,
+  changeCopy,
   language,
-  mayReopen,
-  busy,
-  onReopen,
-  onDescribe,
+  onOpenChange,
 }: {
   /**
    * Whether a closure was decided for this date, as opposed to the weekday
@@ -45,12 +43,10 @@ export const ClosedDay = ({
   note: string | null;
   date: string;
   copy: ReturnType<typeof useCopy<"owner">>;
+  changeCopy: ReturnType<typeof useCopy<"change">>;
   language: ReturnType<typeof useLanguage>["language"];
-  /** ADR 0016: the shop's days are not a worker's to give back, or to name. */
-  mayReopen: boolean;
-  busy: boolean;
-  onReopen: () => void;
-  onDescribe: (note: string) => void;
+  /** Opens the change that closed the day; null when no change stands behind it. */
+  onOpenChange: (() => void) | null;
 }) => (
   <Card
     style={{
@@ -77,18 +73,10 @@ export const ClosedDay = ({
       <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{note}</p>
     )}
     {!decided && <p className="hint" style={{ margin: 0 }}>{copy.restDayNote}</p>}
-    {/* The words are half of why a day is shut, and this is where somebody
-        looking at that day is standing. Saying them here saves a trip up to
-        the band in the month to find out, or to put them right. Only for a
-        closure, though: there is no decision behind a rest day to name or undo.
-        See the note on this component. */}
-    {decided && mayReopen && (
-      <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
-        <RenameNote note={note} busy={busy} onSave={onDescribe} />
-        <Button intent="quiet" busy={busy} onClick={onReopen}>
-          {copy.reopenClosedDay}
-        </Button>
-      </div>
+    {decided && onOpenChange !== null && (
+      <Button intent="quiet" onClick={onOpenChange} style={{ width: "100%" }}>
+        {changeCopy.openChange}
+      </Button>
     )}
   </Card>
 );

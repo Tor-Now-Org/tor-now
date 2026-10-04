@@ -9,7 +9,9 @@ import {
   type Business,
   type BusinessCategory,
   type BusinessPhoto,
+  type CalendarChange,
   type DateOverride,
+  type LocalTimeRangeValue,
   type Payment,
   type PlanVersion,
   type Resource,
@@ -26,6 +28,7 @@ import {
   type DaysOwed,
 } from "@tor-now/domain";
 import type { MyWaiting } from "../application/waiting-service.ts";
+import type { ChangePreview } from "../application/change-service.ts";
 import type { PlatformStats } from "../application/admin-service.ts";
 import type { PaymentBoard } from "../application/addon-service.ts";
 import type { SubscriptionView } from "../application/billing.ts";
@@ -197,6 +200,29 @@ export const strandedOut = (stranded: StrandedAppointment) => ({
   serviceName: stranded.serviceName,
   customerName: stranded.customerName,
   customerPhone: stranded.customerPhone,
+});
+
+const rangesOut = (ranges: readonly LocalTimeRangeValue[]) =>
+  ranges.map((range) => ({ start: formatLocalTime(range.start), end: formatLocalTime(range.end) }));
+
+/** "שינוי ביומן", as every screen that shows one reads it. */
+export const changeOut = (change: CalendarChange) => ({
+  id: change.id,
+  scope: change.scope,
+  outcome: change.outcome,
+  fromDate: change.fromDate,
+  toDate: change.toDate,
+  days: change.days.map((day) => ({ date: day.date, ranges: rangesOut(day.ranges) })),
+  ranges: change.ranges === null ? null : rangesOut(change.ranges),
+  note: change.note,
+});
+
+export const changePreviewOut = (preview: ChangePreview) => ({
+  days: preview.days,
+  calendars: preview.calendars,
+  appointments: preview.appointments.map(strandedOut),
+  replaces: preview.replaces.map(changeOut),
+  usual: rangesOut(preview.usual),
 });
 
 export const impactOut = (impact: Impact) => ({
