@@ -40,7 +40,7 @@ export const aShop = async (test: Harness, name: string, plan: Plan = "SOLO") =>
     address: "רחוב הרצל 1",
     latitude: 32.0853,
     longitude: 34.7818,
-    category: "barbershop",
+    categories: ["barbershop"],
     plan,
     resourceNames: ["כיסא"],
     services: [{ name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null }],

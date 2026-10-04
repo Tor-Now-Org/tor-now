@@ -11,6 +11,8 @@ import { CategoryAutocomplete } from "../category-autocomplete.tsx";
 import { moveIndex } from "../owner/address-suggestions.ts";
 import { Card, Chip, Empty } from "../ui.tsx";
 import { AllCategoriesIcon, CategoryIcon } from "./category-icons.tsx";
+import { MainCategoryTag } from "./category-tag.tsx";
+import { businessCategories, otherCategoriesCount } from "../category-choice.ts";
 
 // Leaflet touches `window` on import, so the map loads only in the browser, and only once opened.
 const BusinessMap = dynamic(() => import("./business-map.tsx").then((mod) => mod.BusinessMap), { ssr: false });
@@ -248,7 +250,7 @@ export const BusinessSearch = ({
     ? favoriteBusinesses.filter(
         (b) =>
           `${b.name} ${b.address ?? ""}`.toLowerCase().includes(needle) &&
-          (category === null || b.category === category),
+          (category === null || businessCategories(b).includes(category)),
       )
     : (results ?? []);
   const withDistance = baseList.map((business) => ({
@@ -479,7 +481,10 @@ export const BusinessSearch = ({
                           </span>
                           <span style={{ fontSize: 12, color: "var(--faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {[
-                              option.business.category != null ? categoryLabel(option.business.category, language) : null,
+                              option.business.category != null
+                                ? categoryLabel(option.business.category, language) +
+                                  (otherCategoriesCount(option.business) > 0 ? ` +${otherCategoriesCount(option.business)}` : "")
+                                : null,
                               option.business.address,
                               option.distanceKm === null ? null : formatDistance(option.distanceKm, copy),
                             ]
@@ -645,11 +650,10 @@ export const BusinessSearch = ({
                     )}
                     {(business.category != null || distanceLabel !== null || business.openNow !== undefined) && (
                       <span style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-                        {/* Said once in the box already when a Category is chosen. */}
-                        {business.category != null && category === null && (
-                          <span style={{ ...tagStyle, background: "var(--sunken)", color: "var(--muted)" }}>
-                            {categoryLabel(business.category, language)}
-                          </span>
+                        {/* Said once in the box already when it is the Category chosen;
+                            found by another of its Categories, it still says what it mainly is. */}
+                        {business.category != null && business.category !== category && (
+                          <MainCategoryTag business={business} language={language} />
                         )}
                         {distanceLabel !== null && (
                           <span style={{ ...tagStyle, background: "var(--accent-soft)", color: "var(--accent-strong)" }}>

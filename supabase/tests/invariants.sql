@@ -240,5 +240,22 @@ begin
   end;
   if not v_failed then raise exception 'INVARIANT BROKEN: a running cost went below zero'; end if;
 
+  -- ADR 0024: a Business has at most three Categories, and none of them twice.
+  update business set categories = array['barbershop', 'hair_salon', 'nail_salon'] where id = v_biz;
+  v_failed := false;
+  begin
+    update business set categories = array['barbershop', 'hair_salon', 'nail_salon', 'massage'] where id = v_biz;
+  exception when check_violation then v_failed := true;
+  end;
+  if not v_failed then raise exception 'INVARIANT BROKEN: a fourth Category was kept'; end if;
+  v_failed := false;
+  begin
+    update business set categories = array['barbershop', 'barbershop'] where id = v_biz;
+  exception when check_violation then v_failed := true;
+  end;
+  if not v_failed then raise exception 'INVARIANT BROKEN: one Category was kept twice'; end if;
+  -- Empty is a Business that has not chosen yet, which registration never leaves.
+  update business set categories = '{}' where id = v_biz;
+
   raise exception 'ALL_INVARIANTS_HELD';
 end $$;

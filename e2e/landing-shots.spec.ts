@@ -107,7 +107,7 @@ const openA = async (shop: Trade, phone: string): Promise<Shop> => {
       description: shop.description,
       address: shop.address,
       ...at(shop.at.north, shop.at.east),
-      category: shop.category,
+      categories: [shop.category],
       resourceNames: shop.resourceNames,
       services: shop.services.map((service) => ({ ...service, bufferMinutes: null })),
       workingHours: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, ...shop.hours })),

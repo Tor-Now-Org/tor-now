@@ -1321,3 +1321,21 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
 .legal table{display:block;overflow-x:auto;border-collapse:collapse;font-size:13.5px;margin-block:10px}
 .legal th,.legal td{border:1px solid var(--line);padding:6px 8px;text-align:start;vertical-align:top}
 .legal th{background:var(--sunken)}
+
+/* ADR 0024: a Business's Categories as chips; the first, the main one, is filled. */
+.cat-chip{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line);background:var(--raised);
+  border-radius:999px;padding-inline:4px;min-height:36px}
+.cat-chip.main{border:2px solid var(--accent);background:var(--accent-soft)}
+.cat-chip-name{display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:6px 6px 6px 8px;
+  font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;border-radius:999px}
+.cat-chip.main .cat-chip-name{color:var(--accent-strong);cursor:default}
+.cat-chip-star{font-size:10.5px;font-weight:700;background:var(--accent);color:var(--on-accent);border-radius:999px;padding:1px 7px}
+.cat-chip-x{width:26px;height:26px;border-radius:999px;display:grid;place-items:center;border:0;
+  background:var(--sunken);color:var(--muted);font-size:11px;cursor:pointer}
+.cat-chip-name:focus-visible,.cat-chip-x:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.cat-fields{margin:0;padding:7px 10px;border-radius:10px;background:var(--caution-soft);
+  border:1px solid oklch(63% 0.125 65/.35);color:var(--ink);font-size:12.5px;line-height:1.5}
+.cat-tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;
+  background:var(--sunken);color:var(--muted)}
+.cat-more{font-size:10.5px;font-weight:700;color:var(--accent-strong);background:var(--accent-soft);border-radius:999px;padding:0 6px}
+.cat-tags{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}

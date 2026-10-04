@@ -415,7 +415,8 @@ export const api = {
       address: string;
       latitude: number;
       longitude: number;
-      category: string;
+      /** ADR 0024: one to three, the first the main one. */
+      categories: string[];
       /** Chosen on the pricing page; a Business opens on it with its Trial. */
       plan?: PlanName;
       resourceNames: string[];

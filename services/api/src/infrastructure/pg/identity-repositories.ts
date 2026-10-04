@@ -184,18 +184,19 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
                extensions.similarity(name, ${text})
                  + case when name ilike ${text + "%"} then ${SEARCH.prefixBoost}::real else 0 end
              end
-             + case when category = any(string_to_array(${inferredList}::text, ','))
+             + case when categories && string_to_array(${inferredList}::text, ',')
                     then ${SEARCH.categoryBoost}::real else 0 end
              as score
       from business
       where active
-        and (${category}::text is null or category = ${category}::text)
+        -- ADR 0024: any of a Business's Categories meets the filter, not only its main one.
+        and (${category}::text is null or ${category}::text = any(categories))
         -- A location is required to register; one without it is not discoverable.
         and latitude is not null and longitude is not null
         and (${text} = ''
              or name operator(extensions.%) ${text}
              or name ilike ${"%" + text + "%"}
-             or category = any(string_to_array(${inferredList}::text, ',')))
+             or categories && string_to_array(${inferredList}::text, ','))
       order by score desc,
                -- ponytail: flat-earth distance, used only to order; fine across Israel, PostGIS if the map goes wide.
                power(latitude - ${latitude}::float8, 2)
@@ -210,10 +211,10 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
 
   async create(business) {
     const rows = await tx<Row[]>`
-      insert into business (name, phone, time_zone, description, address, latitude, longitude, category)
+      insert into business (name, phone, time_zone, description, address, latitude, longitude, categories)
       values (${business.name}, ${business.phone}, ${business.timeZone},
               ${business.description}, ${business.address}, ${business.latitude}, ${business.longitude},
-              ${business.category})
+              ${[...business.categories]}::text[])
       returning *`;
     return one(rows, toBusiness, "Business");
   },
@@ -228,7 +229,7 @@ export const businessRepository = (tx: Transaction): BusinessRepository => ({
         address = ${changes.address === undefined ? tx`address` : changes.address},
         latitude = ${changes.latitude === undefined ? tx`latitude` : changes.latitude},
         longitude = ${changes.longitude === undefined ? tx`longitude` : changes.longitude},
-        category = ${changes.category === undefined ? tx`category` : changes.category},
+        categories = ${changes.categories === undefined ? tx`categories` : tx`${[...changes.categories]}::text[]`},
         instagram = ${changes.instagram === undefined ? tx`instagram` : changes.instagram},
         whatsapp = ${changes.whatsapp === undefined ? tx`whatsapp` : changes.whatsapp},
         default_buffer_minutes = coalesce(${changes.defaultBufferMinutes ?? null}, default_buffer_minutes),

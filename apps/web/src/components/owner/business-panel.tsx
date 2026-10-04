@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { api } from "@/lib/api/client.ts";
 import { AddressAutocomplete } from "./address-autocomplete.tsx";
-import { CategoryAutocomplete } from "../category-autocomplete.tsx";
+import { CategoryChooser } from "../category-chooser.tsx";
+import { businessCategories } from "../category-choice.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type {
   BusinessDto,
@@ -502,11 +503,13 @@ export const BusinessPanel = ({
               problem={problem.text(settings.name, TEXT_RULES.businessName)}
               onChange={(e) => { setSettings({ ...settings, name: e.target.value }); setSaved(false); }} />
             {/* A business registered before Categories existed has none; say what that costs. */}
-            <CategoryAutocomplete id="s-category" label={copy.fCategory}
-              hint={settings.category == null ? copy.fCategoryMissing : copy.fCategoryHint}
-              placeholder={copy.categoryPlaceholder}
-              value={settings.category ?? null} language={language}
-              onChange={(category) => { setSettings({ ...settings, category }); setSaved(false); }} />
+            <CategoryChooser id="s-category" language={language}
+              value={businessCategories(settings)}
+              hint={businessCategories(settings).length === 0 ? copy.fCategoryMissing : undefined}
+              onChange={(categories) => {
+                setSettings({ ...settings, categories, category: categories[0] ?? null });
+                setSaved(false);
+              }} />
             {/* Held as E.164 like the API wants it, typed as local digits like
                 everywhere else a number is entered. */}
             <PhoneField id="s-phone" label={copy.fPhone} hint={copy.fPhoneHint}
@@ -619,7 +622,7 @@ export const BusinessPanel = ({
                     ? {}
                     : { address: settings.address, latitude: settings.latitude, longitude: settings.longitude }),
                   // Changeable, never clearable: nothing is sent until one is chosen.
-                  ...(settings.category == null ? {} : { category: settings.category }),
+                  ...(businessCategories(settings).length === 0 ? {} : { categories: businessCategories(settings) }),
                   description: settings.description === "" ? null : settings.description,
                   instagram: blankToNull(settings.instagram),
                   whatsapp: blankToNull(settings.whatsapp),

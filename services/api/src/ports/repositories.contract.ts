@@ -12,6 +12,7 @@ import {
   parseInstant,
   parseLocalDate,
   timeZone,
+  type BusinessCategory,
   type Instant,
   type LocalDate,
   type PhotoSlot,
@@ -78,7 +79,7 @@ export const describeRepositoryContract = (
         // Registration requires a location, and search skips a Business without one.
         latitude: 32.0853,
         longitude: 34.7818,
-        category: null,
+        categories: [],
       });
       await repositories.memberships.create(owner.id, business.id, "OWNER");
       const resource = await repositories.resources.create({
@@ -1257,14 +1258,27 @@ export const describeRepositoryContract = (
             address: "הרצל 1",
             latitude: 32.0853,
             longitude: 34.7818,
-            category: "barbershop",
+            categories: ["barbershop", "nail_salon"],
           }),
         ).toMatchObject({
           name: "שם חדש",
           address: "הרצל 1",
           latitude: 32.0853,
           longitude: 34.7818,
-          category: "barbershop",
+          categories: ["barbershop", "nail_salon"],
+        });
+        // ADR 0024: the order is the meaning — the first is the main one — so
+        // swapping two comes back swapped, and an update leaving them out keeps them.
+        expect(
+          await repositories.businesses.update(context.business.id, {
+            categories: ["nail_salon", "barbershop"],
+          }),
+        ).toMatchObject({ categories: ["nail_salon", "barbershop"] });
+        expect(
+          await repositories.businesses.update(context.business.id, { name: "שם שלישי" }),
+        ).toMatchObject({ categories: ["nail_salon", "barbershop"] });
+        expect(await repositories.businesses.findById(context.business.id)).toMatchObject({
+          categories: ["nail_salon", "barbershop"],
         });
 
         expect(
@@ -1327,7 +1341,7 @@ export const describeRepositoryContract = (
         // fixture leaves it null, and null proves nothing about a join.
         await repositories.businesses.update(context.business.id, {
           address: "הרצל 1",
-          category: "barbershop",
+          categories: ["nail_salon", "barbershop"],
         });
         expect(
           await repositories.appointments.listForCustomerWithBusiness(context.owner.id, {
@@ -1337,7 +1351,8 @@ export const describeRepositoryContract = (
         ).toMatchObject([
           {
             businessName: context.business.name,
-            businessCategory: "barbershop",
+            // The main Category, which is the first, places the business on the list.
+            businessCategory: "nail_salon",
             resourceName: context.resource.name,
             businessAddress: "הרצל 1",
             businessLatitude: context.business.latitude,
@@ -2382,16 +2397,16 @@ export const describeRepositoryContract = (
         const far = await aBookableBusiness(repositories, "06003");
         const nails = await aBookableBusiness(repositories, "06004");
         await repositories.businesses.update(near.business.id, {
-          category: "barbershop",
+          categories: ["barbershop"],
           latitude: 32.08,
           longitude: 34.78,
         });
         await repositories.businesses.update(far.business.id, {
-          category: "barbershop",
+          categories: ["barbershop"],
           latitude: 32.79,
           longitude: 34.99,
         });
-        await repositories.businesses.update(nails.business.id, { category: "nail_salon" });
+        await repositories.businesses.update(nails.business.id, { categories: ["nail_salon"] });
         const ids = (results: readonly { business: { id: string } }[]) =>
           results.map((result) => result.business.id);
 
@@ -2428,6 +2443,42 @@ export const describeRepositoryContract = (
           }),
         );
         expect(filtered).not.toContain(near.business.id);
+      });
+    });
+
+    it("finds a business under any of its categories, not only the main one", async () => {
+      await withRepositories(async (repositories) => {
+        const both = await aBookableBusiness(repositories, "06006");
+        const other = await aBookableBusiness(repositories, "06007");
+        await repositories.businesses.update(both.business.id, {
+          categories: ["hair_salon", "nail_salon", "makeup_artist"],
+        });
+        await repositories.businesses.update(other.business.id, { categories: ["massage"] });
+        const ids = async (search: Parameters<typeof repositories.businesses.search>[0]) =>
+          (await repositories.businesses.search(search)).map((result) => result.business.id);
+        const browse = (category: BusinessCategory) =>
+          ids({ text: "", category, inferred: [], near: null });
+
+        expect(await browse("hair_salon")).toContain(both.business.id);
+        expect(await browse("nail_salon")).toContain(both.business.id);
+        expect(await browse("makeup_artist")).toContain(both.business.id);
+        expect(await browse("massage")).not.toContain(both.business.id);
+        expect(await browse("massage")).toContain(other.business.id);
+
+        // An inferred Category matching only the third still finds it.
+        expect(
+          await ids({ text: "מאפרת", category: null, inferred: ["makeup_artist"], near: null }),
+        ).toContain(both.business.id);
+        expect(
+          await ids({ text: "מאפרת", category: null, inferred: ["makeup_artist"], near: null }),
+        ).not.toContain(other.business.id);
+
+        // A business with none chosen yet is found by name and by no Category.
+        await repositories.businesses.update(other.business.id, { categories: [] });
+        expect(await browse("massage")).not.toContain(other.business.id);
+        expect(
+          await ids({ text: other.business.name, category: null, inferred: [], near: null }),
+        ).toContain(other.business.id);
       });
     });
 

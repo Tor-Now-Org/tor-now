@@ -210,6 +210,8 @@ export const aBusinessWithOpenHours = async (options: {
    * shop with more than one calendar and people working in it.
    */
   plan?: "SOLO" | "TEAM";
+  /** ADR 0024: up to three, the first the main one. A barbershop unless a journey is about them. */
+  categories?: readonly string[];
 }) => {
   const { code } = await call<{ code: string }>("/auth/request-code", {
     method: "POST",
@@ -234,7 +236,7 @@ export const aBusinessWithOpenHours = async (options: {
       // somewhere and nothing here depends on where.
       latitude: 32.0853,
       longitude: 34.7818,
-      category: "barbershop",
+      categories: options.categories ?? ["barbershop"],
       plan: options.plan ?? "TEAM",
       resourceNames: ["יומן א"],
       services: [
@@ -511,9 +513,9 @@ export const pickAnAddress = async (page: Page, typed = "הרצל 1"): Promise<v
 };
 
 /** A Category is picked from the list, like the address: typing alone chooses nothing. */
-export const pickACategory = async (page: Page, typed = "ספר"): Promise<void> => {
-  await page.getByLabel("קטגוריה").fill(typed);
-  await page.getByRole("option", { name: /מספרה/ }).first().click();
+export const pickACategory = async (page: Page, typed = "ספר", named: RegExp = /מספרה/): Promise<void> => {
+  await page.getByRole("combobox", { name: "סוג העסק" }).fill(typed);
+  await page.getByRole("option", { name: named }).first().click();
 };
 
 /** The month the grid is on, read off its own dated squares — the month most of them belong to. */

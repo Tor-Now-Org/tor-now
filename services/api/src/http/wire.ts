@@ -66,7 +66,9 @@ export const businessOut = (business: Business) => ({
   address: business.address,
   latitude: business.latitude,
   longitude: business.longitude,
-  category: business.category,
+  // ADR 0024: the main Category stays under its old name for a client that reads only that.
+  category: business.categories[0] ?? null,
+  categories: business.categories,
   instagram: business.instagram,
   whatsapp: business.whatsapp,
   active: business.active,

@@ -1,8 +1,10 @@
 import { z } from "zod";
 import {
   bareHandle,
-  BUSINESS_CATEGORIES,
+  checkCategories,
+  currentCategory,
   INSTAGRAM_PATTERN,
+  MAX_CATEGORIES,
   PHONE_PATTERN,
   BILLING_FLAGS,
   BILLING_STATUSES,
@@ -12,6 +14,8 @@ import {
   RATE_SOURCE_LENGTH,
   REVIEW_STARS,
   TEXT_RULES,
+  type BusinessCategory,
+  type CategoriesProblem,
   type TextRule,
 } from "@tor-now/domain";
 import { PAGINATION } from "../config.ts";
@@ -94,7 +98,11 @@ export const updateProfileSchema = z.object({
 
 export const searchSchema = z.object({
   q: z.string().trim().default(""),
-  category: z.enum(BUSINESS_CATEGORIES).optional(),
+  // A link saved before ADR 0024 may name a retired code; it browses the one it joined.
+  category: z
+    .string()
+    .transform((code, context) => currentCategory(code) ?? unknownCategory(context))
+    .optional(),
   // The customer's position, when they shared it: orders a browse nearest first.
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
@@ -201,6 +209,68 @@ const instagramSchema = z
     message: "An Instagram handle: letters, digits, dots or underscores",
   });
 
+/**
+ * ADR 0024: one to three Categories, the first the main one. The rule itself is
+ * the domain's, so the wizard refuses exactly what this refuses.
+ */
+const CATEGORIES_PROBLEMS: Readonly<Record<CategoriesProblem, string>> = {
+  NONE: "Choose at least one category",
+  TOO_MANY: `At most ${MAX_CATEGORIES} categories`,
+  UNKNOWN: "Not a category on the list",
+  REPEATED: "The same category twice",
+};
+
+const unknownCategory = (context: z.RefinementCtx): never => {
+  context.addIssue({ code: z.ZodIssueCode.custom, message: CATEGORIES_PROBLEMS.UNKNOWN });
+  return z.NEVER;
+};
+
+const categoryList = (codes: readonly string[], context: z.RefinementCtx) => {
+  const checked = checkCategories(codes);
+  if (checked.ok) return checked.categories;
+  context.addIssue({ code: z.ZodIssueCode.custom, message: CATEGORIES_PROBLEMS[checked.problem] });
+  return z.NEVER;
+};
+
+const categoryFields = {
+  categories: z.array(z.string()).transform(categoryList).optional(),
+  /** Before ADR 0024 a Business had one; a client that still sends it means a list of one. */
+  category: z
+    .string()
+    .transform((code, context) => categoryList([code], context))
+    .optional(),
+};
+
+type CategoryFields = {
+  readonly categories?: readonly BusinessCategory[] | undefined;
+  readonly category?: readonly BusinessCategory[] | undefined;
+};
+
+/** Folds the old single field into the list, refusing a body that sends both. */
+const oneCategoryList = <T extends CategoryFields>(
+  { category, categories, ...rest }: T,
+  context: z.RefinementCtx,
+): Omit<T, "category" | "categories"> & { categories?: readonly BusinessCategory[] } => {
+  if (category !== undefined && categories !== undefined) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["category"],
+      message: "Send categories, not category as well",
+    });
+    return z.NEVER;
+  }
+  const chosen = categories ?? category;
+  return chosen === undefined ? rest : { ...rest, categories: chosen };
+};
+
+/** Registering, the list is required: a Business is found by what it is. */
+const withCategories = <T extends CategoryFields>(value: T, context: z.RefinementCtx) => {
+  const folded = oneCategoryList(value, context);
+  if (folded.categories !== undefined) return { ...folded, categories: folded.categories };
+  context.addIssue({ code: z.ZodIssueCode.custom, path: ["categories"], message: CATEGORIES_PROBLEMS.NONE });
+  return z.NEVER;
+};
+
 export const registerBusinessSchema = z.object({
   name: text(TEXT_RULES.businessName),
   phone: phoneSchema,
@@ -209,7 +279,7 @@ export const registerBusinessSchema = z.object({
   address: text(TEXT_RULES.address),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  category: z.enum(BUSINESS_CATEGORIES),
+  ...categoryFields,
   /** Left out, the Business goes on the cheapest Plan with room for its calendars. */
   plan: z.enum(PLANS).optional(),
   resourceNames: z.array(text(TEXT_RULES.resourceName)).min(1),
@@ -224,9 +294,9 @@ export const registerBusinessSchema = z.object({
     )
     .min(1),
   workingHours: z.array(workingHoursEntrySchema).min(1),
-});
+}).transform(withCategories);
 
-export const updateBusinessSchema = z.object({
+const updateBusinessFields = z.object({
   name: text(TEXT_RULES.businessName).optional(),
   phone: phoneSchema.optional(),
   timeZone: z.string().min(1).optional(),
@@ -235,8 +305,8 @@ export const updateBusinessSchema = z.object({
   // Required to register and what search needs to show it: changeable, never clearable.
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
-  // ADR 0017: changeable, never clearable — a business that has one keeps one.
-  category: z.enum(BUSINESS_CATEGORIES).optional(),
+  // ADR 0017, 0024: changeable, never clearable — a business that has some keeps one.
+  ...categoryFields,
   instagram: instagramSchema.nullable().optional(),
   whatsapp: phoneSchema.nullable().optional(),
   defaultBufferMinutes: z.number().int().min(0).max(240).optional(),
@@ -244,6 +314,8 @@ export const updateBusinessSchema = z.object({
   bookingHorizonDays: z.number().int().min(1).max(365).optional(),
   cancellationWindowHours: z.number().int().min(0).max(720).optional(),
 });
+
+export const updateBusinessSchema = updateBusinessFields.transform(oneCategoryList);
 
 export const serviceSchema = z.object({
   name: text(TEXT_RULES.serviceName),
@@ -496,10 +568,12 @@ export const planEditSchema = z.object({
   features: z.array(z.enum(FEATURES)).max(FEATURES.length),
 });
 
-export const adminBusinessUpdateSchema = updateBusinessSchema.extend({
-  /** ADR 0010: an edit on the owner's behalf records why it was made. */
-  reason: z.string().trim().min(TEXT_RULES.auditReason.min).max(TEXT_RULES.auditReason.max),
-});
+export const adminBusinessUpdateSchema = updateBusinessFields
+  .extend({
+    /** ADR 0010: an edit on the owner's behalf records why it was made. */
+    reason: z.string().trim().min(TEXT_RULES.auditReason.min).max(TEXT_RULES.auditReason.max),
+  })
+  .transform(oneCategoryList);
 
 /** ADR 0008: an erasure records why it was carried out, and cannot be undone. */
 export const erasureSchema = z.object({

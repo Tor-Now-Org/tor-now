@@ -4,7 +4,7 @@ Date: 2026-09-15
 
 ## Status
 
-Accepted. Supersedes the "no type field" part of ADR 0011.
+Accepted. Supersedes the "no type field" part of ADR 0011. Its "one Category" is superseded by ADR 0024.
 
 ## Context
 

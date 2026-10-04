@@ -35,7 +35,7 @@ describe("Features and Previews", () => {
       address: "רחוב הרצל 2",
       latitude: 32.0853,
       longitude: 34.7818,
-      category: "barbershop",
+      categories: ["barbershop"],
       plan: "TEAM",
       resourceNames: ["נוי"],
       services: [{ name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null }],

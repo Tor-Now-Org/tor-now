@@ -29,8 +29,11 @@ export type Business = {
   /** The pin the owner dropped on the map. Null until they place one. */
   readonly latitude: number | null;
   readonly longitude: number | null;
-  /** ADR 0017. Null only for a business registered before Categories existed. */
-  readonly category: BusinessCategory | null;
+  /**
+   * ADR 0024: up to three, the first the main one — what a card and a map pin
+   * call the Business. Empty only for one registered before Categories existed.
+   */
+  readonly categories: readonly BusinessCategory[];
   /** Instagram handle, bare: no @ and no URL. Null when the business has none. */
   readonly instagram: string | null;
   /**

@@ -224,7 +224,8 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           .filter(
             (business) =>
               business.active &&
-              (category === null || business.category === category) &&
+              // ADR 0024: any of its Categories meets the filter, not only the main one.
+              (category === null || business.categories.includes(category)) &&
               // A location is required to register; one without it is not discoverable.
               business.latitude !== null &&
               business.longitude !== null,
@@ -232,7 +233,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           .flatMap((business) => {
             const name = business.name.toLowerCase();
             const byName = needle !== "" && name.includes(needle);
-            const byCategory = business.category !== null && inferred.includes(business.category);
+            const byCategory = business.categories.some((one) => inferred.includes(one));
             if (needle !== "" && !byName && !byCategory) return [];
             const score =
               (byName ? 0.5 + (name.startsWith(needle) ? SEARCH.prefixBoost : 0) : 0) +
@@ -263,7 +264,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
           address: input.address,
           latitude: input.latitude,
           longitude: input.longitude,
-          category: input.category,
+          categories: [...input.categories],
           instagram: null,
           whatsapp: null,
           active: true,
@@ -1167,7 +1168,7 @@ export const inMemoryRepositories = (store: Store): Repositories => {
             return {
               appointment,
               businessName: business.name,
-              businessCategory: business.category,
+              businessCategory: business.categories[0] ?? null,
               resourceName: resource.name,
               businessAddress: business.address,
               businessLatitude: business.latitude,

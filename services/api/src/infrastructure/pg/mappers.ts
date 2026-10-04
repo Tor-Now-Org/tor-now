@@ -25,7 +25,7 @@ import {
   type Subscription,
   type User,
   type WorkingHours,
-  isBusinessCategory,
+  currentCategory,
   type BusinessCategory,
   parseFeature,
   planTerms,
@@ -60,7 +60,19 @@ const int = (value: unknown): number => Number(value);
 const bool = (value: unknown): boolean => Boolean(value);
 /** A code no longer in the list reads as none, rather than failing the whole row. */
 export const nullableCategory = (value: unknown): BusinessCategory | null =>
-  typeof value === "string" && isBusinessCategory(value) ? value : null;
+  typeof value === "string" ? currentCategory(value) : null;
+/**
+ * A stored list of Categories, read as the list has them now: a code that
+ * joined a sibling is the sibling, and one the list never had is dropped
+ * rather than shown, so a card never names something the browser cannot label.
+ */
+export const categoriesOf = (value: unknown): BusinessCategory[] => {
+  const stored = Array.isArray(value) ? value : [];
+  const current = stored
+    .map((code) => (typeof code === "string" ? currentCategory(code) : null))
+    .filter((code): code is BusinessCategory => code !== null);
+  return [...new Set(current)];
+};
 export const nullableNumber = (value: unknown): number | null =>
   value === null || value === undefined ? null : Number(value);
 
@@ -109,7 +121,7 @@ export const toBusiness = (row: Row): Business => ({
   address: nullableText(row["address"]),
   latitude: nullableNumber(row["latitude"]),
   longitude: nullableNumber(row["longitude"]),
-  category: nullableCategory(row["category"]),
+  categories: categoriesOf(row["categories"]),
   instagram: nullableText(row["instagram"]),
   whatsapp: nullableText(row["whatsapp"]),
   active: bool(row["active"]),

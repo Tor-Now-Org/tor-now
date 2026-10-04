@@ -15,8 +15,10 @@ export type BusinessDto = {
   address: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  /** ADR 0017. Absent from an older API, null for a business that has not chosen one. */
+  /** ADR 0017: the main Category. Absent from an older API, null for a business that has not chosen one. */
   category?: BusinessCategory | null;
+  /** ADR 0024: all of them, the main one first. Absent from an API before it; read through businessCategories. */
+  categories?: readonly BusinessCategory[];
   /**
    * Instagram handle, bare: no @ and no URL. Optional in the type as well as
    * in the data — an API deployed before these existed sends neither key, and

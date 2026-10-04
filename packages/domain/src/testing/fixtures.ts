@@ -24,7 +24,7 @@ export const aBusiness = (overrides: Partial<Business> = {}): Business => ({
   address: null,
   latitude: null,
   longitude: null,
-  category: null,
+  categories: [],
   instagram: null,
   whatsapp: null,
   active: true,

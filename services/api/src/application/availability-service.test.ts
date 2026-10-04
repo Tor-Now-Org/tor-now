@@ -126,7 +126,7 @@ describe("availability", () => {
       address: "רחוב אחר 2",
       latitude: 32.0853,
       longitude: 34.7818,
-      category: "barbershop",
+      categories: ["barbershop"],
       resourceNames: ["א"],
       services: [{ name: "ש", durationMinutes: 30, priceMinor: 0, bufferMinutes: null }],
       workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],
@@ -252,7 +252,7 @@ describe("discovery", () => {
       address: "רחוב הרצל 1",
       latitude: 32.0853,
       longitude: 34.7818,
-      category: "barbershop" as const,
+      categories: ["barbershop"] as const,
       resourceNames: ["א"],
       services: [
         { name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null },

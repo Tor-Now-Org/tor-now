@@ -46,7 +46,7 @@ describe("waiting for a time", () => {
       address: "רחוב הרצל 1",
       latitude: 32.0853,
       longitude: 34.7818,
-      category: "barbershop",
+      categories: ["barbershop"],
       resourceNames: ["רן"],
       services: [
         { name: "תספורת", durationMinutes: 60, priceMinor: 8000, bufferMinutes: 0 },
@@ -126,7 +126,7 @@ describe("waiting for a time", () => {
         address: "רחוב אחר 2",
         latitude: 32.09,
         longitude: 34.78,
-        category: "barbershop",
+        categories: ["barbershop"],
         resourceNames: ["כיסא"],
         services: [
           { name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null },

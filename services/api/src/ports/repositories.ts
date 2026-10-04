@@ -175,7 +175,7 @@ export type BusinessSearchResult = {
 /** ADR 0017: what a search asks for. Empty `text` with a `category` is a browse. */
 export type BusinessSearchCriteria = {
   readonly text: string;
-  /** Chosen by the customer: a hard filter. */
+  /** Chosen by the customer: a hard filter, met by any of a Business's Categories. */
   readonly category: BusinessCategory | null;
   /** Inferred from `text`: a ranking boost that also admits a non-matching name. */
   readonly inferred: readonly BusinessCategory[];
@@ -195,7 +195,7 @@ export type BusinessRepository = {
     address: string | null;
     latitude: number | null;
     longitude: number | null;
-    category: BusinessCategory | null;
+    categories: readonly BusinessCategory[];
   }): Promise<Business>;
   update(
     id: BusinessId,

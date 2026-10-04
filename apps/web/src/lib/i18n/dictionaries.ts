@@ -12,6 +12,7 @@
  */
 
 import { costs } from "./costs-copy.ts";
+import { categories } from "./categories-copy.ts";
 
 export const LANGUAGES = ["he", "en"] as const;
 export type Language = (typeof LANGUAGES)[number];
@@ -542,9 +543,6 @@ const onboarding = {
     "bizName": "שם העסק",
     "address": "כתובת",
     "addressHint": "יש לבחור כתובת מהרשימה — הסמן על המפה נקבע לפיה.",
-    "category": "קטגוריה",
-    "categoryHint": "כך לקוחות ימצאו אתכם. אפשר לשנות אחר כך.",
-    "categoryPlaceholder": "למשל: מספרה, קוסמטיקה, מאמן כושר",
     "locationLabel": "המיקום על המפה",
     "resourcesTitle": "מי נותן את השירות",
     "resourcesBody": "כל עסק מתחיל עם יומן אחד. אם יש יותר מכיסא, חדר או מטפל — אפשר להוסיף עכשיו או בהמשך.",
@@ -610,9 +608,6 @@ const onboarding = {
     "bizName": "Business name",
     "address": "Address",
     "addressHint": "Choose an address from the list — the pin on the map follows it.",
-    "category": "Category",
-    "categoryHint": "This is how customers find you. You can change it later.",
-    "categoryPlaceholder": "For example: barbershop, cosmetics, personal trainer",
     "locationLabel": "Location on the map",
     "resourcesTitle": "Who provides the service",
     "resourcesBody": "Every business starts with one calendar. If there is more than one chair, room or practitioner, add them now or later.",
@@ -940,10 +935,7 @@ const owner = {
     "fAddress": "כתובת",
     "fAddressHint": "יש לבחור כתובת מהרשימה — הסמן על המפה נקבע לפיה.",
     "fLocationMissing": "עדיין לא נבחרה כתובת מהרשימה, ולכן לקוחות לא ימצאו אתכם בחיפוש.",
-    "fCategory": "קטגוריה",
-    "fCategoryHint": "כך לקוחות מוצאים אתכם כשהם מחפשים לפי סוג העסק.",
     "fCategoryMissing": "עדיין לא נבחרה קטגוריה, ולכן לקוחות שמחפשים לפי קטגוריה לא ימצאו אתכם.",
-    "categoryPlaceholder": "בחרו קטגוריה…",
     "locationLabel": "המיקום על המפה",
     "fDescription": "תיאור קצר",
     "fDescriptionHint": "שתי שורות שמסבירות מה אתם עושים.",
@@ -1335,10 +1327,7 @@ const owner = {
     "fAddress": "Address",
     "fAddressHint": "Choose an address from the list — the pin on the map follows it.",
     "fLocationMissing": "No address chosen from the list yet, so customers won't find you in search.",
-    "fCategory": "Category",
-    "fCategoryHint": "How customers find you when they search by kind of business.",
     "fCategoryMissing": "No category yet, so customers who browse by category won't find you.",
-    "categoryPlaceholder": "Choose a category…",
     "locationLabel": "Location on the map",
     "fDescription": "Short description",
     "fDescriptionHint": "Two lines saying what you do.",
@@ -3168,6 +3157,7 @@ const statistics = {
 
 export const DICTIONARIES = {
   costs,
+  categories,
   legal,
   customer,
   signIn,

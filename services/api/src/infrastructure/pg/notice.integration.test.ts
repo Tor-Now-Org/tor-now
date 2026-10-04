@@ -55,7 +55,7 @@ const aShopAndItsOwner = async (tx: Transaction, suffix: string) => {
     address: null,
     latitude: 32.0853,
     longitude: 34.7818,
-    category: null,
+    categories: [],
   });
   await membershipRepository(tx).create(owner.id, business.id, "OWNER");
   return { owner, business };

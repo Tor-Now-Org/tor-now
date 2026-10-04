@@ -95,7 +95,7 @@ describe("Notices", () => {
         address: "רחוב הרצל 2",
         latitude: 32.0853,
         longitude: 34.7818,
-        category: "barbershop",
+        categories: ["barbershop"],
         plan: "SOLO",
         resourceNames: ["רן"],
         services: [],

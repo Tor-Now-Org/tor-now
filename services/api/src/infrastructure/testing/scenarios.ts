@@ -43,7 +43,7 @@ export const anEstablishedBusiness = async (
     address: "רחוב הרצל 1",
     latitude: 32.0853,
     longitude: 34.7818,
-    category: "barbershop",
+    categories: ["barbershop"],
     plan: options.plan ?? "TEAM",
     resourceNames: ["רן"],
     services: [

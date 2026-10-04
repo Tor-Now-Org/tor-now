@@ -12,9 +12,11 @@ and discoverable in search until an administrator deactivates it.
 _Avoid_: Organization, tenant, shop, vendor
 
 **Category**:
-What kind of place a Business is, chosen from a closed list (ADR 0017). Exactly one
-per Business; `other` covers what the list did not foresee. Customers filter
-search by it, and search infers one from typed words.
+What kind of place a Business is, chosen from a closed list (ADR 0017). One to
+three per Business (ADR 0024), the first its **main** one: what a card, a map pin
+and "visited" call it by. `other` covers what the list did not foresee.
+Customers filter search by any of them, and search infers one from typed words.
+A code that joined a sibling stays a search word of the one it joined.
 _Avoid_: Type, kind, vertical, business type
 
 **Resource**:

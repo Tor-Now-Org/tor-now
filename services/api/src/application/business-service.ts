@@ -114,7 +114,8 @@ export type RegistrationInput = {
   readonly address: string;
   readonly latitude: number;
   readonly longitude: number;
-  readonly category: BusinessCategory;
+  /** ADR 0024: one to three, the first the main one; checked at the boundary. */
+  readonly categories: readonly BusinessCategory[];
   /**
    * The Plan the owner chose. Left out, the Business goes on the cheapest Plan
    * with room for the calendars it opens with.
@@ -415,7 +416,7 @@ export const businessService = ({
         address: input.address,
         latitude: input.latitude,
         longitude: input.longitude,
-        category: input.category,
+        categories: input.categories,
       });
 
       await repositories.memberships.create(userId, business.id, "OWNER");
@@ -476,7 +477,7 @@ export const businessService = ({
       timeZone: string;
       description: string | null;
       address: string | null;
-      category: BusinessCategory;
+      categories: readonly BusinessCategory[];
       instagram: string | null;
       whatsapp: string | null;
       defaultBufferMinutes: number;

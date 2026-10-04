@@ -14,7 +14,7 @@ import { BUSINESS_DEFAULTS, TEXT_RULES, TRIAL_DAYS, type BusinessCategory } from
 import { BufferChoice } from "@/components/owner/buffer-choice.tsx";
 import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
 import { AddressAutocomplete } from "@/components/owner/address-autocomplete.tsx";
-import { CategoryAutocomplete } from "@/components/category-autocomplete.tsx";
+import { CategoryChooser } from "@/components/category-chooser.tsx";
 import { AccountDrawer } from "@/components/account-drawer.tsx";
 import { CalendarIcon, PeopleIcon } from "@/components/bottom-nav.tsx";
 import {
@@ -108,7 +108,7 @@ function OnboardingWizard() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [step, setStep] = useState<Step>("details");
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<BusinessCategory | null>(null);
+  const [categories, setCategories] = useState<readonly BusinessCategory[]>([]);
   const [phone, setPhone] = useState(user !== null ? fromE164(user.phone) : "");
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
@@ -194,7 +194,7 @@ function OnboardingWizard() {
           checkLocalPhone(phone),
           checkText(address, TEXT_RULES.address),
           checkText(description, TEXT_RULES.description),
-        ) && latitude !== null && longitude !== null && category !== null
+        ) && latitude !== null && longitude !== null && categories.length > 0
       : // Photos are optional, so this step never blocks.
         step === "photos"
         ? true
@@ -218,7 +218,7 @@ function OnboardingWizard() {
             hours.some((day) => day.open) && weekIsUsable(hours);
 
   const finish = async () => {
-    if (latitude === null || longitude === null || category === null) return;
+    if (latitude === null || longitude === null || categories.length === 0) return;
     setBusy(true);
     setError(null);
     try {
@@ -230,7 +230,7 @@ function OnboardingWizard() {
         address: address.trim(),
         latitude,
         longitude,
-        category,
+        categories: [...categories],
         description: description.trim() === "" ? null : description.trim(),
         plan,
         resourceNames: resources.map((r) => r.trim()).filter((r) => r.length > 0),
@@ -375,17 +375,14 @@ function OnboardingWizard() {
                 onBlur={() => leave("name")}
                 onChange={(e) => setName(e.target.value)}
               />
-              {/* ADR 0017: chosen from the list, like the address — required,
+              {/* ADR 0017, 0024: chosen from the list, like the address — required,
                   because browsing by Category only works if everyone has one. */}
-              <CategoryAutocomplete
+              <CategoryChooser
                 id="biz-category"
-                label={copy.category}
-                hint={copy.categoryHint}
-                placeholder={copy.categoryPlaceholder}
                 required
-                value={category}
+                value={categories}
                 language={language}
-                onChange={setCategory}
+                onChange={setCategories}
               />
               <PhoneField
                 id="biz-phone"

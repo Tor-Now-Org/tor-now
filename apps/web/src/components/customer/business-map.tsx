@@ -11,6 +11,7 @@ import { distanceLabel, type GeoPoint } from "@/lib/distance.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { Chip } from "../ui.tsx";
 import { AllCategoriesIcon, CategoryIcon } from "./category-icons.tsx";
+import { MainCategoryTag } from "./category-tag.tsx";
 import { HeartIcon, tagStyle } from "./business-search.tsx";
 
 /**
@@ -209,11 +210,7 @@ export const BusinessMap = ({
                     </span>
                   )}
                   <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {selected.business.category != null && (
-                      <span style={{ ...tagStyle, background: "var(--sunken)", color: "var(--muted)" }}>
-                        {categoryLabel(selected.business.category, language)}
-                      </span>
-                    )}
+                    <MainCategoryTag business={selected.business} language={language} />
                     {selected.distanceKm !== null && (
                       <span style={{ ...tagStyle, background: "var(--accent-soft)", color: "var(--accent-strong)" }}>
                         {distanceLabel(selected.distanceKm, copy)}

@@ -22,15 +22,19 @@ export const CategoryAutocomplete = ({
   placeholder,
   required,
   value,
+  exclude = [],
   language,
   onChange,
 }: {
   id: string;
-  label: string;
+  /** Left out when the field sits under a label of its own, as in the chooser. */
+  label?: string | undefined;
   hint?: string | undefined;
   placeholder?: string | undefined;
   required?: boolean;
   value: BusinessCategory | null;
+  /** Already chosen elsewhere, so not offered again. */
+  exclude?: readonly BusinessCategory[];
   language: "he" | "en";
   onChange: (category: BusinessCategory) => void;
 }) => {
@@ -39,9 +43,10 @@ export const CategoryAutocomplete = ({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
-  const matches = matchCategories(query ?? "");
+  const matches = matchCategories(query ?? "").filter((code) => !exclude.includes(code));
   // Other is always there, so a business the list did not foresee is never stuck.
-  const options = matches.includes(OTHER_CATEGORY) ? matches : [...matches, OTHER_CATEGORY];
+  const options =
+    matches.includes(OTHER_CATEGORY) || exclude.includes(OTHER_CATEGORY) ? matches : [...matches, OTHER_CATEGORY];
 
   const pick = (category: BusinessCategory) => {
     onChange(category);
@@ -66,10 +71,12 @@ export const CategoryAutocomplete = ({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, position: "relative" }}>
-      <label htmlFor={id} className="label">
-        {label}
-        {required && <span aria-hidden="true"> *</span>}
-      </label>
+      {label !== undefined && (
+        <label htmlFor={id} className="label">
+          {label}
+          {required && <span aria-hidden="true"> *</span>}
+        </label>
+      )}
       <input
         id={id}
         className="field"

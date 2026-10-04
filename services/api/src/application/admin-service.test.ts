@@ -57,7 +57,7 @@ describe("administrator scope", () => {
       address: "רחוב הרצל 2",
       latitude: 32.0853,
       longitude: 34.7818,
-      category: "barbershop",
+      categories: ["barbershop"],
       resourceNames: ["נוי"],
       services: [{ name: "תספורת", durationMinutes: 30, priceMinor: 8000, bufferMinutes: null }],
       workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],

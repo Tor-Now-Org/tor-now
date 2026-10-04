@@ -159,7 +159,7 @@ export const appointmentRepository = (
     const rows = await tx<Row[]>`
       select a.*,
              b.name      as business_name,
-             b.category  as business_category,
+             b.categories[1] as business_category,
              b.address   as business_address,
              b.latitude  as business_latitude,
              b.longitude as business_longitude
