@@ -53,6 +53,18 @@ describe("a month in numbers", () => {
     expect([completed, upcoming]).toEqual([1, 2]);
   });
 
+  it("loses a cancelled slot only once its time has passed, since until then another customer can take it", () => {
+    const result = statistics({
+      appointments: [
+        visit("2026-09-08", "10:00", "user-1", { status: "CANCELLED", cancelledBy: "CUSTOMER", cancelledAt: instant(0) }),
+        visit("2026-09-15", "10:00", "user-1", { status: "CANCELLED", cancelledBy: "CUSTOMER", cancelledAt: instant(0) }),
+      ],
+    });
+
+    const lost = (date: string) => result.days.find((day) => day.date === date)?.lost;
+    expect([lost("2026-09-08"), lost("2026-09-15")]).toEqual([1, 0]);
+  });
+
   it("sets a running month against the same stretch of the one before", () => {
     const result = statistics({
       appointments: [

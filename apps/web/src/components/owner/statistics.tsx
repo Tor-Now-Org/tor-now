@@ -377,10 +377,8 @@ const Delta = ({
   return (
     <span className={`st-delta ${change.kind === "up" ? "good" : "bad"}`}>
       <bdi dir="ltr">
-        {change.kind === "up" ? "▲" : "▼"} {change.amount}
-        {points ? "" : "%"}
+        {change.kind === "up" ? "▲" : "▼"} {change.amount}%
       </bdi>
-      {points ? ` ${copy.points}` : ""}
     </span>
   );
 };

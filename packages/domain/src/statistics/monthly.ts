@@ -250,7 +250,8 @@ export const monthlyStatistics = (input: StatisticsInput): MonthlyStatistics => 
     return {
       date,
       completed: that.filter((one) => outcome(one) === "FINISHED").length,
-      lost: that.filter((one) => outcome(one) === "NO_SHOW" || outcome(one) === "CANCELLED").length,
+      // A cancelled slot is open to someone else until its time passes; only then is it lost.
+      lost: that.filter((one) => outcome(one) === "NO_SHOW" || (outcome(one) === "CANCELLED" && one.startAt < now)).length,
       upcoming: that.filter((one) => outcome(one) === "UPCOMING").length,
       open: openMinutes(shown, startOf(date), startOf(addDays(date, 1))) > 0,
     };
