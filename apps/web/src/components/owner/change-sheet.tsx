@@ -20,6 +20,7 @@ import {
   sentenceOf,
   withOutcome,
   withUsual,
+  noChangeOf,
   type Door,
   type Draft,
   type Sentence,
@@ -77,7 +78,9 @@ const ChangeForm = ({
   const errorText = useErrorText();
   const today = todayIn(business.timeZone);
   const [draft, setDraft] = useState<Draft>(() => draftFor(door, who, today));
-  const [preview, setPreview] = useState<ChangePreviewDto | null>(null);
+  /** The last answer, and the plan it answers — so nothing on screen is decided by an answer to an older plan. */
+  const [answered, setAnswered] = useState<{ readonly asked: string; readonly preview: ChangePreviewDto } | null>(null);
+  const preview = answered?.preview ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,7 +106,7 @@ const ChangeForm = ({
       });
   useEffect(() => {
     if (asked === null) {
-      setPreview(null);
+      setAnswered(null);
       return;
     }
     let current = true;
@@ -112,12 +115,12 @@ const ChangeForm = ({
         .previewChange(token, business.id, JSON.parse(asked) as Parameters<typeof api.previewChange>[2])
         .then((answer) => {
           if (!current) return;
-          setPreview(answer);
+          setAnswered({ asked, preview: answer });
           setDraft((now) => withUsual(now, answer.usual));
         })
         .catch(() => {
           // A warning that could not be fetched must not read as "nobody is booked".
-          if (current) setPreview(null);
+          if (current) setAnswered(null);
         });
     }, PREVIEW_PAUSE_MS);
     return () => {
@@ -126,6 +129,8 @@ const ChangeForm = ({
     };
   }, [asked, token, business.id]);
 
+  // Only an answer to the plan on screen may say it changes nothing.
+  const noChange = noChangeOf(draft, answered !== null && answered.asked === asked ? preview?.sameAsUsual : undefined);
   const stranded = draft.outcome === null || hoursProblem ? 0 : (preview?.appointments.length ?? 0);
   const label = saveLabel(draft, stranded);
   const sentence = sentenceOf(
@@ -279,7 +284,14 @@ const ChangeForm = ({
         </p>
       ))}
 
-      {sentence !== null && !hoursProblem && !datesProblem && (
+      {noChange !== null && (
+        <p className="change-same" role="status" style={{ margin: 0 }}>
+          {copy[noChange.key]}
+          {noChange.backToUsual && ` ${copy.backToUsual}`}
+        </p>
+      )}
+
+      {sentence !== null && noChange === null && !hoursProblem && !datesProblem && (
         <ChangeSentence sentence={sentence} />
       )}
 
@@ -323,7 +335,7 @@ const ChangeForm = ({
       <Button
         intent={(label.key !== "save" && label.key !== "chooseWho" && label.key !== "chooseWhat") || closing ? "danger" : "primary"}
         busy={busy}
-        disabled={problems.length > 0}
+        disabled={problems.length > 0 || noChange !== null}
         onClick={() => void save()}
       >
         {"count" in label ? fillText(copy[label.key], { count: String(label.count) }) : copy[label.key]}

@@ -7,6 +7,7 @@ import {
   draftFor,
   hoursText,
   markOf,
+  noChangeOf,
   mayChange,
   problemsOf,
   quickChips,
@@ -417,5 +418,34 @@ describe("who may change a change", () => {
     expect(mayChange(aChange({ scope: { kind: "CALENDAR", resourceId: "b" } }), worker)).toBe(true);
     expect(mayChange(aChange({ scope: { kind: "BUSINESS" } }), worker)).toBe(false);
     expect(mayChange(aChange({ scope: { kind: "CALENDAR", resourceId: "a" } }), worker)).toBe(false);
+  });
+});
+
+describe("other hours that change nothing", () => {
+  const day = (overrides: Partial<Draft> = {}): Draft => ({
+    ...draftFor({ kind: "days", from: "2026-10-06", to: "2026-10-06", resourceId: "a" }, owner, TODAY),
+    outcome: "OTHER_HOURS",
+    ranges: [{ start: "09:00", end: "17:00" }],
+    ...overrides,
+  });
+
+  it("are said to change nothing, for one day or several", () => {
+    expect(noChangeOf(day(), true)).toEqual({ key: "sameAsUsualDay", backToUsual: false });
+    expect(noChangeOf(day({ toDate: "2026-10-08" }), true)).toEqual({ key: "sameAsUsualDays", backToUsual: false });
+  });
+
+  it("point to removing the change when it is an edit", () => {
+    expect(noChangeOf(day({ replacing: "hours:a:2026-10-06:2026-10-06" }), true)).toEqual({ key: "sameAsUsualDay", backToUsual: true });
+  });
+
+  it("say nothing when the hours differ, or before the answer is known", () => {
+    expect(noChangeOf(day(), false)).toBeNull();
+    expect(noChangeOf(day(), undefined)).toBeNull();
+  });
+
+  it("say nothing for the other outcomes", () => {
+    expect(noChangeOf(day({ outcome: "OFF_PART" }), true)).toBeNull();
+    expect(noChangeOf(day({ outcome: "OFF_ALL_DAY", ranges: [] }), true)).toBeNull();
+    expect(noChangeOf(day({ outcome: null }), true)).toBeNull();
   });
 });

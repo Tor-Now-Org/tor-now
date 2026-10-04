@@ -444,3 +444,100 @@ describe("what the waiting list is asked to look at", () => {
     expect(test.store.waitingRechecks).toEqual([]);
   });
 });
+
+describe("other hours that are the usual ones", () => {
+  let test: Harness;
+  let shop: Shop;
+
+  beforeEach(async () => {
+    test = harness();
+    shop = await aTwoCalendarShop(test);
+  });
+
+  const sameAsUsual = async (plan: ReturnType<typeof aPlan>) =>
+    (await test.services.changes.preview(shop.owner.actor, shop.business.id, plan, null)).sameAsUsual;
+
+  it("are said to change nothing, for a calendar and for the whole business", async () => {
+    expect(await sameAsUsual(aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "09:00", end: "17:00" }]))).toBe(true);
+    expect(await sameAsUsual(aPlan(BUSINESS, "OTHER_HOURS", [{ start: "09:00", end: "17:00" }]))).toBe(true);
+  });
+
+  it("are the usual ones however the stretches were typed", async () => {
+    // Two stretches that meet are the one stretch the week keeps.
+    expect(await sameAsUsual(aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "12:00", end: "17:00" }, { start: "09:00", end: "12:00" }]))).toBe(true);
+  });
+
+  it("are not when any hour differs", async () => {
+    expect(await sameAsUsual(aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "09:00", end: "16:30" }]))).toBe(false);
+    expect(await sameAsUsual(aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "09:00", end: "12:00" }, { start: "13:00", end: "17:00" }]))).toBe(false);
+  });
+
+  it("are the usual ones only if they are on every day of the change", async () => {
+    expect(await sameAsUsual(aPlan(BUSINESS, "OTHER_HOURS", [{ start: "09:00", end: "17:00" }], { toDate: THURSDAY }))).toBe(true);
+    await test.services.business.replaceWorkingHours(shop.owner.actor, shop.business.id, shop.resource.id, [
+      { dayOfWeek: 2, start: "09:00", end: "17:00" },
+      { dayOfWeek: 3, start: "09:00", end: "17:00" },
+      { dayOfWeek: 4, start: "10:00", end: "14:00" },
+    ]);
+    expect(await sameAsUsual(aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "09:00", end: "17:00" }], { toDate: THURSDAY }))).toBe(false);
+  });
+
+  it("are the business's usual ones only if every calendar keeps them", async () => {
+    await test.services.business.replaceWorkingHours(shop.owner.actor, shop.business.id, shop.second.id, [
+      { dayOfWeek: 2, start: "12:00", end: "19:00" },
+    ]);
+    expect(await sameAsUsual(aPlan(BUSINESS, "OTHER_HOURS", [{ start: "09:00", end: "17:00" }]))).toBe(false);
+    expect(await sameAsUsual(aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "09:00", end: "17:00" }]))).toBe(true);
+  });
+
+  it("are a split day's usual ones when the week splits it the same way", async () => {
+    await test.services.business.replaceWorkingHours(shop.owner.actor, shop.business.id, shop.resource.id, [
+      { dayOfWeek: 2, start: "09:00", end: "12:00" },
+      { dayOfWeek: 2, start: "16:00", end: "20:00" },
+    ]);
+    expect(await sameAsUsual(aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "09:00", end: "12:00" }, { start: "16:00", end: "20:00" }]))).toBe(true);
+    expect(await sameAsUsual(aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "09:00", end: "20:00" }]))).toBe(false);
+  });
+
+  it("is never said of a day off, some hours off, or a day nobody usually works", async () => {
+    expect(await sameAsUsual(aPlan(BUSINESS, "OFF_ALL_DAY"))).toBe(false);
+    expect(await sameAsUsual(aPlan(BUSINESS, "OFF_PART", [{ start: "09:00", end: "17:00" }]))).toBe(false);
+    // Saturday, which this shop does not work: any hours are a change.
+    expect(await sameAsUsual(aPlan(BUSINESS, "OTHER_HOURS", [{ start: "09:00", end: "17:00" }], { fromDate: "2026-09-05" }))).toBe(false);
+    expect((await test.services.changes.preview(shop.owner.actor, shop.business.id, { ...aPlan(BUSINESS, "OFF_ALL_DAY"), outcome: null }, null)).sameAsUsual).toBe(false);
+  });
+
+  it("are refused when saved, and nothing is written", async () => {
+    await expect(
+      test.services.changes.apply(shop.owner.actor, shop.business.id, aPlan(BUSINESS, "OTHER_HOURS", [{ start: "09:00", end: "17:00" }]), "KEEP", null),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(test.store.dateOverrides).toHaveLength(0);
+  });
+
+  it("are refused as an edit too, leaving the change as it was — giving the day back is removing it", async () => {
+    await test.services.changes.apply(
+      shop.owner.actor, shop.business.id, aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "09:00", end: "13:00" }]), "KEEP", null,
+    );
+    const before = await test.services.changes.list(shop.owner.actor, shop.business.id, TUESDAY, TUESDAY);
+    await expect(
+      test.services.changes.apply(
+        shop.owner.actor, shop.business.id, aPlan(calendar(shop.resource.id), "OTHER_HOURS", [{ start: "09:00", end: "17:00" }]), "KEEP", before[0]!.id,
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(await test.services.changes.list(shop.owner.actor, shop.business.id, TUESDAY, TUESDAY)).toEqual(before);
+  });
+});
+
+describe("stretches that meet", () => {
+  it("are one stretch, not an overlap", async () => {
+    const test = harness();
+    const shop = await aTwoCalendarShop(test);
+    await test.services.changes.apply(
+      shop.owner.actor, shop.business.id,
+      aPlan(calendar(shop.resource.id), "OFF_PART", [{ start: "12:00", end: "13:00" }, { start: "10:00", end: "12:00" }]),
+      "KEEP", null,
+    );
+    const [change] = await test.services.changes.list(shop.owner.actor, shop.business.id, TUESDAY, TUESDAY);
+    expect(change?.ranges).toEqual([{ start: 600, end: 780 }]);
+  });
+});

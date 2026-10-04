@@ -79,7 +79,16 @@ describe("the change routes", () => {
       token,
     );
     expect(status).toBe(200);
-    expect(body).toEqual({ days: 1, calendars: 1, appointments: [], replaces: [], usual: [{ start: "09:00", end: "17:00" }] });
+    expect(body).toEqual({ days: 1, calendars: 1, appointments: [], replaces: [], usual: [{ start: "09:00", end: "17:00" }], sameAsUsual: false });
+  });
+
+  it("says when other hours are the usual ones, and refuses to save them", async () => {
+    const plan = { scope: { kind: "BUSINESS" }, fromDate: TUESDAY, toDate: TUESDAY, outcome: "OTHER_HOURS", ranges: [{ start: "09:00", end: "17:00" }] };
+    expect((await api.post(`${base}/preview`, plan, token)).body).toMatchObject({ sameAsUsual: true });
+    const refused = await make(plan);
+    expect(refused.status).toBe(400);
+    expect(refused.body).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
+    expect(await listed()).toEqual([]);
   });
 
   it("previews with the outcome still unanswered", async () => {

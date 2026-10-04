@@ -152,21 +152,9 @@ export const Schedule = ({
 
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
-      {many && (
-        <div role="group" aria-label={changeCopy.scopeLabel} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {tab === "changes" && (
-            <ScopeChip chosen={scope === BUSINESS} business onClick={() => setScope(BUSINESS)}>
-              {changeCopy.wholeBusiness}
-            </ScopeChip>
-          )}
-          {onOffer.map((candidate) => (
-            <ScopeChip key={candidate.id} chosen={candidate.id === scope} onClick={() => setScope(candidate.id)}>
-              {candidate.name}
-            </ScopeChip>
-          ))}
-        </div>
-      )}
-
+      {/* What, then whose: the two views first, and the calendars under them —
+          "כל העסק" is one of those only where the business has something of
+          its own, its changes; the usual week is always a calendar's. */}
       <div role="tablist" style={{ display: "flex", gap: 6 }}>
         {(["usual", "changes"] as const).map((candidate) => (
           <button
@@ -190,6 +178,21 @@ export const Schedule = ({
           </button>
         ))}
       </div>
+
+      {many && (
+        <div role="group" aria-label={tab === "changes" ? changeCopy.scopeLabel : changeCopy.calendarLabel} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {tab === "changes" && (
+            <ScopeChip chosen={scope === BUSINESS} business onClick={() => setScope(BUSINESS)}>
+              {changeCopy.wholeBusiness}
+            </ScopeChip>
+          )}
+          {onOffer.map((candidate) => (
+            <ScopeChip key={candidate.id} chosen={candidate.id === scope} onClick={() => setScope(candidate.id)}>
+              {candidate.name}
+            </ScopeChip>
+          ))}
+        </div>
+      )}
 
       {error !== null && <Critical>{error}</Critical>}
 

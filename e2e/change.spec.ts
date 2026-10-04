@@ -534,3 +534,133 @@ test.describe("in English", () => {
     await ready(page);
   });
 });
+
+test.describe("other hours that are the usual ones", () => {
+  const SAME_DAY = "אלה השעות הרגילות של היום הזה — אין כאן שינוי.";
+
+  test("say so instead of a sentence, hold saving back, and let go once an hour differs", async ({ page }) => {
+    const shop = await aTwoCalendarShop("רגיל");
+    const [day] = daysInOneMonth(1, 2) as [string];
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    const sheet = await changeFromThePlus(page, day);
+    await outcome(sheet, "עובדים בשעות אחרות").click();
+
+    // It opens on the usual day, which is no change at all.
+    await expect(sheet.getByRole("status").filter({ hasText: SAME_DAY })).toBeVisible();
+    await expect(theSentence(sheet)).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: "שמירת השינוי" })).toBeDisabled();
+
+    // One hour different, and it is a change again.
+    await sheet.getByRole("button", { name: "עד 13:00" }).click();
+    await expect(sheet.getByText(SAME_DAY)).toHaveCount(0);
+    await expect(theSentence(sheet)).toContainText("רק 09:00–13:00, במקום 09:00–17:00");
+    await expect(sheet.getByRole("button", { name: "שמירת השינוי" })).toBeEnabled();
+
+    // And back to the usual hours, back to no change.
+    await sheet.getByRole("button", { name: "כמו בדרך כלל" }).click();
+    await expect(sheet.getByText(SAME_DAY)).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "שמירת השינוי" })).toBeDisabled();
+  });
+
+  test("are the usual ones however the stretches were typed", async ({ page }) => {
+    const shop = await aTwoCalendarShop("רגיל מפוצל");
+    const [day] = daysInOneMonth(1, 2) as [string];
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    const sheet = await changeFromThePlus(page, day);
+    await outcome(sheet, "עובדים בשעות אחרות").click();
+    await typeHours(sheet, "09:00", "12:00");
+    await sheet.getByRole("button", { name: "+ עוד טווח" }).click();
+    await typeHours(sheet, "12:00", "17:00", 1);
+    await expect(sheet.getByText(SAME_DAY)).toBeVisible();
+  });
+
+  test("for several days of the whole business, said of those days", async ({ page }) => {
+    const shop = await aTwoCalendarShop("רגיל כולם");
+    const [first, last] = daysInOneMonth(2, 2) as [string, string];
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    const sheet = await changeFromThePlus(page, first, last);
+    await forWhom(sheet).getByRole("button", { name: "כל העסק" }).click();
+    await outcome(sheet, "עובדים בשעות אחרות").click();
+    await expect(sheet.getByText("אלה השעות הרגילות של הימים האלה — אין כאן שינוי.")).toBeVisible();
+  });
+
+  test("are not the business's usual ones when a calendar keeps other hours", async ({ page }) => {
+    const shop = await aTwoCalendarShop("רגיל שונה");
+    await call(`/businesses/${shop.business.id}/resources/${shop.second.id}/working-hours`, {
+      method: "PUT",
+      token: shop.owner.token,
+      body: { week: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, start: "12:00", end: "19:00" })) },
+    });
+    const [day] = daysInOneMonth(1, 2) as [string];
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    const sheet = await changeFromThePlus(page, day);
+    await forWhom(sheet).getByRole("button", { name: "כל העסק" }).click();
+    await outcome(sheet, "עובדים בשעות אחרות").click();
+    await typeHours(sheet, "09:00", "17:00");
+    await expect(theSentence(sheet)).toContainText("העסק פתוח רק 09:00–17:00");
+    await expect(sheet.getByText(/אין כאן שינוי/)).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: "שמירת השינוי" })).toBeEnabled();
+  });
+
+  test("as an edit, point to removing the change instead", async ({ page }) => {
+    const shop = await aTwoCalendarShop("חזרה לרגיל");
+    const [day] = daysInOneMonth(1, 2) as [string];
+    await aChange(shop, { scope: { kind: "CALENDAR", resourceId: shop.resource.id }, outcome: "OTHER_HOURS", fromDate: day, ranges: [{ start: "09:00", end: "13:00" }] });
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    await showTheMonthOf(page, day);
+    await page.getByRole("button", { name: /^שעות אחרות/ }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "עריכה" }).click();
+    const sheet = await theSheet(page);
+    await sheet.getByRole("button", { name: "כמו בדרך כלל" }).click();
+    await expect(sheet.getByText(`${SAME_DAY} כדי להחזיר לשעות הרגילות, מוחקים את השינוי.`)).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "שמירת השינוי" })).toBeDisabled();
+    expect(await changesOf(shop, day, day)).toMatchObject([{ ranges: [{ start: "09:00", end: "13:00" }] }]);
+  });
+
+  test("are refused by the API too", async () => {
+    const shop = await aTwoCalendarShop("רגיל שרת");
+    await expect(
+      aChange(shop, { scope: { kind: "BUSINESS" }, outcome: "OTHER_HOURS", fromDate: aDayFromNow(2), ranges: [{ start: "09:00", end: "17:00" }] }),
+    ).rejects.toThrow(/400/);
+  });
+});
+
+test.describe("the schedule's layout", () => {
+  test("the two views come first, and the calendars under them", async ({ page }) => {
+    const shop = await aTwoCalendarShop("סדר");
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+
+    const tabs = page.getByRole("tablist");
+    const calendars = page.getByRole("group", { name: "איזה יומן" });
+    await expect(tabs.getByRole("tab", { name: "שעות קבועות" })).toHaveAttribute("aria-selected", "true");
+    await expect(calendars).toBeVisible();
+    expect((await tabs.boundingBox())!.y).toBeLessThan((await calendars.boundingBox())!.y);
+    // The usual week is always a calendar's: there is no business choice here.
+    await expect(calendars.getByRole("button")).toHaveText(["יומן א", "שימי"]);
+
+    // Changes: the same place, and the whole business first among them.
+    await tabs.getByRole("tab", { name: "שינויים" }).click();
+    const whose = page.getByRole("group", { name: "של מי השינויים" });
+    expect((await tabs.boundingBox())!.y).toBeLessThan((await whose.boundingBox())!.y);
+    await expect(whose.getByRole("button")).toHaveText(["כל העסק", "יומן א", "שימי"]);
+    await whose.getByRole("button", { name: "כל העסק" }).click();
+    await expect(page.getByRole("button", { name: "שינוי לכל העסק" })).toBeVisible();
+
+    // Back to the usual week from the whole business: the first calendar's, not nobody's.
+    await tabs.getByRole("tab", { name: "שעות קבועות" }).click();
+    await expect(calendars.getByRole("button", { name: "יומן א" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("a business with one calendar has nothing to choose between", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({ name: `סדר יחיד ${Date.now()}`, ownerPhone: uniquePhone() });
+    await openTheCalendar(page, shop.owner.token, shop.business.id);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+    await expect(page.getByRole("tablist")).toBeVisible();
+    await expect(page.getByRole("group", { name: "איזה יומן" })).toHaveCount(0);
+    await page.getByRole("tab", { name: "שינויים" }).click();
+    await expect(page.getByRole("group", { name: "של מי השינויים" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "שינוי ביומן א" })).toBeVisible();
+  });
+});

@@ -292,6 +292,8 @@ export type ChangePreviewDto = ClosureImpactDto & {
   replaces: ChangeDto[];
   /** What the first day usually keeps, for this scope. */
   usual: ClockRange[];
+  /** Other hours that are what every calendar keeps on every one of these days anyway. Absent from an older API. */
+  sameAsUsual?: boolean;
 };
 
 export type SlotDto = { startAt: string; endAt: string };

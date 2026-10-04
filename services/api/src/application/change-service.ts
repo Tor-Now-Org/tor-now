@@ -77,6 +77,8 @@ export type ChangePreview = {
   readonly replaces: readonly CalendarChange[];
   /** What the first day usually keeps, for this scope: where "other hours" starts from. */
   readonly usual: readonly LocalTimeRangeValue[];
+  /** Other hours that are exactly what every calendar keeps on every one of these days anyway. */
+  readonly sameAsUsual: boolean;
 };
 
 export type ChangeResult = {
@@ -138,8 +140,12 @@ const hoursOf = (ranges: readonly { start: string; end: string }[]): LocalInterv
     if (end <= start) throw validationFailed("Hours must end after they start");
     return interval(start, end);
   });
-  if (normalize(hours).length !== hours.length) throw validationFailed("The hours overlap");
-  return [...hours].sort((left, right) => left.start - right.start);
+  const ordered = [...hours].sort((left, right) => left.start - right.start);
+  if (ordered.some((range, index) => index > 0 && range.start < ordered[index - 1]!.end)) {
+    throw validationFailed("The hours overlap");
+  }
+  // Stretches that only meet are one stretch, typed in two.
+  return normalize(ordered);
 };
 
 type Checked = {
@@ -243,6 +249,31 @@ const usualHours = async (
   return normalize(
     week.filter((entry) => entry.dayOfWeek === weekday).map((entry) => interval(entry.start, entry.end)),
   ).map((range) => ({ start: range.start, end: range.end }));
+};
+
+const shapeOf = (ranges: readonly { start: number; end: number }[]) =>
+  normalize(ranges.map((range) => interval(range.start, range.end)))
+    .map((range) => `${range.start}-${range.end}`)
+    .join(",");
+
+/**
+ * Whether these hours are what each of these calendars keeps on each of these
+ * days by its usual week — in which case "other hours" would change nothing.
+ */
+const keepsTheUsual = async (
+  repositories: Repositories,
+  targets: readonly ResourceId[],
+  dates: readonly LocalDate[],
+  hours: readonly LocalInterval[],
+): Promise<boolean> => {
+  const week = await repositories.workingHours.listForResources(targets);
+  const wanted = shapeOf(hours);
+  return targets.every((resourceId) =>
+    dates.every((date) => {
+      const weekday = dayOfWeekOf(date);
+      return shapeOf(week.filter((entry) => entry.resourceId === resourceId && entry.dayOfWeek === weekday)) === wanted;
+    }),
+  );
 };
 
 /** A Block, less the days being given back; what is left of it stays in its group. */
@@ -461,7 +492,7 @@ export const changeService = ({ unitOfWork, clock }: { unitOfWork: UnitOfWork; c
         const usual = await usualHours(repositories, targets, first);
         if (plan.outcome === null) {
           const days = datesBetween(first, parseLocalDate(plan.toDate)).length;
-          return { days, calendars: targets.length, appointments: [], replaces: [], usual };
+          return { days, calendars: targets.length, appointments: [], replaces: [], usual, sameAsUsual: false };
         }
         const full = { ...plan, outcome: plan.outcome, note: null };
         const checked = check(full, todayFor(context.business));
@@ -471,6 +502,7 @@ export const changeService = ({ unitOfWork, clock }: { unitOfWork: UnitOfWork; c
           appointments: await namedFor(repositories, [...(await stranded(repositories, context, full, checked))]),
           replaces: await overwritten(repositories, context, full, checked, replacing),
           usual,
+          sameAsUsual: full.outcome === "OTHER_HOURS" && (await keepsTheUsual(repositories, targets, checked.dates, checked.hours)),
         };
       });
     },
@@ -492,6 +524,11 @@ export const changeService = ({ unitOfWork, clock }: { unitOfWork: UnitOfWork; c
         authorize(context, plan.scope);
         const today = todayFor(context.business);
         const checked = check(plan, today);
+        // Other hours that are the usual ones change nothing: a day back to its
+        // usual hours is a change removed, not one written.
+        if (plan.outcome === "OTHER_HOURS" && (await keepsTheUsual(session.repositories, targetsOf(context, plan.scope), checked.dates, checked.hours))) {
+          throw validationFailed("Those are the usual hours: nothing would change");
+        }
         if (replacing !== null) {
           const old = await findChange(session.repositories, context, replacing);
           authorize(context, old.scope);

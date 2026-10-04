@@ -406,3 +406,17 @@ export const mayChange = (change: Pick<ChangeDto, "scope">, who: Who): boolean =
   change.scope.kind === "BUSINESS"
     ? who.manages
     : who.calendars.some((calendar) => calendar.id === (change.scope as { resourceId: string }).resourceId);
+
+/**
+ * Other hours that are the very hours the days usually keep change nothing, and
+ * saving them would only write a day identical to itself. The sheet says so in
+ * place of the sentence, and holds saving back; an edit is pointed at removing
+ * the change, which is what giving a day back its usual hours is.
+ */
+export const noChangeOf = (
+  draft: Pick<Draft, "outcome" | "fromDate" | "toDate" | "replacing">,
+  sameAsUsual: boolean | undefined,
+): { readonly key: "sameAsUsualDay" | "sameAsUsualDays"; readonly backToUsual: boolean } | null =>
+  draft.outcome === "OTHER_HOURS" && sameAsUsual === true
+    ? { key: draft.fromDate === draft.toDate ? "sameAsUsualDay" : "sameAsUsualDays", backToUsual: draft.replacing !== null }
+    : null;
