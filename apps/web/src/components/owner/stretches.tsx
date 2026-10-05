@@ -2,6 +2,7 @@
 
 import { mergedRanges, type TimeRange } from "@tor-now/domain";
 import { useCopy } from "@/lib/i18n/index.tsx";
+import { openPicker } from "../ui.tsx";
 import { breakBetween, collidesWithPrevious, isClock, isUsable } from "./usual-week.ts";
 import { DEFAULT_OPENING } from "./week.ts";
 
@@ -310,8 +311,10 @@ export const Clock = ({
   return (
     <span
       className="clock-box"
+      onClick={openPicker}
       style={{
         position: "relative",
+        cursor: "pointer",
         flex: 1,
         minWidth: 0,
         display: "flex",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type MouseEvent, type ReactNode } from "react";
 import { useSheetPresence } from "./sheet-presence.ts";
 
 /**
@@ -94,6 +94,18 @@ const ClockFace = ({ value, style }: { value: unknown; style?: CSSProperties }) 
 );
 
 /**
+ * Opens the time picker from anywhere in its box. Desktop browsers open it only
+ * from their own small clock icon; phones already open it on any tap.
+ */
+export const openPicker = (event: MouseEvent<HTMLElement>) => {
+  try {
+    event.currentTarget.querySelector("input")?.showPicker();
+  } catch {
+    // ponytail: no showPicker (old Safari) or no user gesture — the icon still works.
+  }
+};
+
+/**
  * A labelled input that can say what is wrong with it.
  *
  * The problem is shown under the field rather than collected at the top of the
@@ -149,7 +161,7 @@ export const Field = ({
         {required && <span aria-hidden="true"> *</span>}
       </span>
       {clock ? (
-        <span style={{ position: "relative", display: "block" }}>
+        <span onClick={openPicker} style={{ position: "relative", display: "block", cursor: "pointer" }}>
           {input}
           <ClockFace value={rest.value} style={{ insetInlineStart: 13 }} />
         </span>
