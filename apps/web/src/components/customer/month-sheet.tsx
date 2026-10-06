@@ -15,7 +15,6 @@ import {
   monthsOf,
   whenOpens,
   type Mark,
-  type PartChoice,
 } from "./days-model.ts";
 
 /** A Sunday, from which the week's narrow day names are read in the reader's language. */
@@ -37,7 +36,6 @@ export const MonthSheet = ({
   lastDay,
   selected,
   days,
-  part,
   timeZone,
   horizonDays,
   ensure,
@@ -49,7 +47,6 @@ export const MonthSheet = ({
   lastDay: string;
   selected: string;
   days: Readonly<Record<string, DayAvailabilityDto>>;
-  part: PartChoice;
   timeZone: string;
   horizonDays: number;
   ensure: (from: string, to: string) => Promise<void>;
@@ -152,7 +149,7 @@ export const MonthSheet = ({
         </button>
       );
     }
-    const mark = markOf(days[date], part, timeZone, today, horizonDays);
+    const mark = markOf(days[date], today, horizonDays);
     const short =
       mark.kind === "free"
         ? String(mark.count)
@@ -164,9 +161,7 @@ export const MonthSheet = ({
               ? words.markCall
               : mark.kind === "over"
                 ? words.markOver
-                : mark.kind === "noneThen"
-                  ? "–"
-                  : "";
+                : "";
     return (
       <button
         key={date}
@@ -174,7 +169,7 @@ export const MonthSheet = ({
         data-date={date}
         className={`month-cell ${toneOf(mark)}`}
         {...(date === selected ? { "aria-current": "date" as const } : {})}
-        aria-label={`${name}, ${markAria(mark, part, words, language)}`}
+        aria-label={`${name}, ${markAria(mark, words, language)}`}
         onClick={() => onPick(date)}
       >
         {number}

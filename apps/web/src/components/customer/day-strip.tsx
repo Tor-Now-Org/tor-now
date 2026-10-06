@@ -5,7 +5,7 @@ import { formatLocalDate, weekdayOf } from "@/lib/format.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { dayName, markAria, markText } from "./day-words.ts";
-import type { Mark, Opening, PartChoice } from "./days-model.ts";
+import type { Mark, Opening } from "./days-model.ts";
 
 /** How a mark is drawn: an open day, a full one, or a quiet one with nothing to book. */
 const toneOf = (mark: Mark): string =>
@@ -28,7 +28,6 @@ export const DayStrip = ({
   marks,
   today,
   selected,
-  part,
   onSelect,
   nextOpening,
   onMonth,
@@ -37,7 +36,6 @@ export const DayStrip = ({
   marks: Readonly<Record<string, Mark>>;
   today: string;
   selected: string;
-  part: PartChoice;
   onSelect: (date: string) => void;
   /** The first date past the window, when the strip reaches the window's end. */
   nextOpening: { date: string; when: Opening } | null;
@@ -69,14 +67,14 @@ export const DayStrip = ({
               role="radio"
               data-date={date}
               aria-checked={date === selected}
-              aria-label={`${name}, ${markAria(mark, part, words, language)}`}
+              aria-label={`${name}, ${markAria(mark, words, language)}`}
               className={`day-chip ${toneOf(mark)}`}
               onClick={() => onSelect(date)}
             >
               <span className="w">{date === today ? customer.today : (customer.days[weekdayOf(date)] ?? "")}</span>
               <span className="n">{formatLocalDate(date, language, { day: "numeric", month: "numeric" })}</span>
               <span className="c">
-                {mark.kind === "loading" ? <span className="wait-line" aria-hidden="true" /> : markText(mark, part, words, language)}
+                {mark.kind === "loading" ? <span className="wait-line" aria-hidden="true" /> : markText(mark, words, language)}
               </span>
             </button>
           );
@@ -97,40 +95,6 @@ export const DayStrip = ({
           </button>
         )}
       </div>
-    </div>
-  );
-};
-
-/** "When suits you" — one choice that every day's count, and the times shown, follow. */
-export const PartChoiceRow = ({
-  part,
-  onChange,
-}: {
-  part: PartChoice;
-  onChange: (part: PartChoice) => void;
-}) => {
-  const words = useCopy("days");
-  const customer = useCopy("customer");
-  const names: Readonly<Record<PartChoice, string>> = {
-    any: words.anyTime,
-    morning: customer.morning,
-    noon: customer.noon,
-    evening: customer.evening,
-  };
-  return (
-    <div className="part-choice" role="radiogroup" aria-label={words.whenSuits}>
-      {(["any", "morning", "noon", "evening"] as const).map((choice) => (
-        <button
-          key={choice}
-          type="button"
-          role="radio"
-          aria-checked={choice === part}
-          className="chip"
-          onClick={() => onChange(choice)}
-        >
-          {names[choice]}
-        </button>
-      ))}
     </div>
   );
 };

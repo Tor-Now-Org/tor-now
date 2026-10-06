@@ -7,6 +7,12 @@ Date: 2026-10-06
 Accepted. Builds on ADR 0003 (fetched on demand), ADR 0012 (the Minimum Notice
 and Booking Horizon) and ADR 0018 (Parts of Day, the waiting list).
 
+Amended 2026-10-07: the customer's Part of Day choice ("מתי נוח לכם?") is
+withdrawn from the business page. Every day counts, and shows, all its times;
+the page opens on the first day with any room. The two decisions below that
+name a chosen Part of Day no longer apply. Parts of Day still group the times
+and still shape the waiting list (ADR 0018).
+
 ## Context
 
 A customer chose a day and only then learned whether it had room. A closed day,

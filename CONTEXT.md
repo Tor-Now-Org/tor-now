@@ -173,7 +173,7 @@ _Avoid_: Queue, waitlist, reservation, hold, standby
 
 **Day Mark**:
 What a customer's day says before it is opened (ADR 0026): how many Slots it
-has free in the chosen Part of Day, or why it has none — closed, full, by phone
+has free, or why it has none — closed, full, by phone
 (inside the Minimum Notice), over, or opening later (past the Booking Horizon).
 _Avoid_: Badge, status, availability count, label
 

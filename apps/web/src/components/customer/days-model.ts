@@ -1,4 +1,4 @@
-import type { DayAvailabilityDto, SlotDto } from "@/lib/api/types.ts";
+import type { DayAvailabilityDto } from "@/lib/api/types.ts";
 import { addDaysTo, partOfDay, type PartOfDay } from "@/lib/format.ts";
 
 /**
@@ -11,9 +11,6 @@ import { addDaysTo, partOfDay, type PartOfDay } from "@/lib/format.ts";
 /** How many days the strip offers before the month takes over. */
 export const STRIP_DAYS = 14;
 
-export const PART_CHOICES = ["any", "morning", "noon", "evening"] as const;
-export type PartChoice = (typeof PART_CHOICES)[number];
-
 /** When a date past the window opens: later today, tomorrow, or on a date. */
 export type Opening =
   | { readonly kind: "today" }
@@ -22,7 +19,6 @@ export type Opening =
 
 export type Mark =
   | { readonly kind: "free"; readonly count: number }
-  | { readonly kind: "noneThen" }
   | { readonly kind: "full" }
   | { readonly kind: "closed" }
   | { readonly kind: "call" }
@@ -43,9 +39,6 @@ const later = (left: string, right: string): string => (left >= right ? left : r
 export const datesFromTo = (from: string, to: string): string[] =>
   Array.from({ length: Math.max(0, daysFromTo(from, to) + 1) }, (_unused, index) => addDaysTo(from, index));
 
-export const slotsIn = (day: DayAvailabilityDto, part: PartChoice, timeZone: string): SlotDto[] =>
-  part === "any" ? day.slots : day.slots.filter((slot) => partOfDay(slot.startAt, timeZone) === part);
-
 /**
  * The window moves with the clock, so a time on a date past it opens at the
  * same clock time `horizonDays` earlier: a date's hours open on the date the
@@ -60,16 +53,11 @@ export const whenOpens = (date: string, today: string, horizonDays: number): Ope
 
 export const markOf = (
   day: DayAvailabilityDto | undefined,
-  part: PartChoice,
-  timeZone: string,
   today: string,
   horizonDays: number,
 ): Mark => {
   if (day === undefined) return { kind: "loading" };
-  if (day.slots.length > 0) {
-    const count = slotsIn(day, part, timeZone).length;
-    return count > 0 ? { kind: "free", count } : { kind: "noneThen" };
-  }
+  if (day.slots.length > 0) return { kind: "free", count: day.slots.length };
   switch (day.emptyReason) {
     case "CLOSED":
       return { kind: "closed" };
@@ -136,19 +124,17 @@ export const pagesFor = (
 };
 
 /**
- * The first date with a time free in the chosen part — but only once every day
- * before it has answered, so the page never opens past a day it has not read.
+ * The first date with a time free — but only once every day before it has
+ * answered, so the page never opens past a day it has not read.
  */
 export const firstFree = (
   dates: readonly string[],
   days: Readonly<Record<string, DayAvailabilityDto>>,
-  part: PartChoice,
-  timeZone: string,
 ): string | null => {
   for (const date of dates) {
     const day = days[date];
     if (day === undefined) return null;
-    if (slotsIn(day, part, timeZone).length > 0) return date;
+    if (day.slots.length > 0) return date;
   }
   return null;
 };
@@ -219,9 +205,5 @@ export const firstWaitablePart = (date: string, noticeEnds: Date, timeZone: stri
   if (date < edge) return PART_ORDER.length;
   return PART_ORDER.indexOf(partOfDay(noticeEnds.toISOString(), timeZone));
 };
-
-/** A remembered choice, read defensively: storage is the device's, not ours. */
-export const readPart = (stored: string | null): PartChoice =>
-  (PART_CHOICES as readonly string[]).includes(stored ?? "") ? (stored as PartChoice) : "any";
 
 export type { PartOfDay };

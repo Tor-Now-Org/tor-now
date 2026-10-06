@@ -382,86 +382,6 @@ test.describe("the whole month", () => {
   });
 });
 
-test.describe("when suits the customer", () => {
-  const eveningsOf = async (shop: Awaited<ReturnType<typeof aShop>>, date: string) =>
-    (await offered(shop, shop.resource.id, date)).filter((clock) => clock >= "17:00");
-
-  test("a time of day counts every day by it, and shows only its times", async ({ page }) => {
-    const shop = await aShop("ערב", { start: "09:00", end: "20:00" });
-    const day = aDayFromNow(3);
-    const evenings = await eveningsOf(shop, day);
-    await aChange(shop, {
-      scope: { kind: "CALENDAR", resourceId: shop.resource.id },
-      outcome: "OTHER_HOURS",
-      fromDate: aDayFromNow(2),
-      ranges: [{ start: "09:00", end: "11:00" }],
-    });
-
-    await openTheBusiness(page, shop.business.id);
-    const when = page.getByRole("radiogroup", { name: "מתי נוח לכם?" });
-    await expect(when.getByRole("radio", { name: "בכל שעה" })).toHaveAttribute("aria-checked", "true");
-    await when.getByRole("radio", { name: "ערב" }).click();
-
-    await expect(dayChip(page, 3)).toContainText(`${evenings.length} בערב`, { timeout: 15_000 });
-    await expect(dayChip(page, 2)).toContainText("אין בערב");
-
-    await dayChip(page, 3).click();
-    await expect(times(page).first()).toBeVisible();
-    const shown = await times(page).allTextContents();
-    expect(shown).toEqual(evenings);
-  });
-
-  test("a day with nothing at that time offers every hour of it", async ({ page }) => {
-    const shop = await aShop("כל השעות", { start: "09:00", end: "20:00" });
-    await aChange(shop, {
-      scope: { kind: "CALENDAR", resourceId: shop.resource.id },
-      outcome: "OTHER_HOURS",
-      fromDate: aDayFromNow(2),
-      ranges: [{ start: "09:00", end: "11:00" }],
-    });
-    await openTheBusiness(page, shop.business.id);
-    const when = page.getByRole("radiogroup", { name: "מתי נוח לכם?" });
-    await when.getByRole("radio", { name: "ערב" }).click();
-
-    await dayChip(page, 2).click();
-    await expect(page.getByText("אין תורים פנויים בערב ביום הזה")).toBeVisible();
-    await page.getByRole("button", { name: "כל השעות ביום הזה" }).click();
-
-    await expect(when.getByRole("radio", { name: "בכל שעה" })).toHaveAttribute("aria-checked", "true");
-    await expect(times(page).filter({ hasText: "09:00" })).toBeVisible();
-  });
-
-  test("the choice is remembered on the next visit", async ({ page }) => {
-    const shop = await aShop("זוכר");
-    await openTheBusiness(page, shop.business.id);
-    const when = page.getByRole("radiogroup", { name: "מתי נוח לכם?" });
-    await when.getByRole("radio", { name: "צהריים" }).click();
-
-    await page.reload();
-    await ready(page);
-    await expect(
-      page.getByRole("radiogroup", { name: "מתי נוח לכם?" }).getByRole("radio", { name: "צהריים" }),
-    ).toHaveAttribute("aria-checked", "true", { timeout: 15_000 });
-  });
-
-  test("the page opens on the first day with room at the chosen time", async ({ page }) => {
-    const shop = await aShop("ערב ראשון", { start: "09:00", end: "20:00" });
-    await aChange(shop, {
-      scope: { kind: "CALENDAR", resourceId: shop.resource.id },
-      outcome: "OTHER_HOURS",
-      fromDate: aDayFromNow(0),
-      toDate: aDayFromNow(2),
-      ranges: [{ start: "09:00", end: "11:00" }],
-    });
-    await page.addInitScript(() => window.localStorage.setItem("tor-now.when", "evening"));
-
-    await openTheBusiness(page, shop.business.id);
-
-    await expect(dayChip(page, 3)).toHaveAttribute("aria-checked", "true", { timeout: 15_000 });
-    await expect(dayChip(page, 3)).toContainText("בערב");
-  });
-});
-
 test.describe("in English", () => {
   test("the days say the same things", async ({ page }) => {
     await useEnglish(page);
@@ -473,7 +393,8 @@ test.describe("in English", () => {
     const days = page.getByRole("radiogroup", { name: "Choose a day" });
     await expect(days.getByRole("radio").first()).toContainText("Closed", { timeout: 15_000 });
     await expect(days.getByRole("radio").nth(1)).toContainText(/\d+ free/);
-    await expect(page.getByRole("radiogroup", { name: "When suits you?" }).getByRole("radio", { name: "Any time" })).toBeVisible();
+    // The times of day are no longer a filter above the days.
+    await expect(page.getByRole("radiogroup", { name: "When suits you?" })).toHaveCount(0);
     await page.getByRole("button", { name: "Whole month" }).click();
     await expect(page.getByRole("button", { name: "Next month" })).toBeVisible();
   });

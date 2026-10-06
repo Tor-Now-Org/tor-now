@@ -1479,9 +1479,6 @@ input[type="time"]::selection{background:transparent;color:transparent}
 .month-legend .lf::before{background:var(--caution)}
 .month-legend .lo::before{background:var(--sunken);border:1px dashed var(--faint)}
 .month-legend .ll::before{background:none;border:1px dotted var(--faint)}
-.part-choice{display:flex;gap:8px;flex-wrap:wrap}
-.part-choice .chip{min-height:38px;padding:0 14px;border:1px solid var(--line);background:var(--raised);color:var(--ink)}
-.part-choice .chip[aria-checked="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .none-soon{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:14px;background:var(--sunken);border:1px dashed var(--line)}
 .none-soon b{font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:15px;color:var(--ink)}
 .none-soon span{font-size:12.5px;line-height:1.6;color:var(--muted)}

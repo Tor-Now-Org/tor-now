@@ -6,7 +6,7 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import type { DayAvailabilityDto, SlotDto } from "@/lib/api/types.ts";
 import { spanOfMinutes } from "@/lib/span-text.ts";
 import { openingText } from "./customer/day-words.ts";
-import { firstWaitablePart, whenOpens, type PartChoice } from "./customer/days-model.ts";
+import { firstWaitablePart, whenOpens } from "./customer/days-model.ts";
 import { Empty, Note } from "./ui.tsx";
 
 /** Below an hour, a notice is not worth saying in the sentence that sends someone to the phone. */
@@ -30,8 +30,6 @@ export const SlotGrid = ({
   businessPhone,
   onWaitFor,
   waitingFor,
-  part = "any",
-  onShowAll,
   bookingWindow,
 }: {
   day: DayAvailabilityDto;
@@ -66,18 +64,12 @@ export const SlotGrid = ({
    * checking whether the first one worked.
    */
   waitingFor?: readonly PartOfDay[] | undefined;
-  /** ADR 0026: the part of the day the customer chose; only its times are shown. */
-  part?: PartChoice;
-  /** Back to every hour, from a day with nothing in the chosen part. */
-  onShowAll?: () => void;
   /** The booking window, for saying when a day opens and how much notice is asked. */
   bookingWindow: { today: string; horizonDays: number; noticeMinutes: number };
 }) => {
   const { language } = useLanguage();
   const words = useCopy("days");
   const waiting = waitingFor ?? [];
-  const partWord = (chosen: PartOfDay) =>
-    chosen === "morning" ? words.inMorning : chosen === "noon" ? words.inNoon : words.inEvening;
 
   // ADR 0026: a day with nothing to book says why, and offers what that reason
   // leaves: another day, the phone, or when it opens. Only a full day offers
@@ -163,34 +155,7 @@ export const SlotGrid = ({
     ORDER.indexOf(wanted) >= firstOpenPart &&
     day.openParts.includes(asWirePart(wanted));
 
-  // ADR 0026: a day free only at other times than the chosen ones says so, and
-  // offers every hour of it rather than leaving the customer to work out why.
-  if (part !== "any" && !day.slots.some((slot) => partOfDay(slot.startAt, timeZone) === part)) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <Empty
-          title={fillText(words.noneThenTitle, { part: partWord(part) })}
-          body={words.noneThenBody}
-          action={
-            onShowAll === undefined ? undefined : (
-              <button type="button" className="quiet" style={{ width: "auto", padding: "0 22px" }} onClick={onShowAll}>
-                {words.showAllHours}
-              </button>
-            )
-          }
-        />
-        {offersWaitFor(part) && onWaitFor !== undefined && (
-          <WaitButton
-            waiting={waiting.includes(part)}
-            label={(waiting.includes(part) ? labels.waitingForPart : labels.waitForPart).replace("{part}", labels[part])}
-            onClick={() => onWaitFor(part)}
-          />
-        )}
-      </div>
-    );
-  }
-
-  const grouped = ORDER.filter((each) => part === "any" || each === part).map((part) => ({
+  const grouped = ORDER.map((part) => ({
     part,
     slots: day.slots.filter((slot) => partOfDay(slot.startAt, timeZone) === part),
   }))

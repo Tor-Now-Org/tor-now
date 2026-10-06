@@ -10,9 +10,7 @@ import {
   monthWeeks,
   monthsOf,
   pagesFor,
-  readPart,
   reachesPastStrip,
-  slotsIn,
   stripDates,
   whenOpens,
 } from "./days-model.ts";
@@ -41,35 +39,9 @@ const MORNING_AND_EVENING = aDay({
   slots: [at("2026-10-13", "09:30"), at("2026-10-13", "10:00"), at("2026-10-13", "17:00")],
 });
 
-describe("slotsIn — the times a part of the day keeps", () => {
-  it("keeps every time for any time", () => {
-    expect(slotsIn(MORNING_AND_EVENING, "any", ZONE)).toHaveLength(3);
-  });
-
-  it("keeps the morning's", () => {
-    expect(slotsIn(MORNING_AND_EVENING, "morning", ZONE)).toHaveLength(2);
-  });
-
-  it("keeps the evening's, from 17:00 on", () => {
-    expect(slotsIn(MORNING_AND_EVENING, "evening", ZONE)).toEqual([at("2026-10-13", "17:00")]);
-  });
-
-  it("keeps none at noon when nothing starts then", () => {
-    expect(slotsIn(MORNING_AND_EVENING, "noon", ZONE)).toEqual([]);
-  });
-});
-
 describe("markOf — what a day says before it is opened", () => {
   it("counts the free times", () => {
-    expect(markOf(MORNING_AND_EVENING, "any", ZONE, TODAY, 60)).toEqual({ kind: "free", count: 3 });
-  });
-
-  it("counts only the chosen part", () => {
-    expect(markOf(MORNING_AND_EVENING, "morning", ZONE, TODAY, 60)).toEqual({ kind: "free", count: 2 });
-  });
-
-  it("says none then when the day is free only at other times", () => {
-    expect(markOf(MORNING_AND_EVENING, "noon", ZONE, TODAY, 60)).toEqual({ kind: "noneThen" });
+    expect(markOf(MORNING_AND_EVENING, TODAY, 60)).toEqual({ kind: "free", count: 3 });
   });
 
   it.each([
@@ -78,26 +50,22 @@ describe("markOf — what a day says before it is opened", () => {
     ["TOO_SOON", { kind: "call" }],
     ["DAY_OVER", { kind: "over" }],
   ] as const)("names an empty day by its reason: %s", (reason, mark) => {
-    expect(markOf(aDay({ emptyReason: reason }), "any", ZONE, TODAY, 60)).toEqual(mark);
-  });
-
-  it("keeps the reason whatever part is chosen", () => {
-    expect(markOf(aDay({ emptyReason: "FULLY_BOOKED" }), "evening", ZONE, TODAY, 60)).toEqual({ kind: "full" });
+    expect(markOf(aDay({ emptyReason: reason }), TODAY, 60)).toEqual(mark);
   });
 
   it("says when a day past the horizon opens", () => {
-    expect(markOf(aDay({ date: "2026-10-13", emptyReason: "BEYOND_HORIZON" }), "any", ZONE, TODAY, 7)).toEqual({
+    expect(markOf(aDay({ date: "2026-10-13", emptyReason: "BEYOND_HORIZON" }), TODAY, 7)).toEqual({
       kind: "later",
       when: { kind: "today" },
     });
   });
 
   it("is still loading while the day has not answered", () => {
-    expect(markOf(undefined, "any", ZONE, TODAY, 60)).toEqual({ kind: "loading" });
+    expect(markOf(undefined, TODAY, 60)).toEqual({ kind: "loading" });
   });
 
   it("reads a day with no times and no reason as full rather than inventing one", () => {
-    expect(markOf(aDay(), "any", ZONE, TODAY, 60)).toEqual({ kind: "full" });
+    expect(markOf(aDay(), TODAY, 60)).toEqual({ kind: "full" });
   });
 });
 
@@ -204,19 +172,15 @@ describe("firstFree — the day the page opens on", () => {
   const dates = Object.keys(days);
 
   it("is the first day with a free time", () => {
-    expect(firstFree(dates, days, "any", ZONE)).toBe("2026-10-08");
-  });
-
-  it("is the first with a free time in the chosen part", () => {
-    expect(firstFree(dates, days, "morning", ZONE)).toBe("2026-10-09");
+    expect(firstFree(dates, days)).toBe("2026-10-08");
   });
 
   it("is nothing when no day has one", () => {
-    expect(firstFree(dates, days, "noon", ZONE)).toBeNull();
+    expect(firstFree(dates.slice(0, 2), days)).toBeNull();
   });
 
   it("does not skip past a day still loading", () => {
-    expect(firstFree(["2026-10-05", ...dates], days, "any", ZONE)).toBeNull();
+    expect(firstFree(["2026-10-05", ...dates], days)).toBeNull();
   });
 });
 
@@ -261,16 +225,6 @@ describe("the month", () => {
     expect(cellOf(TODAY, TODAY, "2026-12-05")).toBe("open");
     expect(cellOf("2026-12-05", TODAY, "2026-12-05")).toBe("open");
     expect(cellOf("2026-12-06", TODAY, "2026-12-05")).toBe("later");
-  });
-});
-
-describe("readPart — the remembered Part of Day", () => {
-  it.each(["any", "morning", "noon", "evening"] as const)("keeps %s", (part) => {
-    expect(readPart(part)).toBe(part);
-  });
-
-  it.each([null, "", "night", "MORNING", "{}"])("falls back to any time for %s", (stored) => {
-    expect(readPart(stored)).toBe("any");
   });
 });
 

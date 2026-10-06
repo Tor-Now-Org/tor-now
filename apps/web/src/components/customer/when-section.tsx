@@ -8,7 +8,7 @@ import { useCopy } from "@/lib/i18n/index.tsx";
 import { spanOfDays, spanOfMinutes } from "@/lib/span-text.ts";
 import { SlotGrid } from "../slot-grid.tsx";
 import { Spinner } from "../ui.tsx";
-import { DayStrip, PartChoiceRow } from "./day-strip.tsx";
+import { DayStrip } from "./day-strip.tsx";
 import { MonthSheet } from "./month-sheet.tsx";
 import type { useChoosingDay } from "./use-choosing-day.ts";
 
@@ -16,8 +16,8 @@ import type { useChoosingDay } from "./use-choosing-day.ts";
 const NOTICE_LINE_FROM_MINUTES = 24 * 60;
 
 /**
- * "בוחרים שעה": the Part of Day, the days and what each holds, the month, and
- * the times of the day being looked at. ADR 0026.
+ * "בוחרים שעה": the days and what each holds, the month, and the times of the
+ * day being looked at. ADR 0026.
  */
 export const WhenSection = ({
   business,
@@ -42,25 +42,19 @@ export const WhenSection = ({
   const copy = useCopy("customer");
   const words = useCopy("days");
   const [monthOpen, setMonthOpen] = useState(false);
-  const { part } = chooser;
-  const partWord = part === "morning" ? words.inMorning : part === "noon" ? words.inNoon : words.inEvening;
 
-  const noneSoonBody =
-    part !== "any"
-      ? words.noneSoonPart
-      : [
-          chooser.showsMonth
-            ? words.noneSoonMonth
-            : fillText(words.noneSoonOpening, { span: spanOfDays(business.bookingHorizonDays, words) }),
-          waitingList ? words.noneSoonWait : null,
-        ]
-          .filter((sentence): sentence is string => sentence !== null)
-          .join(" ");
+  const noneSoonBody = [
+    chooser.showsMonth
+      ? words.noneSoonMonth
+      : fillText(words.noneSoonOpening, { span: spanOfDays(business.bookingHorizonDays, words) }),
+    waitingList ? words.noneSoonWait : null,
+  ]
+    .filter((sentence): sentence is string => sentence !== null)
+    .join(" ");
 
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <span className="label">{copy.chooseTime}</span>
-      <PartChoiceRow part={part} onChange={chooser.setPart} />
       {business.minimumNoticeMinutes >= NOTICE_LINE_FROM_MINUTES && (
         <p className="note" style={{ margin: 0 }}>
           {fillText(words.noticeLine, { notice: spanOfMinutes(business.minimumNoticeMinutes, words) })}{" "}
@@ -73,13 +67,7 @@ export const WhenSection = ({
       {/* Compact on purpose: the chosen day says its own reason right below. */}
       {chooser.noneSoon && (
         <div className="none-soon" role="status">
-          <b>
-            {part !== "any"
-              ? fillText(words.noneSoonPartTitle, { part: partWord })
-              : chooser.showsMonth
-                ? words.noneSoonTitle
-                : words.noneInWindowTitle}
-          </b>
+          <b>{chooser.showsMonth ? words.noneSoonTitle : words.noneInWindowTitle}</b>
           <span>{noneSoonBody}</span>
         </div>
       )}
@@ -88,7 +76,6 @@ export const WhenSection = ({
         marks={chooser.marks}
         today={chooser.today}
         selected={chooser.date}
-        part={part}
         onSelect={chooser.choose}
         nextOpening={chooser.nextOpening}
         onMonth={chooser.showsMonth ? () => setMonthOpen(true) : null}
@@ -116,8 +103,6 @@ export const WhenSection = ({
           businessPhone={business.phone}
           onWaitFor={onWaitFor}
           waitingFor={waitingFor}
-          part={part}
-          onShowAll={() => chooser.setPart("any")}
           bookingWindow={{
             today: chooser.today,
             horizonDays: business.bookingHorizonDays,
@@ -133,7 +118,6 @@ export const WhenSection = ({
           lastDay={chooser.lastDay}
           selected={chooser.date}
           days={chooser.days}
-          part={part}
           timeZone={business.timeZone}
           horizonDays={business.bookingHorizonDays}
           ensure={chooser.ensure}

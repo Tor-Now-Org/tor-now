@@ -1,15 +1,12 @@
 import { formatLocalDate, weekdayOf } from "@/lib/format.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import type { DICTIONARIES, Language } from "@/lib/i18n/dictionaries.ts";
-import type { Mark, Opening, PartChoice } from "./days-model.ts";
+import type { Mark, Opening } from "./days-model.ts";
 
 /** ADR 0026: the words a day says, as pure functions of its mark. */
 type Words = { readonly [Key in keyof (typeof DICTIONARIES)["days"]["he"]]: string };
 
 const SHORT_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "numeric" };
-
-const partWord = (part: PartChoice, words: Words): string =>
-  part === "morning" ? words.inMorning : part === "noon" ? words.inNoon : part === "evening" ? words.inEvening : "";
 
 /** "בהמשך היום", "מחר", or "ב-21.10" — for a sentence. */
 export const openingText = (when: Opening, words: Words, language: Language): string =>
@@ -27,13 +24,10 @@ const openingShort = (when: Opening, words: Words, language: Language): string =
       ? words.tomorrow
       : formatLocalDate(when.date, language, SHORT_DATE);
 
-export const markText = (mark: Mark, part: PartChoice, words: Words, language: Language): string => {
+export const markText = (mark: Mark, words: Words, language: Language): string => {
   switch (mark.kind) {
     case "free":
-      if (part !== "any") return fillText(words.markPart, { count: String(mark.count), part: partWord(part, words) });
       return mark.count === 1 ? words.markFreeOne : fillText(words.markFree, { count: String(mark.count) });
-    case "noneThen":
-      return fillText(words.markNoneThen, { part: partWord(part, words) });
     case "full":
       return words.markFull;
     case "closed":
@@ -49,18 +43,10 @@ export const markText = (mark: Mark, part: PartChoice, words: Words, language: L
   }
 };
 
-export const markAria = (mark: Mark, part: PartChoice, words: Words, language: Language): string => {
-  const inPart = partWord(part, words);
+export const markAria = (mark: Mark, words: Words, language: Language): string => {
   switch (mark.kind) {
     case "free":
-      if (part !== "any") {
-        return mark.count === 1
-          ? fillText(words.ariaPartOne, { part: inPart })
-          : fillText(words.ariaPart, { count: String(mark.count), part: inPart });
-      }
       return mark.count === 1 ? words.ariaFreeOne : fillText(words.ariaFree, { count: String(mark.count) });
-    case "noneThen":
-      return fillText(words.ariaNoneThen, { part: inPart });
     case "full":
       return words.ariaFull;
     case "closed":
