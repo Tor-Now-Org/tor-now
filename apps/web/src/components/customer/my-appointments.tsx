@@ -11,6 +11,7 @@ import { outcomeOfDto } from "../owner/appointment-sheet.tsx";
 import { colourOf } from "../owner/event-colour.ts";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
+import { CalendarPlusIcon } from "./booking-flow.tsx";
 import { Button, Card, Critical, Empty, MultilineField, Sheet, Spinner, Warning } from "../ui.tsx";
 
 /**
@@ -219,6 +220,7 @@ export const MyAppointments = ({
   const ACTION: React.CSSProperties = {
     minHeight: 36,
     padding: "0 12px",
+    gap: 6,
     fontSize: 12.5,
     background: "var(--raised)",
     border: "1px solid var(--line)",
@@ -232,6 +234,7 @@ export const MyAppointments = ({
         onClick={() => openInGoogleCalendar(appointment)}
         style={{ ...ACTION, color: "var(--accent-strong)" }}
       >
+        <CalendarPlusIcon />
         {copy.addToCalendar}
       </button>
       <button

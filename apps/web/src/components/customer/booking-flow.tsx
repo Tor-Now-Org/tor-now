@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api/client.ts";
 import { isApiError, isRecoverableSlotError } from "@/lib/api/errors.ts";
 import type {
+  AppointmentDto,
   WaitingDto,
   BusinessDto,
   BusinessProfileDto,
@@ -14,6 +15,7 @@ import type {
 } from "@/lib/api/types.ts";
 import { distanceKm, distanceLabel } from "@/lib/distance.ts";
 import {
+  countdownTo,
   formatLocalDate,
   formatPrice,
   timeIn,
@@ -46,7 +48,7 @@ const key = (
     ? null
     : `${serviceId}|${resourceId}|${date}`;
 
-type Stage = "choosing" | "confirming" | "verifying" | "done";
+type Stage = "choosing" | "confirming" | "verifying" | "done" | "cancelled";
 
 /** Error details are unknown by type; take a string only when it is one. */
 const aString = (value: unknown, fallback: string): string =>
@@ -196,6 +198,9 @@ export const BookingFlow = ({
   >(null);
   /** The answers given so far, carried into every following attempt. */
   const [answered, setAnswered] = useState({ sameService: false, overlap: false });
+  /** What was just booked, kept for the done screen and the cancel on it. */
+  const [booked, setBooked] = useState<AppointmentDto | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   /** The service, calendar and day the profile response already answered for. */
   const alreadyHave = useRef<string | null>(null);
@@ -282,7 +287,7 @@ export const BookingFlow = ({
     setBusy(true);
     setError(null);
     try {
-      await api.book(token, {
+      const made = await api.book(token, {
         businessId: business.id,
         serviceId: service.id,
         resourceId: resource.id,
@@ -291,6 +296,7 @@ export const BookingFlow = ({
         ...(answers.sameService ? { bookingAnotherOfTheSame: true } : {}),
         ...(answers.overlap ? { bookingOverAnother: true } : {}),
       });
+      setBooked(made);
       setStage("done");
     } catch (cause) {
       const asking =
@@ -406,17 +412,200 @@ export const BookingFlow = ({
       ? `https://www.google.com/maps/search/?api=1&query=${business.latitude},${business.longitude}`
       : null;
 
-  if (stage === "done") {
+  /**
+   * Taken back from the screen that made it. The Cancellation Window warns, it
+   * never forbids, so the button is always there and only the warning depends
+   * on the clock — the same rule as on My appointments.
+   */
+  const cancelBooked = async () => {
+    if (token === null || booked === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.cancel(token, booked.id);
+      setCancelling(false);
+      setBooked(null);
+      setSlot(null);
+      setStage("cancelled");
+    } catch (cause) {
+      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (stage === "cancelled") {
     return (
       <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, alignItems: "center", textAlign: "center" }}>
-        <div style={{ display: "grid", placeItems: "center", width: 64, height: 64, borderRadius: 999, background: "var(--positive-soft)" }}>
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="m5 12.5 4.5 4.5L19 7.5" stroke="var(--positive)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+        <h2 style={{ fontSize: 22 }}>{copy.cancelledTitle}</h2>
+        <p className="hint" style={{ margin: 0 }}>{copy.cancelledBody}</p>
+        <Button
+          onClick={() => {
+            setStage("choosing");
+            void loadDay();
+          }}
+        >
+          {copy.pickAnotherTime}
+        </Button>
+        <Button intent="quiet" onClick={onFinished}>{copy.toMine}</Button>
+      </div>
+    );
+  }
+
+  if (stage === "done" && booked !== null) {
+    const day = new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
+      timeZone: business.timeZone,
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+    const span = `${timeIn(booked.startAt, business.timeZone, language)}–${timeIn(booked.endAt, business.timeZone, language)}`;
+    // Where the Cancellation Window opens. Zero means the business asks for no
+    // notice, and then there is no "until" worth naming.
+    const windowOpens =
+      business.cancellationWindowHours > 0
+        ? new Date(new Date(booked.startAt).getTime() - business.cancellationWindowHours * 3_600_000)
+        : null;
+    const late = windowOpens !== null && windowOpens.getTime() <= Date.now();
+    const untilText =
+      windowOpens === null
+        ? null
+        : `${new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", {
+            timeZone: business.timeZone,
+            weekday: "short",
+            day: "numeric",
+            month: "numeric",
+          }).format(windowOpens)}, ${timeIn(windowOpens.toISOString(), business.timeZone, language)}`;
+    const calendarHref = `https://calendar.google.com/calendar/render?${new URLSearchParams({
+      action: "TEMPLATE",
+      text: `${booked.serviceName} - ${business.name}`,
+      dates: [booked.startAt, booked.endAt]
+        .map((iso) => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z"))
+        .join("/"),
+    })}`;
+    const tick = (
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="m5 12.5 4.5 4.5L19 7.5" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+    const step = (done: boolean, title: string, detail: string, last = false, action?: ReactNode) => (
+      <li style={{ display: "grid", gridTemplateColumns: "22px 1fr", gap: 10, position: "relative", paddingBottom: last ? 0 : 14 }}>
+        {!last && (
+          <span aria-hidden="true" style={{ position: "absolute", insetInlineStart: 10, top: 22, bottom: 0, width: 2, background: "var(--line)" }} />
+        )}
+        <span
+          style={{
+            width: 22, height: 22, borderRadius: 999, display: "grid", placeItems: "center",
+            border: `2px solid ${done ? "var(--positive)" : "var(--line)"}`,
+            background: done ? "var(--positive)" : "var(--raised)",
+          }}
+        >
+          {done && tick}
+        </span>
+        <div>
+          <b style={{ display: "block", fontWeight: 600, fontSize: 14 }}>{title}</b>
+          <span className="hint" style={{ fontSize: 12.5, display: "block" }}>{detail}</span>
+          {action}
         </div>
-        <h2 style={{ fontSize: 22 }}>{copy.done}</h2>
-        <p className="hint" style={{ margin: 0 }}>{copy.doneBody}</p>
-        <Button onClick={onFinished}>{copy.toMine}</Button>
+      </li>
+    );
+
+    return (
+      <div className="booked">
+        <div className="booked-hero">
+          <span
+            style={{
+              alignSelf: "start", display: "inline-flex", alignItems: "center", gap: 6,
+              background: "oklch(100% 0 0 / .12)", borderRadius: 999, padding: "4px 10px 4px 8px",
+              fontSize: 12.5, fontWeight: 600,
+            }}
+          >
+            <span style={{ width: 16, height: 16, borderRadius: 999, background: "var(--cyan)", display: "grid", placeItems: "center" }}>
+              {tick}
+            </span>
+            {copy.done}
+          </span>
+          {/* "In 2 days" is the answer; the date under it is the proof. */}
+          <h2 className="booked-countdown">
+            {countdownTo(booked.startAt, language)}
+          </h2>
+          <span className="tab" style={{ opacity: 0.85, fontSize: 15 }}>
+            {day.format(new Date(booked.startAt))} · {span}
+          </span>
+          {/* Each action sits beside what it acts on: the calendar by the date,
+              directions by the address, cancelling by its deadline. */}
+          <a className="booked-action on-navy" href={calendarHref} target="_blank" rel="noreferrer">
+            <CalendarPlusIcon />
+            {copy.addToCalendar}
+          </a>
+        </div>
+
+        <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Row label={copy.atBusiness} value={business.name} />
+          <Row label={copy.service} value={booked.serviceName} />
+          {booked.resourceName != null && booked.resourceName !== "" && (
+            <Row label={copy.who} value={booked.resourceName} />
+          )}
+          {service !== null && (
+            <Row label={copy.priceLabel} value={formatPrice(service.priceMinor, language, copy.free)} />
+          )}
+          {(business.address !== null || mapsHref !== null) && (
+            <Row
+              label={copy.where}
+              value={business.address ?? ""}
+              action={
+                mapsHref !== null && (
+                  <a className="booked-action" href={mapsHref} target="_blank" rel="noreferrer">
+                    <PinIcon />
+                    {copy.directions}
+                  </a>
+                )
+              }
+            />
+          )}
+          {booked.customerNote !== null && booked.customerNote !== "" && (
+            <Row label={copy.customerNote} value={booked.customerNote} />
+          )}
+        </Card>
+
+        <div className="booked-side">
+        <Card>
+          <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {step(true, copy.doneSent, copy.doneSentWhen)}
+            {step(
+              false,
+              untilText !== null && !late ? copy.freeToCancelUntil : copy.cancelAnyTime,
+              untilText !== null && !late ? untilText : copy.toMine,
+              true,
+              <button className="booked-cancel" onClick={() => setCancelling(true)}>
+                {copy.cancelAppointment}
+              </button>,
+            )}
+          </ol>
+        </Card>
+        </div>
+
+        {/* The way forward, pinned above the bottom bar on a phone. */}
+        <div className="booked-go">
+          <Button onClick={onFinished}>{copy.toMine}</Button>
+        </div>
+
+        <Sheet open={cancelling} onClose={() => setCancelling(false)} labelledBy="cancel-booked-title">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h2 id="cancel-booked-title" style={{ fontSize: 20 }}>{copy.cancelAppointment}</h2>
+            <p className="hint tab" style={{ margin: 0 }}>
+              {booked.serviceName} · {day.format(new Date(booked.startAt))} · {span}
+            </p>
+            {late && <Warning>{copy.lateWarning}</Warning>}
+            {error !== null && <Critical>{error}</Critical>}
+            <Button intent="danger" onClick={() => void cancelBooked()} busy={busy}>
+              {copy.cancelAppointment}
+            </Button>
+            <Button intent="quiet" onClick={() => setCancelling(false)}>
+              {copy.keepIt}
+            </Button>
+          </div>
+        </Sheet>
       </div>
     );
   }
@@ -983,9 +1172,26 @@ const WhatsAppMark = () => (
   </svg>
 );
 
-const Row = ({ label, value }: { label: string; value: string }) => (
+const Row = ({ label, value, action }: { label: string; value: string; action?: ReactNode }) => (
   <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
     <span className="label" style={{ minWidth: 64 }}>{label}</span>
-    <span style={{ fontSize: 15, fontWeight: 500 }}>{value}</span>
+    <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+      <span style={{ fontSize: 15, fontWeight: 500, whiteSpace: "pre-wrap" }}>{value}</span>
+      {action}
+    </span>
   </div>
+);
+
+export const CalendarPlusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="5" width="18" height="16" rx="3" />
+    <path d="M3 10h18M8 3v4M16 3v4M12 13.5v5M9.5 16h5" />
+  </svg>
+);
+
+const PinIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
+    <circle cx="12" cy="10" r="2.4" />
+  </svg>
 );

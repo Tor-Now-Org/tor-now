@@ -633,6 +633,39 @@ body {
  * rail depending only on the space it is given.
  * ------------------------------------------------------------------------- */
 
+/* The screen after booking. On a phone, one column whose navy band carries
+   the answer and the cards sit half on it; the way forward is pinned above the
+   bottom bar. On a desktop the band becomes a full-height panel beside the
+   details. Every other action sits beside what it acts on, not in a toolbar. */
+.booked{display:grid;gap:16px;padding:22px 18px 0;
+  background:linear-gradient(180deg,var(--brand-navy) 0 230px,transparent 230px)}
+.booked-hero{color:#fff;display:flex;flex-direction:column;gap:6px}
+.booked-countdown{font-size:42px;line-height:1.05;margin-top:10px;color:#fff}
+.booked-side{display:grid;gap:16px;align-content:start}
+.booked-go{position:sticky;bottom:0;margin-inline:-18px;padding:10px 18px;
+  background:var(--raised);border-top:1px solid var(--line)}
+.booked-action{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;
+  font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:13px;
+  background:var(--accent-soft);color:var(--accent-strong)}
+.booked-action:hover{color:var(--accent-strong);background:oklch(92% 0.04 235)}
+.booked-action.on-navy{align-self:start;margin-top:8px;color:#fff;
+  background:oklch(100% 0 0 / .14);border:1px solid oklch(100% 0 0 / .22)}
+.booked-action.on-navy:hover{color:#fff;background:oklch(100% 0 0 / .22)}
+/* Cancelling sits under its own deadline: findable, never the biggest target. */
+.booked-cancel{min-height:40px;margin-top:2px;color:var(--critical);
+  font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:13px}
+@media (min-width: 1024px) {
+  /* ponytail: the one screen that opts out of the reading measure — it is a
+     summary to glance at, not text to read, so it takes the whole content area. */
+  .app-shell > main:has(.booked) { width: 100%; }
+  .booked{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:16px 24px;padding:28px 32px;background:none}
+  .booked-hero{grid-column:1/-1;background:var(--brand-navy);border-radius:22px;padding:30px 30px 28px;gap:8px}
+  .booked-countdown{font-size:56px}
+  .booked-side{gap:12px}
+  .booked-go{grid-column:1/-1;position:static;margin:0;padding:0;border:0;background:none;justify-self:start}
+  .booked-go > button{width:auto;padding-inline:24px}
+}
+
 /* A tablet, or a half-screen window: more room, but not enough for a rail
    beside a full measure. The shell breathes; the navigation stays put. */
 @media (min-width: 720px) {
