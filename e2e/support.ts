@@ -319,17 +319,22 @@ export const theNextOfferedTime = async (
   );
 };
 
-/** Select one day of the strip by its distance from today. */
+/**
+ * Select one day of the strip by its distance from today.
+ *
+ * Today too: ADR 0026 opens the page on the first day with room, which need not
+ * be today, so "day 0" is a tap like any other rather than where the page starts.
+ */
 export const showDay = async (page: Page, day: number): Promise<void> => {
-  if (day === 0) return;
-  await page.getByRole("radiogroup", { name: TODAY }).getByRole("radio").nth(day).click();
+  await page.getByRole("radiogroup", { name: DAY_STRIP }).getByRole("radio").nth(day).click();
 };
 
-/** What the screen says instead of times. */
-const NO_TIMES = "אין תורים פנויים ביום הזה";
+/** What the screen says instead of times, whichever reason emptied the day (ADR 0026). */
+const NO_TIMES =
+  /אין תורים פנויים ביום הזה|העסק סגור ביום הזה|היום כבר הסתיים|קרוב מדי לקביעה באתר|עוד לא נפתח לקביעה/;
 
-/** The date strip names itself with the word on its first day. */
-const TODAY = "היום";
+/** The days are one radio group, named for what it is for. */
+export const DAY_STRIP = "בחירת יום";
 /** Enough to clear a closed evening and a full tomorrow; short enough to fail fast. */
 const DAYS_TO_TRY = 3;
 const SLOTS_APPEAR_WITHIN = 15_000;
@@ -433,9 +438,7 @@ export const showTheDayOf = async (page: Page, startAt: string): Promise<void> =
   );
   for (let day = 0; day < DAYS_TO_TRY; day += 1) {
     if (aDayFromNow(day) !== wanted) continue;
-    if (day > 0) {
-      await page.getByRole("radiogroup", { name: TODAY }).getByRole("radio").nth(day).click();
-    }
+    await page.getByRole("radiogroup", { name: DAY_STRIP }).getByRole("radio").nth(day).click();
     return;
   }
   throw new Error(`${wanted} is not among the next ${DAYS_TO_TRY} days on the strip.`);

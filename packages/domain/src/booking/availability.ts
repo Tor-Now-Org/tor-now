@@ -3,9 +3,10 @@ import type { Business, Resource, Service } from "../model/business.ts";
 import { occupiedMinutes } from "../model/business.ts";
 import type { BlockedSpan, DateOverride, WorkingHours } from "../model/schedule.ts";
 import type { Instant } from "../time/instant.ts";
-import { addMinutesToInstant } from "../time/instant.ts";
+import { addMinutesToInstant, minutesBetweenInstants } from "../time/instant.ts";
 import type { LocalDate } from "../time/local-date.ts";
-import { bookingWindowFor, isTrimmedByNotice } from "./booking-window.ts";
+import type { Interval } from "../time/interval.ts";
+import { bookingWindowFor, type BookingWindow } from "./booking-window.ts";
 import { bufferForBooking, freeIntervalsOn } from "./free-intervals.ts";
 import { greedyWalk, type Slot, type SlotGenerationStrategy } from "./slots.ts";
 import { zonedToInstant } from "../time/zone.ts";
@@ -26,18 +27,34 @@ export type AvailabilityRequest = {
 };
 
 /**
- * Why a day has no Slots. ADR 0012 asks the near-end case to surface the
- * Business's phone number rather than a bare refusal, so the interface needs to
- * tell the three apart.
+ * Why a day has no Slots, which is what the customer's day says before it is
+ * opened (ADR 0026).
+ *
+ * - CLOSED: the calendar does not work that day, or works too little of it to
+ *   hold the Service.
+ * - DAY_OVER: its hours have already been and gone.
+ * - TOO_SOON: open hours lie between now and the minimum notice. ADR 0012 asks
+ *   for the Business's phone number here rather than a bare refusal.
+ * - BEYOND_HORIZON: its open hours lie past the booking horizon, and open as
+ *   the window moves.
+ * - FULLY_BOOKED: the window holds open hours, and they are taken.
  */
 export const EMPTY_REASONS = [
   "CLOSED",
   "FULLY_BOOKED",
   "TOO_SOON",
   "BEYOND_HORIZON",
+  "DAY_OVER",
 ] as const;
 
 export type EmptyReason = (typeof EMPTY_REASONS)[number];
+
+/**
+ * The most days one availability request may cover (ADR 0026). A month is the
+ * longest span the customer's screen draws at once; without a cap one request
+ * could ask the database to resolve a year of schedule.
+ */
+export const MAX_AVAILABILITY_DAYS = 31;
 
 export type DayAvailability = {
   readonly date: LocalDate;
@@ -46,6 +63,12 @@ export type DayAvailability = {
   readonly emptyReason: EmptyReason | null;
   /** The parts of the day this calendar works at all, whatever is booked. */
   readonly openParts: readonly PartOfDay[];
+  /**
+   * Some of the day's open hours, long enough for the Service, lie past the
+   * booking horizon: they open as the window moves. True on the window's last,
+   * partly open day and on every day wholly beyond it.
+   */
+  readonly partlyBeyondHorizon: boolean;
 };
 
 const startOfDay = (request: AvailabilityRequest): Instant =>
@@ -83,25 +106,26 @@ export const availableSlotsOn = (
   const openParts = partsOfDayOpen(
     openIntervalsOn(date, request.workingHours, request.overrides),
   );
+  const open = openStretchesOf(request);
+  const fits = holdsTheService(open, service.durationMinutes);
+  const dayEnd = endOfDay(request);
+  const partlyBeyondHorizon = fits(window.end, dayEnd);
   if (slots.length > 0) {
-    return { date, slots, emptyReason: null, openParts };
+    return { date, slots, emptyReason: null, openParts, partlyBeyondHorizon };
   }
 
-  return { date, slots: [], emptyReason: emptyReasonFor(request, window), openParts };
+  return {
+    date,
+    slots: [],
+    emptyReason: emptyReasonFor(open, fits, window, now, dayEnd),
+    openParts,
+    partlyBeyondHorizon,
+  };
 };
 
-const emptyReasonFor = (
-  request: AvailabilityRequest,
-  window: { start: Instant; end: Instant },
-): EmptyReason => {
-  const dayStart = startOfDay(request);
-  const dayEnd = endOfDay(request);
-
-  if (isTrimmedByNotice(window, dayEnd)) return "TOO_SOON";
-  if (dayStart >= window.end) return "BEYOND_HORIZON";
-
-  // The day is inside the window, so the schedule itself is what emptied it.
-  const openAtAll = freeIntervalsOn({
+/** The day's open hours as instants, before anything is booked or blocked. */
+const openStretchesOf = (request: AvailabilityRequest): readonly Interval<Instant>[] =>
+  freeIntervalsOn({
     date: request.date,
     timeZone: request.business.timeZone,
     workingHours: request.workingHours,
@@ -109,10 +133,44 @@ const emptyReasonFor = (
     blocks: [],
     occupied: [],
     bufferMinutes: 0,
-    window: { start: dayStart, end: dayEnd },
+    window: { start: startOfDay(request), end: endOfDay(request) },
   });
 
-  return openAtAll.length === 0 ? "CLOSED" : "FULLY_BOOKED";
+/**
+ * Whether some open stretch, cut to [from, to), is still long enough for the
+ * Service. A sliver shorter than the Service is not a time anyone could have,
+ * so it never decides why a day is empty.
+ */
+const holdsTheService =
+  (open: readonly Interval<Instant>[], durationMinutes: number) =>
+  (from: Instant, to: Instant): boolean =>
+    open.some(
+      (stretch) =>
+        minutesBetweenInstants(
+          stretch.start > from ? stretch.start : from,
+          stretch.end < to ? stretch.end : to,
+        ) >= durationMinutes,
+    );
+
+/**
+ * Judged by the open hours inside and around the window, in the order a
+ * customer would ask: does the shop work then, could the window hold one, is it
+ * the notice that is in the way, is it the horizon, or has the day been and
+ * gone.
+ */
+const emptyReasonFor = (
+  open: readonly Interval<Instant>[],
+  fits: (from: Instant, to: Instant) => boolean,
+  window: BookingWindow,
+  now: Instant,
+  dayEnd: Instant,
+): EmptyReason => {
+  if (open.length === 0) return "CLOSED";
+  if (fits(window.start, window.end)) return "FULLY_BOOKED";
+  if (fits(now, window.start)) return "TOO_SOON";
+  if (fits(window.end, dayEnd)) return "BEYOND_HORIZON";
+  if (open.some((stretch) => stretch.start < now)) return "DAY_OVER";
+  return "CLOSED";
 };
 
 /** The span a booking of this Service would occupy, starting at `startAt`. */

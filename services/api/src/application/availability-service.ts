@@ -34,6 +34,7 @@ export type DaySlots = {
   readonly slots: readonly { startAt: string; endAt: string }[];
   readonly emptyReason: DayAvailability["emptyReason"];
   readonly openParts: DayAvailability["openParts"];
+  readonly partlyBeyondHorizon: DayAvailability["partlyBeyondHorizon"];
 };
 
 export type AvailabilityQuery = {
@@ -99,6 +100,7 @@ export const availabilityFor = async (
       date,
       emptyReason: availability.emptyReason,
       openParts: availability.openParts,
+      partlyBeyondHorizon: availability.partlyBeyondHorizon,
       slots: availability.slots.map((slot) => ({
         startAt: formatInstant(slot.startAt),
         endAt: formatInstant(slot.endAt),

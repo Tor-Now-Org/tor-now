@@ -217,7 +217,9 @@ describe("availableSlotsOn — the booking window", () => {
       request({
         workingHours: [workingHours(2, "09:00", "11:00")],
         business: aBusiness({ minimumNoticeMinutes: 60 }),
-        now: at(TUESDAY, "23:00"),
+        // 10:10 + an hour is past closing, though 10:10–11:00 could still hold
+        // an appointment. After closing time is a different answer: DAY_OVER.
+        now: at(TUESDAY, "10:10"),
       }),
     );
     expect(result.emptyReason).toBe("TOO_SOON");

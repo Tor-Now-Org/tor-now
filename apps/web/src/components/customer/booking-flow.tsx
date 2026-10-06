@@ -27,26 +27,15 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { CategoryTags } from "./category-tag.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useSession } from "@/lib/session.tsx";
-import { DateStrip } from "../date-strip.tsx";
 import { LogoMark } from "../logo.tsx";
-import { SlotGrid } from "../slot-grid.tsx";
 import { VerifyPanel } from "../verify-panel.tsx";
 import { BusinessPhotos } from "./business-photos.tsx";
 import { ReviewPrompt, ReviewSummary, useBusinessReviews } from "./business-reviews.tsx";
 import { WaitSheet } from "./wait-sheet.tsx";
+import { lastBookableDay, stripDates } from "./days-model.ts";
+import { useChoosingDay } from "./use-choosing-day.ts";
+import { WhenSection } from "./when-section.tsx";
 import { Button, Card, Critical, MultilineField, Sheet, Spinner, Warning } from "../ui.tsx";
-
-/** How much of the calendar the strip offers at once. */
-const VISIBLE_DAYS = 14;
-
-const key = (
-  serviceId: string | undefined,
-  resourceId: string | undefined,
-  date: string | undefined,
-): string | null =>
-  serviceId === undefined || resourceId === undefined || date === undefined
-    ? null
-    : `${serviceId}|${resourceId}|${date}`;
 
 type Stage = "choosing" | "confirming" | "verifying" | "done" | "cancelled";
 
@@ -73,8 +62,12 @@ export const BookingFlow = ({
   const [profile, setProfile] = useState<BusinessProfileDto | null>(null);
   const [service, setService] = useState<ServiceDto | null>(null);
   const [resource, setResource] = useState<ResourceDto | null>(null);
-  const [date, setDate] = useState(() => todayIn(business.timeZone));
-  const [day, setDay] = useState<DayAvailabilityDto | null>(null);
+  /** The first two weeks the business page already carried, for the first service and calendar. */
+  const [seed, setSeed] = useState<{
+    serviceId: string;
+    resourceId: string;
+    days: readonly DayAvailabilityDto[];
+  } | null>(null);
   const [slot, setSlot] = useState<SlotDto | null>(null);
   const [stage, setStage] = useState<Stage>("choosing");
   const [busy, setBusy] = useState(false);
@@ -90,6 +83,20 @@ export const BookingFlow = ({
   const [waitingFor, setWaitingFor] = useState<PartOfDay | null | undefined>(undefined);
   /** What this customer already has standing at this business. */
   const [waiting, setWaiting] = useState<readonly WaitingDto[]>([]);
+
+  const showError = useCallback(
+    (cause: unknown) => setError(errorText(isApiError(cause) ? cause.code : "INTERNAL")),
+    [errorText],
+  );
+  /** ADR 0026: the days, what each holds, and which one is being looked at. */
+  const chooser = useChoosingDay({
+    business,
+    serviceId: service?.id ?? null,
+    resourceId: resource?.id ?? null,
+    seed,
+    onError: showError,
+  });
+  const { date } = chooser;
 
 
   /**
@@ -202,72 +209,33 @@ export const BookingFlow = ({
   const [booked, setBooked] = useState<AppointmentDto | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
-  /** The service, calendar and day the profile response already answered for. */
-  const alreadyHave = useRef<string | null>(null);
-
   useEffect(() => {
     const today = todayIn(business.timeZone);
+    // ADR 0026: the business page carries the first two weeks for the first
+    // service and calendar, so the days can say what they hold at once.
+    const lastDay = lastBookableDay(new Date(), business.timeZone, business.bookingHorizonDays);
+    const firstPage = stripDates(today, lastDay, null);
     api
-      .businessProfile(business.id, { from: today, to: today })
+      .businessProfile(business.id, { from: firstPage[0]!, to: firstPage.at(-1)! })
       .then((loaded) => {
         setProfile(loaded);
-        setService(loaded.services[0] ?? null);
-        setResource(loaded.resources[0] ?? null);
-        // The first day came back with the profile, so the screen can draw
-        // times immediately instead of waiting for a second request. Remember
-        // which combination it answered, so the effect below does not
-        // immediately ask for the same thing again.
-        const first = loaded.availability?.[0];
-        if (first !== undefined) {
-          setDay(first);
-          alreadyHave.current = key(
-            loaded.services[0]?.id,
-            loaded.resources[0]?.id,
-            first.date,
-          );
+        const firstService = loaded.services[0] ?? null;
+        const firstResource = loaded.resources[0] ?? null;
+        setService(firstService);
+        setResource(firstResource);
+        if (firstService !== null && firstResource !== null && loaded.availability !== undefined) {
+          setSeed({ serviceId: firstService.id, resourceId: firstResource.id, days: loaded.availability });
         }
       })
       .catch((cause) => setError(errorText(isApiError(cause) ? cause.code : "INTERNAL")));
-  }, [business.id, business.timeZone, errorText]);
-
-  /**
-   * ADR 0003: availability is fetched on demand — when a service or date is
-   * chosen, when the customer returns from verifying, and again at
-   * confirmation. Nothing polls; correctness rests on the exclusion constraint
-   * and on re-validation at the moment of booking.
-   */
-  const loadDay = useCallback(async () => {
-    if (service === null || resource === null) return;
-    setBusy(true);
-    try {
-      const [loaded] = await api.availability(business.id, {
-        serviceId: service.id,
-        resourceId: resource.id,
-        from: date,
-        to: date,
-      });
-      setDay(loaded ?? null);
-    } catch (cause) {
-      setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
-    } finally {
-      setBusy(false);
-    }
-  }, [business.id, service, resource, date, errorText]);
+  }, [business.id, business.timeZone, business.bookingHorizonDays, errorText]);
 
   useEffect(() => {
     setSlot(null);
     // A booking error belongs to the choice that produced it; changing the
     // service, calendar or day makes it stale.
     setError(null);
-    // The profile may already have answered this exact question. Skip it once,
-    // then forget — every later change of service, calendar or day is a real
-    // request, because availability is never assumed to have stayed still.
-    if (alreadyHave.current === key(service?.id, resource?.id, date)) {
-      alreadyHave.current = null;
-      return;
-    }
-    void loadDay();
-  }, [loadDay, service, resource, date]);
+  }, [service, resource, date]);
 
   /**
    * `answers` carries what the customer has already said yes to. Both are false
@@ -326,7 +294,7 @@ export const BookingFlow = ({
         // time is asked again, against a list that is now current.
         setSlot(null);
         setStage("choosing");
-        await loadDay();
+        await chooser.refreshDay();
       }
     } finally {
       setBusy(false);
@@ -442,7 +410,8 @@ export const BookingFlow = ({
         <Button
           onClick={() => {
             setStage("choosing");
-            void loadDay();
+            // The time just given back is free again: the day is read anew.
+            void chooser.refreshDay();
           }}
         >
           {copy.pickAnotherTime}
@@ -835,54 +804,28 @@ export const BookingFlow = ({
         </section>
       )}
 
-      <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <span className="label">{copy.chooseTime}</span>
-        <DateStrip
-          from={todayIn(business.timeZone)}
-          days={Math.min(VISIBLE_DAYS, business.bookingHorizonDays)}
-          selected={date}
-          onSelect={setDate}
-          todayLabel={copy.today}
-          weekdayNames={copy.days}
-        />
-        {busy ? (
-          <Spinner />
-        ) : day !== null ? (
-          <SlotGrid
-            day={day}
-            timeZone={business.timeZone}
-            selected={slot?.startAt ?? null}
-            onSelect={(picked) => {
-              setSlot(picked);
-              setStage("confirming");
-            }}
-            labels={{
-              morning: copy.morning,
-              noon: copy.noon,
-              evening: copy.evening,
-              noTimes: copy.noTimes,
-              noTimesBody: copy.noTimesBody,
-              callBusiness: copy.callBusiness,
-              waitForPart: copy.waitForPart,
-              waitForDay: copy.waitForDay,
-              waitingForPart: copy.waitingForPart,
-              waitingForDay: copy.waitingForDay,
-            }}
-            businessPhone={business.phone}
-            // Offered only once a Service is chosen: what a day has free
-            // depends on how long the Service takes, so waiting for "a
-            // morning" is not a question until there is something to fit in it.
-            // Nor where the Business's plan has no waiting list: a customer is
-            // never offered what could not come to anything (ADR 0019).
-            onWaitFor={
-              service === null || profile?.waitingList === false
-                ? undefined
-                : (part) => setWaitingFor(part)
-            }
-            waitingFor={standingParts}
-          />
-        ) : null}
-      </section>
+      <WhenSection
+        business={business}
+        chooser={chooser}
+        hasService={service !== null && resource !== null}
+        selectedSlot={slot?.startAt ?? null}
+        onSelectSlot={(picked) => {
+          setSlot(picked);
+          setStage("confirming");
+        }}
+        // Offered only once a Service is chosen: what a day has free depends on
+        // how long the Service takes, so waiting for "a morning" is not a
+        // question until there is something to fit in it. Nor where the
+        // Business's plan has no waiting list: a customer is never offered
+        // what could not come to anything (ADR 0019).
+        onWaitFor={
+          service === null || profile.waitingList === false
+            ? undefined
+            : (part) => setWaitingFor(part)
+        }
+        waitingFor={standingParts}
+        waitingList={profile.waitingList !== false}
+      />
 
       {error !== null && stage === "choosing" && <Critical>{error}</Critical>}
 
@@ -1088,7 +1031,7 @@ export const BookingFlow = ({
               // The slot was never held (ADR 0003), so availability is asked
               // again before the booking is attempted.
               setStage("confirming");
-              void loadDay();
+              void chooser.refreshDay();
             }}
           />
         )}

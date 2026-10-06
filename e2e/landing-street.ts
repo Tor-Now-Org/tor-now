@@ -80,6 +80,8 @@ export type Words = {
   tabCustomers: string;
   tabBusiness: string;
   today: string;
+  /** The name the customer's days go by (ADR 0026). */
+  dayStrip: string;
   nextMonth: string;
   free: string;
   appointmentForCustomer: string;
@@ -367,6 +369,7 @@ export const HEBREW: Tongue = {
     tabCustomers: "לקוחות",
     tabBusiness: "העסק",
     today: "היום",
+    dayStrip: "בחירת יום",
     nextMonth: "החודש הבא",
     free: "פנוי",
     appointmentForCustomer: "תור ללקוח",
@@ -395,6 +398,7 @@ export const ENGLISH: Tongue = {
     tabCustomers: "Customers",
     tabBusiness: "Business",
     today: "Today",
+    dayStrip: "Choose a day",
     nextMonth: "Next month",
     free: "Free",
     appointmentForCustomer: "An appointment",

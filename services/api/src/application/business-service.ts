@@ -1,5 +1,6 @@
 import {
   BUSINESS_DEFAULTS,
+  requireRoomToBook,
   cancelAppointment,
   DomainError,
   forbidden,
@@ -488,6 +489,16 @@ export const businessService = ({
   ): Promise<Business> {
     return unitOfWork.run(actor, async ({ repositories }) => {
       await requireOwnerOrManager(repositories, actor, businessId);
+      if (changes.minimumNoticeMinutes !== undefined || changes.bookingHorizonDays !== undefined) {
+        // ADR 0026: judged together, with whichever half was not sent read
+        // from what is saved — a notice alone can close a window just as well.
+        const saved = await repositories.businesses.findById(businessId);
+        if (saved === null) throw notFound("Business", businessId);
+        requireRoomToBook({
+          minimumNoticeMinutes: changes.minimumNoticeMinutes ?? saved.minimumNoticeMinutes,
+          bookingHorizonDays: changes.bookingHorizonDays ?? saved.bookingHorizonDays,
+        });
+      }
       return repositories.businesses.update(businessId, {
         ...changes,
         ...(changes.timeZone === undefined

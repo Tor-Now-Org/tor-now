@@ -22,7 +22,8 @@ import { Customers } from "./customers.tsx";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { TEXT_RULES } from "@tor-now/domain";
+import { leavesRoomToBook, TEXT_RULES } from "@tor-now/domain";
+import { spanOfDays, spanOfMinutes } from "@/lib/span-text.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import {
   blocking,
@@ -119,6 +120,8 @@ export const BusinessPanel = ({
   onTeamChanged?: () => void;
 }) => {
   const copy = useCopy("owner");
+  /** Lengths of time said as a person would, for the booking window's refusal. */
+  const spanWords = useCopy("days");
   const { language } = useLanguage();
   const errorText = useErrorText();
 
@@ -604,6 +607,16 @@ export const BusinessPanel = ({
             <NumberField id="s-horizon" label={`${copy.fHorizon} (${copy.unitDays})`} hint={copy.fHorizonHint}
               value={settings.bookingHorizonDays} fallback={1}
               onValue={(v) => { setSettings({ ...settings, bookingHorizonDays: v ?? 1 }); setSaved(false); }} />
+            {/* ADR 0026: a notice as long as the horizon leaves customers every
+                day empty and nothing to say why — refused here, as it is by the API. */}
+            {!leavesRoomToBook(settings) && (
+              <Critical>
+                {fillText(copy.windowImpossible, {
+                  notice: spanOfMinutes(settings.minimumNoticeMinutes, spanWords),
+                  horizon: spanOfDays(settings.bookingHorizonDays, spanWords),
+                })}
+              </Critical>
+            )}
           </Card>
 
           {/* Changing these takes effect for new availability only; ADR 0012
@@ -634,7 +647,7 @@ export const BusinessPanel = ({
                 setSaved(true);
               })
             }
-            disabled={blocking(
+            disabled={!leavesRoomToBook(settings) || blocking(
               checkText(settings.name, TEXT_RULES.businessName),
               checkLocalPhone(fromE164(settings.phone)),
               checkText(settings.address ?? "", TEXT_RULES.address),

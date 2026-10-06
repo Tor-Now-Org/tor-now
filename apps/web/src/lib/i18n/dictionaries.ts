@@ -14,6 +14,7 @@
 import { costs } from "./costs-copy.ts";
 import { categories } from "./categories-copy.ts";
 import { change } from "./change-copy.ts";
+import { days } from "./days-copy.ts";
 
 export const LANGUAGES = ["he", "en"] as const;
 export type Language = (typeof LANGUAGES)[number];
@@ -922,6 +923,7 @@ const owner = {
     "fNoticeHint": "לקוח לא יוכל לתפוס תור שמתחיל בפחות מהזמן הזה מעכשיו. מגן עליכם מהפתעות של הרגע האחרון.",
     "fHorizon": "עד כמה רחוק אפשר לתפוס תור",
     "fHorizonHint": "כמה ימים קדימה היומן פתוח ללקוחות. מעבר לזה פשוט אין מה לבחור.",
+    "windowImpossible": "עם ההגדרות האלה אף לקוח לא יוכל לקבוע: צריך לקבוע {notice} מראש, אבל היומן פתוח רק {horizon} קדימה. קצרו את הראשון או הגדילו את השני.",
     "unitMinutes": "דקות",
     "unitHours": "שעות",
     "unitDays": "ימים",
@@ -1270,6 +1272,7 @@ const owner = {
     "fNoticeHint": "A customer cannot take a slot starting sooner than this from now. It protects you from last-minute surprises.",
     "fHorizon": "How far ahead a customer may book",
     "fHorizonHint": "How many days of calendar are open to customers. Beyond that there is simply nothing to pick.",
+    "windowImpossible": "With these settings no customer can book: bookings need {notice} of notice, but the calendar is only open {horizon} ahead. Shorten the first or lengthen the second.",
     "unitMinutes": "minutes",
     "unitHours": "hours",
     "unitDays": "days",
@@ -3086,6 +3089,7 @@ export const DICTIONARIES = {
   costs,
   categories,
   change,
+  days,
   legal,
   customer,
   signIn,

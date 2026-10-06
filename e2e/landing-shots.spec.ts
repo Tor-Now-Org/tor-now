@@ -459,9 +459,8 @@ for (const tongue of TONGUES) {
 
   /** Select one day of the customer's strip by its distance from today. */
   const showDay = async (page: Page, day: number): Promise<void> => {
-    if (day === 0) return;
     await page
-      .getByRole("radiogroup", { name: words.today })
+      .getByRole("radiogroup", { name: words.dayStrip })
       .getByRole("radio")
       .nth(day)
       .click();

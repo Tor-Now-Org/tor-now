@@ -8,6 +8,9 @@ import {
   PHONE_PATTERN,
   BILLING_FLAGS,
   CHANGE_OUTCOMES,
+  daysBetween,
+  MAX_AVAILABILITY_DAYS,
+  parseLocalDate,
   BILLING_STATUSES,
   COST_UNITS,
   FEATURES,
@@ -109,12 +112,31 @@ export const searchSchema = z.object({
   lng: z.coerce.number().min(-180).max(180).optional(),
 });
 
-export const availabilitySchema = z.object({
-  serviceId: uuidSchema,
-  resourceId: uuidSchema,
-  from: localDateSchema,
-  to: localDateSchema,
-});
+/**
+ * ADR 0026: a span runs forward, and covers a month at most. Checked here so a
+ * request for a year of schedule is refused before it reaches the database.
+ */
+const spanFits = (range: { from?: string | undefined; to?: string | undefined }): boolean => {
+  if (range.from === undefined || range.to === undefined) return true;
+  try {
+    const span = daysBetween(parseLocalDate(range.from), parseLocalDate(range.to));
+    return span >= 0 && span < MAX_AVAILABILITY_DAYS;
+  } catch {
+    // A date that does not exist is refused by the date's own check.
+    return true;
+  }
+};
+
+const SPAN_MESSAGE = `A span runs forward and covers at most ${MAX_AVAILABILITY_DAYS} days`;
+
+export const availabilitySchema = z
+  .object({
+    serviceId: uuidSchema,
+    resourceId: uuidSchema,
+    from: localDateSchema,
+    to: localDateSchema,
+  })
+  .refine(spanFits, { message: SPAN_MESSAGE });
 
 /**
  * ADR 0018. Joining a waiting list, or rewriting what was asked for: the same
@@ -541,7 +563,8 @@ export const optionalDateRangeSchema = z
   .refine(
     (range) => (range.from === undefined) === (range.to === undefined),
     { message: "from and to must be given together" },
-  );
+  )
+  .refine(spanFits, { message: SPAN_MESSAGE });
 
 export const paymentSchema = z.object({
   amountMinor: z.number().int().positive(),

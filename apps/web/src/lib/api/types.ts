@@ -302,12 +302,13 @@ export type ChangePreviewDto = ClosureImpactDto & {
 
 export type SlotDto = { startAt: string; endAt: string };
 
-/** ADR 0012: why a day is empty decides what the interface offers instead. */
+/** ADR 0012, ADR 0026: why a day is empty decides what the interface offers instead. */
 export type EmptyReason =
   | "CLOSED"
   | "FULLY_BOOKED"
   | "TOO_SOON"
-  | "BEYOND_HORIZON";
+  | "BEYOND_HORIZON"
+  | "DAY_OVER";
 
 export type DayAvailabilityDto = {
   date: string;
@@ -315,6 +316,11 @@ export type DayAvailabilityDto = {
   emptyReason: EmptyReason | null;
   /** The parts of the day this calendar works at all, whatever is booked. */
   openParts: PartOfDayName[];
+  /**
+   * Some of the day's hours lie past the booking horizon and open as it moves.
+   * Absent from an API older than ADR 0026, which reads as false.
+   */
+  partlyBeyondHorizon?: boolean;
 };
 
 export type AppointmentStatus =

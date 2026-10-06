@@ -171,6 +171,12 @@ when it is withdrawn, when its customer books that day, or when the date
 passes.
 _Avoid_: Queue, waitlist, reservation, hold, standby
 
+**Day Mark**:
+What a customer's day says before it is opened (ADR 0026): how many Slots it
+has free in the chosen Part of Day, or why it has none — closed, full, by phone
+(inside the Minimum Notice), over, or opening later (past the Booking Horizon).
+_Avoid_: Badge, status, availability count, label
+
 **Part of Day**:
 Morning, noon or evening in the Business's own zone — the three groups the slot
 grid has always shown, and the unit a Waiting Entry is expressed in. Wanting all

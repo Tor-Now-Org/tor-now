@@ -320,3 +320,53 @@ describe("discovery", () => {
     expect(profile.services).toEqual([]);
   });
 });
+
+describe("what each day says about the booking window (ADR 0026)", () => {
+  const ask = (test: Harness, shop: Awaited<ReturnType<typeof anEstablishedBusiness>>) =>
+    test.services.availability.forRange(
+      { kind: "ANONYMOUS" },
+      {
+        businessId: shop.business.id,
+        serviceId: shop.service.id,
+        resourceId: shop.resource.id,
+        from: TUESDAY as never,
+        to: TUESDAY as never,
+      },
+    );
+
+  it("offers the morning of the window's last day and says the rest opens later", async () => {
+    // Frozen at 12:00 on 25.8 in Jerusalem: seven days ahead ends at noon on
+    // the Tuesday, which works 09:00–17:00.
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    await test.services.business.update(shop.owner.actor, shop.business.id, { bookingHorizonDays: 7 });
+
+    const [day] = await ask(test, shop);
+    expect(day?.slots.length).toBeGreaterThan(0);
+    expect(day?.slots.every((slot) => slot.endAt <= TUESDAY_AT("12:00"))).toBe(true);
+    expect(day?.partlyBeyondHorizon).toBe(true);
+  });
+
+  it("says nothing opens later on an ordinary day", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    const [day] = await ask(test, shop);
+    expect(day?.partlyBeyondHorizon).toBe(false);
+  });
+
+  it("calls the day over once its hours have ended, with no waiting to offer", async () => {
+    const test = harness({ now: parseInstant(TUESDAY_AT("18:00")) });
+    const shop = await anEstablishedBusiness(test);
+    const [day] = await ask(test, shop);
+    expect(day?.slots).toEqual([]);
+    expect(day?.emptyReason).toBe("DAY_OVER");
+  });
+
+  it("sends the customer to the phone when the notice reaches into the day", async () => {
+    const test = harness({ now: parseInstant(TUESDAY_AT("08:00")) });
+    const shop = await anEstablishedBusiness(test);
+    await test.services.business.update(shop.owner.actor, shop.business.id, { minimumNoticeMinutes: 10 * 60 });
+    const [day] = await ask(test, shop);
+    expect(day?.emptyReason).toBe("TOO_SOON");
+  });
+});

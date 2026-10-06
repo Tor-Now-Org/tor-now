@@ -1,7 +1,8 @@
 import type { Business } from "../model/business.ts";
 import { addMinutesToInstant, type Instant } from "../time/instant.ts";
 import { interval, type Interval } from "../time/interval.ts";
-import { MILLISECONDS_PER_DAY } from "../shared/constants.ts";
+import { MILLISECONDS_PER_DAY, MINUTES_PER_DAY } from "../shared/constants.ts";
+import { validationFailed } from "../shared/errors.ts";
 
 /**
  * ADR 0012: how far out a Business accepts bookings, at both ends. The window
@@ -66,11 +67,26 @@ export const isWithinBookingWindow = (
 };
 
 /**
- * Whether the near end of the window is what emptied a day. ADR 0012 asks for
- * the Business's phone number in that case, rather than a bare "nothing
- * available" — the customer is told how to ask, not merely told no.
+ * ADR 0026: whether these two settings leave any time a customer could book.
+ *
+ * A notice as long as the horizon closes the window entirely, and the customer
+ * then finds every day empty with nothing to explain why. The offer starts up
+ * to one boundary past `now + notice`, so the notice has to stop short of the
+ * horizon by more than that for the window to stay open at every moment.
  */
-export const isTrimmedByNotice = (
-  window: BookingWindow,
-  dayEnd: Instant,
-): boolean => dayEnd <= window.start;
+export const leavesRoomToBook = (
+  business: Pick<Business, "minimumNoticeMinutes" | "bookingHorizonDays">,
+): boolean =>
+  business.minimumNoticeMinutes + OFFER_BOUNDARY_MINUTES <
+  business.bookingHorizonDays * MINUTES_PER_DAY;
+
+/** The refusal an owner sees when their settings would leave nothing to book. */
+export const requireRoomToBook = (
+  business: Pick<Business, "minimumNoticeMinutes" | "bookingHorizonDays">,
+): void => {
+  if (!leavesRoomToBook(business)) {
+    throw validationFailed("The minimum notice must be shorter than the booking horizon", {
+      reason: "NOTICE_BEYOND_HORIZON",
+    });
+  }
+};

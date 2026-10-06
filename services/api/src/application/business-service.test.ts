@@ -1586,3 +1586,67 @@ describe("the team", () => {
     expect(team.some((each) => each.user.id === customer.user.id)).toBe(false);
   });
 });
+
+describe("a booking window somebody can book in (ADR 0026)", () => {
+  const DAY = 24 * 60;
+
+  const refusal = async (attempt: Promise<unknown>) => {
+    try {
+      await attempt;
+    } catch (error) {
+      return error as { code: string; details: Record<string, unknown> };
+    }
+    throw new Error("expected a refusal");
+  };
+
+  it("refuses a notice longer than the horizon", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    const refused = await refusal(
+      test.services.business.update(shop.owner.actor, shop.business.id, {
+        minimumNoticeMinutes: 7 * DAY,
+        bookingHorizonDays: 5,
+      }),
+    );
+    expect(refused.code).toBe("VALIDATION_FAILED");
+    expect(refused.details).toEqual({ reason: "NOTICE_BEYOND_HORIZON" });
+  });
+
+  it("measures a change to one against the other as already saved", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    await test.services.business.update(shop.owner.actor, shop.business.id, { bookingHorizonDays: 2 });
+    await refusal(
+      test.services.business.update(shop.owner.actor, shop.business.id, { minimumNoticeMinutes: 2 * DAY }),
+    );
+    await test.services.business.update(shop.owner.actor, shop.business.id, { minimumNoticeMinutes: DAY });
+    await refusal(
+      test.services.business.update(shop.owner.actor, shop.business.id, { bookingHorizonDays: 1 }),
+    );
+  });
+
+  it("writes nothing when it refuses", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    await refusal(
+      test.services.business.update(shop.owner.actor, shop.business.id, {
+        name: "שם חדש",
+        minimumNoticeMinutes: 7 * DAY,
+        bookingHorizonDays: 5,
+      }),
+    );
+    const profile = await test.services.discovery.profile({ kind: "ANONYMOUS" }, shop.business.id);
+    expect(profile.business.name).not.toBe("שם חדש");
+    expect(profile.business.minimumNoticeMinutes).toBe(60);
+  });
+
+  it("saves the two together when they leave room", async () => {
+    const test = harness();
+    const shop = await anEstablishedBusiness(test);
+    const saved = await test.services.business.update(shop.owner.actor, shop.business.id, {
+      minimumNoticeMinutes: 3 * DAY,
+      bookingHorizonDays: 4,
+    });
+    expect(saved).toMatchObject({ minimumNoticeMinutes: 3 * DAY, bookingHorizonDays: 4 });
+  });
+});
