@@ -40,8 +40,8 @@ begin
   insert into appointment (business_id, resource_id, service_id, customer_id,
       start_at, end_at, occupied_until, service_name, resource_name,
       price_minor, duration_minutes, buffer_minutes)
-    values (v_biz, v_res, v_svc, v_customer, '2026-10-06T09:00:00Z', '2026-10-06T09:30:00Z',
-            '2026-10-06T09:40:00Z', 'probe cut', 'probe chair', 8000, 30, 10);
+    values (v_biz, v_res, v_svc, v_customer, now() + interval '1 day', now() + interval '1 day 30 minutes',
+            now() + interval '1 day 40 minutes', 'probe cut', 'probe chair', 8000, 30, 10);
 
   -- --- the functions, called rather than merely created ---------------------
   -- As the owner, because the function guards itself on who is asking — which
@@ -243,13 +243,13 @@ begin
   -- here, and why it was the end-to-end suite that found it the first time.
   perform set_config('request.jwt.claims', json_build_object('sub', v_customer)::text, true);
   set local role authenticated;
-  perform app.mark_for_recheck(v_res, date '2026-10-06');
+  perform app.mark_for_recheck(v_res, current_date + 1);
   -- Twice, because a busy morning marks the same day again and the second one
   -- has a conflict to resolve.
-  perform app.mark_for_recheck(v_res, date '2026-10-06');
+  perform app.mark_for_recheck(v_res, current_date + 1);
   reset role;
   select count(*) into v_seen from waiting_recheck
-    where resource_id = v_res and on_date = date '2026-10-06';
+    where resource_id = v_res and on_date = current_date + 1;
   if v_seen <> 1 then
     raise exception 'POLICY BROKEN: marking a day twice left % rows', v_seen;
   end if;
@@ -268,7 +268,7 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', v_customer)::text, true);
   set local role authenticated;
   insert into waiting_entry (business_id, customer_id, service_id, on_date, parts)
-    values (v_biz, v_customer, v_svc, date '2026-10-07', array['MORNING']);
+    values (v_biz, v_customer, v_svc, current_date + 2, array['MORNING']);
   reset role;
 
   perform set_config('request.jwt.claims', json_build_object('sub', v_stranger)::text, true);
@@ -277,7 +277,7 @@ begin
   v_failed := false;
   begin
     insert into waiting_entry (business_id, customer_id, service_id, on_date, parts)
-      values (v_biz, v_customer, v_svc, date '2026-10-08', array['EVENING']);
+      values (v_biz, v_customer, v_svc, current_date + 3, array['EVENING']);
   exception when insufficient_privilege or others then v_failed := true;
   end;
   reset role;
