@@ -173,12 +173,13 @@ test.describe("the business's booking window", () => {
     await openTheBusiness(page, shop.business.id);
 
     await expect(page.getByText("כאן קובעים לפחות 3 ימים מראש. לתור קרוב יותר")).toBeVisible();
-    await expect(dayChip(page, 0)).toContainText("בטלפון", { timeout: 15_000 });
-    await expect(dayChip(page, 1)).toContainText("סגור");
+    // Day 2, not today: it lies wholly inside the notice at any hour, while
+    // today's last half hour is over rather than too soon.
+    await expect(dayChip(page, 1)).toContainText("סגור", { timeout: 15_000 });
     await expect(dayChip(page, 2)).toContainText("בטלפון");
     for (const early of [0, 1, 2]) await expect(dayChip(page, early)).toHaveAttribute("aria-checked", "false");
 
-    await dayChip(page, 0).click();
+    await dayChip(page, 2).click();
     await expect(page.getByText("קרוב מדי לקביעה באתר")).toBeVisible();
     await expect(page.getByText("העסק מקבל כאן תורים 3 ימים מראש.", { exact: false })).toBeVisible();
     // The header's own call button names the number too; these two are the window's.
@@ -190,6 +191,7 @@ test.describe("the business's booking window", () => {
 
   test("hours inside the notice are not offered for waiting, though they hold no booking", async ({ page }) => {
     test.skip(minutesNow() < 12 * 60 + 30, "The morning is inside the notice only once it has passed today.");
+    test.skip(minutesNow() > 23 * 60, "Near midnight the notice reaches past the third day's last time too.");
     const shop = await aShop("המתנה בתוך ההודעה");
     await settings(shop, { minimumNoticeMinutes: 3 * 24 * 60 });
 

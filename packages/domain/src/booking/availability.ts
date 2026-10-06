@@ -9,9 +9,8 @@ import type { Interval } from "../time/interval.ts";
 import { bookingWindowFor, type BookingWindow } from "./booking-window.ts";
 import { bufferForBooking, freeIntervalsOn } from "./free-intervals.ts";
 import { greedyWalk, type Slot, type SlotGenerationStrategy } from "./slots.ts";
-import { zonedToInstant } from "../time/zone.ts";
+import { instantToZoned, zonedToInstant } from "../time/zone.ts";
 import { END_OF_DAY, MIDNIGHT } from "../time/local-time.ts";
-import { openIntervalsOn } from "../schedule/open-hours.ts";
 import { partsOfDayOpen, type PartOfDay } from "./part-of-day.ts";
 
 export type AvailabilityRequest = {
@@ -61,7 +60,11 @@ export type DayAvailability = {
   readonly slots: readonly Slot[];
   /** Null when slots were found. */
   readonly emptyReason: EmptyReason | null;
-  /** The parts of the day this calendar works at all, whatever is booked. */
+  /**
+   * The parts of the day this calendar still works from the booking window's
+   * near end, whatever is booked. Hours already over, or inside the minimum
+   * notice, have nothing that could free up for this customer.
+   */
   readonly openParts: readonly PartOfDay[];
   /**
    * Some of the day's open hours, long enough for the Service, lie past the
@@ -103,12 +106,22 @@ export const availableSlotsOn = (
   });
 
   const slots = strategy(free, service.durationMinutes, bufferMinutes);
-  const openParts = partsOfDayOpen(
-    openIntervalsOn(date, request.workingHours, request.overrides),
-  );
   const open = openStretchesOf(request);
   const fits = holdsTheService(open, service.durationMinutes);
   const dayEnd = endOfDay(request);
+  const openParts = partsOfDayOpen(
+    open
+      .map((stretch) => ({
+        start: stretch.start > window.start ? stretch.start : window.start,
+        end: stretch.end,
+      }))
+      .filter((stretch) => stretch.start < stretch.end)
+      .map((stretch) => ({
+        start: instantToZoned(stretch.start, business.timeZone).time,
+        // A stretch running to midnight ends on the next date, at 00:00.
+        end: stretch.end >= dayEnd ? END_OF_DAY : instantToZoned(stretch.end, business.timeZone).time,
+      })),
+  );
   const partlyBeyondHorizon = fits(window.end, dayEnd);
   if (slots.length > 0) {
     return { date, slots, emptyReason: null, openParts, partlyBeyondHorizon };

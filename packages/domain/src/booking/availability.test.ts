@@ -225,6 +225,41 @@ describe("availableSlotsOn — the booking window", () => {
     expect(result.emptyReason).toBe("TOO_SOON");
   });
 
+  it("reports DAY_OVER, with nothing to wait for, once today's hours are over", () => {
+    const result = availableSlotsOn(
+      request({
+        workingHours: [workingHours(2, "09:00", "11:00")],
+        now: at(TUESDAY, "15:00"),
+      }),
+    );
+    expect(result.emptyReason).toBe("DAY_OVER");
+    expect(result.openParts).toEqual([]);
+  });
+
+  it("reports TOO_SOON when today's remaining hours are all inside the notice", () => {
+    const result = availableSlotsOn(
+      request({
+        workingHours: [workingHours(2, "09:00", "17:00")],
+        business: aBusiness({ minimumNoticeMinutes: 120 }),
+        now: at(TUESDAY, "15:30"),
+      }),
+    );
+    expect(result.emptyReason).toBe("TOO_SOON");
+  });
+
+  it("leaves out the parts of today the Resource has finished working", () => {
+    const result = availableSlotsOn(
+      request({
+        workingHours: [
+          workingHours(2, "09:00", "13:00"),
+          workingHours(2, "17:00", "20:00"),
+        ],
+        now: at(TUESDAY, "14:00"),
+      }),
+    );
+    expect(result.openParts).toEqual(["EVENING"]);
+  });
+
   it("reports BEYOND_HORIZON past the booking horizon", () => {
     const result = availableSlotsOn(
       request({
