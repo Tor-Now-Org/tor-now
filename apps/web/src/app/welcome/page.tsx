@@ -126,10 +126,6 @@ export default function Welcome() {
       <header className="lp-hero">
         <div className="lp-wrap lp-herogrid">
           <div>
-            <span className="lp-eyebrow">
-              <i className="lp-pulse" />
-              {copy.heroBadge}
-            </span>
             <h1 className="lp-big">
               {copy.heroA}
               <br />
@@ -215,7 +211,7 @@ export default function Welcome() {
         </div>
       </section>
 
-      <section className="lp-wrap lp-section">
+      <section className="lp-wrap lp-section lp-why">
         <span className="lp-kicker">{copy.kWhy}</span>
         <div className="lp-feats">
           {[
@@ -278,21 +274,6 @@ export default function Welcome() {
               <span className="lp-ico" aria-hidden="true">🕘</span>
               <span><b>{copy.ctHours}</b><span>{copy.ctHoursValue}</span></span>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="lp-wrap lp-section">
-        <div className="lp-final">
-          <h2 className="lp-h2">{copy.fTitle}</h2>
-          <p>{copy.fSub}</p>
-          <div className="lp-actions lp-centre">
-            <Link className="lp-btn lp-glow lp-lg" href="/">
-              {copy.fCta1}
-            </Link>
-            <Link className="lp-btn lp-ghost lp-lg" href="/pricing">
-              {copy.fCta2}
-            </Link>
           </div>
         </div>
       </section>

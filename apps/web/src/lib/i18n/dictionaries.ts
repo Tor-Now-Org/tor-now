@@ -2059,7 +2059,6 @@ const landing = {
     navPricing: "מחירים",
     navContact: "דברו איתנו",
     navCta: "לקביעת תור",
-    heroBadge: "העסקים שלידכם, עם היומן פתוח",
     heroA: "התור הבא שלך,",
     heroB: "בלי טלפון אחד",
     heroLede:
@@ -2115,11 +2114,7 @@ const landing = {
     ctMail: "מייל",
     ctHours: "זמינים",
     ctHoursValue: "א׳–ה׳, 09:00–18:00",
-    fTitle: "התור הבא מחכה",
-    fSub: "בלי הורדה, בלי סיסמה. פותחים ומתחילים.",
-    fCta1: "לקביעת תור",
-    fCta2: "לפתיחת עסק",
-    footNote: "נבנה בישראל · עברית ואנגלית",
+    footNote: "עברית ואנגלית",
   },
   en: {
     navHow: "How it works",
@@ -2127,7 +2122,6 @@ const landing = {
     navPricing: "Pricing",
     navContact: "Contact",
     navCta: "Book a slot",
-    heroBadge: "The businesses near you, with the diary open",
     heroA: "Your next appointment,",
     heroB: "without a single call",
     heroLede:
@@ -2183,11 +2177,7 @@ const landing = {
     ctMail: "Email",
     ctHours: "Hours",
     ctHoursValue: "Sun–Thu, 09:00–18:00",
-    fTitle: "The next slot is waiting",
-    fSub: "No download, no password. Open it and start.",
-    fCta1: "Book a slot",
-    fCta2: "Open a business",
-    footNote: "Built in Israel · Hebrew and English",
+    footNote: "Hebrew and English",
   },
 } as const;
 
