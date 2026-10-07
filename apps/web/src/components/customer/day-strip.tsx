@@ -45,10 +45,16 @@ export const DayStrip = ({
   const strip = useRef<HTMLDivElement>(null);
 
   // The chosen day is always in sight, including one picked from the month.
+  // Sideways only: scrollIntoView also scrolls the page, which opened the
+  // business page past its cover photo.
   useEffect(() => {
-    strip.current
-      ?.querySelector<HTMLElement>(`[data-date="${selected}"]`)
-      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const row = strip.current;
+    const day = row?.querySelector<HTMLElement>(`[data-date="${selected}"]`);
+    if (!row || !day) return;
+    const box = row.getBoundingClientRect();
+    const at = day.getBoundingClientRect();
+    if (at.left < box.left) row.scrollLeft -= box.left - at.left;
+    else if (at.right > box.right) row.scrollLeft += at.right - box.right;
   }, [selected, dates.length]);
 
   return (

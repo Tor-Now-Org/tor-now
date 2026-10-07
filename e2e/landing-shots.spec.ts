@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { anAdministrator } from "./cost-support.ts";
-import { aDayFromNow, anInstantAt, call, database, ready } from "./support.ts";
+import { API_URL, aDayFromNow, anInstantAt, call, database, ready } from "./support.ts";
 import { TONGUES, type Person, type Tongue, type Trade } from "./landing-street.ts";
 
 /**
@@ -479,6 +479,13 @@ for (const tongue of TONGUES) {
 
       barber = await openA(street.barber, fakePhone(1));
       salon = await openA(street.salon, fakePhone(2));
+      // The salon's cover, so its page opens on a picture of the place.
+      const cover = await fetch(`${API_URL}/businesses/${salon.id}/photos/0`, {
+        method: "PUT",
+        headers: { "Content-Type": "image/jpeg", Authorization: `Bearer ${salon.token}` },
+        body: readFileSync(new URL("./fixtures/salon.jpg", import.meta.url)),
+      });
+      expect(cover.status, await cover.text()).toBe(201);
       const nails = await openA(street.nails, fakePhone(3));
       const clinic = await openA(street.clinic, fakePhone(4));
       await openA(street.masseur, fakePhone(5));
@@ -653,11 +660,9 @@ for (const tongue of TONGUES) {
       await map.getByTitle(street.salon.name).dispatchEvent("click");
       await map.getByRole("button", { name: words.bookTime }).click();
       await expect(page.getByText(words.chooseService)).toBeVisible({ timeout: 15_000 });
-      const service = page.getByText(street.atTheSalon).first();
-      await expect(service).toBeVisible();
-      await photograph(page, into, "c3-business", service);
+      await expect(page.getByText(street.atTheSalon).first()).toBeVisible();
 
-      // Picking an hour is not a screen, it is a sequence — scroll, choose,
+      // Opening the business and picking an hour is not a screen, it is a sequence — scroll, choose,
       // confirm — and the still that stood for it was caught mid-scroll with
       // its top sliced off. It is filmed instead, below.
 
@@ -789,6 +794,7 @@ for (const tongue of TONGUES) {
           await page.goto(`/business/${salon.id}`);
           await ready(page);
           await expect(page.getByText(words.chooseService)).toBeVisible({ timeout: 15_000 });
+          await expect(page.getByRole("img", { name: street.salon.name })).toBeVisible({ timeout: 15_000 });
         },
         async (page) => {
           await page.waitForTimeout(700);
@@ -805,37 +811,16 @@ for (const tongue of TONGUES) {
             await page.mouse.wheel(0, 90);
             await page.waitForTimeout(120);
           }
-          await page.waitForTimeout(1300);
+          await page.waitForTimeout(1500);
 
-          // Further out than the days reach: the month, and a day two weeks on.
-          await page.getByRole("button", { name: words.wholeMonth }).click();
-          const month = page.getByRole("dialog");
-          await expect(month).toBeVisible({ timeout: 15_000 });
-          await page.waitForTimeout(1400);
-          const far = aDayFromNow(16);
-          const cell = month.locator(`[data-date="${far}"]`);
-          if ((await cell.count()) === 0) {
-            await month.getByRole("button", { name: words.nextMonthOfDays }).click();
-            await page.waitForTimeout(900);
-          }
-          await expect(cell).toContainText(/\d+\s*\d+/, { timeout: 15_000 });
-          await cell.click();
-          await expect(month).toBeHidden({ timeout: 15_000 });
-          await page.waitForTimeout(1200);
-
-          // Down to that day's times, in steps rather than a jump.
-          for (let nudge = 0; nudge < 4; nudge += 1) {
-            await page.mouse.wheel(0, 130);
-            await page.waitForTimeout(140);
-          }
           const times = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });
           await expect(times.first()).toBeVisible({ timeout: 15_000 });
-          await page.waitForTimeout(900);
-
+          await page.waitForTimeout(800);
           await times.nth(2).click();
-          await page.waitForTimeout(1100);
+          await page.waitForTimeout(2000);
           await page.getByRole("button", { name: words.confirmBooking }).click();
           await expect(page.getByText(words.booked)).toBeVisible({ timeout: 20_000 });
+          await page.waitForTimeout(1600);
         },
         her,
       );
@@ -895,7 +880,7 @@ for (const tongue of TONGUES) {
     });
 
     /**
-     * Eleven captions, eleven different screens.
+     * Ten captions, ten different screens.
      *
      * A click that misses is silent — the screen simply stays where it was, the
      * next capture photographs it again, and the page ends up showing the same
@@ -903,7 +888,7 @@ for (const tongue of TONGUES) {
      * is what shipped, and this is the assertion that would have caught it.
      */
     test("every screen is a different screen", async () => {
-      const stills = ["c2-map", "c3-business", "c5-mine", "o1-month", "o2-day",
+      const stills = ["c2-map", "c5-mine", "o1-month", "o2-day",
                       "o4-customers", "o5-panel", "o6-stats"];
       const films = ["c1-search", "c4-book", "o3-booking"];
 

@@ -23,7 +23,7 @@ import { LegalLinks } from "@/components/legal.tsx";
  * one route change away, whenever somebody wants to make it.
  */
 
-const CUSTOMER_STEPS = ["c1", "c2", "c3", "c4", "c5"] as const;
+const CUSTOMER_STEPS = ["c1", "c2", "c4", "c5"] as const;
 const OWNER_STEPS = ["o1", "o2", "o3", "o4", "o5", "o6"] as const;
 
 /**
@@ -55,7 +55,6 @@ const screens = (language: Language) => {
   return {
     c1: { film: of("c1-search.mp4"), poster: of("c1-search-poster.jpg") },
     c2: { still: of("c2-map.jpg") },
-    c3: { still: of("c3-business.jpg") },
     c4: { film: of("c4-book.mp4"), poster: of("c4-book-poster.jpg") },
     c5: { still: of("c5-mine.jpg") },
     o1: { still: of("o1-month.jpg") },
@@ -178,8 +177,8 @@ export default function Welcome() {
           onPick={setCustomerAt}
           steps={CUSTOMER_STEPS.map((step, i) => ({
             key: step,
-            title: [copy.c1t, copy.c2t, copy.c3t, copy.c4t, copy.c5t][i] ?? "",
-            body: [copy.c1b, copy.c2b, copy.c3b, copy.c4b, copy.c5b][i] ?? "",
+            title: [copy.c1t, copy.c2t, copy.c4t, copy.c5t][i] ?? "",
+            body: [copy.c1b, copy.c2b, copy.c4b, copy.c5b][i] ?? "",
             shot: SHOT[step],
           }))}
         />
