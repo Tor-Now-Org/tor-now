@@ -457,15 +457,6 @@ for (const tongue of TONGUES) {
     await square.click({ timeout: 15_000 });
   };
 
-  /** Select one day of the customer's strip by its distance from today. */
-  const showDay = async (page: Page, day: number): Promise<void> => {
-    await page
-      .getByRole("radiogroup", { name: words.dayStrip })
-      .getByRole("radio")
-      .nth(day)
-      .click();
-  };
-
   test.describe(`@shots the front door's pictures, in ${tongue.code}`, () => {
     // One story, told in order: the street exists before anybody searches it.
     test.describe.configure({ mode: "serial" });
@@ -481,6 +472,10 @@ for (const tongue of TONGUES) {
 
     test("seeds a street, a diary and a customer", async () => {
       mkdirSync(into, { recursive: true });
+      // One street per language, in one database: the other language's shops
+      // are taken off the street first, or the English search turns up
+      // "מספרת רן" beside "Ran's Barbershop" and the map pins both streets.
+      await database()`update business set active = false`;
 
       barber = await openA(street.barber, fakePhone(1));
       salon = await openA(street.salon, fakePhone(2));
@@ -799,16 +794,38 @@ for (const tongue of TONGUES) {
           await page.waitForTimeout(700);
           await page.getByRole("button", { name: new RegExp(street.atTheSalon) }).click();
           await page.waitForTimeout(900);
-          // A day ahead: a shop filmed at six in the evening has almost nothing
-          // left to offer, and an empty grid argues against the product.
-          await showDay(page, 2);
-          await page.waitForTimeout(900);
 
-          // Scrolled in steps rather than jumped, so the clip shows somebody
-          // moving down the page instead of the page teleporting.
+          // The days, each saying how many times it has free (ADR 0026) —
+          // brought up the screen so the strip and its counts are the picture.
+          const days = page.getByRole("radiogroup", { name: words.dayStrip });
           await page.mouse.move(195, 600);
-          for (let nudge = 0; nudge < 5; nudge += 1) {
-            await page.mouse.wheel(0, 150);
+          for (let nudge = 0; nudge < 8; nudge += 1) {
+            const box = await days.boundingBox();
+            if (box === null || box.y < 330) break;
+            await page.mouse.wheel(0, 90);
+            await page.waitForTimeout(120);
+          }
+          await page.waitForTimeout(1300);
+
+          // Further out than the days reach: the month, and a day two weeks on.
+          await page.getByRole("button", { name: words.wholeMonth }).click();
+          const month = page.getByRole("dialog");
+          await expect(month).toBeVisible({ timeout: 15_000 });
+          await page.waitForTimeout(1400);
+          const far = aDayFromNow(16);
+          const cell = month.locator(`[data-date="${far}"]`);
+          if ((await cell.count()) === 0) {
+            await month.getByRole("button", { name: words.nextMonthOfDays }).click();
+            await page.waitForTimeout(900);
+          }
+          await expect(cell).toContainText(/\d+\s*\d+/, { timeout: 15_000 });
+          await cell.click();
+          await expect(month).toBeHidden({ timeout: 15_000 });
+          await page.waitForTimeout(1200);
+
+          // Down to that day's times, in steps rather than a jump.
+          for (let nudge = 0; nudge < 4; nudge += 1) {
+            await page.mouse.wheel(0, 130);
             await page.waitForTimeout(140);
           }
           const times = page.locator("[role=radio]", { hasText: /^\d\d:\d\d$/ });

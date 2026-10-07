@@ -11,6 +11,7 @@ import {
   call,
   aRunInOneMonth,
   aRunInOneWeek,
+  useEnglish,
   openTheDayOf,
   showTheMonthOf,
   pickACategory,
@@ -6595,5 +6596,60 @@ test.describe("a gap too short for any appointment", () => {
     sheet = page.getByRole("dialog");
     await expect(sheet.getByRole("button", { name: "תור ללקוח בשעה שנבחרה" })).toBeVisible();
     await expect(sheet.getByText(/הפער קצר/)).toHaveCount(0);
+  });
+});
+
+test.describe("the switch between customer and business, in English", () => {
+  /** Each half's words, and whether they fit inside it. */
+  const halves = (page: Page) =>
+    page
+      .getByRole("group", { name: "Switch between customer and management" })
+      .getByRole("button")
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const shown = Array.from(button.querySelectorAll("span")).find(
+            (span) => getComputedStyle(span).display !== "none" && span.textContent !== "",
+          );
+          return {
+            text: shown?.textContent ?? button.textContent ?? "",
+            fits: shown === undefined ? button.scrollWidth <= button.clientWidth : shown.scrollWidth <= shown.clientWidth,
+          };
+        }),
+      );
+
+  test("says the whole of both halves on a phone, the short way", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await useEnglish(page);
+    const shop = await aBusinessWithOpenHours({ name: `Switch ${Date.now()}`, ownerPhone: uniquePhone() });
+    await page.addInitScript(([key, value]) => window.localStorage.setItem(key as string, value as string), [
+      "tor-now.session",
+      shop.owner.token,
+    ]);
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await expect.poll(() => halves(page)).toEqual([
+      { text: "Customer", fits: true },
+      { text: "Business", fits: true },
+    ]);
+    // Still named in full for anybody listening rather than looking.
+    await expect(page.getByRole("button", { name: "Manage business" })).toBeVisible();
+  });
+
+  test("says it in full where there is room", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await useEnglish(page);
+    const shop = await aBusinessWithOpenHours({ name: `Switch ${Date.now()}`, ownerPhone: uniquePhone() });
+    await page.addInitScript(([key, value]) => window.localStorage.setItem(key as string, value as string), [
+      "tor-now.session",
+      shop.owner.token,
+    ]);
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+
+    await expect.poll(() => halves(page)).toEqual([
+      { text: "Customer", fits: true },
+      { text: "Manage business", fits: true },
+    ]);
   });
 });

@@ -112,13 +112,26 @@ export const ContextSwitch = ({
             if (several) setChoosing(true);
           }}
           style={{ ...half(managing), maxWidth: 148 }}
+          aria-label={managing && several ? undefined : copy.manageWord}
         >
           {crossing && !managing ? <Pip /> : null}
-          <span
-            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-          >
-            {label}
-          </span>
+          {/* On a narrow phone the long English words did not fit beside the
+              wordmark and were cut to "Manage …"; there the switch says the
+              short form, and the long one stays its name for a screen reader. */}
+          {managing && several ? (
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {label}
+            </span>
+          ) : (
+            <>
+              <span className="switch-long" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {copy.manageWord}
+              </span>
+              <span className="switch-short" aria-hidden="true" style={{ whiteSpace: "nowrap" }}>
+                {copy.manageShort}
+              </span>
+            </>
+          )}
           {managing && several && (
             <span aria-hidden="true" style={{ fontSize: 10, opacity: 0.7 }}>
               ▾
@@ -181,7 +194,7 @@ const half = (pressed: boolean) => ({
   gap: 5,
   minWidth: 0,
   minHeight: 31,
-  padding: "0 8px",
+  padding: "0 7px",
   borderRadius: 999,
   fontFamily: "var(--font-rubik), sans-serif",
   fontSize: 12,

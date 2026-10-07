@@ -1502,3 +1502,7 @@ input[type="time"]::selection{background:transparent;color:transparent}
    margins; its ring is drawn closer in, around the words, so it neither pokes
    past the column nor touches the days below. */
 .month-link:focus-visible{outline-offset:-6px}
+
+/* The header's switch (context-switch.tsx): the short word on a narrow phone. */
+.switch-short{display:none}
+@media (max-width:419px){.switch-long{display:none}.switch-short{display:inline}}
