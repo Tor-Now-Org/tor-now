@@ -1452,6 +1452,10 @@ input[type="time"]::selection{background:transparent;color:transparent}
   font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:12.5px;line-height:1.25;text-align:center}
 .day-tile .n{font-size:14px;font-variant-numeric:tabular-nums}
 .day-tile .c{font-family:var(--font-heebo),sans-serif;font-size:10.5px;font-weight:500;white-space:nowrap}
+.when-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.month-link{display:inline-flex;align-items:center;gap:5px;min-height:44px;margin-block:-12px;padding:0 8px;margin-inline-end:-8px;
+  border:0;border-radius:10px;background:none;font-size:13.5px;font-weight:600;color:var(--accent);white-space:nowrap}
+.month-link:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px}
 .month-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .month-head h2{font-size:17px}
 .month-head button{min-height:44px;min-width:44px;padding:0 10px;border-radius:12px;font-size:13.5px;font-weight:600;color:var(--accent);white-space:nowrap}

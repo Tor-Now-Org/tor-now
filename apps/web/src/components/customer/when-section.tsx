@@ -54,7 +54,19 @@ export const WhenSection = ({
 
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <span className="label">{copy.chooseTime}</span>
+      {/* The month sits by the heading, in sight, not at the end of the strip's scroll. */}
+      <div className="when-head">
+        <span className="label">{copy.chooseTime}</span>
+        {chooser.showsMonth && (
+          <button type="button" className="month-link" onClick={() => setMonthOpen(true)} aria-haspopup="dialog">
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+              <rect x="3" y="4.5" width="14" height="12.5" rx="2.5" />
+              <path d="M3 8.5h14M7 2.5v4M13 2.5v4" />
+            </svg>
+            {words.wholeMonth}
+          </button>
+        )}
+      </div>
       {business.minimumNoticeMinutes >= NOTICE_LINE_FROM_MINUTES && (
         <p className="note" style={{ margin: 0 }}>
           {fillText(words.noticeLine, { notice: spanOfMinutes(business.minimumNoticeMinutes, words) })}{" "}
@@ -78,7 +90,6 @@ export const WhenSection = ({
         selected={chooser.date}
         onSelect={chooser.choose}
         nextOpening={chooser.nextOpening}
-        onMonth={chooser.showsMonth ? () => setMonthOpen(true) : null}
       />
       {chooser.day === undefined ? (
         hasService ? <Spinner /> : null

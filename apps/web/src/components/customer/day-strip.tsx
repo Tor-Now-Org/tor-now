@@ -21,7 +21,7 @@ const toneOf = (mark: Mark): string =>
  * ADR 0026: the days, each saying what it holds. Every day stays a choice —
  * a full day leads to the waiting list and a "by phone" day to the phone — so
  * nothing here is disabled. The strip ends with the day after the window, when
- * it is in sight, and with the month, when the window runs past it.
+ * it is in sight. The month is reached from the heading above, not the strip's end.
  */
 export const DayStrip = ({
   dates,
@@ -30,7 +30,6 @@ export const DayStrip = ({
   selected,
   onSelect,
   nextOpening,
-  onMonth,
 }: {
   dates: readonly string[];
   marks: Readonly<Record<string, Mark>>;
@@ -39,8 +38,6 @@ export const DayStrip = ({
   onSelect: (date: string) => void;
   /** The first date past the window, when the strip reaches the window's end. */
   nextOpening: { date: string; when: Opening } | null;
-  /** Opens the month; absent when the strip already holds the whole window. */
-  onMonth: (() => void) | null;
 }) => {
   const words = useCopy("days");
   const customer = useCopy("customer");
@@ -88,11 +85,6 @@ export const DayStrip = ({
               })}
             </span>
           </div>
-        )}
-        {onMonth !== null && (
-          <button type="button" className="day-tile" onClick={onMonth} aria-haspopup="dialog">
-            {words.wholeMonth}
-          </button>
         )}
       </div>
     </div>

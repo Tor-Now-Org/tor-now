@@ -223,7 +223,7 @@ const customer = {
     "doneSent": "אישור נשלח בוואטסאפ",
     "doneSentWhen": "עכשיו",
     "freeToCancelUntil": "אפשר לבטל בלי ביטול מאוחר עד",
-    "cancelAnyTime": "אפשר לבטל בכל עת מתוך „התורים שלי”",
+    "cancelAnyTime": "אפשר לבטל בכל עת מתוך ״התורים שלי״",
     "directions": "ניווט",
     "where": "איפה",
     "cancelledTitle": "התור בוטל",
