@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BusinessDayDto } from "@/lib/api/types.ts";
 import { timeIn } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { colourOf } from "./event-colour.ts";
+import { minutesNowOn } from "./day-actions.tsx";
 import { Mark } from "./lane-mark.tsx";
 import {
   BOX_MINIMUM,
@@ -93,6 +94,20 @@ export const DayTimeline = ({
   const copy = useCopy("owner");
   const { language } = useLanguage();
   const [opened, setOpened] = useState<number[]>([]);
+  const [now, setNow] = useState(() => minutesNowOn(timeZone, day.date));
+  const nowLine = useRef<HTMLElement | null>(null);
+
+  // A minute is the clock's own resolution, so ticking any faster draws nothing new.
+  useEffect(() => {
+    setNow(minutesNowOn(timeZone, day.date));
+    const tick = setInterval(() => setNow(minutesNowOn(timeZone, day.date)), 60_000);
+    return () => clearInterval(tick);
+  }, [timeZone, day.date]);
+
+  // Opening today lands on the present, once — not again on every tick.
+  useEffect(() => {
+    nowLine.current?.scrollIntoView({ block: "center" });
+  }, [day.date]);
 
   const words = {
     hour: copy.oneHour,
@@ -156,6 +171,12 @@ export const DayTimeline = ({
   const folds = foldsIn(window, [...everything, ...closedInAny(window, shown.map(openOf))], opened);
   const scale = scaleOf(window, folds);
 
+  // Another day reads as 0 or 24:00, which is outside the window, so no line.
+  const nowShown = now > window.start && now < window.end;
+  const nowFold = nowShown ? folds.find((fold) => now > fold.start && now < fold.end) : undefined;
+  // An hour label the now pill would sit on top of gives way to it.
+  const underNow = (minute: number) => nowShown && Math.abs(scale.y(minute) - scale.y(now)) < 12;
+
   const hours: number[] = [];
   for (let minute = window.start; minute <= window.end; minute += 60) hours.push(minute);
 
@@ -189,7 +210,7 @@ export const DayTimeline = ({
             drawn, because the fold says which hours it holds. */}
         <div style={{ width: 40, flexShrink: 0, position: "relative" }}>
           {hours
-            .filter((minute) => !swallowedBy(folds, minute))
+            .filter((minute) => !swallowedBy(folds, minute) && !underNow(minute))
             .map((minute) => (
               <span
                 key={minute}
@@ -208,6 +229,26 @@ export const DayTimeline = ({
                 {clockOf(minute)}
               </span>
             ))}
+          {nowShown && (
+            <span
+              className="tab"
+              style={{
+                position: "absolute",
+                insetInlineEnd: 0,
+                top: scale.y(now),
+                transform: "translateY(-50%)",
+                fontSize: 10,
+                fontWeight: 700,
+                color: "var(--on-accent)",
+                background: "var(--critical)",
+                borderRadius: 999,
+                padding: "1px 5px",
+                zIndex: 4,
+              }}
+            >
+              {clockOf(now)}
+            </span>
+          )}
         </div>
 
         <div style={{ flex: 1, position: "relative", display: "flex", gap: 5 }}>
@@ -297,6 +338,13 @@ export const DayTimeline = ({
           {folds.map((fold) => (
             <button
               key={fold.start}
+              ref={
+                fold === nowFold
+                  ? (element) => {
+                      nowLine.current = element;
+                    }
+                  : undefined
+              }
               onClick={() => setOpened([...opened, fold.start])}
               style={{
                 position: "absolute",
@@ -308,9 +356,9 @@ export const DayTimeline = ({
                 // no strip of card is left showing under it.
                 height: FOLD_HEIGHT - 2,
                 borderRadius: 10,
-                background: "var(--sunken)",
-                border: "1px solid var(--line)",
-                color: "var(--muted)",
+                background: fold === nowFold ? "var(--critical-soft)" : "var(--sunken)",
+                border: `1px solid ${fold === nowFold ? "var(--critical)" : "var(--line)"}`,
+                color: fold === nowFold ? "var(--ink)" : "var(--muted)",
                 fontSize: 11,
                 display: "flex",
                 alignItems: "center",
@@ -325,9 +373,34 @@ export const DayTimeline = ({
               <span>
                 · {copy.freeWord} · {spokenLength(fold.end - fold.start, words)}
               </span>
+              {fold === nowFold && (
+                <span className="tab">
+                  · {copy.nowWord} {clockOf(now)}
+                </span>
+              )}
               <span aria-hidden="true">▾</span>
             </button>
           ))}
+
+          {/* Now, across every lane — inside a fold the pill says it instead. */}
+          {nowShown && !nowFold && (
+            <span
+              ref={(element) => {
+                nowLine.current = element;
+              }}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                insetInline: -2,
+                top: scale.y(now) - 1,
+                height: 2,
+                background: "var(--critical)",
+                zIndex: 4,
+                pointerEvents: "none",
+                scrollMarginBlock: 120,
+              }}
+            />
+          )}
         </div>
       </div>
     </div>
