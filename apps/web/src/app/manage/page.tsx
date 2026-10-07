@@ -236,7 +236,7 @@ function ManageApp() {
             and only the body below it is unknown. */}
         <AppHeader />
         <main style={{ flex: 1, display: "grid", placeItems: "center" }}>
-          <Spinner />
+          <Spinner page />
         </main>
       </>
     );

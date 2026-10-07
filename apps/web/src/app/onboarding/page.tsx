@@ -79,7 +79,7 @@ type DraftService = {
 // useSearchParams needs a Suspense boundary for static rendering.
 export default function OnboardingPage() {
   return (
-    <Suspense fallback={<Spinner />}>
+    <Suspense fallback={<Spinner page />}>
       <OnboardingWizard />
     </Suspense>
   );
