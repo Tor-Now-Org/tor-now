@@ -155,6 +155,9 @@ export default function Welcome() {
               eager
               playing
               onFinished={nextHero}
+              onSwipe={(step) =>
+                setHero((at) => (at + step + HERO_STEPS.length) % HERO_STEPS.length)
+              }
             />
             <div className="lp-dots">
               {HERO_STEPS.map((step, at) => (
@@ -322,6 +325,7 @@ const Screen = ({
   eager = false,
   playing = false,
   onFinished,
+  onSwipe,
 }: {
   shot: Shot;
   alt: string;
@@ -329,27 +333,51 @@ const Screen = ({
   /** Whether this is the screen on show, and on somebody's screen. */
   playing?: boolean;
   onFinished?: (() => void) | undefined;
-}) => (
-  <div className="lp-phone">
-    {isFilm(shot) ? <Film shot={shot} alt={alt} playing={playing} onFinished={onFinished} /> : (
-      /* Not next/image: these are the 390x844 artboard at twice over, shown at
-         one size on every viewport, so the loader's srcset would buy nothing a
-         single well-sized JPEG does not.
+  /** A sideways swipe on a phone: 1 for the next screen, -1 for the one before. */
+  onSwipe?: (step: 1 | -1) => void;
+}) => {
+  const from = useRef<{ x: number; y: number } | null>(null);
 
-         Eager only in the hero. The rest are three screens down the page, and
-         making somebody wait for pictures they have not scrolled to is how a
-         page about saving people time opens slowly. */
-      <img
-        src={shot.still}
-        alt={alt}
-        width={390}
-        height={844}
-        loading={eager ? "eager" : "lazy"}
-        decoding="async"
-      />
-    )}
-  </div>
-);
+  return (
+    <div
+      className="lp-phone"
+      onTouchStart={(e) => {
+        const touch = e.touches[0];
+        from.current = touch === undefined ? null : { x: touch.clientX, y: touch.clientY };
+      }}
+      onTouchEnd={(e) => {
+        const start = from.current;
+        const touch = e.changedTouches[0];
+        from.current = null;
+        if (onSwipe === undefined || start === null || touch === undefined) return;
+        const dx = touch.clientX - start.x;
+        // A short or mostly-vertical drag is somebody scrolling the page.
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(touch.clientY - start.y)) return;
+        // In Hebrew the next screen sits to the left, so it is pulled in rightwards.
+        const rtl = getComputedStyle(e.currentTarget).direction === "rtl";
+        onSwipe(dx < 0 !== rtl ? 1 : -1);
+      }}
+    >
+      {isFilm(shot) ? <Film shot={shot} alt={alt} playing={playing} onFinished={onFinished} /> : (
+        /* Not next/image: these are the 390x844 artboard at twice over, shown at
+           one size on every viewport, so the loader's srcset would buy nothing a
+           single well-sized JPEG does not.
+
+           Eager only in the hero. The rest are three screens down the page, and
+           making somebody wait for pictures they have not scrolled to is how a
+           page about saving people time opens slowly. */
+        <img
+          src={shot.still}
+          alt={alt}
+          width={390}
+          height={844}
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+        />
+      )}
+    </div>
+  );
+};
 
 const Film = ({
   shot,
@@ -499,6 +527,7 @@ const Tour = ({
           alt={shown.title}
           playing={watching}
           onFinished={next}
+          onSwipe={(step) => onPick((at + step + steps.length) % steps.length)}
         />
       )}
     </div>

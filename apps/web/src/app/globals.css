@@ -1021,7 +1021,7 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
   background:radial-gradient(circle,oklch(70% 0.122 209/.34),transparent 62%);filter:blur(12px)}
 /* One shell for every screen on the page, so a photograph of the product and
    the product itself are the same object to the eye. */
-.lp-phone{position:relative;z-index:2;width:min(318px,82vw);border-radius:38px;padding:9px;
+.lp-phone{position:relative;touch-action:pan-y;z-index:2;width:min(318px,82vw);border-radius:38px;padding:9px;
   background:linear-gradient(160deg,#1d3a63,#0a1d3a);box-shadow:0 24px 60px -28px oklch(10% 0.06 258/.55)}
 .lp-phone img,.lp-phone video{display:block;width:100%;height:auto;border-radius:30px;
   background:var(--paper);animation:lp-fade .5s ease}
