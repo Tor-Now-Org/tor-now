@@ -397,6 +397,22 @@ export const aRunInOneMonth = (length: number, options: { earliest?: number; aft
 };
 
 /**
+ * A run of days that sits in one month and in one week row of its grid, from
+ * Sunday. A band across days is drawn a row at a time, so a run that wraps
+ * past Saturday is two narrower bands — and what a narrow band leaves out is
+ * then about the date the suite ran on, not about the product.
+ */
+export const aRunInOneWeek = (length: number, earliest = 1): number => {
+  for (let start = earliest; start < earliest + 40; start += 1) {
+    const first = aDayFromNow(start);
+    const last = aDayFromNow(start + length - 1);
+    const weekday = new Date(`${first}T00:00:00Z`).getUTCDay();
+    if (weekday + length - 1 <= 6 && first.slice(0, 7) === last.slice(0, 7)) return start;
+  }
+  throw new Error(`No run of ${length} days fits in one week row`);
+};
+
+/**
  * Turn the month grid until it shows a date, without touching the date itself.
  */
 export const showTheMonthOf = async (page: Page, date: string): Promise<void> => {

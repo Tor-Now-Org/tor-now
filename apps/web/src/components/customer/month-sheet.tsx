@@ -8,21 +8,19 @@ import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { Note, Sheet } from "../ui.tsx";
 import { dayName, markAria, openingText } from "./day-words.ts";
 import {
+  cellLook,
   cellOf,
   markOf,
   monthSpan,
   monthWeeks,
   monthsOf,
   whenOpens,
-  type Mark,
 } from "./days-model.ts";
 
 /** A Sunday, from which the week's narrow day names are read in the reader's language. */
 const A_SUNDAY = "2026-10-04";
 const WEEK = 7;
 
-const toneOf = (mark: Mark): string =>
-  mark.kind === "full" ? "full" : mark.kind === "call" ? "off call" : mark.kind === "free" || mark.kind === "loading" ? "" : "off";
 
 /**
  * ADR 0026: "כל החודש". The window's months, each day saying what it holds,
@@ -61,6 +59,28 @@ export const MonthSheet = ({
   const grid = useRef<HTMLDivElement>(null);
   /** A day the arrow keys moved to in a month not drawn yet. */
   const pendingFocus = useRef<string | null>(null);
+  /** What had focus when the sheet opened — the "כל החודש" link — to hand it back on closing. */
+  const opener = useRef<HTMLElement | null>(null);
+
+  // A dialog takes focus when it opens and gives it back when it closes.
+  // Without this, focus stayed on the link under the sheet, so closing with
+  // Escape left a keyboard ring on a link nobody had moved to.
+  useEffect(() => {
+    if (!open) return;
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = window.requestAnimationFrame(() => {
+      const target =
+        grid.current?.querySelector<HTMLElement>('[aria-current="date"]') ??
+        grid.current?.querySelector<HTMLElement>("button[data-date]");
+      target?.focus({ preventScroll: true });
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      const back = opener.current;
+      opener.current = null;
+      if (back?.isConnected === true) back.focus({ preventScroll: true });
+    };
+  }, [open]);
 
   // Opens on the month of the day being looked at.
   useEffect(() => {
@@ -87,8 +107,9 @@ export const MonthSheet = ({
     grid.current?.querySelector<HTMLElement>(`[data-date="${target}"]`)?.focus();
   }, [month]);
 
+  /** The neighbouring months by their short names, so the title keeps one line on a narrow phone. */
   const monthOnly = (first: string) =>
-    new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", { month: "long", timeZone: "UTC" }).format(
+    new Intl.DateTimeFormat(language === "he" ? "he-IL" : "en-GB", { month: "short", timeZone: "UTC" }).format(
       new Date(`${first}T12:00:00Z`),
     );
   const previous = addDaysTo(month, -1).slice(0, 8) + "01";
@@ -150,30 +171,27 @@ export const MonthSheet = ({
       );
     }
     const mark = markOf(days[date], today, horizonDays);
-    const short =
-      mark.kind === "free"
-        ? String(mark.count)
-        : mark.kind === "full"
-          ? words.markFull
-          : mark.kind === "closed"
-            ? words.markClosed
-            : mark.kind === "call"
-              ? words.markCall
-              : mark.kind === "over"
-                ? words.markOver
-                : "";
+    const look = cellLook(mark);
+    const short = {
+      count: mark.kind === "free" ? String(mark.count) : "",
+      full: words.markFull,
+      closed: words.markClosed,
+      call: words.cellCall,
+      over: words.markOver,
+      "": "",
+    }[look.word];
     return (
       <button
         key={date}
         type="button"
         data-date={date}
-        className={`month-cell ${toneOf(mark)}`}
+        className={`month-cell ${look.tone}`}
         {...(date === selected ? { "aria-current": "date" as const } : {})}
         aria-label={`${name}, ${markAria(mark, words, language)}`}
         onClick={() => onPick(date)}
       >
         {number}
-        <i aria-hidden="true">{short}</i>
+        <i aria-hidden="true">{mark.kind === "loading" ? <span className="wait-line" /> : short}</i>
       </button>
     );
   };
@@ -210,7 +228,14 @@ export const MonthSheet = ({
             {monthOnly(following)} ›
           </button>
         </div>
-        <div ref={grid} className="month-grid" role="group" aria-label={words.monthTitle} onKeyDown={move}>
+        <div
+          ref={grid}
+          className="month-grid"
+          role="group"
+          aria-label={words.monthTitle}
+          aria-busy={monthWeeks(month).flat().some((date) => date !== null && cellOf(date, today, lastDay) === "open" && days[date] === undefined)}
+          onKeyDown={move}
+        >
           {headings.map((heading, day) => (
             <span key={`h-${day}`} className="h" aria-hidden="true">
               {heading}

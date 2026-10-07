@@ -10,6 +10,7 @@ import {
   anInstantAt,
   call,
   aRunInOneMonth,
+  aRunInOneWeek,
   openTheDayOf,
   showTheMonthOf,
   pickACategory,
@@ -3328,8 +3329,10 @@ test.describe("blocking time out", () => {
     });
 
     // Three days, which is room enough for the band to say both whose it is
-    // and why. A narrower one keeps the reason and leaves whose to its colour.
-    const days = inOneMonth([2, 3, 4]);
+    // and why. A narrower one keeps the reason and leaves whose to its colour —
+    // so the three sit in one week row, or a Sunday among them splits the band.
+    const start = aRunInOneWeek(3, 2);
+    const days = [aDayFromNow(start), aDayFromNow(start + 1), aDayFromNow(start + 2)] as const;
     await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
       method: "POST",
       token: shop.owner.token,
@@ -4288,6 +4291,13 @@ test.describe("the calendar, altogether", () => {
   };
 
   /** A shop that works Sunday to Thursday, so its weekends are its own. */
+  /** The first day from `earliest` on that a weekday shop works, Sunday to Thursday. */
+  const aWorkingDayAhead = (earliest: number): string => {
+    for (let ahead = earliest; ; ahead += 1) {
+      if (new Date(`${aDayFromNow(ahead)}T00:00:00Z`).getUTCDay() <= 4) return aDayFromNow(ahead);
+    }
+  };
+
   const aWeekdayBusiness = async (name: string) => {
     const shop = await aBusinessWithOpenHours({
       name,
@@ -4393,7 +4403,9 @@ test.describe("the calendar, altogether", () => {
 
   test("blocking over a blockage leaves one, covering both", async ({ page }) => {
     const shop = await aWeekdayBusiness(`בליעה ${Date.now()}`);
-    const day = aDayFromNow(2);
+    // A day this shop works: hours off on a Friday are refused as hours
+    // nobody works anyway, which is right, and not what this is about.
+    const day = aWorkingDayAhead(2);
     await call(`/businesses/${shop.business.id}/resources/${shop.resource.id}/blocks`, {
       method: "POST",
       token: shop.owner.token,

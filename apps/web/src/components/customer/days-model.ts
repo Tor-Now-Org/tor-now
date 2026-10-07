@@ -191,6 +191,36 @@ export const monthSpan = (
 export const cellOf = (date: string, today: string, lastDay: string): "past" | "open" | "later" =>
   date < today ? "past" : date > lastDay ? "later" : "open";
 
+/**
+ * How a day is drawn in the month: its tone, and the one word (or count) under
+ * its number. A day past the window — wholly, or still to open later today —
+ * is drawn as not open yet, the same dotted cell as every later day, rather
+ * than as a quiet blank.
+ */
+export type CellLook = {
+  readonly tone: "" | "full" | "off" | "off call" | "later";
+  readonly word: "count" | "full" | "closed" | "call" | "over" | "";
+};
+
+export const cellLook = (mark: Mark): CellLook => {
+  switch (mark.kind) {
+    case "free":
+      return { tone: "", word: "count" };
+    case "full":
+      return { tone: "full", word: "full" };
+    case "closed":
+      return { tone: "off", word: "closed" };
+    case "call":
+      return { tone: "off call", word: "call" };
+    case "over":
+      return { tone: "off", word: "over" };
+    case "later":
+      return { tone: "later", word: "" };
+    case "loading":
+      return { tone: "", word: "" };
+  }
+};
+
 const PART_ORDER: readonly PartOfDay[] = ["morning", "noon", "evening"];
 
 /**

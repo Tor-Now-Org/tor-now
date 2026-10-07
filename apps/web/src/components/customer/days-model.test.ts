@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DayAvailabilityDto } from "@/lib/api/types.ts";
 import {
+  cellLook,
   cellOf,
   firstFree,
   firstWaitablePart,
@@ -252,5 +253,20 @@ describe("firstWaitablePart — where waiting could still come to something", ()
   it("is the part the notice ends in on the day it ends", () => {
     // Three days on, at 14:30: the morning is too soon, the afternoon is not.
     expect(firstWaitablePart("2026-10-09", after(3 * 24 * 60), ZONE)).toBe(1);
+  });
+});
+
+describe("cellLook — how a day is drawn in the month", () => {
+  it.each([
+    [{ kind: "free", count: 4 }, { tone: "", word: "count" }],
+    [{ kind: "full" }, { tone: "full", word: "full" }],
+    [{ kind: "closed" }, { tone: "off", word: "closed" }],
+    [{ kind: "call" }, { tone: "off call", word: "call" }],
+    [{ kind: "over" }, { tone: "off", word: "over" }],
+    [{ kind: "later", when: { kind: "today" } }, { tone: "later", word: "" }],
+    [{ kind: "later", when: { kind: "on", date: "2026-10-21" } }, { tone: "later", word: "" }],
+    [{ kind: "loading" }, { tone: "", word: "" }],
+  ] as const)("%j", (mark, look) => {
+    expect(cellLook(mark)).toEqual(look);
   });
 });

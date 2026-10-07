@@ -1446,7 +1446,6 @@ input[type="time"]::selection{background:transparent;color:transparent}
 .day-chip .c .wait-line{display:block;width:30px;height:6px;margin-top:5px;border-radius:3px;background:var(--line)}
 .day-chip[aria-checked="true"]{background:var(--accent);border-color:var(--accent);border-style:solid;color:var(--on-accent)}
 .day-chip[aria-checked="true"] .w,.day-chip[aria-checked="true"] .n,.day-chip[aria-checked="true"] .c{color:var(--on-accent)}
-.day-chip:focus-visible,.month-cell:focus-visible,.day-tile:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px}
 .day-tile{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:58px;min-height:74px;
   padding:8px 6px;border-radius:14px;border:1px dashed var(--accent);background:var(--accent-soft);color:var(--accent-strong);
   font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:12.5px;line-height:1.25;text-align:center}
@@ -1455,18 +1454,20 @@ input[type="time"]::selection{background:transparent;color:transparent}
 .when-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .month-link{display:inline-flex;align-items:center;gap:5px;min-height:44px;margin-block:-12px;padding:0 8px;margin-inline-end:-8px;
   border:0;border-radius:10px;background:none;font-size:13.5px;font-weight:600;color:var(--accent);white-space:nowrap}
-.month-link:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px}
-.month-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.month-head h2{font-size:17px}
-.month-head button{min-height:44px;min-width:44px;padding:0 10px;border-radius:12px;font-size:13.5px;font-weight:600;color:var(--accent);white-space:nowrap}
+.month-head{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.month-head h2{font-size:17px;white-space:nowrap;text-align:center;flex:1;min-width:0}
+.month-head button{flex:none;min-height:44px;min-width:44px;padding:0 8px;border:1px solid transparent;border-radius:12px;font-size:13.5px;font-weight:600;color:var(--accent);white-space:nowrap}
 .month-head button:not(:disabled):hover{background:var(--accent-soft)}
 .month-head button:disabled{color:var(--faint);font-weight:500;cursor:default}
-.month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .month-grid .h{font-size:11px;color:var(--faint);text-align:center}
-.month-cell{aspect-ratio:1/1.12;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--raised);
+/* A fixed height rather than a ratio: a ratio with a floor under it widened
+   every column past a 320px phone, and left a row of past days shorter. */
+.month-cell{height:48px;min-width:0;border-radius:10px;border:1px solid var(--line);background:var(--raised);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
   font-family:var(--font-rubik),sans-serif;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
-.month-cell i{font-style:normal;font-family:var(--font-heebo),sans-serif;font-size:9.5px;font-weight:600;line-height:1.2;color:var(--positive)}
+.month-cell i{max-width:100%;overflow:hidden;white-space:nowrap;font-style:normal;font-family:var(--font-heebo),sans-serif;font-size:9.5px;font-weight:600;line-height:1.2;color:var(--positive)}
+@media (min-width:720px){.month-cell{height:54px}}
 .month-cell.full i{color:var(--caution)}
 .month-cell.off{background:var(--sunken);border-style:dashed;color:var(--faint)}
 .month-cell.off i{color:var(--faint);font-weight:500}
@@ -1486,3 +1487,18 @@ input[type="time"]::selection{background:transparent;color:transparent}
 .none-soon{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:14px;background:var(--sunken);border:1px dashed var(--line)}
 .none-soon b{font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:15px;color:var(--ink)}
 .none-soon span{font-size:12.5px;line-height:1.6;color:var(--muted)}
+.month-cell .wait-line{display:block;width:14px;height:5px;margin-top:4px;border-radius:3px;background:var(--line)}
+/* Focus is one ring drawn over the edge, inward, never outside it: the strip
+   scrolls and would clip a ring drawn beyond it, and a ring around a dashed
+   border read as a second, broken border. On a filled (chosen) one the ring is
+   the paper's colour, inside the fill.
+   Last in the sheet, so no rule for a kind of day — a dotted "not open yet",
+   a dashed closed one — can put its own border back over the focus. */
+.day-chip:focus-visible,.day-tile:focus-visible,.month-link:focus-visible,.month-cell:focus-visible,.month-cell.later:focus-visible,.month-head button:focus-visible{
+  outline:2px solid var(--accent-strong);outline-offset:-2px}
+.day-chip[aria-checked="true"]:focus-visible,.month-cell[aria-current="date"]:focus-visible{
+  outline-color:var(--on-accent);outline-offset:-4px}
+/* The month link keeps a 44px target by reaching past its row with negative
+   margins; its ring is drawn closer in, around the words, so it neither pokes
+   past the column nor touches the days below. */
+.month-link:focus-visible{outline-offset:-6px}

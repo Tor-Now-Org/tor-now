@@ -3,6 +3,7 @@ import { aChange, aBookingAt, aTwoCalendarShop, offered } from "./change-support
 import {
   aBusinessWithOpenHours,
   aDayFromNow,
+  anInstantAt,
   call,
   DAY_STRIP,
   ready,
@@ -190,16 +191,21 @@ test.describe("the business's booking window", () => {
   });
 
   test("hours inside the notice are not offered for waiting, though they hold no booking", async ({ page }) => {
-    test.skip(minutesNow() < 12 * 60 + 30, "The morning is inside the notice only once it has passed today.");
-    test.skip(minutesNow() > 23 * 60, "Near midnight the notice reaches past the third day's last time too.");
+    // A notice that ends at 18:00 three days out, whatever the hour now: that
+    // day's morning and noon are inside it, and its evening is bookable.
+    const day = aDayFromNow(3);
+    const endsAt = Date.parse(anInstantAt(day, "18:00"));
+    const notice = Math.ceil((endsAt - Date.now()) / 60_000);
     const shop = await aShop("המתנה בתוך ההודעה");
-    await settings(shop, { minimumNoticeMinutes: 3 * 24 * 60 });
+    await settings(shop, { minimumNoticeMinutes: notice });
 
     await openTheBusiness(page, shop.business.id);
-    await dayChip(page, 3).click();
+    await strip(page).locator(`[data-date="${day}"]`).click();
 
     await expect(times(page).first()).toBeVisible({ timeout: 15_000 });
+    expect(await times(page).first().textContent()).toMatch(/^(18|19|2\d):/);
     await expect(page.getByRole("button", { name: "הודיעו לי אם מתפנה בוקר" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "הודיעו לי אם מתפנה צהריים" })).toHaveCount(0);
   });
 
   test("the default hour's notice draws no line above the days", async ({ page }) => {
@@ -430,4 +436,133 @@ test.describe("the owner's booking window", () => {
     );
     expect(profile.business).toMatchObject({ minimumNoticeMinutes: 10080, bookingHorizonDays: 8 });
   });
+});
+
+test.describe("drawn cleanly", () => {
+  /** Whether focus on this element is drawn inside its edge, where nothing can clip it. */
+  const ringIsInside = (page: Page, selector: string) =>
+    page.locator(selector).first().evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        visible: element.matches(":focus-visible"),
+        outline: style.outlineStyle,
+        inward: parseFloat(style.outlineOffset) < 0,
+      };
+    });
+
+  test("the month takes focus when it opens and gives it back to its link", async ({ page }) => {
+    const shop = await aShop("פוקוס");
+    await openTheBusiness(page, shop.business.id);
+    const link = page.getByRole("button", { name: "כל החודש" });
+    await link.click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.locator('[aria-current="date"]')).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(link).toBeFocused();
+    // Escape is a key, so the link shows that it has focus — inside its edge.
+    expect(await ringIsInside(page, ".month-link")).toEqual({ visible: true, outline: "solid", inward: true });
+  });
+
+  test("every focusable part draws its focus inside its own edge", async ({ page }) => {
+    const shop = await aShop("טבעת");
+    await openTheBusiness(page, shop.business.id);
+
+    for (const selector of [".day-chip", ".month-link"]) {
+      await page.keyboard.press("Shift");
+      await page.locator(selector).first().focus();
+      expect(await ringIsInside(page, selector), selector).toEqual({ visible: true, outline: "solid", inward: true });
+    }
+    await page.getByRole("button", { name: "כל החודש" }).press("Enter");
+    await page.keyboard.press("ArrowLeft");
+    expect(await ringIsInside(page, ".month-cell:focus")).toEqual({ visible: true, outline: "solid", inward: true });
+  });
+
+  test("a focused day that is not open yet has its dotted edge covered by the focus", async ({ page }) => {
+    const shop = await aShop("נקודות");
+    await settings(shop, { bookingHorizonDays: 20 });
+    await openTheBusiness(page, shop.business.id);
+    await page.getByRole("button", { name: "כל החודש" }).click();
+    const later = await showInTheSheet(page, aDayFromNow(22));
+    await page.keyboard.press("Shift");
+    await later.focus();
+    expect(
+      await later.evaluate((cell) => {
+        const style = getComputedStyle(cell);
+        return {
+          visible: cell.matches(":focus-visible"),
+          outline: style.outlineStyle,
+          // Drawn over the dotted edge, at least as wide as it, so the dots never show through.
+          covers: parseFloat(style.outlineOffset) <= -parseFloat(style.borderTopWidth) && parseFloat(style.outlineWidth) >= 2,
+        };
+      }),
+    ).toEqual({ visible: true, outline: "solid", covers: true });
+  });
+
+  test("a month still loading says so in every open day, then fills in", async ({ page }) => {
+    const shop = await aShop("טוען");
+    await openTheBusiness(page, shop.business.id);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(/\/availability\?/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.getByRole("button", { name: "כל החודש" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "החודש הבא" }).click();
+
+    await expect(sheet.locator(".month-grid")).toHaveAttribute("aria-busy", "true");
+    await expect(sheet.locator(".month-cell .wait-line").first()).toBeVisible();
+    release();
+    await expect(sheet.locator(".month-grid")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+    await expect(sheet.locator(".month-cell .wait-line")).toHaveCount(0);
+  });
+
+  test("every row of the month is the same height, past days included", async ({ page }) => {
+    const shop = await aShop("שורות");
+    await openTheBusiness(page, shop.business.id);
+    await page.getByRole("button", { name: "כל החודש" }).click();
+    const heights = await page
+      .getByRole("dialog")
+      .locator(".month-cell")
+      .evaluateAll((cells) => [...new Set(cells.map((cell) => Math.round(cell.getBoundingClientRect().height)))]);
+    expect(heights).toHaveLength(1);
+  });
+
+  for (const language of ["he", "en"] as const) {
+    test(`a 320px phone holds the days and the month, in ${language}`, async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 720 });
+      if (language === "en") await useEnglish(page);
+      const shop = await aShop("טלפון צר");
+      await page.goto(`/business/${shop.business.id}`);
+      await ready(page);
+      await expect(page.locator(".day-strip")).toBeVisible({ timeout: 15_000 });
+
+      // The days scroll inside their own strip; the page never scrolls sideways.
+      const strip = (await page.locator(".day-strip").boundingBox())!;
+      expect(strip.x).toBeGreaterThanOrEqual(0);
+      expect(strip.x + strip.width).toBeLessThanOrEqual(320);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+
+      await page.getByRole("button", { name: language === "he" ? "כל החודש" : "Whole month" }).click();
+      const sheet = page.getByRole("dialog");
+      const frame = (await sheet.boundingBox())!;
+      const cells = await sheet.locator(".month-cell").evaluateAll((all) =>
+        all.map((cell) => {
+          const box = cell.getBoundingClientRect();
+          return { left: box.left, right: box.right };
+        }),
+      );
+      for (const cell of cells) {
+        expect(cell.left).toBeGreaterThanOrEqual(frame.x);
+        expect(cell.right).toBeLessThanOrEqual(frame.x + frame.width);
+      }
+      // The month's name keeps to one line between its arrows.
+      const title = (await sheet.getByRole("heading").boundingBox())!;
+      expect(title.height).toBeLessThan(32);
+      expect(await sheet.locator(".month-grid").evaluate((grid) => grid.scrollWidth <= grid.clientWidth)).toBe(true);
+    });
+  }
 });
