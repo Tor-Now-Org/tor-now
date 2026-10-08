@@ -1,5 +1,6 @@
 "use client";
 
+import { api } from "./api/client.ts";
 import type { BusinessDto } from "@/lib/api/types.ts";
 
 /**
@@ -50,6 +51,30 @@ export const knownBusinesses = (): BusinessDto[] | null => known;
 
 export const rememberBusinesses = (businesses: BusinessDto[] | null): void => {
   known = businesses;
+};
+
+/**
+ * The businesses, asked for once however many screens want them at the same time.
+ *
+ * Opening the app at `/` asks for them, then hands over to /manage, which asks
+ * again — and the second answer is what /manage waits on. Joining the request
+ * already in the air makes that one round trip. Only a request still in flight
+ * is shared: a reload after a change must ask afresh, so `join` is opt-in.
+ */
+let inFlight: { token: string; answer: Promise<BusinessDto[]> } | null = null;
+
+export const fetchBusinesses = (
+  token: string,
+  { join = false }: { join?: boolean } = {},
+): Promise<BusinessDto[]> => {
+  if (join && inFlight?.token === token) return inFlight.answer;
+  const entry = { token, answer: api.myBusinesses(token) };
+  inFlight = entry;
+  const settled = () => {
+    if (inFlight === entry) inFlight = null;
+  };
+  entry.answer.then(settled, settled);
+  return entry.answer;
 };
 
 /**

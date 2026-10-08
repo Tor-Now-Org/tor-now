@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { businessToManage } from "./last-managed.ts";
+import { describe, expect, it, vi } from "vitest";
+import { api } from "./api/client.ts";
+import { businessToManage, fetchBusinesses } from "./last-managed.ts";
 
 const shop = (id: string) => ({ id });
 
@@ -27,5 +28,24 @@ describe("which business the switch opens", () => {
 
   it("is the only one there is, whatever was remembered", () => {
     expect(businessToManage([shop("only")], "gone")?.id).toBe("only");
+  });
+});
+
+describe("asking for the businesses", () => {
+  it("joins a request in flight, and asks afresh once it has answered", async () => {
+    const asked = vi.spyOn(api, "myBusinesses").mockResolvedValue([]);
+    const first = fetchBusinesses("t", { join: true });
+    // `/` asked, then /manage arrived while the answer was still out.
+    expect(fetchBusinesses("t", { join: true })).toBe(first);
+    // A reload after a change is never answered from before it.
+    const reload = fetchBusinesses("t");
+    expect(reload).not.toBe(first);
+    expect(fetchBusinesses("other", { join: true })).not.toBe(reload);
+    expect(asked).toHaveBeenCalledTimes(3);
+    await reload;
+    await new Promise((settle) => setTimeout(settle, 0));
+    void fetchBusinesses("t", { join: true });
+    expect(asked).toHaveBeenCalledTimes(4);
+    asked.mockRestore();
   });
 });

@@ -11,6 +11,7 @@ import {
 } from "react";
 import { api } from "./api/client.ts";
 import { isApiError } from "./api/errors.ts";
+import { fetchBusinesses, lastManaged } from "./last-managed.ts";
 import type { MeDto } from "./api/types.ts";
 
 /**
@@ -75,6 +76,10 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       return;
     }
+    // Someone who manages from this device will want their businesses next, and
+    // asking only once `/me` answers puts a second round trip in their way.
+    // Started alongside it; whichever screen asks first joins this one.
+    if (lastManaged() !== null) fetchBusinesses(stored, { join: true }).catch(() => undefined);
     try {
       const me = await api.me(stored);
       setToken(stored);

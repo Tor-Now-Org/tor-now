@@ -23,6 +23,7 @@ import { AccountDrawer } from "@/components/account-drawer.tsx";
 import { ContextSwitch } from "@/components/context-switch.tsx";
 import {
   businessToManage,
+  fetchBusinesses,
   knownBusinesses,
   lastManaged,
   rememberBusinesses,
@@ -121,8 +122,7 @@ function CustomerAppInner() {
       setOwned([]);
       return;
     }
-    api
-      .myBusinesses(token)
+    fetchBusinesses(token, { join: true })
       .then((mine) => {
         rememberBusinesses(mine);
         setOwned(mine);
@@ -146,6 +146,12 @@ function CustomerAppInner() {
     pathname === "/" &&
     searchParams.get("screen") === null &&
     user?.isHasBusinesses === true;
+  // The diary's code, fetched while `/me` is still out: the spinner hides the
+  // header switch that would otherwise have prefetched it, so the hand-over
+  // used to start with a download. The device's memory is only a hint here.
+  useEffect(() => {
+    if (arrived && lastManaged() !== null) router.prefetch("/manage");
+  }, [arrived, router]);
   useEffect(() => {
     if (loading) return;
     arriving = false;

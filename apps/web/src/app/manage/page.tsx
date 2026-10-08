@@ -26,6 +26,7 @@ import { AccountDrawer } from "@/components/account-drawer.tsx";
 import { ContextSwitch } from "@/components/context-switch.tsx";
 import {
   businessToManage,
+  fetchBusinesses,
   knownBusinesses,
   lastManaged,
   rememberBusinesses,
@@ -111,9 +112,11 @@ function ManageApp() {
     [router],
   );
 
-  const loadBusinesses = useCallback(async () => {
+  // `join` only on arrival, to share the request `/` already has in the air; a
+  // reload after a change must not be answered from before it.
+  const loadBusinesses = useCallback(async (join = false) => {
     if (token === null) return;
-    const mine = await api.myBusinesses(token);
+    const mine = await fetchBusinesses(token, { join });
     rememberBusinesses(mine);
     setBusinesses(mine);
     // The address wins while it names something; otherwise the one they were
@@ -137,7 +140,7 @@ function ManageApp() {
   }, [token, requested]);
 
   useEffect(() => {
-    void loadBusinesses();
+    void loadBusinesses(true);
   }, [loadBusinesses]);
 
   const loadResources = useCallback(
