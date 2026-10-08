@@ -80,6 +80,21 @@ const businessIdIn = (pathname: string): string | null => {
   return rest === "" ? null : decodeURIComponent(rest);
 };
 
+/**
+ * Whether this mount is the tab opening the app at a bare `/`. Staff opening
+ * the app mean their diary, so that arrival goes to /manage — and only that
+ * one: "לקוח" in the switch also leads here, and must stay here, whether the
+ * tab started at `/` or somewhere else. In memory on purpose — a fresh load or
+ * launch is a fresh arrival.
+ */
+let arriving = true;
+const openedAtRoot = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const entry = performance.getEntriesByType("navigation")[0];
+  const url = new URL(entry?.name ?? window.location.href);
+  return url.pathname === "/" && url.searchParams.get("screen") === null;
+};
+
 function CustomerAppInner() {
   const copy = useCopy("customer");
   const router = useRouter();
@@ -123,6 +138,20 @@ function CustomerAppInner() {
    */
   const ownsNothing = !loading && (user === null || !user.isHasBusinesses);
 
+  // Captured per mount, so a re-render while the redirect is in flight cannot
+  // flash the customer screen. /manage picks the business they were last in.
+  const [arrived] = useState(() => arriving && openedAtRoot());
+  const toManage =
+    arrived &&
+    pathname === "/" &&
+    searchParams.get("screen") === null &&
+    user?.isHasBusinesses === true;
+  useEffect(() => {
+    if (loading) return;
+    arriving = false;
+    if (toManage) router.replace("/manage");
+  }, [loading, toManage, router]);
+
   /**
    * The path is what says which business is open, so a link and a tap arrive
    * the same way: navigation changes the URL, and this fills in the business
@@ -154,7 +183,8 @@ function CustomerAppInner() {
 
   // Same reasoning as the owner app: the header stays, so crossing back does
   // not blank the screen — only the part nobody knows yet waits.
-  if (loading) {
+  // The manage page's own loading frame, so the hand-over shows nothing at all.
+  if (loading || toManage) {
     return (
       <>
         <AppHeader />

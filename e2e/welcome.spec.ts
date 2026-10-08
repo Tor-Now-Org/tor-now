@@ -62,7 +62,7 @@ test.describe("the welcome page", () => {
       }
     }
 
-    expect(shown).toHaveLength(11);
+    expect(shown).toHaveLength(10);
     expect(new Set(shown).size, `two steps share a screen: ${shown.join(", ")}`)
       .toBe(shown.length);
   });
@@ -72,9 +72,9 @@ test.describe("the welcome page", () => {
     await ready(page);
 
     const customer = page.locator("#how .lp-step");
-    await expect(customer).toHaveCount(5);
-    await customer.nth(4).click();
-    await expect(customer.nth(4)).toHaveAttribute("aria-current", "true");
+    await expect(customer).toHaveCount(4);
+    await customer.nth(3).click();
+    await expect(customer.nth(3)).toHaveAttribute("aria-current", "true");
     await expect(page.locator("#how .lp-phone img")).toHaveAttribute("src", /c5-mine/);
 
     const owner = page.locator("#owners .lp-step");

@@ -111,7 +111,7 @@ test.describe("who may reach the panel", () => {
       ([key, value]) => window.localStorage.setItem(key as string, value as string),
       ["tor-now.session", shop.owner.token],
     );
-    await page.goto("/");
+    await page.goto("/?screen=search");
     await ready(page);
     await page.getByRole("button", { name: "החשבון שלי" }).click();
     await expect(page.getByRole("dialog").getByText("כלקוח")).toBeVisible({ timeout: 15_000 });

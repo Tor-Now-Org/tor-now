@@ -1643,7 +1643,7 @@ test.describe("the business panel", () => {
     expect(profile.business.whatsapp).toBe("+972545646946");
 
     // And on the customer's side, one tap each.
-    await page.goto("/");
+    await page.goto("/?screen=search");
     await ready(page);
     await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
     await page.getByText(name, { exact: false }).first().click();
@@ -2588,7 +2588,7 @@ test.describe("photos", () => {
     }).toPass({ timeout: 15_000 });
 
     // The customer's page follows: no photos, no gallery.
-    await page.goto("/");
+    await page.goto("/?screen=search");
     await ready(page);
     await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(shop.business.name.slice(0, 8));
     await page.getByText(shop.business.name).first().click();
@@ -2640,7 +2640,7 @@ test.describe("photos", () => {
     expect(profile.photos.map((photo) => photo.slot)).toEqual([0, 1]);
 
     // And a customer looking at the business sees them, cover large.
-    await page.goto("/");
+    await page.goto("/?screen=search");
     await ready(page);
     await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 8));
     await page.getByText(name).first().click();
@@ -6141,13 +6141,37 @@ test.describe("the switch between customer and management", () => {
     await expect(switcher.getByText(live.business.name)).toBeVisible();
   });
 
+  test("staff opening the app land in the business they were last in, and the customer side stays reachable", async ({
+    page,
+  }) => {
+    const ownerPhone = uniquePhone();
+    const first = await aBusinessWithOpenHours({ name: `פתיחה ${Date.now()}`, ownerPhone });
+    const second = await aBusinessWithOpenHours({ name: `אחרון ${Date.now()}`, ownerPhone });
+    await signedInAt(page, first);
+    await page.goto(`/manage?business=${second.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 15_000 });
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/manage/, { timeout: 15_000 });
+    const switcher = page.getByRole("group", { name: "מעבר בין לקוח לניהול" });
+    await expect(switcher.getByText(second.business.name)).toBeVisible({ timeout: 15_000 });
+
+    // "לקוח" leads to `/` too, and must not bounce back.
+    await switcher.getByRole("button", { name: "לקוח" }).click();
+    await expect(page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page).not.toHaveURL(/\/manage/);
+  });
+
   test("the account drawer shows only where you are", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({
       name: `מגירה ${Date.now()}`,
       ownerPhone: uniquePhone(),
     });
     await signedInAt(page, shop);
-    await page.goto("/");
+    await page.goto("/?screen=search");
     await ready(page);
 
     // Crossing over is the switch's job alone; the drawer names the context
