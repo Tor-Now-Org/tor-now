@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type InputHTMLAttributes } from "react";
+import { useRef, useState, type InputHTMLAttributes } from "react";
+import { cleanNumberText } from "./number-text.ts";
 import { Field } from "./ui.tsx";
 
 /**
@@ -17,12 +18,19 @@ import { Field } from "./ui.tsx";
  * is what comes out of it. An empty box stays empty. Selecting the contents on
  * focus means the first keystroke replaces what is there, which is what a
  * person means by tapping a field with one number in it and typing another.
+ *
+ * A text box with a numeric keyboard rather than `type="number"`: a number box
+ * keeps no selection on a phone — the finger lifting puts the caret back after
+ * the nought — and typing then gave "080". The text is cleaned as it is typed
+ * (digits, one point where allowed, no leading zeros), so wherever the caret
+ * was, eighty is "80".
  */
 export const NumberField = ({
   value,
   onValue,
   fallback,
   min = 0,
+  decimals = false,
   ...rest
 }: Omit<
   InputHTMLAttributes<HTMLInputElement>,
@@ -41,6 +49,8 @@ export const NumberField = ({
    */
   fallback: number | null;
   min?: number;
+  /** Whether the number may have a fraction — a price in shekels and agorot. */
+  decimals?: boolean;
 }) => {
   const [text, setText] = useState(value === null ? "" : String(value));
   /**
@@ -54,7 +64,11 @@ export const NumberField = ({
     setText(value === null ? "" : String(value));
   }
 
-  const say = (next: string) => {
+  /** Set on focus, so the tap that focused does not collapse the selection it made. */
+  const justFocused = useRef(false);
+
+  const say = (typed: string) => {
+    const next = cleanNumberText(typed, decimals);
     setText(next);
     if (next.trim() === "") {
       // An empty box is only worth reporting where an empty value is a thing
@@ -68,7 +82,8 @@ export const NumberField = ({
       }
       return;
     }
-    const asNumber = Number(next);
+    // "12." is somebody still typing; the number it is on its way to is 12.
+    const asNumber = Number(next.endsWith(".") ? next.slice(0, -1) : next);
     if (!Number.isFinite(asNumber) || asNumber < min) return;
     setReported(asNumber);
     onValue(asNumber);
@@ -77,16 +92,30 @@ export const NumberField = ({
   return (
     <Field
       {...rest}
-      type="number"
-      inputMode="numeric"
-      min={min}
+      type="text"
+      inputMode={decimals ? "decimal" : "numeric"}
+      autoComplete="off"
       value={text}
       // The first keystroke replaces what is there rather than joining it.
-      onFocus={(event) => event.currentTarget.select()}
+      onFocus={(event) => {
+        justFocused.current = true;
+        event.currentTarget.select();
+        rest.onFocus?.(event);
+      }}
+      onPointerUp={(event) => {
+        // The lift of the tap that focused the box would put the caret where
+        // the finger was and drop the selection; keep it for that one lift.
+        if (justFocused.current) {
+          justFocused.current = false;
+          event.preventDefault();
+          event.currentTarget.select();
+        }
+      }}
       onChange={(event) => say(event.target.value)}
       onBlur={(event) => {
         // Leaving an empty box means the fallback, and the box says so rather
         // than staying blank and reporting something else.
+        justFocused.current = false;
         if (text.trim() === "" && fallback !== null) {
           setReported(fallback);
           setText(String(fallback));

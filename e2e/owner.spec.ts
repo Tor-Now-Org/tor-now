@@ -6383,6 +6383,77 @@ test.describe("typing a number into a number", () => {
     await page.keyboard.press("Backspace");
     await expect(price).toHaveValue("");
   });
+
+  test("a new service's price starts empty, and typing never leaves a leading zero", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({ name: `מחיר ${Date.now()}`, ownerPhone: uniquePhone() });
+    await page.addInitScript(([k, v]) => window.localStorage.setItem(k as string, v as string), [
+      "tor-now.session",
+      shop.owner.token,
+    ]);
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "הוספת שירות" }).click();
+    const sheet = page.getByRole("dialog");
+    const price = sheet.getByLabel(/מחיר/);
+
+    // Optional, as its hint says: an empty box with an example in it, not a
+    // nought to be deleted first.
+    await expect(price).toHaveValue("");
+    await expect(price).toHaveAttribute("placeholder", "80");
+
+    // The caret after a nought, which is where a finger leaves it on a phone
+    // when the selection does not survive the tap: still eighty, not "080".
+    await price.fill("0");
+    await price.press("End");
+    await price.pressSequentially("80");
+    await expect(price).toHaveValue("80");
+
+    // Left empty, the service is saved without a price.
+    await price.fill("");
+    await sheet.getByLabel(/שם השירות/).fill("ייעוץ");
+    await price.blur();
+    await expect(price).toHaveValue("");
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(sheet).toBeHidden({ timeout: 15_000 });
+    const services = await call<{ name: string; priceMinor: number }[]>(`/businesses/${shop.business.id}/services`, {
+      token: shop.owner.token,
+    });
+    expect(services.find((service) => service.name === "ייעוץ")?.priceMinor).toBe(0);
+  });
+
+  test("a number box takes a typed number cleanly, wherever the caret was", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({ name: `מספרים ${Date.now()}`, ownerPhone: uniquePhone() });
+    await page.addInitScript(([k, v]) => window.localStorage.setItem(k as string, v as string), [
+      "tor-now.session",
+      shop.owner.token,
+    ]);
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "הוספת שירות" }).click();
+    const sheet = page.getByRole("dialog");
+
+    const duration = sheet.getByLabel(/משך/);
+    await duration.fill("0");
+    await duration.press("End");
+    await duration.pressSequentially("45");
+    await expect(duration).toHaveValue("45");
+
+    // Letters and signs never reach the box.
+    await duration.fill("");
+    await duration.pressSequentially("4-5e");
+    await expect(duration).toHaveValue("45");
+
+    // A price may have agorot.
+    const price = sheet.getByLabel(/מחיר/);
+    await price.pressSequentially("79.90");
+    await expect(price).toHaveValue("79.90");
+
+    // On a phone the keyboard that opens is the numbers one.
+    await expect(duration).toHaveAttribute("inputmode", "numeric");
+    await expect(price).toHaveAttribute("inputmode", "decimal");
+  });
 });
 
 test.describe("the billing tab", () => {

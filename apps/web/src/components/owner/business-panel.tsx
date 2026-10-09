@@ -96,6 +96,16 @@ const MINOR_UNITS_PER_MAJOR = 100;
  * Everything about the Business itself: what it offers, whose calendars, the
  * rules it books by, and what it owes the platform.
  */
+/**
+ * A service as the form edits it: a price of nought is no price, an empty box
+ * with its example, rather than a nought somebody has to delete first.
+ */
+const withoutZeroPrice = (service: ServiceDto): Partial<ServiceDto> => {
+  if (service.priceMinor !== 0) return service;
+  const { priceMinor: _none, ...rest } = service;
+  return rest;
+};
+
 export const BusinessPanel = ({
   token,
   business,
@@ -327,7 +337,7 @@ export const BusinessPanel = ({
               >
                 {service.active ? copy.hideService : copy.showService}
               </button>
-              <button className="chip" style={{ border: "1px solid var(--line)" }} onClick={() => setEditing(service)}>
+              <button className="chip" style={{ border: "1px solid var(--line)" }} onClick={() => setEditing(withoutZeroPrice(service))}>
                 {copy.editService}
               </button>
             </Card>
@@ -335,7 +345,7 @@ export const BusinessPanel = ({
           {/* Withdrawing a service never touches bookings already made — each
               keeps the name, duration and price it was booked at. */}
           <Note>{copy.serviceHiddenNote}</Note>
-          <Button intent="quiet" onClick={() => setEditing({ name: "", durationMinutes: 30, priceMinor: 0, bufferMinutes: null })}>
+          <Button intent="quiet" onClick={() => setEditing({ name: "", durationMinutes: 30, bufferMinutes: null })}>
             {copy.addService}
           </Button>
         </>
@@ -710,9 +720,15 @@ export const BusinessPanel = ({
             <NumberField id="svc-duration" label={copy.durationMinutes} hint={copy.durationHint}
               value={editing.durationMinutes ?? 30} fallback={30} min={1}
               onValue={(v) => setEditing({ ...editing, durationMinutes: v ?? 30 })} />
+            {/* Optional, as its hint says: no price is an empty box showing an
+                example, not a nought somebody has to delete before typing. */}
             <NumberField id="svc-price" label={copy.price} placeholder={copy.pricePlaceholder} hint={copy.priceHint}
-              value={(editing.priceMinor ?? 0) / MINOR_UNITS_PER_MAJOR} fallback={0}
-              onValue={(v) => setEditing({ ...editing, priceMinor: Math.round((v ?? 0) * MINOR_UNITS_PER_MAJOR) })} />
+              value={editing.priceMinor === undefined ? null : editing.priceMinor / MINOR_UNITS_PER_MAJOR}
+              fallback={null} decimals
+              onValue={(v) => {
+                const { priceMinor: _left, ...rest } = editing;
+                setEditing(v === null ? rest : { ...editing, priceMinor: Math.round(v * MINOR_UNITS_PER_MAJOR) });
+              }} />
             <BufferChoice
               id="svc-buffer"
               durationMinutes={editing.durationMinutes ?? 30}
@@ -746,7 +762,8 @@ export const BusinessPanel = ({
                     : api.updateService(token, business.id, editing.id, {
                         name: editing.name,
                         durationMinutes: editing.durationMinutes,
-                        priceMinor: editing.priceMinor,
+                        // An emptied box is no price, not "leave it as it was".
+                        priceMinor: editing.priceMinor ?? 0,
                         bufferMinutes: editing.bufferMinutes ?? null,
                       }),
                 )
