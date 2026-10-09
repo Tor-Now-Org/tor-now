@@ -52,6 +52,17 @@ describe("loadConfig", () => {
     ).toThrow(/SUPABASE_JWT_SECRET must be at least 32/);
   });
 
+  it("reads the sign-in route's secret, and leaves it unset when absent", () => {
+    expect(loadConfig(minimal).signInProxySecret).toBeNull();
+    expect(loadConfig({ ...minimal, SIGN_IN_PROXY_SECRET: secret }).signInProxySecret).toBe(secret);
+  });
+
+  it("refuses a sign-in route secret too short to be one", () => {
+    expect(() => loadConfig({ ...minimal, SIGN_IN_PROXY_SECRET: "short" })).toThrow(
+      /SIGN_IN_PROXY_SECRET must be at least 32 characters/,
+    );
+  });
+
   it("refuses a real transport with no credentials behind it", () => {
     expect(() =>
       loadConfig({ ...minimal, VERIFICATION_TRANSPORT: "WHATSAPP" }),

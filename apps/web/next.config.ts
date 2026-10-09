@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withBotId } from "botid/next/config";
 
 /**
  * The domain package is consumed as TypeScript source rather than as a built
@@ -10,4 +11,5 @@ const config: NextConfig = {
   reactStrictMode: true,
 };
 
-export default config;
+// ADR 0027: serves BotID's challenge from our own domain.
+export default withBotId(config);

@@ -100,6 +100,18 @@ export const createApp = (services: Services) => {
   // Verification (ADR 0004). Registering and logging in are the same act.
   // ---------------------------------------------------------------------------
   app.post("/auth/request-code", async (context) => {
+    // ADR 0027: every code is a WhatsApp message we pay for, so a deployment
+    // that sends them takes requests only from the web app's sign-in route,
+    // which has already checked the caller is a person. Without the secret
+    // that route holds, nothing is sent. A deployment on the log transport
+    // sends nothing and stays open, unless a secret is set.
+    const expected = services.config.signInProxySecret;
+    if (expected !== null || services.config.verificationTransport !== "LOG") {
+      const presented = context.req.header("X-Sign-In-Proxy") ?? "";
+      if (expected === null || !equalsInConstantTime(presented, expected)) {
+        throw forbidden("Sign-in codes are requested through the sign-in page");
+      }
+    }
     const { phone } = await parseBody(context, schema.requestCodeSchema);
     return context.json(await services.auth.requestCode(phone));
   });

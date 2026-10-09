@@ -100,10 +100,16 @@ type RequestOptions = {
    * JSON would cost a third more of every one of them to say nothing extra.
    */
   raw?: { bytes: Blob; contentType: string };
+  /** Where the path is served from, when it is not the API. */
+  base?: string;
 };
 
-const buildUrl = (path: string, query: RequestOptions["query"]): string => {
-  const url = new URL(`${API_BASE_URL}${path}`);
+const buildUrl = (
+  path: string,
+  query: RequestOptions["query"],
+  base: string = API_BASE_URL,
+): string => {
+  const url = new URL(`${base}${path}`);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
@@ -131,11 +137,11 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<ApiErrorCode>([
 ]);
 
 export const request = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
-  const { method = "GET", body, token, query, signal, raw } = options;
+  const { method = "GET", body, token, query, signal, raw, base } = options;
 
   let response: Response;
   try {
-    response = await fetch(buildUrl(path, query), {
+    response = await fetch(buildUrl(path, query, base), {
       method,
       signal: signal ?? null,
       headers: {
@@ -190,11 +196,13 @@ export const api = {
       exposesVerificationCode: boolean;
     }>("/health"),
 
-  // ADR 0004: registering and signing in are the same act.
+  // ADR 0004: registering and signing in are the same act. ADR 0027: the code
+  // is requested through the web app's own route, which checks for bots.
   requestCode: (phone: string) =>
-    request<RequestCodeDto>("/auth/request-code", {
+    request<RequestCodeDto>("/api/auth/request-code", {
       method: "POST",
       body: { phone },
+      base: location.origin,
     }),
 
   verifyCode: (

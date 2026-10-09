@@ -150,6 +150,7 @@ The function reads everything from its environment. Supabase injects
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_SMS_FROM` | required by the non-`LOG` transports |
 | `EXPOSE_VERIFICATION_CODE` | forces the development behaviour below on or off |
 | `CORS_ORIGINS` | comma-separated allowlist; empty reflects the caller |
+| `SIGN_IN_PROXY_SECRET` | at least 32 characters, shared with the web app's sign-in route (ADR 0027). Set the same value on Vercel. With a real verification transport and no secret, the API sends no sign-in codes |
 | `WEB_ORIGIN` | where the web app lives, e.g. `https://tor-panuy.vercel.app`; WhatsApp Notices link into it, and leave the link out when unset |
 
 **A deployment with no delivery channel returns the verification code in its own

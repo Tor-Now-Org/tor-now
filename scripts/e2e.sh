@@ -55,6 +55,9 @@ npm run build --workspace @tor-now/api >/dev/null
 export E2E_API_URL="http://127.0.0.1:$API_PORT/api"
 export E2E_BASE_URL="http://127.0.0.1:$WEB_PORT"
 export NEXT_PUBLIC_API_URL="$E2E_API_URL"
+# ADR 0027: shared by the API and the web app's sign-in route, so the run
+# proves the interface's codes go through that route.
+export SIGN_IN_PROXY_SECRET="$(openssl rand -hex 32)"
 
 echo "→ API on $API_PORT"
 # Generated per run: the database it signs against is thrown away at the end,

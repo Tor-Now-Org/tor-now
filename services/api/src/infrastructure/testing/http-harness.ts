@@ -20,6 +20,7 @@ const testConfig: Config = {
   corsOrigins: [],
   webOrigin: null,
   storage: null,
+  signInProxySecret: null,
 };
 
 const JOB_SECRET = "test-job-secret";
@@ -40,7 +41,7 @@ export const A_BUSINESS = {
   workingHours: [{ dayOfWeek: 2, start: "09:00", end: "17:00" }],
 };
 
-export const httpHarness = () => {
+export const httpHarness = (configChanges: Partial<Config> = {}) => {
   const test: Harness = harness();
 
   // Mounted under /api exactly as index.ts does, so the paths under test are
@@ -48,7 +49,7 @@ export const httpHarness = () => {
   const app = new Hono();
   app.route("/api", createApp({
     ...test.services,
-    config: testConfig,
+    config: { ...testConfig, ...configChanges },
     tokens: test.tokens,
     photos: test.photos,
     jobCredential: { async read() { return JOB_SECRET; } },
@@ -71,11 +72,12 @@ export const httpHarness = () => {
   const call = async (
     method: string,
     path: string,
-    options: { body?: unknown; token?: string } = {},
+    options: { body?: unknown; token?: string; headers?: Record<string, string> } = {},
   ) => {
     const response = await app.request(`/api${path}`, {
       method,
       headers: {
+        ...options.headers,
         ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
         ...(options.token === undefined
           ? {}
@@ -97,6 +99,8 @@ export const httpHarness = () => {
       call("GET", path, token === undefined ? {} : { token }),
     post: (path: string, body?: unknown, token?: string) =>
       call("POST", path, { ...(body === undefined ? {} : { body }), ...(token === undefined ? {} : { token }) }),
+    postWithHeaders: (path: string, body: unknown, headers: Record<string, string>) =>
+      call("POST", path, { body, headers }),
     patch: (path: string, body: unknown, token?: string) =>
       call("PATCH", path, { body, ...(token === undefined ? {} : { token }) }),
     put: (path: string, body: unknown, token?: string) =>

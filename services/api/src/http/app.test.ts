@@ -28,6 +28,46 @@ describe("health", () => {
   });
 });
 
+describe("sign-in codes reach the API only through the sign-in page (ADR 0027)", () => {
+  const secret = "s".repeat(32);
+  const phone = { phone: "+972501234567" };
+
+  it("refuses a code request without the sign-in route's secret", async () => {
+    const api = httpHarness({ signInProxySecret: secret });
+    const { status, body } = await api.post("/auth/request-code", phone);
+    expect(status).toBe(403);
+    expect(body).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+
+  it("refuses a code request with the wrong secret", async () => {
+    const api = httpHarness({ signInProxySecret: secret });
+    const { status } = await api.postWithHeaders("/auth/request-code", phone, {
+      "X-Sign-In-Proxy": "t".repeat(32),
+    });
+    expect(status).toBe(403);
+  });
+
+  it("issues a code when the sign-in route forwards the request", async () => {
+    const api = httpHarness({ signInProxySecret: secret });
+    const { status } = await api.postWithHeaders("/auth/request-code", phone, {
+      "X-Sign-In-Proxy": secret,
+    });
+    expect(status).toBe(200);
+  });
+
+  it("sends nothing on a real transport that has no secret configured", async () => {
+    const api = httpHarness({ verificationTransport: "WHATSAPP", exposeVerificationCode: false });
+    const { status } = await api.post("/auth/request-code", phone);
+    expect(status).toBe(403);
+  });
+
+  it("stays open on the log transport with no secret, where nothing is sent", async () => {
+    const api = httpHarness();
+    const { status } = await api.post("/auth/request-code", phone);
+    expect(status).toBe(200);
+  });
+});
+
 describe("validation at the boundary", () => {
   let api: HttpHarness;
 

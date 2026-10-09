@@ -278,10 +278,10 @@ test.describe("finding and booking", () => {
 
     // Someone else takes it, out of band.
     const phone = uniquePhone();
-    const codeResponse = await request.post(`${process.env["E2E_API_URL"] ?? "http://127.0.0.1:8787/api"}/auth/request-code`, {
-      data: { phone },
+    const { code } = await call<{ code: string }>("/auth/request-code", {
+      method: "POST",
+      body: { phone },
     });
-    const { code } = (await codeResponse.json()) as { code: string };
     const sessionResponse = await request.post(`${process.env["E2E_API_URL"] ?? "http://127.0.0.1:8787/api"}/auth/verify`, {
       data: { phone, code, name: { givenName: "אחר", familyName: "לגמרי" } },
     });

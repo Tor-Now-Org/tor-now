@@ -9,7 +9,7 @@ import {
   resetCosts,
   shekels,
 } from "./cost-support.ts";
-import { aBusinessWithOpenHours, call, closeDatabase, uniquePhone } from "./support.ts";
+import { aBusinessWithOpenHours, API_URL, call, closeDatabase, uniquePhone } from "./support.ts";
 
 /**
  * What Businesses and the platform cost (ADR 0023), as an administrator uses
@@ -344,4 +344,14 @@ test("sends a sign-in code only to an Israeli number", async () => {
   await expect(call("/auth/request-code", { method: "POST", body: { phone: "+14155238886" } })).rejects.toThrow(/400/);
   const israeli = await call<{ code: string }>("/auth/request-code", { method: "POST", body: { phone: uniquePhone() } });
   expect(israeli.code).toMatch(/^\d{6}$/);
+});
+
+test("sends no sign-in code to a caller who skips the sign-in page", async () => {
+  // ADR 0027: only the web app's route, which checks for bots, holds the secret.
+  const response = await fetch(`${API_URL}/auth/request-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone: uniquePhone() }),
+  });
+  expect(response.status).toBe(403);
 });

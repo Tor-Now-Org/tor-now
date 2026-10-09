@@ -168,6 +168,13 @@ const schema = z.object({
     .object({ url: z.string().min(1), serviceRoleKey: z.string().min(1) })
     .nullable()
     .default(null),
+  /**
+   * Shared with the web app's sign-in route, which checks for bots before it
+   * forwards a code request (ADR 0027). Null leaves the endpoint open, which a
+   * real transport refuses at the route rather than at boot: a missing secret
+   * stops sign-in codes, not the whole API.
+   */
+  signInProxySecret: z.string().min(32, "must be at least 32 characters").nullable().default(null),
 });
 
 export type Config = z.infer<typeof schema>;
@@ -184,6 +191,7 @@ const ENVIRONMENT_VARIABLE: Readonly<Record<string, string>> = Object.freeze({
   corsOrigins: "CORS_ORIGINS",
   webOrigin: "WEB_ORIGIN",
   storage: "SUPABASE_URL",
+  signInProxySecret: "SIGN_IN_PROXY_SECRET",
 });
 
 /**
@@ -291,6 +299,10 @@ export const loadConfig = (env: Environment): Config => {
       .map((origin) => origin.trim())
       .filter((origin) => origin.length > 0),
     webOrigin: env["WEB_ORIGIN"] === undefined || env["WEB_ORIGIN"] === "" ? null : env["WEB_ORIGIN"],
+    signInProxySecret:
+      env["SIGN_IN_PROXY_SECRET"] === undefined || env["SIGN_IN_PROXY_SECRET"] === ""
+        ? null
+        : env["SIGN_IN_PROXY_SECRET"],
   });
 
   if (!parsed.success) {

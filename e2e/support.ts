@@ -127,6 +127,8 @@ export const asTyped = (e164: string): string => e164.replace(PHONE_DIAL_CODE, "
 /** The interface prints this beside the field instead of asking for it. */
 const PHONE_DIAL_CODE = "+972";
 
+const SIGN_IN_PROXY_SECRET = process.env["SIGN_IN_PROXY_SECRET"];
+
 export const call = async <T>(
   path: string,
   options: { method?: string; body?: unknown; token?: string } = {},
@@ -136,6 +138,9 @@ export const call = async <T>(
     headers: {
       ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
       ...(options.token === undefined ? {} : { Authorization: `Bearer ${options.token}` }),
+      // ADR 0027: the run's API takes codes only from the sign-in route; the
+      // suite stands in for it when it calls the API directly.
+      ...(SIGN_IN_PROXY_SECRET === undefined ? {} : { "X-Sign-In-Proxy": SIGN_IN_PROXY_SECRET }),
     },
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
   });
