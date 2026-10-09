@@ -170,6 +170,16 @@ jobs:
           npm run build:api
           npm run build --workspace @tor-now/web
 
+      # ADR 0027: one secret for the API, the web app's sign-in route and the
+      # suite, as scripts/e2e.sh shares it — so the run proves codes go through
+      # that route, and that a caller who skips it is refused. Generated per
+      # run and masked, like the signing key below.
+      - name: Share the sign-in proxy secret
+        run: |
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          echo "SIGN_IN_PROXY_SECRET=$secret" >> "$GITHUB_ENV"
+
       # The API is the same code the Edge Function runs, served by Node.
       - name: Start the API
         run: |
