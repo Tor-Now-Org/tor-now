@@ -25,6 +25,7 @@ import {
 import { fillParts } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { CategoryTags } from "./category-tag.tsx";
+import { Tick, TimelineStep } from "../timeline-step.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { useSession } from "@/lib/session.tsx";
 import { LogoMark } from "../logo.tsx";
@@ -452,33 +453,6 @@ export const BookingFlow = ({
         .map((iso) => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z"))
         .join("/"),
     })}`;
-    const tick = (
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="m5 12.5 4.5 4.5L19 7.5" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    );
-    const step = (done: boolean, title: string, detail: string, last = false, action?: ReactNode) => (
-      <li style={{ display: "grid", gridTemplateColumns: "22px 1fr", gap: 10, position: "relative", paddingBottom: last ? 0 : 14 }}>
-        {!last && (
-          <span aria-hidden="true" style={{ position: "absolute", insetInlineStart: 10, top: 22, bottom: 0, width: 2, background: "var(--line)" }} />
-        )}
-        <span
-          style={{
-            width: 22, height: 22, borderRadius: 999, display: "grid", placeItems: "center",
-            border: `2px solid ${done ? "var(--positive)" : "var(--line)"}`,
-            background: done ? "var(--positive)" : "var(--raised)",
-          }}
-        >
-          {done && tick}
-        </span>
-        <div>
-          <b style={{ display: "block", fontWeight: 600, fontSize: 14 }}>{title}</b>
-          <span className="hint" style={{ fontSize: 12.5, display: "block" }}>{detail}</span>
-          {action}
-        </div>
-      </li>
-    );
-
     return (
       <div className="booked">
         <div className="booked-hero">
@@ -490,7 +464,7 @@ export const BookingFlow = ({
             }}
           >
             <span style={{ width: 16, height: 16, borderRadius: 999, background: "var(--cyan)", display: "grid", placeItems: "center" }}>
-              {tick}
+              <Tick />
             </span>
             {copy.done}
           </span>
@@ -540,16 +514,17 @@ export const BookingFlow = ({
         <div className="booked-side">
         <Card>
           <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {step(true, copy.doneSent, copy.doneSentWhen)}
-            {step(
-              false,
-              untilText !== null && !late ? copy.freeToCancelUntil : copy.cancelAnyTime,
-              untilText !== null && !late ? untilText : copy.toMine,
-              true,
+            <TimelineStep state="done" title={copy.doneSent} detail={copy.doneSentWhen} />
+            <TimelineStep
+              state="todo"
+              title={untilText !== null && !late ? copy.freeToCancelUntil : copy.cancelAnyTime}
+              detail={untilText !== null && !late ? untilText : copy.toMine}
+              last
+            >
               <button className="booked-cancel" onClick={() => setCancelling(true)}>
                 {copy.cancelAppointment}
-              </button>,
-            )}
+              </button>
+            </TimelineStep>
           </ol>
         </Card>
         </div>

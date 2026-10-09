@@ -15,6 +15,7 @@ import { costs } from "./costs-copy.ts";
 import { categories } from "./categories-copy.ts";
 import { change } from "./change-copy.ts";
 import { days } from "./days-copy.ts";
+import { live } from "./live-copy.ts";
 
 export const LANGUAGES = ["he", "en"] as const;
 export type Language = (typeof LANGUAGES)[number];
@@ -574,20 +575,15 @@ const onboarding = {
     "addService": "הוספת שירות",
     "hoursTitle": "מתי אתם פתוחים",
     "hoursBody": "זה הדבר היחיד שחוסם קבלת תורים. בלי שעות אין מה להציע ללקוחות.",
-    "liveBody": "העסק מופיע בחיפוש ומקבל תורים. אפשר להתחיל לשתף את הקישור.",
-    "liveUntil": "באוויר עד {when} ב־{time}",
-    "liveBodyNoTrial": "תקופת הניסיון הסתיימה — היא כבר נוצלה בעסק קודם. יש לשלם היום: בלי תשלום, {when} ב־{time} העסק יוסר מהחיפוש ולא יקבל תורים חדשים.",
     "startOver": "להתחיל מחדש",
     "back": "חזרה",
     "stepOf": "שלב",
-    "done": "סיום",
     "of": "מתוך",
     "next": "המשך",
     "finish": "סיום",
     "open": "פתוח",
     "closed": "סגור",
     "noHours": "אין שעות",
-    "live": "באוויר",
     "days": ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"],
     "account": "החשבון שלי",
   },
@@ -639,20 +635,15 @@ const onboarding = {
     "addService": "Add a service",
     "hoursTitle": "When you are open",
     "hoursBody": "This is the only thing that blocks taking bookings. Without hours there is nothing to offer.",
-    "liveBody": "The business is in search and taking bookings. You can start sharing the link.",
-    "liveUntil": "Live until {time} {when}",
-    "liveBodyNoTrial": "The trial has ended, since it was used on an earlier business. Pay today: without a payment, the business leaves search {when} at {time} and takes no new bookings.",
     "startOver": "Start over",
     "back": "Back",
     "stepOf": "Step",
-    "done": "Done",
     "of": "of",
     "next": "Next",
     "finish": "Finish",
     "open": "Open",
     "closed": "Closed",
     "noHours": "No hours",
-    "live": "is live",
     "days": ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
     "account": "Your account",
   },
@@ -3080,6 +3071,7 @@ export const DICTIONARIES = {
   categories,
   change,
   days,
+  live,
   legal,
   customer,
   signIn,

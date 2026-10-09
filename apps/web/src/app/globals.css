@@ -666,6 +666,53 @@ body {
   .booked-go > button{width:auto;padding-inline:24px}
 }
 
+/* The screen a business opens on (ADR 0028): the booked screen's parts. The
+   band is the hero's own background here rather than a fixed-height stripe,
+   because a business's name can run to two lines where a countdown cannot. */
+.booked.live{background:none}
+.booked.live .booked-hero{margin:-22px -18px 0;padding:24px 18px 58px;background:var(--brand-navy)}
+.booked.live .booked-hero + .card{margin-top:-58px}
+.live-badge{align-self:start;display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px 4px 8px;
+  background:oklch(100% 0 0 / .12);font-size:12.5px;font-weight:600}
+.live-badge-mark{width:16px;height:16px;border-radius:999px;background:var(--cyan);display:grid;place-items:center}
+.live-badge.due{background:oklch(80% 0.12 75 / .2);color:oklch(91% 0.08 85)}
+.live-badge.due .live-badge-mark{background:var(--caution)}
+.live-name{font-size:34px;line-height:1.1;color:#fff;margin-top:10px;overflow-wrap:anywhere;text-wrap:balance}
+.live-meta{opacity:.85;font-size:14.5px}
+.live-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.live-actions .booked-action.on-navy{margin-top:0}
+.booked-action.on-navy.pay{background:#fff;color:var(--brand-navy);border-color:#fff}
+.booked-action.on-navy.pay:hover{background:oklch(95% 0.02 240);color:var(--brand-navy)}
+.live-summary{display:flex;flex-direction:column;gap:12px;padding:16px}
+.live-row{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px;align-items:baseline}
+.live-value{display:flex;flex-direction:column;gap:2px;font-size:15px;font-weight:500;overflow-wrap:anywhere}
+.live-value small{font-size:12.5px;font-weight:400;color:var(--muted)}
+.live-photo-note{margin:0;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;line-height:1.6;color:var(--muted)}
+.live-step-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.live-step-actions .booked-action{min-height:38px;padding:0 12px;font-size:12.5px}
+.share-sheet{display:flex;flex-direction:column;gap:14px}
+.share-sheet h2{font-size:19px}
+.share-message{margin:0;padding:12px 14px;border-radius:12px;background:var(--sunken);font-size:13.5px;line-height:1.6}
+.share-message a{color:var(--accent-strong);overflow-wrap:anywhere}
+.share-targets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.share-target{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 12px;border-radius:14px;
+  border:1px solid var(--line);background:var(--raised);color:var(--ink);text-align:center;
+  font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:14px}
+.share-target:hover{border-color:var(--accent)}
+.share-target i{display:grid;place-items:center;font-style:normal;flex-shrink:0}
+.share-target.wa{background:oklch(95% 0.05 150);border-color:oklch(82% 0.08 150);color:oklch(38% 0.1 150)}
+.share-card{margin:0;display:grid;place-items:center;padding:12px;border-radius:14px;background:var(--sunken)}
+.share-card img{display:block;width:auto;height:auto;max-width:100%;max-height:min(44vh,340px);border-radius:6px;
+  box-shadow:0 6px 20px -8px oklch(25% 0.05 258 / .35)}
+.share-card-wait{display:grid;place-items:center;height:min(44vh,340px);aspect-ratio:1240/1748;max-width:100%;
+  color:var(--muted);font-size:13px;text-align:center}
+.share-actions{display:grid;gap:8px}
+@media (min-width: 1024px) {
+  .booked.live .booked-hero{margin:0;padding:30px 30px 28px}
+  .booked.live .booked-hero + .card{margin-top:0}
+  .live-name{font-size:46px}
+}
+
 /* A tablet, or a half-screen window: more room, but not enough for a rail
    beside a full measure. The shell breathes; the navigation stays put. */
 @media (min-width: 720px) {

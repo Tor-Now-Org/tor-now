@@ -38,6 +38,8 @@ import { cheapestRoomierThan } from "@/lib/entitlement.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { usePlans } from "@/lib/use-plans.ts";
 import { VerifyPanel } from "@/components/verify-panel.tsx";
+import { BusinessLive, type OpenedBusiness } from "@/components/owner/business-live.tsx";
+import { NumberField } from "@/components/number-field.tsx";
 import { ConsentText, useLegalSheet } from "@/components/legal.tsx";
 import type { PlanName } from "@/lib/api/types.ts";
 
@@ -72,9 +74,17 @@ const DEFAULT_SERVICE_MINUTES = 30;
 type DraftService = {
   name: string;
   durationMinutes: number;
-  priceMinor: number;
+  /** Empty until a price is typed, rather than a nought to delete first; saved as free. */
+  priceMinor: number | null;
   bufferMinutes: number | null;
 };
+
+const newService = (): DraftService => ({
+  name: "",
+  durationMinutes: DEFAULT_SERVICE_MINUTES,
+  priceMinor: null,
+  bufferMinutes: null,
+});
 
 // useSearchParams needs a Suspense boundary for static rendering.
 export default function OnboardingPage() {
@@ -92,7 +102,6 @@ function OnboardingWizard() {
   // The recovery-time choice is the business panel's, words and all.
   const ownerCopy = useCopy("owner");
   const billingCopy = useCopy("billing");
-  const noticeCopy = useCopy("notices");
   const params = useSearchParams();
   const plans = usePlans();
   const locks = useLockText();
@@ -125,15 +134,12 @@ function OnboardingWizard() {
     setTouched((previous) => new Set(previous).add(field));
   const problem = useFieldProblem();
   const [resources, setResources] = useState<string[]>([""]);
-  const [services, setServices] = useState<DraftService[]>([
-    { name: "", durationMinutes: DEFAULT_SERVICE_MINUTES, priceMinor: 0, bufferMinutes: null },
-  ]);
+  const [services, setServices] = useState<DraftService[]>(() => [newService()]);
   const [hours, setHours] = useState<DayHours[]>(emptyWeek);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [live, setLive] = useState<string | null>(null);
-  // Read when the business opens: the owner had their Trial before, so this one owes from today.
-  const [payBy, setPayBy] = useState<{ tomorrow: boolean; time: string } | null>(null);
+  // The business once it is open, as the screen after the wizard summarises it.
+  const [opened, setOpened] = useState<OpenedBusiness | null>(null);
   // The plan is chosen once, on the pricing page, and arrives in the address.
   // Without one there is nothing to open a Business on, so the owner is sent
   // to choose it — never asked a second time here.
@@ -224,6 +230,10 @@ function OnboardingWizard() {
     try {
       // The ticked box, recorded against the owner before the business exists.
       await api.acceptTerms(token);
+      const named = services
+        .filter((service) => service.name.trim().length > 0)
+        .map((service) => ({ ...service, name: service.name.trim(), priceMinor: service.priceMinor ?? 0 }));
+      const calendars = resources.map((r) => r.trim()).filter((r) => r.length > 0);
       const business = await api.registerBusiness(token, {
         name: name.trim(),
         phone: toE164(phone),
@@ -233,10 +243,8 @@ function OnboardingWizard() {
         categories: [...categories],
         description: description.trim() === "" ? null : description.trim(),
         plan,
-        resourceNames: resources.map((r) => r.trim()).filter((r) => r.length > 0),
-        services: services
-          .filter((service) => service.name.trim().length > 0)
-          .map((service) => ({ ...service, name: service.name.trim() })),
+        resourceNames: calendars,
+        services: named,
         workingHours: hours.flatMap((day, dayOfWeek) => rangesFor(day, dayOfWeek)),
       });
       // The business exists now, so the held files finally have somewhere to
@@ -244,15 +252,37 @@ function OnboardingWizard() {
       // over: it is registered and bookable either way, and a missing picture
       // is a smaller problem than a wizard that ends in an error after four
       // steps of typing.
-      await Promise.all(
+      const uploads = await Promise.all(
         photos.map((photo) =>
           api
             .uploadBusinessPhoto(token, business.id, photo.slot, photo.file)
-            .catch(() => null),
+            .then(() => true)
+            .catch(() => false),
         ),
       );
-      if (user?.hadTrial === true) setPayBy(deactivationDeadline(business.timeZone));
-      setLive(business.id);
+      // The Trial's end, as the server set it. Only said on the screen, so a
+      // failed read leaves the date off rather than the owner on an error.
+      const hadTrial = user?.hadTrial === true;
+      const trialEndsOn = hadTrial
+        ? null
+        : await api
+            .subscription(token, business.id)
+            .then((billing) => billing.subscription.trialEndsOn)
+            .catch(() => null);
+      setOpened({
+        id: business.id,
+        name: business.name,
+        category: categories[0] ?? null,
+        address: address.trim(),
+        services: named,
+        calendars,
+        hours,
+        plan,
+        planPriceMinor: chosen?.priceMinor ?? null,
+        trialEndsOn,
+        payBy: hadTrial ? deactivationDeadline(business.timeZone) : null,
+        failedPhotos: uploads.filter((uploaded) => !uploaded).length,
+      });
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
     } finally {
@@ -289,15 +319,14 @@ function OnboardingWizard() {
     />
   );
 
-  if (live !== null) {
-    const payByWords = {
-      when: payBy?.tomorrow === true ? noticeCopy.tomorrow : noticeCopy.today,
-      time: payBy?.time ?? "",
-    };
+  if (opened !== null) {
+    // ADR 0011: open, and in search. Every way off this screen leads into the
+    // business, which is where the owner works from now on.
+    const intoBusiness = () => router.push(`/manage?business=${opened.id}`);
     return (
       <>
         <AppHeader
-          onBack={() => router.push("/")}
+          onBack={intoBusiness}
           backLabel={copy.back}
           trailing={
             user !== null ? (
@@ -309,21 +338,8 @@ function OnboardingWizard() {
             ) : null
           }
         />
-        <main className="scroll" style={{ flex: 1, padding: "40px 20px", display: "flex", flexDirection: "column", gap: 16, alignItems: "center", textAlign: "center" }}>
-          {payBy === null ? (
-            <span className="chip" style={{ background: "var(--positive-soft)", color: "var(--positive)", border: "1px solid var(--positive)" }}>
-              {copy.live}
-            </span>
-          ) : (
-            <span className="chip" style={{ background: "var(--caution-soft)", color: "var(--caution)", border: "1px solid var(--caution)" }}>
-              {fillText(copy.liveUntil, payByWords)}
-            </span>
-          )}
-          <h1 style={{ fontSize: 24 }}>{name}</h1>
-          <p className="hint" style={{ margin: 0 }}>
-            {payBy === null ? copy.liveBody : fillText(copy.liveBodyNoTrial, payByWords)}
-          </p>
-          <Button onClick={() => router.push(`/manage?business=${live}`)}>{copy.done}</Button>
+        <main className="scroll" style={{ flex: 1, minHeight: 0 }}>
+          <BusinessLive business={opened} onDone={intoBusiness} />
         </main>
         {accountDrawer}
       </>
@@ -545,15 +561,14 @@ function OnboardingWizard() {
                       setServices(services.map((s, i) => (i === position ? { ...s, durationMinutes: Number(event.target.value) } : s)))
                     }
                   />
-                  <Field
+                  <NumberField
                     id={`service-price-${position}`}
                     label={copy.priceShekels}
-                    required
-                    type="number"
-                    inputMode="numeric"
-                    value={service.priceMinor / 100}
-                    onChange={(event) =>
-                      setServices(services.map((s, i) => (i === position ? { ...s, priceMinor: Math.round(Number(event.target.value) * 100) } : s)))
+                    decimals
+                    value={service.priceMinor === null ? null : service.priceMinor / 100}
+                    fallback={null}
+                    onValue={(shekels) =>
+                      setServices(services.map((s, i) => (i === position ? { ...s, priceMinor: shekels === null ? null : Math.round(shekels * 100) } : s)))
                     }
                   />
                 </div>
@@ -582,7 +597,7 @@ function OnboardingWizard() {
             <Button
               intent="quiet"
               onClick={() =>
-                setServices([...services, { name: "", durationMinutes: DEFAULT_SERVICE_MINUTES, priceMinor: 0, bufferMinutes: null }])
+                setServices([...services, newService()])
               }
             >
               {copy.addService}
