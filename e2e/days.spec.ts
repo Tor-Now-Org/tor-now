@@ -41,6 +41,41 @@ const weekdayOf = (date: string): string => HEBREW_WEEKDAYS[new Date(`${date}T00
 const lastBookableDay = (horizonDays: number): string =>
   new Intl.DateTimeFormat("en-CA", { timeZone: ZONE }).format(new Date(Date.now() + horizonDays * 86_400_000));
 
+/** A date some days after another, on the calendar. */
+const plusDays = (date: string, days: number): string => {
+  const moved = new Date(`${date}T00:00:00Z`);
+  moved.setUTCDate(moved.getUTCDate() + days);
+  return moved.toISOString().slice(0, 10);
+};
+
+/**
+ * A booking horizon whose last day leaves a few days of the same month after
+ * it, so the month sheet draws days that are not open yet. Twenty days unless
+ * that ends at a month's edge.
+ */
+const aHorizonEndingMidMonth = (room = 4): number => {
+  for (let days = 20; days > 8; days -= 1) {
+    const last = lastBookableDay(days);
+    if (plusDays(last, room).slice(0, 7) === last.slice(0, 7)) return days;
+  }
+  return 20;
+};
+
+/**
+ * When a shop open all day lets a date be booked, said as the app says it.
+ * Worked out the way the window is — the date's midnight less the horizon, in
+ * hours — since a clock change in between moves it by an hour, and between
+ * midnight and one that can make "on the 11th" into "tomorrow".
+ */
+const opensWord = (date: string, horizonDays: number): string => {
+  const opens = new Intl.DateTimeFormat("en-CA", { timeZone: ZONE }).format(
+    new Date(Date.parse(anInstantAt(date, "00:00")) - horizonDays * 86_400_000),
+  );
+  if (opens <= aDayFromNow(0)) return "בהמשך היום";
+  if (opens === aDayFromNow(1)) return "מחר";
+  return `ב-${shortDate(opens)}`;
+};
+
 /** Pages the open month sheet forward until it draws this date. */
 const showInTheSheet = async (page: Page, date: string) => {
   const sheet = page.getByRole("dialog");
@@ -297,34 +332,27 @@ test.describe("the whole month", () => {
 
   test("a day past the window says when it opens", async ({ page }) => {
     const shop = await aShop("עוד לא נפתח");
-    await settings(shop, { bookingHorizonDays: 20 });
-    const last = lastBookableDay(20);
-    // A day at least two past the window, in its last month, so it opens on a
-    // date rather than tomorrow.
-    const beyond = [2, 3, 4, 5, 6].map((extra) => {
-      const date = new Date(`${last}T00:00:00Z`);
-      date.setUTCDate(date.getUTCDate() + extra);
-      return date.toISOString().slice(0, 10);
-    }).find((date) => date.slice(0, 7) === last.slice(0, 7));
-    test.skip(beyond === undefined, "The window ends at its month's very end today.");
-    const opens = new Date(`${beyond!}T00:00:00Z`);
-    opens.setUTCDate(opens.getUTCDate() - 20);
-    const opensOn = opens.toISOString().slice(0, 10);
+    const horizon = aHorizonEndingMidMonth();
+    await settings(shop, { bookingHorizonDays: horizon });
+    // A few days past the window, in its last month, so it usually opens on a
+    // date; around a clock change it can open tomorrow, and says so.
+    const beyond = plusDays(lastBookableDay(horizon), 3);
+    const when = opensWord(beyond, horizon);
 
     await openTheBusiness(page, shop.business.id);
     await page.getByRole("button", { name: "כל החודש" }).click();
     const sheet = page.getByRole("dialog");
-    const cell = await showInTheSheet(page, beyond!);
+    const cell = await showInTheSheet(page, beyond);
 
-    await expect(cell).toHaveAccessibleName(new RegExp(`ייפתח לקביעה ב-${shortDate(opensOn)}$`));
+    await expect(cell).toHaveAccessibleName(new RegExp(`ייפתח לקביעה ${when}$`));
     await cell.click();
-    await expect(sheet.getByText(`${shortDate(beyond!)} עוד לא נפתח לקביעה. התורים בו ייפתחו ב-${shortDate(opensOn)}.`)).toBeVisible();
+    await expect(sheet.getByText(`${shortDate(beyond)} עוד לא נפתח לקביעה. התורים בו ייפתחו ${when}.`)).toBeVisible();
     // Still open: a day not open yet is something to read, not to pick.
     await expect(sheet).toBeVisible();
     await expect(sheet.getByText("עוד לא נפתח", { exact: true })).toBeVisible();
   });
 
-  test("the day right after the window opens tomorrow", async ({ page }) => {
+  test("the day right after the window opens next, tomorrow or later today", async ({ page }) => {
     const shop = await aShop("מחר נפתח");
     await settings(shop, { bookingHorizonDays: 20 });
     const after = new Date(`${lastBookableDay(20)}T00:00:00Z`);
@@ -336,7 +364,7 @@ test.describe("the whole month", () => {
     const sheet = page.getByRole("dialog");
     test.skip((await showInTheSheet(page, date).then((cell) => cell.count())) === 0, "It falls in a month past the window's last.");
     await (await showInTheSheet(page, date)).click();
-    await expect(sheet.getByText(`${shortDate(date)} עוד לא נפתח לקביעה. התורים בו ייפתחו מחר.`)).toBeVisible();
+    await expect(sheet.getByText(`${shortDate(date)} עוד לא נפתח לקביעה. התורים בו ייפתחו ${opensWord(date, 20)}.`)).toBeVisible();
   });
 
   test("picking a day three weeks out brings it into the days, ready to book", async ({ page }) => {
@@ -481,10 +509,12 @@ test.describe("drawn cleanly", () => {
 
   test("a focused day that is not open yet has its dotted edge covered by the focus", async ({ page }) => {
     const shop = await aShop("נקודות");
-    await settings(shop, { bookingHorizonDays: 20 });
+    const horizon = aHorizonEndingMidMonth();
+    await settings(shop, { bookingHorizonDays: horizon });
     await openTheBusiness(page, shop.business.id);
     await page.getByRole("button", { name: "כל החודש" }).click();
-    const later = await showInTheSheet(page, aDayFromNow(22));
+    const later = await showInTheSheet(page, plusDays(lastBookableDay(horizon), 2));
+    await expect(later).toHaveClass(/later/);
     await page.keyboard.press("Shift");
     await later.focus();
     expect(
