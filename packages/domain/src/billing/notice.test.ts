@@ -181,7 +181,7 @@ describe("noticesDue", () => {
     const late = noticesDue(
       input({ subscription: { trialEndsOn: null, paidThrough: day("2026-10-18"), scheduledMove: null } }),
     );
-    expect(late).toEqual([{ kind: "PAYMENT_LATE", graceEndsOn: "2026-11-01" }]);
+    expect(late).toEqual([{ kind: "PAYMENT_LATE", graceEndsOn: "2026-10-21" }]);
   });
 
   it("warns of a scheduled move a week ahead, but not on its own day", () => {

@@ -3293,8 +3293,8 @@ export const describeRepositoryContract = (
 
         const lapsedIds = async (today: LocalDate) =>
           (await repositories.subscriptions.listLapsed(today)).map((subscription) => subscription.businessId);
-        expect(await lapsedIds(addDays(paidThrough, 14))).not.toContain(context.business.id);
-        expect(await lapsedIds(addDays(paidThrough, 15))).toContain(context.business.id);
+        expect(await lapsedIds(addDays(paidThrough, 3))).not.toContain(context.business.id);
+        expect(await lapsedIds(addDays(paidThrough, 4))).toContain(context.business.id);
       });
     });
 

@@ -151,7 +151,7 @@ describe("Notices", () => {
       expect(kinds(shop).filter((kind) => kind === "PAYMENT_LATE")).toHaveLength(1);
       expect(noticeOf(shop, "PAYMENT_LATE")?.facts).toEqual({
         kind: "PAYMENT_LATE",
-        graceEndsOn: addDays(paidThrough, 14),
+        graceEndsOn: addDays(paidThrough, 3),
       });
       expect(whatsappKinds()).toContain("PAYMENT_LATE");
     });

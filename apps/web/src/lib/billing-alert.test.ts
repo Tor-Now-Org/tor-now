@@ -26,19 +26,28 @@ describe("deactivationDeadline", () => {
 });
 
 describe("payTodayNote", () => {
-  const lapsed = (trialEndsOn: string | null) => ({ status: "LAPSED" as const, subscription: { trialEndsOn } });
+  const billing = (status: string, trialEndsOn: string | null = null) => ({ status, subscription: { trialEndsOn } });
 
   it("says the Trial was used elsewhere when the Business never had one", () => {
-    expect(payTodayNote(lapsed(null))).toBe("lapsedSoonNote");
+    expect(payTodayNote(billing("LAPSED"), null)).toBe("lapsedSoonNote");
   });
 
   it("says only that it is unpaid when it had a Trial of its own", () => {
-    expect(payTodayNote(lapsed("2026-09-23"))).toBe("lapsedSoonPaidNote");
+    expect(payTodayNote(billing("LAPSED", "2026-09-23"), null)).toBe("lapsedSoonPaidNote");
   });
 
-  it("says nothing for any other status", () => {
-    for (const status of ["TRIAL", "PAID", "IN_GRACE", "DEACTIVATED"] as const) {
-      expect(payTodayNote({ status, subscription: { trialEndsOn: null } })).toBeNull();
-    }
+  it("asks for payment for the whole Grace Period", () => {
+    expect(payTodayNote(billing("IN_GRACE"), 14)).toBe("inGraceNote");
+    expect(payTodayNote(billing("IN_GRACE"), 0)).toBe("inGraceNote");
+  });
+
+  it("asks for payment in a Trial's last three days, its last day included", () => {
+    expect(payTodayNote(billing("TRIAL", "2026-10-13"), 3)).toBe("trialEndingNote");
+    expect(payTodayNote(billing("TRIAL", "2026-10-10"), 0)).toBe("trialEndingNote");
+    expect(payTodayNote(billing("TRIAL", "2026-10-14"), 4)).toBeNull();
+  });
+
+  it("says nothing while paid or switched off", () => {
+    for (const status of ["PAID", "DEACTIVATED"]) expect(payTodayNote(billing(status), 1)).toBeNull();
   });
 });

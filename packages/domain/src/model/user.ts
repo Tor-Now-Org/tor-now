@@ -47,7 +47,7 @@ export type User = {
  * signed in on an older version is then shown the update notice until they
  * acknowledge it. A typo fix leaves it alone.
  */
-export const TERMS_VERSION = "2026-10-03";
+export const TERMS_VERSION = "2026-10-10";
 
 /**
  * The name to show. Joining happens here rather than in each interface, so

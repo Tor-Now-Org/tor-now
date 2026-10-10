@@ -1622,6 +1622,9 @@ const billing = {
     "trialNote": "תקופת הניסיון מסתיימת ב־{date}. כדי להמשיך, יש לשלם עד אז — אחרת העסק יוסר מהחיפוש ולא יקבל תורים חדשים. תורים שכבר נקבעו לא ייפגעו.",
     "lapsedSoonNote": "תקופת הניסיון הסתיימה — היא כבר נוצלה בעסק קודם. יש לשלם היום: בלי תשלום, ב־{date} בשעה {time} העסק יוסר מהחיפוש ולא יקבל תורים חדשים.",
     "lapsedSoonPaidNote": "המנוי לא שולם. יש לשלם היום: בלי תשלום, ב־{date} בשעה {time} העסק יוסר מהחיפוש ולא יקבל תורים חדשים.",
+    "trialEndingNote": "תקופת הניסיון מסתיימת ב־{date}. יש לשלם עד אז — אחרת העסק יוסר מהחיפוש ולא יקבל תורים חדשים.",
+    "inGraceNote": "המנוי לא שולם, והעסק בתקופת החסד עד {date}. יש לשלם עד אז — אחרת העסק יוסר מהחיפוש ולא יקבל תורים חדשים.",
+    "goToPayment": "לתשלום",
     "noPayments": "עדיין אין תשלומים.",
     "seePlans": "למסלולים",
     "featureLine": {
@@ -1762,6 +1765,9 @@ const billing = {
     "trialNote": "Your Trial ends on {date}. To carry on, pay by then. Otherwise the business leaves search and takes no new bookings. Appointments already booked are unaffected.",
     "lapsedSoonNote": "The trial has ended, since it was used on an earlier business. Pay today: without a payment, on {date} at {time} the business leaves search and takes no new bookings.",
     "lapsedSoonPaidNote": "The subscription is unpaid. Pay today: without a payment, on {date} at {time} the business leaves search and takes no new bookings.",
+    "trialEndingNote": "Your Trial ends on {date}. Pay by then, or the business leaves search and takes no new bookings.",
+    "inGraceNote": "The subscription is unpaid, and the business is in its Grace Period until {date}. Pay by then, or the business leaves search and takes no new bookings.",
+    "goToPayment": "Go to payment",
     "noPayments": "No payments yet.",
     "seePlans": "See plans",
     "featureLine": {

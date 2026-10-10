@@ -14,11 +14,15 @@ export const bannerOf = (
   return notice === undefined ? null : { notice, othersUnread };
 };
 
-/** The pay-today banner says what the payment-due Notice says, so not both. */
+/** What the pay-today banner already says, as a Notice. */
+const SAID_BY_PAY_BANNER: readonly string[] = ["PAYMENT_DUE", "PAYMENT_LATE", "TRIAL_ENDING"];
+
+/** The pay-today banner says what these Notices say, so not both. */
 export const bannerBeside = <Banner extends { readonly notice: NoticeDto }>(
   banner: Banner | null,
-  lapsed: boolean,
-): Banner | null => (lapsed && banner?.notice.facts.kind === "PAYMENT_DUE" ? null : banner);
+  payBannerShown: boolean,
+): Banner | null =>
+  payBannerShown && banner !== null && SAID_BY_PAY_BANNER.includes(banner.notice.facts.kind) ? null : banner;
 
 export const unreadOf = (board: NoticeBoardDto | null): number =>
   (board?.notices ?? []).filter((notice) => !notice.read).length;

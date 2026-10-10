@@ -17,24 +17,39 @@ import { localDateOf } from "./day-filter.ts";
 import { usePlans } from "@/lib/use-plans.ts";
 
 /**
- * A lapsed Business is still on until the nightly run turns it off: above every
- * tab, until paid, the owner is told when. A switched-off one never gets here —
- * its screen is a sheet saying so.
+ * Above every tab, until paid: a lapsed Business is told when the nightly run
+ * turns it off, one in its Grace Period or its Trial's last days when that
+ * ends — each with the way to pay. A switched-off one never gets here — its
+ * screen is a sheet saying so.
  */
-export const PayTodayBanner = ({ billing, timeZone }: { billing: BillingDto; timeZone: string }) => {
+export const PayTodayBanner = ({
+  billing,
+  timeZone,
+  onPay,
+}: {
+  billing: BillingDto;
+  timeZone: string;
+  onPay: () => void;
+}) => {
   const words = useCopy("billing");
   const { language } = useLanguage();
-  const note = payTodayNote(billing);
+  const note = payTodayNote(billing, billing.nextDate === null ? null : daysUntil(billing.nextDate, timeZone));
   if (note === null) return null;
+  const longDate = (localDate: string) => formatLocalDate(localDate, language, { day: "numeric", month: "long" });
   const deadline = deactivationDeadline(timeZone);
   return (
-    <div style={{ margin: "12px 16px 4px" }}>
+    <div className="notice-banner-wrap">
       <Warning>
         {fillText(words[note], {
-          date: formatLocalDate(deadline.date, language, { day: "numeric", month: "long" }),
+          date: note === "trialEndingNote" || note === "inGraceNote" ? longDate(billing.nextDate ?? "") : longDate(deadline.date),
           time: deadline.time,
         })}
       </Warning>
+      <div className="notice-banner-actions">
+        <button type="button" className="go" onClick={onPay}>
+          {words.goToPayment}
+        </button>
+      </div>
     </div>
   );
 };

@@ -349,11 +349,11 @@ describe("administrator scope", () => {
     };
 
     // Inside the grace period: nothing happens.
-    paidThrough("2026-08-20");
+    paidThrough("2026-08-23");
     expect(await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" })).toEqual([]);
 
     // Past it: the business goes.
-    paidThrough("2026-08-01");
+    paidThrough("2026-08-21");
     expect(await test.services.admin.deactivateLapsedBusinesses({ kind: "SYSTEM" })).toEqual([
       shop.business.id,
     ]);

@@ -30,15 +30,25 @@ export const deactivationDeadline = (
   return { date: run.date, tomorrow: run.date !== localDateOf(now.toISOString(), zone), time: formatLocalTime(run.time) };
 };
 
+/** How close a Trial's end has to be before the banner above every tab asks for payment. */
+export const PAY_SOON_DAYS = 3;
+
 /**
- * Which sentence the banner above every tab says while a Business is lapsed and
- * still on; null when it is not lapsed. No Trial at all means its owner used it
- * on an earlier Business.
+ * Which sentence the banner above every tab says: while a Business is lapsed
+ * and still on, in its Grace Period, or in the last days of its Trial; null
+ * otherwise. No Trial at all means its owner used it on an earlier Business.
+ * `daysLeft` is `daysUntil` the Standing's date, null when it has none.
  */
-export const payTodayNote = (billing: {
-  status: string;
-  subscription: { trialEndsOn: string | null };
-}): "lapsedSoonNote" | "lapsedSoonPaidNote" | null => {
-  if (billing.status !== "LAPSED") return null;
-  return billing.subscription.trialEndsOn === null ? "lapsedSoonNote" : "lapsedSoonPaidNote";
+export const payTodayNote = (
+  billing: { status: string; subscription: { trialEndsOn: string | null } },
+  daysLeft: number | null,
+): "lapsedSoonNote" | "lapsedSoonPaidNote" | "trialEndingNote" | "inGraceNote" | null => {
+  if (billing.status === "LAPSED") {
+    return billing.subscription.trialEndsOn === null ? "lapsedSoonNote" : "lapsedSoonPaidNote";
+  }
+  if (billing.status === "IN_GRACE") return "inGraceNote";
+  if (billing.status === "TRIAL" && daysLeft !== null && daysLeft >= 0 && daysLeft <= PAY_SOON_DAYS) {
+    return "trialEndingNote";
+  }
+  return null;
 };

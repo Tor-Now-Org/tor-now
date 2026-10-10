@@ -127,7 +127,7 @@ _Avoid_: Transaction, charge, invoice, settlement
 **Grace Period**:
 The interval after a Subscription falls due during which the Business continues
 to operate unaffected, on the same Plan. Only a Subscription that has received at
-least one Payment has one. Fourteen days; Deactivation follows only once it
+least one Payment has one. Three days; Deactivation follows only once it
 elapses. A Trial never has one.
 _Avoid_: Overdue window, buffer, leniency
 

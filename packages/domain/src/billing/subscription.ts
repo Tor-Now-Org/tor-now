@@ -15,7 +15,7 @@ import { isUpgrade, type PlanVersion } from "./plan.ts";
  * continues to operate unaffected. Fourteen days, per docs/billing/CONTEXT.md;
  * a Trial never has one.
  */
-export const GRACE_PERIOD_DAYS = 14;
+export const GRACE_PERIOD_DAYS = 3;
 
 /** The first thirty days of a Subscription, given once per owner. */
 export const TRIAL_DAYS = 30;

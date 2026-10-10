@@ -39,6 +39,7 @@ import {
 import { Button, Empty, Spinner } from "@/components/ui.tsx";
 import { BUSINESS_DEFAULTS } from "@tor-now/domain";
 import { bannerBeside, useNotices } from "@/lib/use-notices.ts";
+import { daysUntil, payTodayNote } from "@/lib/billing-alert.ts";
 import {
   NoticeBanner,
   NoticeBell,
@@ -309,7 +310,10 @@ function ManageApp() {
   // A tab they may not have — an old link, a role or a plan changed under
   // them — shows their calendar rather than an empty screen.
   const shown: Tab = sections.includes(tab) ? tab : "day";
-  const banner = bannerBeside(notices.banner, billing?.status === "LAPSED");
+  const banner = bannerBeside(
+    notices.banner,
+    billing !== null && payTodayNote(billing, billing.nextDate === null ? null : daysUntil(billing.nextDate, business.timeZone)) !== null,
+  );
 
   return (
     <>
@@ -331,7 +335,7 @@ function ManageApp() {
       />
 
       <main className="scroll" style={{ flex: 1, minHeight: 0 }}>
-        {billing !== null && <PayTodayBanner billing={billing} timeZone={business.timeZone} />}
+        {billing !== null && <PayTodayBanner billing={billing} timeZone={business.timeZone} onPay={openBilling} />}
         {banner !== null && (
           <NoticeBanner
             notice={banner.notice}

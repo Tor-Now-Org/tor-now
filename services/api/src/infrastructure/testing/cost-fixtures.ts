@@ -61,7 +61,7 @@ const setCover = (test: Harness, businessId: BusinessId, cover: { trialEndsOn: s
   );
 };
 
-/** Paid up to a day: paying before it, in grace for fourteen days after, lapsed after that. */
+/** Paid up to a day: paying before it, in grace for three days after, lapsed after that. */
 export const paidThrough = (test: Harness, businessId: BusinessId, day: string): void =>
   setCover(test, businessId, { trialEndsOn: null, paidThrough: day });
 

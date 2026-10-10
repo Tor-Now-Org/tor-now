@@ -82,14 +82,14 @@ describe("subscriptionStateOn", () => {
     expect(subscriptionStateOn(paid(), day("2026-10-01"))).toBe("IN_GRACE");
   });
 
-  it("stays in grace for fourteen days", () => {
-    expect(GRACE_PERIOD_DAYS).toBe(14);
-    expect(graceEndsOn({ paidThrough: day("2026-09-30") })).toBe("2026-10-14");
-    expect(subscriptionStateOn(paid(), day("2026-10-14"))).toBe("IN_GRACE");
+  it("stays in grace for three days", () => {
+    expect(GRACE_PERIOD_DAYS).toBe(3);
+    expect(graceEndsOn({ paidThrough: day("2026-09-30") })).toBe("2026-10-03");
+    expect(subscriptionStateOn(paid(), day("2026-10-03"))).toBe("IN_GRACE");
   });
 
   it("lapses once the grace period elapses", () => {
-    expect(subscriptionStateOn(paid(), day("2026-10-15"))).toBe("LAPSED");
+    expect(subscriptionStateOn(paid(), day("2026-10-04"))).toBe("LAPSED");
   });
 
   it("is current, not in trial, once a trial has been paid for", () => {
@@ -100,8 +100,8 @@ describe("subscriptionStateOn", () => {
 
 describe("shouldDeactivate", () => {
   it("holds off during the grace period and fires after it", () => {
-    expect(shouldDeactivate(paid(), day("2026-10-14"))).toBe(false);
-    expect(shouldDeactivate(paid(), day("2026-10-15"))).toBe(true);
+    expect(shouldDeactivate(paid(), day("2026-10-03"))).toBe(false);
+    expect(shouldDeactivate(paid(), day("2026-10-04"))).toBe(true);
   });
 
   it("fires the day after an unpaid trial", () => {

@@ -64,7 +64,7 @@ const row = (
 const rows = [
   row("Ran", { trialEndsOn: day("2026-09-23") }, { plan: team }),
   row("Noy", { paidThrough: day("2026-10-23") }),
-  row("Dana", { paidThrough: day("2026-09-08") }, { owner: "דנה" }),
+  row("Dana", { paidThrough: day("2026-09-14") }, { owner: "דנה" }),
   row("Harbour", { trialEndsOn: day("2026-10-12") }, { plan: team }),
   row("Barber", { paidThrough: day("2026-10-30") }, { onOffer: 3 }),
   row("Shira", { paidThrough: day("2026-11-02") }, { plan: team, active: false }),

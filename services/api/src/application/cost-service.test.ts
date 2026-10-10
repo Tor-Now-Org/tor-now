@@ -35,7 +35,7 @@ describe("what a month cost", () => {
     const gone = await aShop(test, "סגור", "SOLO");
     paidThrough(test, ran.business.id, "2026-10-10");
     // Paid through a day in the past: in its Grace Period, still paying.
-    paidThrough(test, dana.business.id, "2026-09-15");
+    paidThrough(test, dana.business.id, "2026-09-18");
     paidThrough(test, noa.business.id, "2026-10-01");
     neverPaid(test, gone.business.id);
     holding(test, noa.business.id, "WAITING_LIST", 1_900, "2026-09-01");
@@ -134,8 +134,8 @@ describe("what a month cost", () => {
 
   it("reads an earlier month to its last day, with each Business standing as it did then", async () => {
     const dana = await aShop(test, "סלון דנה", "SOLO");
-    // Paid through 20 August: in grace on 31 August, still paying for August.
-    paidThrough(test, dana.business.id, "2026-08-20");
+    // Paid through 29 August: in grace on 31 August, still paying for August.
+    paidThrough(test, dana.business.id, "2026-08-29");
     test.store.unitRates = test.store.unitRates.map((rate) => ({ ...rate, effectiveFrom: parseLocalDate("2026-08-01") }));
     sent(test, dana.business.id, "BOOKING", "WHATSAPP_UTILITY", "2026-08-31T20:00:00.000Z", 7);
     sent(test, dana.business.id, "BOOKING", "WHATSAPP_UTILITY", "2026-09-01T00:00:00.000Z", 100);

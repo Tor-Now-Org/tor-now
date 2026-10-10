@@ -33,13 +33,13 @@ describe("standingOf — the status", () => {
   });
 
   it("is IN_GRACE once paid time is over, dated by the grace period's last day", () => {
-    const standing = standingOf(withSubscription({ paidThrough: day("2026-09-10") }));
-    expect(standing).toMatchObject({ status: "IN_GRACE", nextDate: "2026-09-24" });
+    const standing = standingOf(withSubscription({ paidThrough: day("2026-09-14") }));
+    expect(standing).toMatchObject({ status: "IN_GRACE", nextDate: "2026-09-17" });
   });
 
   it("is LAPSED after the grace period, dated by the first day it no longer covered", () => {
     const standing = standingOf(withSubscription({ paidThrough: day("2026-08-20") }));
-    expect(standing).toMatchObject({ status: "LAPSED", nextDate: "2026-09-04" });
+    expect(standing).toMatchObject({ status: "LAPSED", nextDate: "2026-08-24" });
   });
 
   it("is LAPSED the day after an unpaid Trial", () => {
