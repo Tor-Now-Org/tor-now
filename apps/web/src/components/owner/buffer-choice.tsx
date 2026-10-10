@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { NumberField } from "../number-field.tsx";
@@ -23,6 +23,7 @@ export const BufferChoice = ({
   businessDefault,
   onChange,
   footer,
+  colour,
 }: {
   id: string;
   durationMinutes: number;
@@ -31,6 +32,8 @@ export const BufferChoice = ({
   onChange: (value: number | null) => void;
   /** Where the business default is set, said in the place's own terms. */
   footer?: ReactNode;
+  /** The service's own colour from the calendar, for the stretch it fills. */
+  colour?: { readonly ground: string; readonly rail: string } | undefined;
 }) => {
   const copy = useCopy("owner");
   // The last time of its own, so trying the business's and coming back does
@@ -72,7 +75,11 @@ export const BufferChoice = ({
         />
       )}
       {/* What the calendar keeps, drawn to scale: the service, then its recovery. */}
-      <div className="buffer-track" aria-hidden="true">
+      <div
+        className="buffer-track"
+        aria-hidden="true"
+        style={colour === undefined ? undefined : ({ "--track-ground": colour.ground, "--track-rail": colour.rail } as CSSProperties)}
+      >
         <span className="service" style={{ flexGrow: durationMinutes }}>
           {durationMinutes}
         </span>

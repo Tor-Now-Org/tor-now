@@ -16,6 +16,7 @@ import { categories } from "./categories-copy.ts";
 import { change } from "./change-copy.ts";
 import { days } from "./days-copy.ts";
 import { live } from "./live-copy.ts";
+import { lists } from "./lists-copy.ts";
 
 export const LANGUAGES = ["he", "en"] as const;
 export type Language = (typeof LANGUAGES)[number];
@@ -3114,6 +3115,7 @@ export const DICTIONARIES = {
   change,
   days,
   live,
+  lists,
   legal,
   customer,
   signIn,

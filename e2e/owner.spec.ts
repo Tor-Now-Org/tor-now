@@ -1709,11 +1709,9 @@ test.describe("the business panel", () => {
     await page.getByRole("button", { name: "העסק" }).click();
     await page.getByRole("button", { name: "יומנים" }).click();
 
-    // Both calendars offer removal, so this names the one under test.
-    await page
-      .locator(".card", { hasText: "כיסא שני" })
-      .getByRole("button", { name: "מחיקה" })
-      .click();
+    // Removing is last in the calendar's own sheet.
+    await page.locator(".list-row", { hasText: "כיסא שני" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "מחיקת היומן" }).click();
 
     // The question, with the number of people it affects in it.
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -1893,7 +1891,8 @@ test.describe("the business panel", () => {
     await page.getByRole("button", { name: "יומנים" }).click();
 
     // The name is the control: pressing it is how it is changed.
-    await page.getByRole("button", { name: `שינוי שם ${shop.resource.name}` }).click();
+    await page.locator(".list-row", { hasText: shop.resource.name }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שינוי שם" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
 
     // It opens with the name selected and takes Enter as done, so a rename is
@@ -1901,7 +1900,7 @@ test.describe("the business panel", () => {
     await page.getByRole("dialog").getByLabel("שם היומן").fill("עמדה ראשית");
     await page.getByRole("dialog").getByLabel("שם היומן").press("Enter");
 
-    await expect(page.getByText("עמדה ראשית")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".list-row", { hasText: "עמדה ראשית" })).toBeVisible({ timeout: 15_000 });
 
     // And a customer choosing between calendars sees the new name.
     const profile = await call<{ resources: { name: string }[] }>(
@@ -1940,10 +1939,8 @@ test.describe("the business panel", () => {
 
     // The second calendar is not the one the schedule would open on by
     // default, which is the whole point of pressing edit on its row.
-    await page
-      .locator(".card", { hasText: "כיסא שני" })
-      .getByRole("button", { name: "עריכה" })
-      .click();
+    await page.locator(".list-row", { hasText: "כיסא שני" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שעות ושינויים ביומן" }).click();
 
     // The schedule screen, open on the calendar whose row was pressed — not on
     // the first one, which is what it would have shown by default.
@@ -1974,10 +1971,11 @@ test.describe("the business panel", () => {
     await page.getByRole("dialog").getByRole("button", { name: "הוספה" }).click();
     await expect(page.getByText("כיסא שני")).toBeVisible({ timeout: 15_000 });
 
-    await page.getByRole("button", { name: "הסתרה" }).first().click();
-    await expect(page.getByRole("button", { name: "הצגה" }).first()).toBeVisible({
-      timeout: 15_000,
-    });
+    // Standing is a switch in the calendar's sheet now, not a button on its row.
+    await page.locator(".list-row", { hasText: shop.resource.name }).click();
+    const shown = page.getByRole("dialog").getByRole("switch", { name: "מוצג ללקוחות" });
+    await shown.click();
+    await expect(shown).toHaveAttribute("aria-checked", "false", { timeout: 15_000 });
     await expect(page.getByText("מוסתר").first()).toBeVisible();
 
     const whileHidden = await call<{ resources: { name: string }[] }>(
@@ -1985,10 +1983,8 @@ test.describe("the business panel", () => {
     );
     expect(whileHidden.resources).toHaveLength(1);
 
-    await page.getByRole("button", { name: "הצגה" }).first().click();
-    await expect(page.getByRole("button", { name: "הסתרה" }).first()).toBeVisible({
-      timeout: 15_000,
-    });
+    await shown.click();
+    await expect(shown).toHaveAttribute("aria-checked", "true", { timeout: 15_000 });
 
     const whenShown = await call<{ resources: { name: string }[] }>(
       `/businesses/${shop.business.id}`,
@@ -2010,13 +2006,13 @@ test.describe("the business panel", () => {
     await ready(page);
     await page.getByRole("button", { name: "העסק" }).click();
 
-    // Hiding is its own control. It used to be reachable only through the
-    // editor's "remove", which deletes a service nobody has booked yet — and
-    // offered no way back from either outcome.
-    await page.getByRole("button", { name: "הסתרה" }).first().click();
-    await expect(page.getByRole("button", { name: "הצגה" }).first()).toBeVisible({
-      timeout: 15_000,
-    });
+    // Hiding is its own control — a switch in the service's sheet, saved with
+    // the rest, never the editor's "remove", which deletes a service nobody
+    // has booked yet.
+    await page.locator(".list-row", { hasText: shop.service.name }).click();
+    await page.getByRole("dialog").getByRole("switch", { name: "מוצג ללקוחות" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
     // And it says so on the row, not only on the control: the owner should be
     // able to tell at a glance which of their services customers can book.
@@ -2031,10 +2027,11 @@ test.describe("the business panel", () => {
 
     // And back again, which was impossible before: a withdrawn service could
     // never be offered a second time.
-    await page.getByRole("button", { name: "הצגה" }).first().click();
-    await expect(page.getByRole("button", { name: "הסתרה" }).first()).toBeVisible({
-      timeout: 15_000,
-    });
+    await page.locator(".list-row", { hasText: shop.service.name }).click();
+    await page.getByRole("dialog").getByRole("switch", { name: "מוצג ללקוחות" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+    await expect(page.locator(".list-row", { hasText: shop.service.name }).locator(".list-tag")).toHaveCount(0);
 
     const whenShown = await call<{ services: { name: string }[] }>(
       `/businesses/${shop.business.id}`,
@@ -2055,7 +2052,7 @@ test.describe("the business panel", () => {
     await page.goto("/manage");
     await ready(page);
     await page.getByRole("button", { name: "העסק" }).click();
-    await page.getByRole("button", { name: "הוספת שירות" }).click();
+    await page.getByRole("button", { name: "הוספה", exact: true }).click();
 
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByLabel("שם השירות").fill("צבע");
@@ -2409,14 +2406,15 @@ test.describe("a customer's own page", () => {
     // A page of its own, not a sheet over the list.
     await expect(page).toHaveURL(/\/manage\/customers\//, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "דנה כהן" })).toBeVisible();
-    // The canvas's card: the counts read as label and value, "customer since"
-    // among them, rather than a row of tiles.
-    await expect(page.getByText("לקוח מאז")).toBeVisible();
-    await expect(page.getByText("היסטוריית התורים")).toBeVisible();
+    // The band says how long they have been a customer; the counts are tiles,
+    // and the history has its heading.
+    await expect(page.getByText(/^לקוח מאז /)).toBeVisible();
+    await expect(page.locator(".record-tiles")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "היסטוריה" })).toBeVisible();
 
-    // One tap to ring them, one to message them; neither asks the owner to
-    // transcribe the number first.
-    await expect(page.getByRole("link", { name: `חיוג ${customerPhone}` })).toHaveAttribute(
+    // One tap to ring them, one to message them, both named; neither asks the
+    // owner to transcribe the number first.
+    await expect(page.getByRole("link", { name: `התקשרות ${customerPhone}` })).toHaveAttribute(
       "href",
       `tel:${customerPhone}`,
     );
@@ -2691,7 +2689,7 @@ test.describe("the team", () => {
     const worker = uniquePhone();
     // The list's own button, not the sheet's — both read "הוספה", which is the
     // right word in both places and the reason this needs saying.
-    await page.getByRole("button", { name: "הוספה", exact: true }).first().click();
+    await page.getByRole("button", { name: "הזמנה", exact: true }).click();
     const sheet = page.getByRole("dialog");
     await sheet.getByLabel("מספר הטלפון שלו").fill(asTyped(worker));
     await sheet.getByLabel("שם פרטי").fill("עובדת");
@@ -2703,7 +2701,11 @@ test.describe("the team", () => {
 
     // The row says the terms and the calendars, which is the whole of the answer.
     await expect(page.getByText("עובדת חדשה")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("יומן ב, יומן ג")).toBeVisible();
+    // Her row names her calendars, each beside its colour.
+    const hers = page.locator(".list-row", { hasText: "עובדת חדשה" }).locator(".list-line");
+    await expect(hers).toContainText("יומן ב");
+    await expect(hers).toContainText("יומן ג");
+    await expect(hers).not.toContainText("יומן א");
 
     // And now the other side of it, on the same phone number the invite named.
     await signInDirectly(page, worker, "עובדת חדשה");
@@ -5737,7 +5739,7 @@ test.describe("booking a customer in", () => {
     await expect(page.getByRole("heading", { name: "תמר בן דוד" })).toBeVisible({
       timeout: 15_000,
     });
-    await page.getByRole("button", { name: "תור ללקוח" }).click();
+    await page.getByRole("button", { name: "תור חדש לתמר" }).click();
 
     // Back on the calendar, with her along and only a day left to choose.
     await expect(page.getByText(/בחירת יום לתור · תמר/)).toBeVisible({ timeout: 15_000 });
@@ -5818,9 +5820,9 @@ test.describe("setting the recovery time", () => {
     await call(`/businesses/${shop.business.id}`, { method: "PATCH", token: shop.owner.token, body: { defaultBufferMinutes: 10 } });
     await openServices(page, shop);
 
-    const row = page.locator(".card", { hasText: shop.service.name }).first();
-    await expect(row.getByText("התאוששות 10 דק׳ · של העסק")).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "עריכת שירות" }).click();
+    const row = page.locator(".list-row", { hasText: shop.service.name }).first();
+    await expect(row.locator(".list-line")).toContainText("ועוד 10 דק׳ התאוששות של העסק", { timeout: 15_000 });
+    await row.click();
 
     const sheet = page.getByRole("dialog");
     const recovery = sheet.getByRole("group", { name: "זמן התאוששות אחרי התור" });
@@ -5835,22 +5837,22 @@ test.describe("setting the recovery time", () => {
     await sheet.getByRole("button", { name: "שמירה" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
     await expect.poll(async () => (await serviceOf(shop))?.bufferMinutes, { timeout: 15_000 }).toBe(15);
-    await expect(row.getByText("התאוששות 15 דק׳", { exact: true })).toBeVisible();
+    await expect(row.locator(".list-line")).toHaveText(/ועוד 15 דק׳ התאוששות$/);
 
     // And back to the business's: saved as "follow", not as a copy of ten.
-    await row.getByRole("button", { name: "עריכת שירות" }).click();
+    await row.click();
     await page.getByRole("dialog").getByRole("button", { name: /כמו בעסק/ }).click();
     await page.getByRole("dialog").getByRole("button", { name: "שמירה" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
     await expect.poll(async () => (await serviceOf(shop))?.bufferMinutes, { timeout: 15_000 }).toBeNull();
-    await expect(row.getByText("התאוששות 10 דק׳ · של העסק")).toBeVisible();
+    await expect(row.locator(".list-line")).toContainText("ועוד 10 דק׳ התאוששות של העסק");
   });
 
   test("a time of its own of nought is no recovery at all", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({ name: `בלי התאוששות ${Date.now()}`, ownerPhone: uniquePhone(), durationMinutes: 30 });
     await call(`/businesses/${shop.business.id}`, { method: "PATCH", token: shop.owner.token, body: { defaultBufferMinutes: 10 } });
     await openServices(page, shop);
-    await page.locator(".card", { hasText: shop.service.name }).first().getByRole("button", { name: "עריכת שירות" }).click({ timeout: 15_000 });
+    await page.locator(".list-row", { hasText: shop.service.name }).first().click({ timeout: 15_000 });
 
     const recovery = page.getByRole("dialog").getByRole("group", { name: "זמן התאוששות אחרי התור" });
     await recovery.getByRole("button", { name: /זמן אחר/ }).click();
@@ -5870,7 +5872,7 @@ test.describe("setting the recovery time", () => {
     });
     await openServices(page, shop);
 
-    await page.locator(".card", { hasText: shop.service.name }).first().getByRole("button", { name: "עריכת שירות" }).click({ timeout: 15_000 });
+    await page.locator(".list-row", { hasText: shop.service.name }).first().click({ timeout: 15_000 });
     await page.getByRole("button", { name: /ברירת המחדל של העסק נקבעת בהגדרות העסק/ }).click();
 
     // The settings, at the default, with each service and whose time it keeps.
@@ -6298,7 +6300,7 @@ test.describe("adding somebody to a business you are not the only owner of", () 
     });
     await page.getByRole("button", { name: "צוות", exact: true }).click();
 
-    await page.getByRole("button", { name: "הוספה" }).first().click();
+    await page.getByRole("button", { name: "הזמנה", exact: true }).click();
     const sheet = page.getByRole("dialog");
     await sheet.getByLabel(/טלפון/).fill(uniquePhone().replace("+972", ""));
     await sheet.getByLabel(/שם פרטי/).fill("שימי");
@@ -6330,7 +6332,7 @@ test.describe("adding somebody to a business you are not the only owner of", () 
       ownerPhone: uniquePhone(),
     });
     await openTeam(page, shop.business.id, shop.owner.token);
-    await page.getByRole("button", { name: "הוספה" }).first().click();
+    await page.getByRole("button", { name: "הזמנה", exact: true }).click();
 
     const sheet = page.getByRole("dialog");
     // The number is the identity and decides whether the name is asked for at
@@ -6361,7 +6363,7 @@ test.describe("typing a number into a number", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await page.getByRole("button", { name: "העסק" }).click();
-    await page.getByRole("button", { name: "הוספת שירות" }).click();
+    await page.getByRole("button", { name: "הוספה", exact: true }).click();
 
     const sheet = page.getByRole("dialog");
     const price = sheet.getByLabel(/מחיר/);
@@ -6393,7 +6395,7 @@ test.describe("typing a number into a number", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await page.getByRole("button", { name: "העסק" }).click();
-    await page.getByRole("button", { name: "הוספת שירות" }).click();
+    await page.getByRole("button", { name: "הוספה", exact: true }).click();
     const sheet = page.getByRole("dialog");
     const price = sheet.getByLabel(/מחיר/);
 
@@ -6435,7 +6437,7 @@ test.describe("typing a number into a number", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await page.getByRole("button", { name: "העסק" }).click();
-    await page.getByRole("button", { name: "הוספת שירות" }).click();
+    await page.getByRole("button", { name: "הוספה", exact: true }).click();
     const sheet = page.getByRole("dialog");
 
     const duration = sheet.getByLabel(/משך/);
@@ -6469,7 +6471,7 @@ test.describe("typing a number into a number", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await page.getByRole("button", { name: "העסק" }).click();
-    await page.getByRole("button", { name: "הוספת שירות" }).click();
+    await page.getByRole("button", { name: "הוספה", exact: true }).click();
     const sheet = page.getByRole("dialog");
     const duration = sheet.getByLabel(/משך/);
     const name = sheet.getByLabel(/שם השירות/);
@@ -6525,7 +6527,7 @@ test.describe("typing a number into a number", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
     await page.getByRole("button", { name: "העסק" }).click();
-    await page.locator(".card", { hasText: shop.service.name }).getByRole("button", { name: "עריכת שירות" }).click();
+    await page.locator(".list-row", { hasText: shop.service.name }).click();
     const sheet = page.getByRole("dialog");
     const price = sheet.getByLabel(/מחיר/);
     await expect(price).toHaveValue("0");
@@ -6628,11 +6630,11 @@ test.describe("what Solo locks", () => {
     await page.getByText("דנה כהן").first().click();
     await expect(page).toHaveURL(/\/manage\/customers\//, { timeout: 15_000 });
 
-    await expect(page.getByRole("button", { name: "תור ללקוח" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "תור חדש לדנה" })).toBeVisible();
     await expect(page.getByRole("group", { name: "היסטוריית לקוח זמינה במסלול צוות" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "חסימת הלקוח" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /חסימת הלקוח/ })).toHaveCount(0);
     // What is coming is not history: it stays.
-    await expect(page.getByText("התורים הקרובים")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "התור הבא" })).toBeVisible();
   });
 });
 

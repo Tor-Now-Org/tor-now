@@ -11,9 +11,14 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { blocking, checkText, useFieldProblem } from "@/lib/use-field-problem.ts";
 import { checkLocalPhone, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "../phone-field.tsx";
-import { Button, Card, Chip, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
+import { Button, Chip, Critical, Empty, Field, Note, Sheet, Spinner } from "../ui.tsx";
 import { Locked, useLockText } from "../locked.tsx";
 import { includes } from "@/lib/entitlement.ts";
+import { fillText } from "@/lib/i18n/fill.ts";
+import { phoneShown } from "@/lib/phone.ts";
+import { PhoneActions } from "../phone-actions.tsx";
+import { laneColourOf } from "./event-colour.ts";
+import { DangerRow, Initial, ListCard, ListHead, ListRow, ListTag, SheetIdentity, SheetRow, SheetRows } from "./list-ui.tsx";
 
 /** The three a person can be given. CUSTOMER is not a thing you invite somebody as. */
 const ROLES = ["OWNER", "MANAGER", "WORKER"] as const;
@@ -67,6 +72,7 @@ export const Team = ({
   onSeePlans?: (() => void) | undefined;
 }) => {
   const copy = useCopy("owner");
+  const words = useCopy("lists");
   const billingCopy = useCopy("billing");
   const locks = useLockText();
   const { user } = useSession();
@@ -84,6 +90,8 @@ export const Team = ({
   const [members, setMembers] = useState<TeamMemberDto[] | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [removing, setRemoving] = useState<TeamMemberDto | null>(null);
+  /** The colleague whose sheet is open: their number, their terms, and removing them. */
+  const [viewing, setViewing] = useState<TeamMemberDto | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [looking, setLooking] = useState(false);
@@ -140,95 +148,128 @@ export const Team = ({
         checkText(draft.givenName, TEXT_RULES.personName),
       ));
 
+  const roleWord = (member: TeamMemberDto) => copy[`role${member.role === "CUSTOMER" ? "WORKER" : member.role}`];
+  /** A worker's calendars, each in its colour from the day view. */
+  const calendarsOf = (member: TeamMemberDto) =>
+    resources
+      .map((resource, index) => ({ resource, index }))
+      .filter(({ resource }) => member.resourceIds.includes(resource.id));
+  const edit = (member: TeamMemberDto) => {
+    setViewing(null);
+    setDraft({
+      member,
+      phone: "",
+      givenName: member.givenName,
+      familyName: member.familyName ?? "",
+      role: member.role === "CUSTOMER" ? "WORKER" : member.role,
+      resourceIds: [...member.resourceIds],
+      locked: false,
+    });
+  };
+  const mayInvite = includes(business, "TEAM_ROLES");
+
   return (
     <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 14 }}>
-      <h3 style={{ fontSize: 25, margin: 0, fontWeight: 500 }}>{copy.team}</h3>
+      <ListHead
+        id="team-title"
+        title={words.team}
+        count={members.length}
+        countLabel={fillText(words.countOf, { title: words.team, n: String(members.length) })}
+        action={
+          mayInvite
+            ? {
+                label: words.invite,
+                onClick: () => {
+                  setLeft({});
+                  setDraft(EMPTY);
+                },
+              }
+            : undefined
+        }
+      />
 
       {error !== null && <Critical>{error}</Critical>}
 
       {members.length === 0 ? (
         <Empty title={copy.noTeam} />
       ) : (
-        members.map((member) => (
-          <Card
-            key={member.membershipId}
-            style={{ display: "flex", alignItems: "center", gap: 10 }}
-          >
-              <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontWeight: 500 }}>
-                  {member.name}
-                  {member.id === user?.id && (
-                    <span className="hint" style={{ marginInlineStart: 6 }}>
-                      {copy.you}
-                    </span>
-                  )}
-                  {member.pending && (
-                    <span className="hint" style={{ marginInlineStart: 6 }}>
-                      {copy.pendingMember}
-                    </span>
-                  )}
-                </span>
-                <span className="hint">
-                  {copy[`role${member.role === "CUSTOMER" ? "WORKER" : member.role}`]}
-                  {member.role === "WORKER" && member.resourceIds.length > 0
-                    ? ` · ${named(member.resourceIds)}`
-                    : ""}
-                </span>
-              </span>
-              <span className="hint tab" dir="ltr" style={{ minWidth: "max-content" }}>
-                {member.phone}
-              </span>
-              {mayTouch(member) && member.id !== user?.id && (
-                <button
-                  className="chip"
-                  style={{ border: "1px solid var(--line)", textAlign: "center" }}
-                  onClick={() =>
-                    setDraft({
-                      member,
-                      phone: "",
-                      givenName: member.givenName,
-                      familyName: member.familyName ?? "",
-                      role: member.role === "CUSTOMER" ? "WORKER" : member.role,
-                      resourceIds: [...member.resourceIds],
-                      locked: false,
-                    })
-                  }
-                >
-                  {copy.editMember}
-                </button>
-              )}
-              {mayTouch(member) && member.id !== user?.id && (
-                <button
-                  onClick={() => setRemoving(member)}
-                  style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
-                >
-                  {copy.removeMember}
-                </button>
-              )}
-            </Card>
-          ))
+        <ListCard labelledBy="team-title">
+          {members.map((member) => {
+            const yours = member.id === user?.id;
+            const calendars = member.role === "WORKER" ? calendarsOf(member) : [];
+            return (
+              <ListRow
+                key={member.membershipId}
+                dataId={member.membershipId}
+                title={member.name}
+                titleExtra={yours ? <span className="list-you">{words.you}</span> : undefined}
+                leading={<Initial name={member.name} pending={member.pending} />}
+                line={
+                  <>
+                    <span>{roleWord(member)}</span>
+                    {calendars.map(({ resource, index }) => (
+                      <span key={resource.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <span className="list-dot" style={{ background: laneColourOf(index) }} aria-hidden="true" />
+                        {resource.name}
+                      </span>
+                    ))}
+                  </>
+                }
+                tags={member.pending ? <ListTag text={words.pending} tone="caution" /> : undefined}
+                // Your own terms are not yours to change, and a MANAGER may
+                // not change an OWNER's: those rows open nothing.
+                onClick={mayTouch(member) && !yours ? () => setViewing(member) : undefined}
+              />
+            );
+          })}
+        </ListCard>
       )}
 
       {/* Whoever is on the team already stays; what the plan holds back is
           adding someone new (ADR 0019). */}
-      {includes(business, "TEAM_ROLES") ? (
-        <Button
-          intent="quiet"
-          onClick={() => {
-            // A new sheet has nothing behind it: whatever was left half-filled
-            // last time is not this person's fault.
-            setLeft({});
-            setDraft(EMPTY);
-          }}
-        >
-          {copy.invite}
-        </Button>
-      ) : (
+      {!mayInvite && (
         <Locked
           {...locks.feature("TEAM_ROLES")}
           {...(onSeePlans === undefined ? {} : { action: billingCopy.seePlans, onAction: onSeePlans })}
         />
       )}
+      <p className="list-foot">{words.teamFoot}</p>
+
+      <Sheet open={viewing !== null} onClose={() => setViewing(null)} labelledBy="member-sheet-title">
+        {viewing !== null && (
+          <div className="sheet-body">
+            <SheetIdentity
+              id="member-sheet-title"
+              title={viewing.name}
+              line={<span dir="ltr">{phoneShown(viewing.phone)}</span>}
+              leading={<Initial name={viewing.name} pending={viewing.pending} size="big" />}
+            />
+            {viewing.pending && <ListTag text={words.pending} tone="caution" />}
+            <PhoneActions
+              phone={viewing.phone}
+              labels={{ call: words.call, whatsapp: words.whatsapp }}
+              named
+            />
+            <SheetRows>
+              <SheetRow label={words.role} value={roleWord(viewing)} onClick={() => edit(viewing)} />
+              {viewing.role === "WORKER" && (
+                <SheetRow
+                  label={words.memberCalendars}
+                  value={named(viewing.resourceIds)}
+                  onClick={() => edit(viewing)}
+                />
+              )}
+            </SheetRows>
+            <DangerRow
+              label={words.removeMember}
+              onClick={() => {
+                setRemoving(viewing);
+                setViewing(null);
+              }}
+            />
+          </div>
+        )}
+      </Sheet>
 
       <Sheet open={draft !== null} onClose={() => setDraft(null)} labelledBy="team-draft-title">
         {draft !== null && (

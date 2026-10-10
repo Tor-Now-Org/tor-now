@@ -10,19 +10,18 @@ import type {
   CalendarAppointmentDto,
   CustomerRecordDto,
 } from "@/lib/api/types.ts";
-import { formatPrice, timeIn } from "@/lib/format.ts";
+import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AppHeader } from "@/components/app-header.tsx";
-import {
-  AppointmentSheet,
-  StatusTag,
-  isCancelled,
-  outcomeOfDto,
-} from "@/components/owner/appointment-sheet.tsx";
-import { PhoneActions } from "@/components/phone-actions.tsx";
-import { Button, Card, Critical, Empty, Note, Spinner } from "@/components/ui.tsx";
+import { AppointmentSheet, outcomeOfDto } from "@/components/owner/appointment-sheet.tsx";
+import { RecordBand, RecordTiles } from "@/components/owner/customer-record/record-band.tsx";
+import { UpcomingCard } from "@/components/owner/customer-record/upcoming-card.tsx";
+import { HistoryList } from "@/components/owner/customer-record/history-list.tsx";
+import { monthAndYear } from "@/components/owner/customer-record/record-dates.ts";
+import { ListRow } from "@/components/owner/list-ui.tsx";
+import { Button, Critical, Empty, Sheet, Spinner } from "@/components/ui.tsx";
 import { Locked, useLockText } from "@/components/locked.tsx";
 
 /**
@@ -39,9 +38,10 @@ import { Locked, useLockText } from "@/components/locked.tsx";
  */
 function CustomerPage({ customerId }: { customerId: string }) {
   const copy = useCopy("owner");
+  const words = useCopy("lists");
   const billingCopy = useCopy("billing");
   const locks = useLockText();
-  const { language, direction } = useLanguage();
+  const { language } = useLanguage();
   const router = useRouter();
   const params = useSearchParams();
   const { token, loading } = useSession();
@@ -53,6 +53,8 @@ function CustomerPage({ customerId }: { customerId: string }) {
   const [record, setRecord] = useState<CustomerRecordDto | null>(null);
   const [open, setOpen] = useState<CalendarAppointmentDto | null>(null);
   const [blocking, setBlocking] = useState(false);
+  /** The question before a block, said once, at the moment it matters. */
+  const [askingToBlock, setAskingToBlock] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -121,25 +123,6 @@ function CustomerPage({ customerId }: { customerId: string }) {
     );
   }
 
-  const locale = language === "he" ? "he-IL" : "en-GB";
-  const dayAndTime = (iso: string) =>
-    new Intl.DateTimeFormat(locale, {
-      timeZone: business.timeZone,
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(new Date(iso));
-  const dateOnly = (iso: string) =>
-    new Intl.DateTimeFormat(locale, {
-      timeZone: business.timeZone,
-      day: "numeric",
-      month: "numeric",
-      year: "numeric",
-    }).format(new Date(iso));
-
   const openable = (appointment: AppointmentDto) =>
     setOpen({
       ...appointment,
@@ -147,9 +130,8 @@ function CustomerPage({ customerId }: { customerId: string }) {
       customerPhone: record.user.phone,
     });
 
-  // Soonest first for what is still to come, because that is the one being
-  // asked about; most recent first for what is done, because that is the one
-  // being remembered.
+  // Without Customer History (ADR 0019) the page still books and still shows
+  // what is coming; the past, its counts and blocking become one lock.
   const historyShown = record.historyIncluded !== false;
   const upcoming = record.appointments
     .filter((appointment) => outcomeOfDto(appointment) === "UPCOMING")
@@ -157,243 +139,98 @@ function CustomerPage({ customerId }: { customerId: string }) {
   const history = record.appointments
     .filter((appointment) => outcomeOfDto(appointment) !== "UPCOMING")
     .sort((left, right) => right.startAt.localeCompare(left.startAt));
-
-  /**
-   * When they became a customer *here*. The account may be older — the same
-   * person books at other businesses with the same number — so this is the
-   * first time they booked with this one.
-   */
-  const earliest = [...record.appointments].sort((left, right) =>
-    left.startAt.localeCompare(right.startAt),
-  )[0];
+  const earliest = [...record.appointments].sort((left, right) => left.startAt.localeCompare(right.startAt))[0];
+  const since = historyShown && earliest !== undefined ? monthAndYear(earliest.startAt, business.timeZone, language) : null;
+  // Absent for an owner looking at their own record: barring yourself from your
+  // own chair is not a thing the API will do. Without the Feature a block can
+  // still be lifted; only a new one is the plan's to allow.
+  const canBlock = record.blockable !== false && (historyShown || record.blocked);
+  const book = () => router.push(`/manage?business=${businessId}&book=${encodeURIComponent(record.user.id)}`);
 
   return (
     <>
-      <AppHeader
-        onBack={back}
-        backLabel={copy.tabCustomers}
-      />
+      <AppHeader onBack={back} backLabel={copy.tabCustomers} />
 
-      <main
-        className="scroll"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          padding: 16,
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        {error !== null && <Critical>{error}</Critical>}
+      <main className="scroll record-page">
+        <RecordBand name={record.user.name} phone={record.user.phone} since={since} blocked={record.blocked} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
-          <span
-            aria-hidden="true"
-            style={{
-              display: "grid",
-              placeItems: "center",
-              width: 54,
-              height: 54,
-              flexShrink: 0,
-              borderRadius: 18,
-              background: "var(--accent-soft)",
-              color: "var(--accent-strong)",
-              fontFamily: "var(--font-rubik), sans-serif",
-              fontSize: 22,
-            }}
-          >
-            {record.user.name.trim().charAt(0) || "?"}
-          </span>
-          <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-            <h1 style={{ fontSize: 21 }}>{record.user.name}</h1>
-            <span className="tab" dir="ltr" style={{ fontSize: 13, color: "var(--muted)" }}>
-              {record.user.phone}
-            </span>
-          </span>
+        <div className="record-body">
+          {error !== null && <Critical>{error}</Critical>}
+
+          {historyShown ? (
+            <RecordTiles
+              visits={record.appointments.length}
+              noShows={record.noShows ?? 0}
+              lateCancels={record.lateCancellations ?? 0}
+            />
+          ) : (
+            <Locked
+              {...locks.feature("CUSTOMER_HISTORY")}
+              {...((business.role ?? "OWNER") === "OWNER"
+                ? {
+                    action: billingCopy.seePlans,
+                    onAction: () => router.push(`/manage?business=${businessId}&tab=business&panel=billing`),
+                  }
+                : {})}
+            />
+          )}
+
+          <UpcomingCard upcoming={upcoming} zone={business.timeZone} onOpen={openable} />
+
+          {historyShown && <HistoryList history={history} zone={business.timeZone} onOpen={openable} />}
+
+          {canBlock && (
+            <ul className="list-card" aria-label={record.blocked ? words.unblockRow : words.blockRow}>
+              {record.blocked ? (
+                <ListRow
+                  title={words.unblockRow}
+                  line={words.unblockRowLine}
+                  onClick={() => void toggleBlocked(false)}
+                />
+              ) : (
+                <ListRow
+                  title={words.blockRow}
+                  line={words.blockRowLine}
+                  tone="danger"
+                  onClick={() => setAskingToBlock(true)}
+                />
+              )}
+            </ul>
+          )}
+
+          <p className="list-foot">{copy.customerScopeNote}</p>
         </div>
 
-        {/* Not on the canvas: what an owner reaches for when a customer needs
-            ringing back. */}
-        <PhoneActions
-          phone={record.user.phone}
-          labels={{ call: copy.callCustomer, whatsapp: copy.whatsappCustomer }}
-        />
-
-        {/* "While I have you" — said on the telephone, with this page open.
-            Booking needs a day, and days are chosen on the calendar, so this
-            hands the customer back to it rather than growing a second way to
-            choose one. A blocked customer cannot be booked, and the button
-            that says so by being absent is kinder than the refusal. */}
-        {record.blocked !== true && (
-          <Button
-            onClick={() =>
-              router.push(
-                `/manage?business=${businessId}&book=${encodeURIComponent(record.user.id)}`,
-              )
-            }
-          >
-            {copy.addAppointmentTitle}
-          </Button>
-        )}
-
-        {/* Without Customer History (ADR 0019) the record still books and
-            still shows what is coming; the past, its counts and blocking — which
-            is judged from the past — become one lock. */}
-        {historyShown ? (
-          <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 11 }}>
-            <Count label={copy.since} value={earliest === undefined ? "—" : dateOnly(earliest.startAt)} />
-            <Count label={copy.total} value={record.appointments.length} />
-            <Count
-              label={copy.lateCancels}
-              value={record.lateCancellations ?? 0}
-              // The one number worth catching an eye, and only when there is one.
-              tone={(record.lateCancellations ?? 0) > 0 ? "var(--caution)" : undefined}
-            />
-            <Count label={copy.noShows} value={record.noShows ?? 0} />
-          </Card>
-        ) : (
-          <Locked
-            {...locks.feature("CUSTOMER_HISTORY")}
-            {...((business.role ?? "OWNER") === "OWNER"
-              ? {
-                  action: billingCopy.seePlans,
-                  onAction: () => router.push(`/manage?business=${businessId}&tab=business&panel=billing`),
-                }
-              : {})}
-          />
-        )}
-
-        {/* Absent for an owner looking at their own record: they arrive here
-            from the customer list by having booked, and barring yourself from
-            your own chair is not a thing the API will do. Without the Feature a
-            block can still be lifted — only a new one is the plan's to allow. */}
-        {record.blockable !== false && (historyShown || record.blocked) && (
-          <>
-            <Button
-              intent={record.blocked ? "quiet" : "danger"}
-              busy={blocking}
-              onClick={() => void toggleBlocked(!record.blocked)}
-            >
-              {record.blocked ? copy.unblockCustomer : copy.blockCustomer}
-            </Button>
-            <Note>{copy.blockedNote}</Note>
-          </>
-        )}
-
-        {upcoming.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            <span style={{ fontSize: 12, color: "var(--faint)" }}>{copy.upcoming}</span>
-            {upcoming.map((appointment) => (
-              <button
-                key={appointment.id}
-                className="card"
-                onClick={() => openable(appointment)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  width: "100%",
-                  padding: "13px 14px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 3,
-                    textAlign: "start",
-                    minWidth: 0,
-                  }}
-                >
-                  <span
-                    className="tab"
-                    style={{ fontSize: 14.5, fontWeight: 600, fontFamily: "var(--font-rubik), sans-serif" }}
-                  >
-                    {dayAndTime(appointment.startAt)}
-                  </span>
-                  <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
-                    {appointment.serviceName} · {appointment.durationMinutes}{" "}
-                    {copy.minutesShort} · {formatPrice(appointment.priceMinor, language, copy.free)}
-                  </span>
-                </span>
-                <Chevron direction={direction} />
-              </button>
-            ))}
-            <span className="hint">{copy.upcomingHint}</span>
+        {/* "While I have you" — said on the telephone, with this page open. A
+            blocked customer cannot be booked, and a button that is absent says
+            so more kindly than a refusal. */}
+        {!record.blocked && (
+          <div className="record-go">
+            <Button onClick={book}>{fillText(words.bookFor, { name: record.user.givenName || record.user.name })}</Button>
           </div>
         )}
-
-        {historyShown && (
-        <>
-        <span style={{ fontSize: 12, color: "var(--faint)" }}>{copy.history}</span>
-        {history.length === 0 ? (
-          <Empty title={copy.noAppointments} body={copy.customerScopeNote} />
-        ) : (
-          history.map((appointment) => (
-            <button
-              key={appointment.id}
-              onClick={() => openable(appointment)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 0",
-                borderBottom: "1px solid var(--line)",
-                width: "100%",
-                textAlign: "start",
-              }}
-            >
-              <span
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 3,
-                  minWidth: 0,
-                }}
-              >
-                {/* The hour, not only the day: "was it the morning one?" is the
-                    question a customer on the phone actually asks. */}
-                <span className="tab" style={{ fontSize: 13 }}>
-                  {dateOnly(appointment.startAt)} · {timeIn(appointment.startAt, business.timeZone, language)}
-                </span>
-                {/* The tag says what happened; the strike shows it. Only for a
-                    cancellation — the rest of this list is simply the past, and
-                    striking all of it would say nothing. */}
-                <span
-                  className={isCancelled(appointment) ? "cancelled" : undefined}
-                  style={{ fontSize: 13.5 }}
-                >
-                  {appointment.serviceName}
-                </span>
-              </span>
-              <span
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-end",
-                  gap: 3,
-                  flexShrink: 0,
-                }}
-              >
-                <StatusTag appointment={appointment} copy={copy} />
-                {/* What it came to. A cancelled one was never paid, so the
-                    price on it would be a figure that never changed hands. */}
-                <span className="tab hint">
-                  {isCancelled(appointment)
-                    ? "—"
-                    : formatPrice(appointment.priceMinor, language, copy.free)}
-                </span>
-              </span>
-            </button>
-          ))
-        )}
-        </>
-        )}
-
-        <p className="hint" style={{ margin: 0 }}>{copy.customerScopeNote}</p>
       </main>
+
+      <Sheet open={askingToBlock} onClose={() => setAskingToBlock(false)} labelledBy="block-ask-title">
+        <div className="sheet-body">
+          <h2 id="block-ask-title" style={{ fontSize: 19 }}>
+            {fillText(words.blockAsk, { name: record.user.name })}
+          </h2>
+          <p className="hint" style={{ margin: 0, lineHeight: 1.6 }}>{words.blockAskBody}</p>
+          <Button
+            intent="danger"
+            busy={blocking}
+            onClick={() =>
+              void toggleBlocked(true).then(() => setAskingToBlock(false))
+            }
+          >
+            {words.block}
+          </Button>
+          <Button intent="quiet" onClick={() => setAskingToBlock(false)}>
+            {words.cancel}
+          </Button>
+        </div>
+      </Sheet>
 
       <AppointmentSheet
         token={token}
@@ -406,46 +243,6 @@ function CustomerPage({ customerId }: { customerId: string }) {
   );
 }
 
-const Count = ({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  tone?: string | undefined;
-}) => (
-  <span style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-    <span style={{ color: "var(--faint)" }}>{label}</span>
-    <span className="tab" style={{ fontWeight: 500, ...(tone === undefined ? {} : { color: tone }) }}>
-      {value}
-    </span>
-  </span>
-);
-
-/** Points the way the reader is going, which is not always right. */
-const Chevron = ({ direction }: { direction: "rtl" | "ltr" }) => (
-  <svg
-    width="17"
-    height="17"
-    viewBox="0 0 24 24"
-    fill="none"
-    aria-hidden="true"
-    style={{
-      marginInlineStart: "auto",
-      flexShrink: 0,
-      transform: direction === "rtl" ? "scaleX(-1)" : undefined,
-    }}
-  >
-    <path
-      d="m9 6 6 6-6 6"
-      stroke="var(--faint)"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
 
 export default function Page({
   params,
@@ -453,7 +250,6 @@ export default function Page({
   params: Promise<{ customerId: string }>;
 }) {
   const { customerId } = use(params);
-  // useSearchParams needs a Suspense boundary for static rendering.
   return (
     <Suspense fallback={<Spinner page />}>
       <CustomerPage customerId={customerId} />

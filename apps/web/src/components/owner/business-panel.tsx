@@ -14,15 +14,11 @@ import type {
   ServiceDto,
 } from "@/lib/api/types.ts";
 import { BillingSection } from "./billing-section.tsx";
-import { Locked, SmallLock, useLockText } from "@/components/locked.tsx";
-import { PlanBadge } from "@/components/billing-badges.tsx";
-import { calendarsFull } from "@/lib/entitlement.ts";
 import { customersInBusiness } from "@/lib/roles.ts";
 import { Customers } from "./customers.tsx";
 import { fillText } from "@/lib/i18n/fill.ts";
-import { formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { leavesRoomToBook, SERVICE_MINUTES, TEXT_RULES } from "@tor-now/domain";
+import { leavesRoomToBook, TEXT_RULES } from "@tor-now/domain";
 import { spanOfDays, spanOfMinutes } from "@/lib/span-text.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import {
@@ -35,47 +31,14 @@ import { checkLocalPhone, fromE164, toE164 } from "@/lib/phone.ts";
 import { PhoneField } from "../phone-field.tsx";
 import { PhotoPanel } from "./photo-panel.tsx";
 import { Team } from "./team.tsx";
-
-/**
- * How the one control that changes standing is drawn.
- *
- * Taking something off the menu should not be the loudest thing on its row, so
- * withdrawing is quiet. Putting it back is the corrective action and is drawn
- * as a filled button — the shape this system uses for "press this" — rather
- * than as an accent tint, which is how it says "already chosen".
- */
-const restoreOrWithdraw = (active: boolean) =>
-  active
-    ? {
-        border: "1px solid var(--line)",
-        background: "var(--raised)",
-        color: "var(--muted)",
-      }
-    : {
-        border: "1px solid var(--accent-strong)",
-        background: "var(--accent)",
-        color: "var(--on-accent)",
-        fontWeight: 600,
-      };
-
-/** The quiet mark that says a name can be changed by pressing it. */
-const PencilMark = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M4 20h4l10-10a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5 4 20Z"
-      stroke="var(--faint)"
-      strokeWidth="1.8"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+import { ServicesPanel } from "./services-panel.tsx";
+import { CalendarsPanel } from "./calendars-panel.tsx";
 
 /** An optional field left empty is absent, not an empty string. */
 const blankToNull = (value: string | null | undefined): string | null =>
   value === null || value === undefined || value.trim() === "" ? null : value.trim();
-import { Button, Card, Critical, Field, Note, Sheet, Spinner, Tag, Warning } from "../ui.tsx";
+import { Button, Card, Critical, Field, Spinner, Warning } from "../ui.tsx";
 import { NumberField } from "../number-field.tsx";
-import { BufferChoice, BufferPill } from "./buffer-choice.tsx";
 import { followersOf } from "./buffer.ts";
 
 // Leaflet reaches for `window`, so the map can only render on the client.
@@ -89,8 +52,6 @@ export type Panel = (typeof PANELS)[number];
 
 export const isPanel = (value: string | null): value is Panel =>
   value !== null && (PANELS as readonly string[]).includes(value);
-
-const MINOR_UNITS_PER_MAJOR = 100;
 
 /**
  * Everything about the Business itself: what it offers, whose calendars, the
@@ -127,24 +88,6 @@ export const BusinessPanel = ({
 
   const [services, setServices] = useState<ServiceDto[] | null>(null);
   const [billing, setBilling] = useState<BillingDto | null>(null);
-  const [editing, setEditing] = useState<Partial<ServiceDto> | null>(null);
-  const [newResource, setNewResource] = useState<string | null>(null);
-  /** The calendar the owner has asked to remove, while they are being asked about it. */
-  const [removing, setRemoving] = useState<ResourceDto | null>(null);
-  /** The calendar being renamed, and the name as it is being typed. */
-  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
-  const renameIsBad =
-    renaming === null || checkText(renaming.name, TEXT_RULES.resourceName) !== null;
-
-  const saveRename = async () => {
-    if (renaming === null || renameIsBad) return;
-    await act(async () => {
-      await api.updateResource(token, business.id, renaming.id, {
-        name: renaming.name.trim(),
-      });
-      setRenaming(null);
-    }, "calendars");
-  };
   const [settings, setSettings] = useState(business);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -154,12 +97,6 @@ export const BusinessPanel = ({
   // Billing is the OWNER's alone (ADR 0016) — absent role means an API
   // deployed before roles existed, where anybody staffing was an OWNER.
   const isOwner = (business.role ?? "OWNER") === "OWNER";
-  const billingCopy = useCopy("billing");
-  const locks = useLockText();
-  const onOffer = resources.filter((resource) => resource.active && resource.paused !== true).length;
-  const full = calendarsFull(business, onOffer);
-  const allowance = business.entitlement?.resourceAllowance ?? onOffer;
-  const pausedAny = resources.some((resource) => resource.active && resource.paused === true);
   // Billing, carried over from a business they own into one they only manage,
   // would be a sub-tab with no chip and nothing under it.
   // The customer list moves here only where the plan gives Statistics, which
@@ -205,12 +142,12 @@ export const BusinessPanel = ({
     setError(null);
     try {
       await action();
-      setEditing(null);
-      setNewResource(null);
       if (touches === "everything") await load();
       onChanged(touches);
+      return true;
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -257,228 +194,28 @@ export const BusinessPanel = ({
       {error !== null && <Critical>{error}</Critical>}
 
       {panel === "services" && (
-        <>
-          {services.map((service) => (
-            // A withdrawn service is still the owner's, so it stays on the
-            // list — but it must not read as one that customers can book.
-            // Greyed and set on a sunken ground so it recedes, and named as
-            // hidden in words, because grey alone reads as "disabled" or
-            // "still loading" rather than "you took this off the menu".
-            <Card
-              key={service.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                ...(service.active
-                  ? {}
-                  : { background: "var(--sunken)", borderStyle: "dashed" }),
-              }}
-            >
-              <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      ...(service.active ? {} : { color: "var(--faint)" }),
-                    }}
-                  >
-                    {service.name}
-                  </span>
-                  {!service.active && <Tag text={copy.hidden} tone="neutral" />}
-                </span>
-                <span className="hint tab" style={service.active ? undefined : { opacity: 0.7 }}>
-                  {service.durationMinutes} {copy.minutesShort} ·{" "}
-                  {formatPrice(service.priceMinor, language, "—")}
-                </span>
-                <BufferPill value={service.bufferMinutes} businessDefault={business.defaultBufferMinutes} />
-              </span>
-              {/* A service's standing is a thing the owner changes, not a label
-                  they read. Hiding used to be reachable only through "remove"
-                  inside the editor — which withdraws a booked service but
-                  permanently deletes one nobody has booked yet, and offered no
-                  way back either way. */}
-              <button
-                className="chip"
-                aria-pressed={!service.active}
-                style={{
-                  // Quiet while it is on offer — taking something off the menu
-                  // should not be the loudest thing on the row — and the clear
-                  // way back once it is not — filled, because the accent tint
-                  // is this system's *selected* state (a picked service, the
-                  // current tab), so a control wearing it reads as already
-                  // chosen rather than as something to press.
-                  ...restoreOrWithdraw(service.active),
-                }}
-                onClick={() =>
-                  void act(() =>
-                    api.updateService(token, business.id, service.id, {
-                      active: !service.active,
-                    }),
-                  )
-                }
-              >
-                {service.active ? copy.hideService : copy.showService}
-              </button>
-              <button className="chip" style={{ border: "1px solid var(--line)" }} onClick={() => setEditing(service)}>
-                {copy.editService}
-              </button>
-            </Card>
-          ))}
-          {/* Withdrawing a service never touches bookings already made — each
-              keeps the name, duration and price it was booked at. */}
-          <Note>{copy.serviceHiddenNote}</Note>
-          <Button intent="quiet" onClick={() => setEditing({ name: "", durationMinutes: SERVICE_MINUTES.initial, priceMinor: 0, bufferMinutes: null })}>
-            {copy.addService}
-          </Button>
-        </>
+        <ServicesPanel
+          token={token}
+          business={business}
+          services={services}
+          busy={busy}
+          act={(action) => act(action)}
+          onBufferDefault={() => onPanel("settings")}
+        />
       )}
 
       {panel === "resources" && (
-        <>
-          {pausedAny ? (
-            <Warning>
-              {allowance === 1
-                ? billingCopy.pausedNoteOne
-                : fillText(billingCopy.pausedNoteMany, { n: String(allowance) })}
-            </Warning>
-          ) : (
-            <Note>{copy.resourceNote}</Note>
-          )}
-          {/* Said only when there is no room left: while there is, the screen
-              is what it always was. */}
-          {full && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--muted)" }}>
-              {billing !== null && <PlanBadge plan={billing.subscription.plan} />}
-              <span>
-                {allowance === 1
-                  ? billingCopy.calendarsFullOne
-                  : fillText(billingCopy.calendarsFullMany, { n: String(allowance) })}
-              </span>
-            </div>
-          )}
-          {resources.map((resource) => {
-            // The last one on offer cannot be taken away by either door: a
-            // business with nothing bookable has no way to say so.
-            const lastOnOffer =
-              resource.active &&
-              resources.filter((candidate) => candidate.active).length <= 1;
-            return (
-              <Card
-                key={resource.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  ...(resource.active && resource.paused !== true
-                    ? {}
-                    : { background: "var(--sunken)", borderStyle: "dashed" }),
-                }}
-              >
-                {/* The name renames itself. It was a chip of its own on a row
-                    that already had three, which crowded the name it was about
-                    into two lines; a name is the one thing on this row nobody
-                    has to hunt for, so pressing it is where renaming belongs. */}
-                <button
-                  onClick={() => setRenaming({ id: resource.id, name: resource.name })}
-                  aria-label={`${copy.rename} ${resource.name}`}
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flexWrap: "wrap",
-                    minHeight: 44,
-                    textAlign: "start",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontWeight: 500,
-                      ...(resource.active && resource.paused !== true ? {} : { color: "var(--faint)" }),
-                    }}
-                  >
-                    {resource.name}
-                  </span>
-                  <PencilMark />
-                  {!resource.active && <Tag text={copy.hidden} tone="neutral" />}
-                  {resource.active && resource.paused === true && (
-                    <Tag text={billingCopy.paused} tone="caution" />
-                  )}
-                </button>
-                {/* Its hours, blocks and exceptional days live on the schedule
-                    screen, which is where a calendar is actually edited. This
-                    goes straight there with this one open, rather than leaving
-                    the owner to find the tab and pick the row again. Plainly
-                    "edit", now that renaming lives on the name and there is no
-                    second editing action to tell it apart from. */}
-                <button
-                  className="chip"
-                  style={{ border: "1px solid var(--line)" }}
-                  onClick={() => onEditCalendar(resource.id)}
-                >
-                  {copy.editCalendar}
-                </button>
-                {/* Standing is something the owner changes, not a word they
-                    read — the same control the services list grew, for the
-                    same reason. */}
-                {/* Showing a hidden calendar is adding one: with the Allowance
-                    full it is locked, and the lock below says why. */}
-                {!lastOnOffer && !resource.active && full && (
-                  <button className="chip" aria-disabled="true" disabled
-                    style={{ border: "1px solid var(--line)", color: "var(--faint)" }}>
-                    <SmallLock />
-                    {copy.showService}
-                  </button>
-                )}
-                {!lastOnOffer && (resource.active || !full) && (
-                  <button
-                    className="chip tap"
-                    aria-pressed={!resource.active}
-                    style={restoreOrWithdraw(resource.active)}
-                    onClick={() =>
-                      void act(
-                        () =>
-                          api.updateResource(token, business.id, resource.id, {
-                            active: !resource.active,
-                          }),
-                        "calendars",
-                      )
-                    }
-                  >
-                    {resource.active ? copy.hideService : copy.showService}
-                  </button>
-                )}
-                {!lastOnOffer && (
-                  <button
-                    onClick={() => setRemoving(resource)}
-                    style={{ color: "var(--critical)", fontSize: 13, minHeight: 40 }}
-                  >
-                    {copy.delete}
-                  </button>
-                )}
-                {/* Said rather than left as an absence: a row with no controls
-                    and no reason reads as broken, not as protected. */}
-                {lastOnOffer && <span className="hint">{copy.lastCalendar}</span>}
-              </Card>
-            );
-          })}
-          {full ? (
-            <Locked
-              {...locks.calendar(business.entitlement?.resourceAllowance ?? 1)}
-              {...(isOwner ? { action: billingCopy.seePlans, onAction: () => onPanel("billing") } : {})}
-            />
-          ) : (
-            <Button intent="quiet" onClick={() => setNewResource("")}>{copy.add}</Button>
-          )}
-        </>
+        <CalendarsPanel
+          token={token}
+          business={business}
+          resources={resources}
+          billing={billing}
+          isOwner={isOwner}
+          busy={busy}
+          act={(action) => act(action, "calendars")}
+          onEditCalendar={onEditCalendar}
+          onSeePlans={() => onPanel("billing")}
+        />
       )}
 
       {panel === "photos" && (
@@ -699,197 +436,6 @@ export const BusinessPanel = ({
         />
       )}
 
-      <Sheet open={editing !== null} onClose={() => setEditing(null)}>
-        {editing !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 style={{ fontSize: 19 }}>{editing.id === undefined ? copy.newService : copy.editService}</h2>
-            <Note>{copy.serviceFormHint}</Note>
-            <Field id="svc-name" label={copy.serviceName} placeholder={copy.serviceNamePlaceholder}
-              problem={problem.text(editing?.name ?? "", TEXT_RULES.serviceName)}
-              value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-            <NumberField id="svc-duration" label={copy.durationMinutes} hint={copy.durationHint}
-              value={editing.durationMinutes ?? SERVICE_MINUTES.initial} fallback={SERVICE_MINUTES.initial}
-              min={SERVICE_MINUTES.min} max={SERVICE_MINUTES.max}
-              onValue={(v) => setEditing({ ...editing, durationMinutes: v ?? SERVICE_MINUTES.initial })} />
-            {/* Nought is no price. The box selects itself when tapped and drops
-                a leading nought, so typing a price over it is one motion. */}
-            <NumberField id="svc-price" label={copy.price} hint={copy.priceHint}
-              value={(editing.priceMinor ?? 0) / MINOR_UNITS_PER_MAJOR}
-              fallback={0} decimals
-              onValue={(v) => setEditing({ ...editing, priceMinor: Math.round((v ?? 0) * MINOR_UNITS_PER_MAJOR) })} />
-            <BufferChoice
-              id="svc-buffer"
-              durationMinutes={editing.durationMinutes ?? 30}
-              value={editing.bufferMinutes ?? null}
-              businessDefault={business.defaultBufferMinutes}
-              onChange={(bufferMinutes) => setEditing({ ...editing, bufferMinutes })}
-              footer={
-                <button
-                  type="button"
-                  className="buffer-link"
-                  onClick={() => {
-                    setEditing(null);
-                    onPanel("settings");
-                  }}
-                >
-                  {copy.bufferDefaultLink} ›
-                </button>
-              }
-            />
-            <Button
-              busy={busy}
-              onClick={() =>
-                act(() =>
-                  editing.id === undefined
-                    ? api.createService(token, business.id, {
-                        name: editing.name ?? "",
-                        durationMinutes: editing.durationMinutes ?? 30,
-                        priceMinor: editing.priceMinor ?? 0,
-                        bufferMinutes: editing.bufferMinutes ?? null,
-                      })
-                    : api.updateService(token, business.id, editing.id, {
-                        name: editing.name,
-                        durationMinutes: editing.durationMinutes,
-                        // An emptied box is no price, not "leave it as it was".
-                        priceMinor: editing.priceMinor ?? 0,
-                        bufferMinutes: editing.bufferMinutes ?? null,
-                      }),
-                )
-              }
-              disabled={checkText(editing.name ?? "", TEXT_RULES.serviceName) !== null}
-            >
-              {copy.save}
-            </Button>
-            {editing.id !== undefined && (
-              <Button intent="danger" busy={busy}
-                onClick={() => act(() => api.deleteService(token, business.id, editing.id as string))}>
-                {copy.removeService}
-              </Button>
-            )}
-          </div>
-        )}
-      </Sheet>
-
-      <Sheet open={renaming !== null} onClose={() => setRenaming(null)} labelledBy="rename-title">
-        {renaming !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 id="rename-title" style={{ fontSize: 19 }}>{copy.renameCalendar}</h2>
-            {/* Renaming touches nothing else: hours, blocks and appointments
-                hang off the calendar's identity rather than its name, and an
-                appointment keeps the name it was booked under. */}
-            <Note>{copy.renameCalendarNote}</Note>
-            <Field
-              id="rename-resource"
-              label={copy.resourceNamePlaceholder}
-              value={renaming.name}
-              // Open with the name selected, and take Enter as "done": a
-              // rename is one short field, and reaching for a button to change
-              // two letters is most of the work.
-              autoFocus
-              onFocus={(event) => event.target.select()}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" || renameIsBad) return;
-                event.preventDefault();
-                void saveRename();
-              }}
-              problem={problem.text(renaming.name, TEXT_RULES.resourceName)}
-              onChange={(event) => setRenaming({ ...renaming, name: event.target.value })}
-            />
-            <Button busy={busy} disabled={renameIsBad} onClick={() => void saveRename()}>
-              {copy.save}
-            </Button>
-            <Button intent="quiet" onClick={() => setRenaming(null)}>
-              {copy.removeCalendarBack}
-            </Button>
-          </div>
-        )}
-      </Sheet>
-
-      <Sheet
-        open={removing !== null}
-        onClose={() => setRemoving(null)}
-        labelledBy="remove-calendar-title"
-      >
-        {removing !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 id="remove-calendar-title" style={{ fontSize: 19 }}>
-              {copy.removeCalendarTitle.replace("{name}", removing.name)}
-            </h2>
-            {/* What happens to the past is not a question, so it is stated
-                rather than asked: it is the record of what the business did. */}
-            <Note>{copy.removeCalendarPast}</Note>
-
-            {(removing.upcomingAppointments ?? 0) > 0 ? (
-              <>
-                <Warning>
-                  {copy.removeCalendarUpcoming.replace(
-                    "{count}",
-                    String(removing.upcomingAppointments ?? 0),
-                  )}
-                </Warning>
-                <Button
-                  busy={busy}
-                  intent="quiet"
-                  onClick={() =>
-                    act(async () => {
-                      await api.deleteResource(token, business.id, removing.id, "KEEP");
-                      setRemoving(null);
-                    }, "calendars")
-                  }
-                >
-                  {copy.removeCalendarKeep}
-                </Button>
-                <Button
-                  busy={busy}
-                  intent="danger"
-                  onClick={() =>
-                    act(async () => {
-                      await api.deleteResource(token, business.id, removing.id, "CANCEL");
-                      setRemoving(null);
-                    }, "calendars")
-                  }
-                >
-                  {copy.removeCalendarCancel}
-                </Button>
-              </>
-            ) : (
-              <Button
-                busy={busy}
-                intent="danger"
-                onClick={() =>
-                  act(async () => {
-                    await api.deleteResource(token, business.id, removing.id, "KEEP");
-                    setRemoving(null);
-                  })
-                }
-              >
-                {copy.removeCalendarConfirm}
-              </Button>
-            )}
-            <Button intent="quiet" onClick={() => setRemoving(null)}>
-              {copy.removeCalendarBack}
-            </Button>
-          </div>
-        )}
-      </Sheet>
-
-      <Sheet open={newResource !== null} onClose={() => setNewResource(null)}>
-        {newResource !== null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 style={{ fontSize: 19 }}>{copy.resources}</h2>
-            <Field id="res-name" label={copy.resources} placeholder={copy.resourceNamePlaceholder}
-              problem={problem.text(newResource ?? "", TEXT_RULES.resourceName)}
-              value={newResource} onChange={(e) => setNewResource(e.target.value)} />
-            <Button busy={busy}
-              disabled={checkText(newResource, TEXT_RULES.resourceName) !== null}
-              onClick={() =>
-                act(() => api.createResource(token, business.id, newResource.trim()), "calendars")
-              }>
-              {copy.add}
-            </Button>
-          </div>
-        )}
-      </Sheet>
     </div>
   );
 };

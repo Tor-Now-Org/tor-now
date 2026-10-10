@@ -17,10 +17,34 @@
 export const PhoneActions = ({
   phone,
   labels,
+  named = false,
+  tone,
 }: {
   phone: string;
   labels: { call: string; whatsapp: string };
-}) => (
+  /** The words beside the icons, where there is room and the icon alone would be a guess. */
+  named?: boolean;
+  /** On the navy band of a page's head. */
+  tone?: "navy";
+}) =>
+  named ? (
+    <div className={`phone-pills${tone === "navy" ? " on-navy" : ""}`}>
+      <a href={`tel:${phone}`} className="phone-pill" aria-label={`${labels.call} ${phone}`}>
+        <CallMark />
+        <span aria-hidden="true">{labels.call}</span>
+      </a>
+      <a
+        href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+        target="_blank"
+        rel="noreferrer"
+        className="phone-pill wa"
+        aria-label={`${labels.whatsapp} ${phone}`}
+      >
+        <WhatsAppMark />
+        <span aria-hidden="true">{labels.whatsapp}</span>
+      </a>
+    </div>
+  ) : (
   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
     <a
       href={`tel:${phone}`}
@@ -45,7 +69,6 @@ export const PhoneActions = ({
   </div>
 );
 
-/** One square per action, on the page's own surface. */
 const MARK = Object.freeze({
   width: 44,
   padding: 0,
