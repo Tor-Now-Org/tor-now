@@ -584,23 +584,16 @@ test.describe("the QR card", () => {
     expect(handed?.files[0]?.size).toBeGreaterThan(10_000);
   });
 
-  test("speaks the name's language: English for a name in Latin letters, in a Hebrew app", async ({ page }) => {
+  test("speaks the app's language: a name in Latin letters still gets a Hebrew card in a Hebrew app", async ({ page }) => {
     const owner = await anOwner(page);
     const name = `Dana Barbershop ${Date.now()}`;
     await openABusiness(page, owner.phone, { name });
     await steps(page).getByRole("button", { name: "קוד QR" }).click();
     const sheet = page.getByRole("dialog", { name: "שיתוף העסק" });
     await expect(sheet.locator(".share-card img")).toBeVisible({ timeout: 15_000 });
-    await expect(sheet.locator(".share-card")).toHaveAttribute("data-language", "en");
+    await expect(sheet.locator(".share-card")).toHaveAttribute("data-language", "he");
     const read = await readTheCard(page);
     expect(read?.data).toMatch(/\/business\/[^/]+$/);
-  });
-
-  test("a name in both scripts follows the app's language", async ({ page }) => {
-    const owner = await anOwner(page);
-    await openABusiness(page, owner.phone, { name: `Studio דנה ${Date.now()}` });
-    await steps(page).getByRole("button", { name: "קוד QR" }).click();
-    await expect(page.locator(".share-card")).toHaveAttribute("data-language", "he", { timeout: 15_000 });
   });
 
   test("a very long name still makes a card that scans", async ({ page }) => {

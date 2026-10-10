@@ -68,3 +68,30 @@ export const readTheCard = async (page: Page) => {
   });
 };
 
+
+/** What a camera reads off the code drawn on the screen, decoded in the page. */
+export const readTheScreenCode = async (page: Page) => {
+  await page.addScriptTag({ path: JSQR });
+  return page.locator(".qr-on-screen").evaluate(async (svg: SVGSVGElement) => {
+    const source = new XMLSerializer().serializeToString(svg);
+    const image = new Image();
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`;
+    await image.decode();
+    const size = 600;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d");
+    if (context === null) return null;
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, size, size);
+    context.drawImage(image, 0, 0, size, size);
+    const pixels = context.getImageData(0, 0, size, size);
+    const decoded = (window as unknown as { jsQR: (d: Uint8ClampedArray, w: number, h: number) => { data: string } | null }).jsQR(
+      pixels.data,
+      size,
+      size,
+    );
+    return decoded?.data ?? null;
+  });
+};

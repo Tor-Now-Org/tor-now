@@ -35,7 +35,7 @@ what comes next, and "ליומן שלי" pinned at the bottom.
 - **The QR card** is drawn in the browser: A6 at 300 dpi, the code at error
   correction level H with its centre cleared for the logo (a fifth of its side —
   the code still scans with twice that cleared), the business's name under it in
-  the language of the name's own letters, three steps, and a fallback to search
+  the app's language, three steps, and a fallback to search
   by name. It downloads as a PNG, or is shared as a picture where the device
   takes files.
 - **Leaving it** — the back arrow or "ליומן שלי" — goes into the business. The

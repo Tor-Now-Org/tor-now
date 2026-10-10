@@ -725,6 +725,25 @@ body {
 .share-card-wait{display:grid;place-items:center;height:min(44vh,340px);aspect-ratio:1240/1748;max-width:100%;
   color:var(--muted);font-size:13px;text-align:center}
 .share-actions{display:grid;gap:8px}
+/* A customer's share: what is being sent at the top, and the code on screen. */
+.share-business{display:flex;align-items:center;gap:12px;padding:9px;border-radius:14px;background:var(--sunken);border:1px solid var(--line)}
+.share-business-thumb{width:48px;height:48px;border-radius:11px;object-fit:cover;flex-shrink:0}
+.share-business-thumb.empty{display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-strong);
+  font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:19px}
+.share-business b{font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:15px;overflow-wrap:anywhere}
+.share-business small{font-size:12.5px;color:var(--muted)}
+.share-code-toggle{display:flex;align-items:center;gap:9px;width:100%;min-height:48px;padding:0 14px;border-radius:14px;border:1px solid var(--line);
+  background:var(--raised);font-size:14.5px;font-weight:500;color:var(--ink);text-align:start}
+.share-code-toggle > span{flex:1}
+.share-code-toggle > svg:last-child{color:var(--faint);transition:transform .15s ease}
+.share-code-toggle > svg.open{transform:rotate(180deg)}
+.share-code-toggle:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
+.share-code{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px;border-radius:16px;border:1px solid var(--line);background:#fff}
+.qr-on-screen{width:min(240px,70vw);height:auto;display:block}
+.share-code figcaption{display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center}
+.share-code figcaption b{font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:17px;color:#0A2450}
+.share-code figcaption small{font-size:12.5px;color:#5B6B82}
+@media (prefers-reduced-motion: reduce){.share-code-toggle > svg:last-child{transition:none}}
 @media (min-width: 1024px) {
   .booked.live .booked-hero{margin:0;padding:30px 30px 28px}
   .booked.live .booked-hero + .card{margin-top:0}

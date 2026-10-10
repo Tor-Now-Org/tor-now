@@ -23,7 +23,7 @@ import type { BusinessPhotoDto } from "@/lib/api/types.ts";
  * root-relative path, which has to be read against the API rather than against
  * the page it is rendered on.
  */
-const addressOf = (photo: BusinessPhotoDto): string =>
+export const photoAddress = (photo: BusinessPhotoDto): string =>
   photo.url.startsWith("http") ? photo.url : `${API_BASE_URL}${photo.url}`;
 
 type Labels = {
@@ -98,7 +98,7 @@ const Slides = ({
              host to configure and nothing to pre-size. */
           const image = (
             <img
-              src={addressOf(photo)}
+              src={photoAddress(photo)}
               alt={index === 0 ? businessName : ""}
               loading={index === 0 ? "eager" : "lazy"}
             />

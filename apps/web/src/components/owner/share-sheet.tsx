@@ -9,6 +9,7 @@ import { cardFileName, whatsappShareLink, type Shared } from "./live-summary.ts"
 
 export type { Shared };
 import { cardFile, drawCard, type CardInput } from "./qr-card.ts";
+import { QrOnScreen } from "./qr-on-screen.tsx";
 
 /** The words a share starts with, in the owner's language. */
 export const shareText = (message: string, url: string): string => `${message}\n${url}`;
@@ -169,20 +170,9 @@ export const ShareSheet = ({
   deadline?: { readonly tomorrow: boolean; readonly time: string } | null;
 }) => {
   const copy = useCopy("live");
-  const link = useCopyLink(shared.url);
   const { picture, failed } = useCardPicture(shared, open);
   const [sharing, setSharing] = useState(false);
-  // Read once on the client: only a device with a share sheet of its own gets "עוד…".
-  const [deviceShares] = useState(() => typeof navigator !== "undefined" && typeof navigator.share === "function");
   const [devicePictures] = useState(takesPictures);
-
-  const shareOnDevice = async () => {
-    try {
-      await navigator.share({ title: shared.name, text: copy.shareMessage, url: shared.url });
-    } catch {
-      // A cancelled share sheet is the person changing their mind.
-    }
-  };
 
   const shareImage = async () => {
     if (picture === null) return;
@@ -211,34 +201,7 @@ export const ShareSheet = ({
             {fillText(copy.dueNote, { when: deadline.tomorrow ? copy.tomorrow : copy.today, time: deadline.time })}
           </Warning>
         )}
-        <p className="share-message">
-          {copy.shareMessage}
-          <br />
-          <a href={shared.url} target="_blank" rel="noreferrer" dir="ltr">
-            {shared.url}
-          </a>
-        </p>
-        <div className={`share-targets${deviceShares ? " three" : ""}`}>
-          <a
-            className="share-target wa"
-            href={whatsappShareLink(shareText(copy.shareMessage, shared.url))}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <i><WhatsAppIcon /></i>
-            {copy.shareWhatsapp}
-          </a>
-          <button type="button" className="share-target" onClick={() => void link.copy()}>
-            <i><CopyIcon /></i>
-            <span aria-live="polite">{link.copied ? copy.copied : copy.copyLink}</span>
-          </button>
-          {deviceShares && (
-            <button type="button" className="share-target" onClick={() => void shareOnDevice()}>
-              <i><ShareIcon /></i>
-              {copy.more}
-            </button>
-          )}
-        </div>
+        <ShareTargets shared={shared} message={copy.shareMessage} />
         <figure className="share-card" data-language={shared.cardLanguage}>
           {picture === null ? (
             failed ? (
@@ -267,6 +230,125 @@ export const ShareSheet = ({
           )}
           <Button intent="quiet" onClick={onClose}>{copy.close}</Button>
         </div>
+      </div>
+    </Sheet>
+  );
+};
+
+/**
+ * The message with the link, and the three ways to send it: WhatsApp written
+ * and with nobody chosen, copying said in place, and the device's own share
+ * sheet where there is one. The same for the owner and for a customer; only
+ * the message is theirs.
+ */
+const ShareTargets = ({ shared, message }: { shared: Shared; message: string }) => {
+  const copy = useCopy("live");
+  const link = useCopyLink(shared.url);
+  // Read once on the client: only a device with a share sheet of its own gets "עוד…".
+  const [deviceShares] = useState(() => typeof navigator !== "undefined" && typeof navigator.share === "function");
+  const shareOnDevice = async () => {
+    try {
+      await navigator.share({ title: shared.name, text: message, url: shared.url });
+    } catch {
+      // A cancelled share sheet is the person changing their mind.
+    }
+  };
+  return (
+    <>
+      <p className="share-message">
+        {message}
+        <br />
+        <a href={shared.url} target="_blank" rel="noreferrer" dir="ltr">
+          {shared.url}
+        </a>
+      </p>
+      <div className={`share-targets${deviceShares ? " three" : ""}`}>
+        <a className="share-target wa" href={whatsappShareLink(shareText(message, shared.url))} target="_blank" rel="noreferrer">
+          <i><WhatsAppIcon /></i>
+          {copy.shareWhatsapp}
+        </a>
+        <button type="button" className="share-target" onClick={() => void link.copy()}>
+          <i><CopyIcon /></i>
+          <span aria-live="polite">{link.copied ? copy.copied : copy.copyLink}</span>
+        </button>
+        {deviceShares && (
+          <button type="button" className="share-target" onClick={() => void shareOnDevice()}>
+            <i><ShareIcon /></i>
+            {copy.more}
+          </button>
+        )}
+      </div>
+    </>
+  );
+};
+
+/**
+ * A customer sharing a business they like, from its page: the owner's sheet in
+ * a friend's voice. What is being sent stands at the top; the code is shown on
+ * the screen for somebody nearby to scan, rather than as a card to print.
+ */
+export const CustomerShareSheet = ({
+  open,
+  onClose,
+  shared,
+  kind,
+  photo,
+}: {
+  open: boolean;
+  onClose: () => void;
+  shared: Shared;
+  /** The main category and the address, in the reader's language. */
+  kind: string;
+  /** The cover photo's address; null for a business without one. */
+  photo: string | null;
+}) => {
+  const copy = useCopy("live");
+  const [showingCode, setShowingCode] = useState(false);
+  const close = () => {
+    setShowingCode(false);
+    onClose();
+  };
+  return (
+    <Sheet open={open} onClose={close} labelledBy="customer-share-title">
+      <div className="share-sheet">
+        <div className="share-business">
+          {photo === null ? (
+            <span className="share-business-thumb empty" aria-hidden="true">
+              {shared.name.trim().charAt(0) || "?"}
+            </span>
+          ) : (
+            <img className="share-business-thumb" src={photo} alt="" width={48} height={48} />
+          )}
+          <span className="list-text">
+            <b>{shared.name}</b>
+            {kind !== "" && <small>{kind}</small>}
+          </span>
+        </div>
+        <h2 id="customer-share-title">{copy.shareTitle}</h2>
+        <ShareTargets shared={shared} message={fillText(copy.friendMessage, { name: shared.name })} />
+        <button
+          type="button"
+          className="share-code-toggle"
+          aria-expanded={showingCode}
+          aria-controls="share-code"
+          onClick={() => setShowingCode(!showingCode)}
+        >
+          <QrIcon />
+          <span>{showingCode ? copy.hideCode : copy.showCode}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={showingCode ? "open" : undefined}>
+            <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {showingCode && (
+          <figure id="share-code" className="share-code">
+            <QrOnScreen url={shared.url} label={fillText(copy.codeOf, { name: shared.name })} />
+            <figcaption>
+              <b>{shared.name}</b>
+              <small>{copy.scanHint}</small>
+            </figcaption>
+          </figure>
+        )}
+        <Button intent="quiet" onClick={close}>{copy.close}</Button>
       </div>
     </Sheet>
   );

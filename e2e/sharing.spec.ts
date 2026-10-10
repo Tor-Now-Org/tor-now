@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { aMember } from "./change-support.ts";
-import { aShareSheetOnTheDevice, noShareSheetOnTheDevice, readTheCard, sharedOnTheDevice } from "./share-support.ts";
-import { aBusinessWithOpenHours, aDayFromNow, anInstantAt, call, database, ready, uniquePhone, useEnglish } from "./support.ts";
+import { aShareSheetOnTheDevice, noShareSheetOnTheDevice, readTheCard, readTheScreenCode, sharedOnTheDevice } from "./share-support.ts";
+import { aBusinessWithOpenHours, aDayFromNow, anInstantAt, API_URL, call, database, ready, signInDirectly, uniquePhone, useEnglish } from "./support.ts";
 
 /**
  * ADR 0028: the one place a business is shared from, once it is open — a pill
@@ -251,7 +251,7 @@ test.describe("sharing the business from the drawer", () => {
     await expect(sheet(page)).toBeHidden();
   });
 
-  test("speaks English in English, while the card follows the business's name", async ({ page }) => {
+  test("speaks English in English, the printed card included, whatever the name's letters", async ({ page }) => {
     await useEnglish(page);
     const shop = await aShop("מספרה");
     await manage(page, shop.owner.token, shop.business.id);
@@ -264,7 +264,8 @@ test.describe("sharing the business from the drawer", () => {
     await expect(shareSheet.getByRole("link", { name: "See it as a customer" })).toBeVisible();
     await expect(shareSheet.getByRole("link", { name: "Share on WhatsApp" })).toBeVisible();
     await expect(shareSheet.getByRole("button", { name: "Copy the link" })).toBeVisible();
-    await expect(shareSheet.locator(".share-card")).toHaveAttribute("data-language", "he", { timeout: 15_000 });
+    // A Hebrew name, an English app: the card is English.
+    await expect(shareSheet.locator(".share-card")).toHaveAttribute("data-language", "en", { timeout: 15_000 });
   });
 
   test("fits a 320px phone: the pill stays on the row's line, and the sheet does not scroll sideways", async ({ page }, info) => {
@@ -287,5 +288,156 @@ test.describe("sharing the business from the drawer", () => {
       Array.from(document.querySelectorAll(".sheet, main")).some((element) => element.scrollWidth > element.clientWidth + 1),
     );
     expect(sideways).toBe(false);
+  });
+});
+
+test.describe("a customer sharing a business from its page", () => {
+  const A_PNG = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const theBusinessPage = async (page: Page, shop: Shop) => {
+    await page.goto(`/business/${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("heading", { level: 1, name: shop.business.name })).toBeVisible({ timeout: 20_000 });
+  };
+  const customerSheet = (page: Page) => page.getByRole("dialog", { name: "שיתוף העסק" });
+
+  test("opens the owner's sheet in a friend's voice, with the business at the top", async ({ page, context }) => {
+    await noShareSheetOnTheDevice(page);
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const shop = await aShop("המלצה");
+    await theBusinessPage(page, shop);
+    await page.getByRole("button", { name: "שיתוף העסק" }).click();
+    const sheet = customerSheet(page);
+    await expect(sheet).toBeVisible();
+
+    // What is being sent, at the top: its name, main category and address.
+    const business = sheet.locator(".share-business");
+    await expect(business).toContainText(shop.business.name);
+    await expect(business).toContainText(/מספרה \/ ספר · רחוב הבדיקה 1/);
+    // Without a cover photo, the initial stands in.
+    await expect(business.locator(".share-business-thumb.empty")).toHaveText(shop.business.name.charAt(0));
+
+    // A friend's message, and the business's own link.
+    const message = `מכירים את ${shop.business.name}? קובעים שם תור בלי להתקשר:`;
+    await expect(sheet.locator(".share-message")).toContainText(message);
+    const url = (await sheet.locator(".share-message a").getAttribute("href")) ?? "";
+    expect(url).toMatch(businessLink(shop));
+    const whatsapp = (await sheet.getByRole("link", { name: "שיתוף בוואטסאפ" }).getAttribute("href")) ?? "";
+    expect(decodeURIComponent(whatsapp.slice("https://wa.me/?text=".length))).toBe(`${message}\n${url}`);
+    await sheet.getByRole("button", { name: "העתקת הקישור" }).click();
+    await expect(sheet.getByRole("button", { name: "הקישור הועתק" })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+
+    // Nothing of the owner's: no customer view, no card to print, no deadline.
+    await expect(sheet.getByRole("link", { name: "צפייה כלקוח" })).toHaveCount(0);
+    await expect(sheet.getByRole("link", { name: "הורדה להדפסה" })).toHaveCount(0);
+    await expect(sheet.locator(".share-card, .warn")).toHaveCount(0);
+    await expect(sheet.getByRole("button", { name: "עוד…" })).toHaveCount(0);
+
+    await sheet.getByRole("button", { name: "סגירה" }).click();
+    await expect(sheet).toBeHidden();
+  });
+
+  test("shows a code on the screen for a friend to scan, and folds it away again", async ({ page }) => {
+    const shop = await aShop("קוד במסך");
+    await theBusinessPage(page, shop);
+    await page.getByRole("button", { name: "שיתוף העסק" }).click();
+    const sheet = customerSheet(page);
+    const toggle = sheet.getByRole("button", { name: "להראות קוד לסריקה" });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(sheet.locator(".qr-on-screen")).toHaveCount(0);
+
+    await toggle.click();
+    const code = sheet.getByRole("img", { name: `קוד QR לעמוד של ${shop.business.name}` });
+    await expect(code).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "הסתרת הקוד" })).toHaveAttribute("aria-expanded", "true");
+    await expect(sheet.locator(".share-code figcaption")).toContainText(shop.business.name);
+    await expect(sheet.locator(".share-code figcaption")).toContainText("מכוונים מצלמה וקובעים תור");
+    // A camera reads the business's page off it, logo and all.
+    expect(await readTheScreenCode(page)).toMatch(businessLink(shop));
+
+    await sheet.getByRole("button", { name: "הסתרת הקוד" }).click();
+    await expect(sheet.locator(".qr-on-screen")).toHaveCount(0);
+
+    // Opened again, the sheet starts folded.
+    await toggle.click();
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "שיתוף העסק" }).click();
+    await expect(customerSheet(page).locator(".qr-on-screen")).toHaveCount(0);
+  });
+
+  test("hands the friend's message to the device's own share sheet where there is one", async ({ page }) => {
+    await aShareSheetOnTheDevice(page);
+    const shop = await aShop("מכשיר לקוח");
+    await theBusinessPage(page, shop);
+    await page.getByRole("button", { name: "שיתוף העסק" }).click();
+    await customerSheet(page).getByRole("button", { name: "עוד…" }).click();
+    await expect.poll(() => sharedOnTheDevice(page)).toHaveLength(1);
+    const [handed] = await sharedOnTheDevice(page);
+    expect(handed).toMatchObject({ title: shop.business.name, text: `מכירים את ${shop.business.name}? קובעים שם תור בלי להתקשר:` });
+    expect(handed?.url).toMatch(businessLink(shop));
+  });
+
+  test("shows the business's cover beside its name", async ({ page }) => {
+    const shop = await aShop("עם תמונה");
+    const response = await fetch(`${API_URL}/businesses/${shop.business.id}/photos/0`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${shop.owner.token}`, "content-type": "image/png" },
+      body: A_PNG,
+    });
+    expect(response.ok, await response.clone().text()).toBe(true);
+    await theBusinessPage(page, shop);
+    await page.getByRole("button", { name: "שיתוף העסק" }).click();
+    const thumb = customerSheet(page).locator("img.share-business-thumb");
+    await expect(thumb).toBeVisible();
+    expect(await thumb.getAttribute("src")).toMatch(/photos|storage|http/);
+  });
+
+  test("a signed-in customer shares the same way", async ({ page }) => {
+    const shop = await aShop("לקוח מחובר");
+    await signInDirectly(page, uniquePhone(), "לקוחה");
+    await theBusinessPage(page, shop);
+    await page.getByRole("button", { name: "שיתוף העסק" }).click();
+    await expect(customerSheet(page).locator(".share-message")).toContainText(`מכירים את ${shop.business.name}?`);
+  });
+
+  test("a business that is off has no share button", async ({ page }) => {
+    const shop = await aShop("כבוי ללקוח");
+    await database()`update business set active = false where id = ${shop.business.id}`;
+    await page.goto(`/business/${shop.business.id}`);
+    await ready(page);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "שיתוף העסק" })).toHaveCount(0);
+  });
+
+  test("in English, the friend speaks English", async ({ page }) => {
+    await useEnglish(page);
+    const shop = await aShop("English share");
+    await page.goto(`/business/${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "Share this business" }).click({ timeout: 20_000 });
+    const sheet = page.getByRole("dialog", { name: "Share the business" });
+    await expect(sheet.locator(".share-message")).toContainText(`Have you tried ${shop.business.name}? You can book there without a phone call:`);
+    await expect(sheet.locator(".share-business")).toContainText("Barbershop");
+    await sheet.getByRole("button", { name: "Show a code to scan" }).click();
+    await expect(sheet.getByRole("img", { name: `QR code for ${shop.business.name}'s page` })).toBeVisible();
+  });
+
+  test("fits a 320px phone with the code open", async ({ page }, info) => {
+    test.skip(info.project.name !== "mobile", "a phone width");
+    await page.setViewportSize({ width: 320, height: 640 });
+    const shop = await aShop("עסק עם שם ארוך מאוד שלא נגמר");
+    await theBusinessPage(page, shop);
+    await page.getByRole("button", { name: "שיתוף העסק" }).click();
+    await customerSheet(page).getByRole("button", { name: "להראות קוד לסריקה" }).click();
+    await expect(customerSheet(page).locator(".qr-on-screen")).toBeVisible();
+    const sideways = await page.evaluate(() =>
+      Array.from(document.querySelectorAll(".sheet, main")).some((element) => element.scrollWidth > element.clientWidth + 1),
+    );
+    expect(sideways).toBe(false);
+    const box = await customerSheet(page).locator(".qr-on-screen").boundingBox();
+    expect((box?.x ?? -1) >= 0 && (box?.x ?? 0) + (box?.width ?? 0) <= 320).toBe(true);
   });
 });

@@ -73,22 +73,6 @@ export const daysText = (days: readonly number[], names: readonly string[]): str
 export const rangesText = (ranges: readonly TimeRange[]): string =>
   ranges.map((range) => `${range.start}–${range.end}`).join(", ");
 
-const HEBREW = /[א-ת]/;
-const LATIN = /[A-Za-z]/;
-
-/**
- * Which language the printed card speaks: the name's own. A name in Hebrew
- * letters gets the Hebrew card, one in Latin letters the English one; a name
- * with both, or with neither ("777"), follows the language the app is in.
- */
-export const nameLanguage = (name: string, fallback: Language): Language => {
-  const hebrew = HEBREW.test(name);
-  const latin = LATIN.test(name);
-  if (hebrew && !latin) return "he";
-  if (latin && !hebrew) return "en";
-  return fallback;
-};
-
 /** The address customers open, the same one "see it as a customer" opens. */
 export const businessUrl = (origin: string, businessId: string): string =>
   `${origin.replace(/\/+$/, "")}/business/${encodeURIComponent(businessId)}`;
@@ -111,7 +95,7 @@ export const cardFileName = (name: string): string => {
 export type Shared = {
   readonly url: string;
   readonly name: string;
-  /** The card's own language: the name's, not necessarily the app's. */
+  /** The language the printed card is set in: the app's. */
   readonly cardLanguage: Language;
   /** The main category and the address, already in the card's language. */
   readonly kind: string;
@@ -130,7 +114,9 @@ export const sharedOf = (
   origin: string,
   appLanguage: Language,
 ): Shared => {
-  const cardLanguage = nameLanguage(business.name, appLanguage);
+  // The card speaks the app's language: whoever shares from a Hebrew app
+  // prints a Hebrew card, whatever letters the business's name is in.
+  const cardLanguage = appLanguage;
   return {
     url: businessUrl(origin, business.id),
     name: business.name,

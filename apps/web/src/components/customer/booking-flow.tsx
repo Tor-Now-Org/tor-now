@@ -30,7 +30,10 @@ import { useErrorText } from "@/lib/use-error-text.ts";
 import { useSession } from "@/lib/session.tsx";
 import { LogoMark } from "../logo.tsx";
 import { VerifyPanel } from "../verify-panel.tsx";
-import { BusinessPhotos } from "./business-photos.tsx";
+import { BusinessPhotos, photoAddress } from "./business-photos.tsx";
+import { CustomerShareSheet } from "../owner/share-sheet.tsx";
+import { kindLine, sharedOf } from "../owner/live-summary.ts";
+import { businessCategories } from "../category-choice.ts";
 import { ReviewPrompt, ReviewSummary, useBusinessReviews } from "./business-reviews.tsx";
 import { WaitSheet } from "./wait-sheet.tsx";
 import { lastBookableDay, stripDates } from "./days-model.ts";
@@ -75,7 +78,8 @@ export const BookingFlow = ({
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   /** Briefly true after the address is copied, where there is no share sheet. */
-  const [shared, setShared] = useState(false);
+  /** The share sheet: the owner's, in a friend's voice (ADR 0028). */
+  const [sharing, setSharing] = useState(false);
   /**
    * ADR 0018. Which empty stretch the customer pressed "tell me" on, or null
    * for the whole day. Undefined means the sheet is closed — distinct from
@@ -347,29 +351,6 @@ export const BookingFlow = ({
    * otherwise crash on a `.replace` of undefined rather than simply showing
    * nothing.
    */
-  /**
-   * Hand the business's own address to whatever the device shares with. The
-   * page is reachable cold at /business/<id>, which is what makes this worth
-   * offering at all — a link that only works for someone already inside the app
-   * is not a link.
-   */
-  const share = async () => {
-    const url = `${window.location.origin}/business/${business.id}`;
-    try {
-      if (typeof navigator.share === "function") {
-        await navigator.share({ title: business.name, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      setShared(true);
-      window.setTimeout(() => setShared(false), 2000);
-    } catch {
-      // A cancelled share sheet and a refused clipboard both land here, and
-      // neither is a failure worth a message: the person either changed their
-      // mind or can select the address from the bar themselves.
-    }
-  };
-
   const said = (value: string | null | undefined): string | null =>
     value === null || value === undefined || value.trim() === "" ? null : value;
   const instagram = said(business.instagram);
@@ -699,24 +680,21 @@ export const BookingFlow = ({
                 <InstagramMark />
               </a>
             )}
-            {/* A business is a place people send each other to. The device's own
-                share sheet where there is one — that is where WhatsApp, a
-                message and the clipboard already live — and a straight copy
-                where there is not, which is every desktop browser. */}
-            <button
-              type="button"
-              onClick={() => void share()}
-              aria-label={copy.shareBusiness}
-              title={copy.shareBusiness}
-              style={{
-                ...MARK,
-                color: shared ? "var(--positive)" : "var(--muted)",
-                borderColor: shared ? "var(--positive)" : "var(--line)",
-              }}
-              className="chip tap"
-            >
-              {shared ? <SharedMark /> : <ShareMark />}
-            </button>
+            {/* A business is a place people send each other to: the sheet the
+                owner shares from, said as a friend would. Not for a business
+                that is off — its page takes no bookings. */}
+            {business.active && (
+              <button
+                type="button"
+                onClick={() => setSharing(true)}
+                aria-label={copy.shareBusiness}
+                title={copy.shareBusiness}
+                style={{ ...MARK, color: "var(--muted)" }}
+                className="chip tap"
+              >
+                <ShareMark />
+              </button>
+            )}
         </span>
       </div>
 
@@ -1011,6 +989,21 @@ export const BookingFlow = ({
           />
         )}
       </Sheet>
+      <CustomerShareSheet
+        open={sharing}
+        onClose={() => setSharing(false)}
+        shared={sharedOf(
+          { id: business.id, name: business.name, address: business.address, category: businessCategories(business)[0] ?? null },
+          typeof window === "undefined" ? "" : window.location.origin,
+          language,
+        )}
+        kind={kindLine(businessCategories(business)[0] ?? null, business.address, language)}
+        photo={(() => {
+          const photos = profile.photos ?? [];
+          const cover = photos.find((one) => one.slot === 0) ?? photos[0];
+          return cover === undefined ? null : photoAddress(cover);
+        })()}
+      />
     </div>
   );
 };
@@ -1029,18 +1022,6 @@ const ShareMark = () => (
       stroke="currentColor"
       strokeWidth="1.8"
       strokeLinecap="round"
-    />
-  </svg>
-);
-
-const SharedMark = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="m5 12.5 4.5 4.5L19 7.5"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     />
   </svg>
 );

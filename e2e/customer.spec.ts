@@ -152,14 +152,16 @@ test.describe("finding and booking", () => {
     const name = `שיתוף ${Date.now()}`;
     const shop = await aBusinessWithOpenHours({ name, ownerPhone: uniquePhone() });
 
-    // No share sheet in this browser, so the address goes to the clipboard.
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto("/");
     await ready(page);
     await page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…").fill(name.slice(0, 7));
     await page.getByText(name, { exact: false }).first().click();
 
+    // The sheet, then its copy: the link it copies is the business's own page.
     await page.getByRole("button", { name: "שיתוף העסק" }).click();
+    await page.getByRole("dialog", { name: "שיתוף העסק" }).getByRole("button", { name: "העתקת הקישור" }).click();
+    await expect(page.getByRole("dialog").getByRole("button", { name: "הקישור הועתק" })).toBeVisible();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     expect(copied).toContain(`/business/${shop.business.id}`);
 
