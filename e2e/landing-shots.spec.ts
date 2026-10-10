@@ -686,6 +686,10 @@ for (const tongue of TONGUES) {
       // diary is a screenshot of nothing happening.
       await openTheDay(page, day);
       await expect(page.getByText(firstCustomer).first()).toBeVisible({ timeout: 15_000 });
+      // Choosing a day scrolls down to its diary; how far depends on where the
+      // day falls in the month, so on some dates the month left the frame.
+      // The picture is of the month, so it is brought back first.
+      await bring(page, calendarChip, 90);
       await photograph(page, into, "o1-month", calendarChip);
 
       // The same day with every chair at once, which is the shape of the
@@ -699,7 +703,9 @@ for (const tongue of TONGUES) {
       // diary is.
       const lane = page.getByText(street.barber.resourceNames[1]!, { exact: true }).first();
       await expect(lane).toBeVisible();
-      await bring(page, lane, 104);
+      // High enough that the month's last row is under the header, not
+      // sliced along the top of the frame.
+      await bring(page, lane, 66);
       await photograph(page, into, "o2-day", lane);
 
       // Who comes here, and what they have had. Booking somebody in is filmed
