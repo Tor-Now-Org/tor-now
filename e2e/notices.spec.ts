@@ -58,14 +58,17 @@ test.describe("notices", () => {
     await page.goto(`/manage?business=${shop.business.id}`);
     await ready(page);
 
-    // What costs the most to miss stands; the Trial's start waits in the bell.
-    await expect(banner(page).getByText("התשלום באיחור")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("עוד הודעה אחת בפעמון")).toBeVisible();
+    // In grace, the pay banner stands above every tab, with the date grace
+    // ends; the late-payment notice it stands for waits in the bell rather
+    // than saying the same thing twice.
+    const pay = page.locator(".notice-banner-wrap").filter({ hasText: "תקופת החסד" });
+    await expect(pay).toContainText("המנוי לא שולם, והעסק בתקופת החסד עד", { timeout: 15_000 });
+    await expect(banner(page)).toHaveCount(0);
 
     await page.getByRole("button", { name: "לקוחות", exact: true }).click();
-    await expect(banner(page).getByText("התשלום באיחור")).toBeVisible();
+    await expect(pay).toBeVisible();
 
-    await banner(page).getByRole("button", { name: "איך משלמים" }).click();
+    await pay.getByRole("button", { name: "לתשלום" }).click();
     await expect(page.getByText("המסלולים")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("בחסד", { exact: true })).toBeVisible();
   });
