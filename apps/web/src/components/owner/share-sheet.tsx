@@ -1,22 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Critical, Sheet } from "@/components/ui.tsx";
+import { Button, Critical, Sheet, Warning } from "@/components/ui.tsx";
 import { DICTIONARIES } from "@/lib/i18n/dictionaries.ts";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
-import { cardFileName, whatsappShareLink } from "./live-summary.ts";
-import { cardFile, drawCard, type CardInput } from "./qr-card.ts";
+import { cardFileName, whatsappShareLink, type Shared } from "./live-summary.ts";
 
-/** What the business is called and where it lives, for the message and the card. */
-export type Shared = {
-  readonly url: string;
-  readonly name: string;
-  /** The card's own language: the name's, not necessarily the app's. */
-  readonly cardLanguage: "he" | "en";
-  /** The main category and the address, already in the card's language. */
-  readonly kind: string;
-};
+export type { Shared };
+import { cardFile, drawCard, type CardInput } from "./qr-card.ts";
 
 /** The words a share starts with, in the owner's language. */
 export const shareText = (message: string, url: string): string => `${message}\n${url}`;
@@ -108,10 +100,17 @@ const useCardPicture = (shared: Shared, wanted: boolean) => {
   return { picture, failed };
 };
 
-const canShareFile = (file: File): boolean =>
-  typeof navigator.share === "function" &&
-  typeof navigator.canShare === "function" &&
-  navigator.canShare({ files: [file] });
+/** Whether this device can be handed a picture to share, asked with a stand-in before the card exists. */
+const takesPictures = (): boolean => {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function" || typeof navigator.canShare !== "function") {
+    return false;
+  }
+  try {
+    return navigator.canShare({ files: [new File([""], "card.png", { type: "image/png" })] });
+  } catch {
+    return false;
+  }
+};
 
 export const WhatsAppIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -124,6 +123,22 @@ export const CopyIcon = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="8" y="8" width="12" height="12" rx="2" />
     <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+  </svg>
+);
+
+export const ShareIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
+  </svg>
+);
+
+export const EyeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+    <circle cx="12" cy="12" r="3" />
   </svg>
 );
 
@@ -141,11 +156,33 @@ export const QrIcon = () => (
  * copying the link, and the printable QR card — saved to print, or sent on as
  * a picture where the device can.
  */
-export const ShareSheet = ({ open, onClose, shared }: { open: boolean; onClose: () => void; shared: Shared }) => {
+export const ShareSheet = ({
+  open,
+  onClose,
+  shared,
+  deadline = null,
+}: {
+  open: boolean;
+  onClose: () => void;
+  shared: Shared;
+  /** While payment is due: when the business leaves search without it. */
+  deadline?: { readonly tomorrow: boolean; readonly time: string } | null;
+}) => {
   const copy = useCopy("live");
   const link = useCopyLink(shared.url);
   const { picture, failed } = useCardPicture(shared, open);
   const [sharing, setSharing] = useState(false);
+  // Read once on the client: only a device with a share sheet of its own gets "עוד…".
+  const [deviceShares] = useState(() => typeof navigator !== "undefined" && typeof navigator.share === "function");
+  const [devicePictures] = useState(takesPictures);
+
+  const shareOnDevice = async () => {
+    try {
+      await navigator.share({ title: shared.name, text: copy.shareMessage, url: shared.url });
+    } catch {
+      // A cancelled share sheet is the person changing their mind.
+    }
+  };
 
   const shareImage = async () => {
     if (picture === null) return;
@@ -162,7 +199,18 @@ export const ShareSheet = ({ open, onClose, shared }: { open: boolean; onClose: 
   return (
     <Sheet open={open} onClose={onClose} labelledBy="share-sheet-title">
       <div className="share-sheet">
-        <h2 id="share-sheet-title">{copy.shareTitle}</h2>
+        <div className="share-head">
+          <h2 id="share-sheet-title">{copy.shareTitle}</h2>
+          <a className="share-view" href={shared.url} target="_blank" rel="noreferrer">
+            <EyeIcon />
+            {copy.asCustomer}
+          </a>
+        </div>
+        {deadline !== null && (
+          <Warning>
+            {fillText(copy.dueNote, { when: deadline.tomorrow ? copy.tomorrow : copy.today, time: deadline.time })}
+          </Warning>
+        )}
         <p className="share-message">
           {copy.shareMessage}
           <br />
@@ -170,7 +218,7 @@ export const ShareSheet = ({ open, onClose, shared }: { open: boolean; onClose: 
             {shared.url}
           </a>
         </p>
-        <div className="share-targets">
+        <div className={`share-targets${deviceShares ? " three" : ""}`}>
           <a
             className="share-target wa"
             href={whatsappShareLink(shareText(copy.shareMessage, shared.url))}
@@ -184,6 +232,12 @@ export const ShareSheet = ({ open, onClose, shared }: { open: boolean; onClose: 
             <i><CopyIcon /></i>
             <span aria-live="polite">{link.copied ? copy.copied : copy.copyLink}</span>
           </button>
+          {deviceShares && (
+            <button type="button" className="share-target" onClick={() => void shareOnDevice()}>
+              <i><ShareIcon /></i>
+              {copy.more}
+            </button>
+          )}
         </div>
         <figure className="share-card" data-language={shared.cardLanguage}>
           {picture === null ? (
@@ -196,14 +250,18 @@ export const ShareSheet = ({ open, onClose, shared }: { open: boolean; onClose: 
             <img src={picture.src} alt={fillText(copy.cardPreview, { name: shared.name })} width={620} height={874} />
           )}
         </figure>
+        {/* Drawn before the card is ready, and waiting for it, so the sheet
+            keeps its size and nothing moves under a finger when it arrives. */}
         <div className="share-actions">
-          {picture !== null && (
+          {picture === null ? (
+            <Button disabled>{copy.download}</Button>
+          ) : (
             <a className="primary" href={picture.src} download={picture.file.name}>
               {copy.download}
             </a>
           )}
-          {picture !== null && canShareFile(picture.file) && (
-            <Button intent="quiet" busy={sharing} onClick={() => void shareImage()}>
+          {devicePictures && (
+            <Button intent="quiet" busy={sharing} disabled={picture === null} onClick={() => void shareImage()}>
               {copy.shareImage}
             </Button>
           )}

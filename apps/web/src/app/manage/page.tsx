@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client.ts";
 import type { BillingDto, BusinessDto, ResourceDto } from "@/lib/api/types.ts";
 import { customersInBusiness, SECTIONS, sectionsFor, staffRole, type Section } from "@/lib/roles.ts";
-import { useCopy } from "@/lib/i18n/index.tsx";
+import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
 import {
@@ -24,6 +24,10 @@ import { Statistics } from "@/components/owner/statistics.tsx";
 import { Schedule } from "@/components/owner/schedule.tsx";
 import { AccountDrawer } from "@/components/account-drawer.tsx";
 import { ContextSwitch } from "@/components/context-switch.tsx";
+import { ShareIcon, ShareSheet } from "@/components/owner/share-sheet.tsx";
+import { sharedOf } from "@/components/owner/live-summary.ts";
+import { businessCategories } from "@/components/category-choice.ts";
+import { deactivationDeadline } from "@/lib/billing-alert.ts";
 import {
   businessToManage,
   fetchBusinesses,
@@ -92,6 +96,10 @@ function ManageApp() {
   const requestedPanel = params.get("panel");
   const [panel, setPanel] = useState<Panel>(isPanel(requestedPanel) ? requestedPanel : "services");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // ADR 0028: sharing the business, from its row in the drawer.
+  const [sharing, setSharing] = useState(false);
+  const liveCopy = useCopy("live");
+  const { language } = useLanguage();
 
   /**
    * Move to another business, address and all.
@@ -419,8 +427,36 @@ function ManageApp() {
             badge: <BuildingIcon />,
             current: true,
             onClick: () => setDrawerOpen(false),
+            // The one place the business is shared from: in its own row, so
+            // it costs the drawer no space. One sheet at a time, so the drawer
+            // makes way for it.
+            action: {
+              label: liveCopy.share,
+              name: liveCopy.shareTitle,
+              icon: <ShareIcon />,
+              onClick: () => {
+                setDrawerOpen(false);
+                setSharing(true);
+              },
+            },
           },
         ]}
+      />
+
+      <ShareSheet
+        open={sharing}
+        onClose={() => setSharing(false)}
+        shared={sharedOf(
+          {
+            id: business.id,
+            name: business.name,
+            address: business.address,
+            category: businessCategories(business)[0] ?? null,
+          },
+          typeof window === "undefined" ? "" : window.location.origin,
+          language,
+        )}
+        deadline={billing?.status === "LAPSED" ? deactivationDeadline(business.timeZone) : null}
       />
     </>
   );

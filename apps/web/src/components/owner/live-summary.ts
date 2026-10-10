@@ -1,4 +1,4 @@
-import { mergedRanges, type TimeRange } from "@tor-now/domain";
+import { categoryLabel, mergedRanges, type BusinessCategory, type TimeRange } from "@tor-now/domain";
 import type { Language } from "@/lib/i18n/dictionaries.ts";
 import type { DayHours } from "./week.ts";
 
@@ -105,4 +105,36 @@ export const cardFileName = (name: string): string => {
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
   return `qr-${slug === "" ? "business" : slug}.png`;
+};
+
+/** What a share hands on: the link, the name, and the card's own language and line. */
+export type Shared = {
+  readonly url: string;
+  readonly name: string;
+  /** The card's own language: the name's, not necessarily the app's. */
+  readonly cardLanguage: Language;
+  /** The main category and the address, already in the card's language. */
+  readonly kind: string;
+};
+
+/** The main category and the address, as one line, in one language. */
+export const kindLine = (category: BusinessCategory | null, address: string | null, language: Language): string =>
+  [category === null ? null : categoryLabel(category, language), address]
+    .filter((part): part is string => part !== null && part.trim() !== "")
+    .map((part) => part.trim())
+    .join(" · ");
+
+/** A business as a share hands it on, wherever the share starts. */
+export const sharedOf = (
+  business: { readonly id: string; readonly name: string; readonly address: string | null; readonly category: BusinessCategory | null },
+  origin: string,
+  appLanguage: Language,
+): Shared => {
+  const cardLanguage = nameLanguage(business.name, appLanguage);
+  return {
+    url: businessUrl(origin, business.id),
+    name: business.name,
+    cardLanguage,
+    kind: kindLine(business.category, business.address, cardLanguage),
+  };
 };

@@ -5,9 +5,11 @@ import {
   daysText,
   firstAndMore,
   hoursGroups,
+  kindLine,
   nameLanguage,
   namedOnly,
   rangesText,
+  sharedOf,
   whatsappShareLink,
 } from "./live-summary.ts";
 import { emptyWeek, type DayHours } from "./week.ts";
@@ -174,5 +176,46 @@ describe("the card's file name", () => {
   });
   it("stays short", () => {
     expect(cardFileName("א".repeat(200)).length).toBeLessThanOrEqual("qr-.png".length + 40);
+  });
+});
+
+describe("the line under the name", () => {
+  it("is the main category and the address, in the language asked for", () => {
+    expect(kindLine("barbershop", "הרצל 1, תל אביב", "he")).toBe("מספרה / ספר · הרצל 1, תל אביב");
+    expect(kindLine("barbershop", "1 Herzl, Tel Aviv", "en")).toBe("Barbershop · 1 Herzl, Tel Aviv");
+  });
+  it("leaves out what the business does not have, and trims what it does", () => {
+    expect(kindLine(null, "הרצל 1", "he")).toBe("הרצל 1");
+    expect(kindLine("barbershop", null, "he")).toBe("מספרה / ספר");
+    expect(kindLine("barbershop", "   ", "he")).toBe("מספרה / ספר");
+    expect(kindLine("barbershop", "  הרצל 1  ", "he")).toBe("מספרה / ספר · הרצל 1");
+    expect(kindLine(null, null, "en")).toBe("");
+  });
+});
+
+describe("a business as a share hands it on", () => {
+  const business = { id: "b-1", name: "מספרת דנה", address: "הרצל 1", category: "barbershop" as const };
+
+  it("links to the business's page and keeps its name", () => {
+    expect(sharedOf(business, "https://tor-panuy.vercel.app", "en")).toMatchObject({
+      url: "https://tor-panuy.vercel.app/business/b-1",
+      name: "מספרת דנה",
+    });
+  });
+  it("sets the card in the name's language, and its line in that language too", () => {
+    expect(sharedOf(business, "https://x.test", "en")).toMatchObject({ cardLanguage: "he", kind: "מספרה / ספר · הרצל 1" });
+    expect(sharedOf({ ...business, name: "Dana's" }, "https://x.test", "he")).toMatchObject({
+      cardLanguage: "en",
+      kind: "Barbershop · הרצל 1",
+    });
+  });
+  it("follows the app for a name in both scripts, and survives a business with no category or address", () => {
+    expect(sharedOf({ ...business, name: "Studio דנה" }, "https://x.test", "en").cardLanguage).toBe("en");
+    expect(sharedOf({ id: "b-2", name: "x", address: null, category: null }, "https://x.test/", "he")).toEqual({
+      url: "https://x.test/business/b-2",
+      name: "x",
+      cardLanguage: "en",
+      kind: "",
+    });
   });
 });

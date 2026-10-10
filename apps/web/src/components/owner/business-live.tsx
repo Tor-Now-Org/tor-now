@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { categoryLabel, TRIAL_DAYS, type BusinessCategory } from "@tor-now/domain";
+import { TRIAL_DAYS, type BusinessCategory } from "@tor-now/domain";
 import { Button, Card } from "@/components/ui.tsx";
 import { Tick, TimelineStep } from "@/components/timeline-step.tsx";
 import type { PlanName } from "@/lib/api/types.ts";
@@ -14,11 +14,12 @@ import {
   daysText,
   firstAndMore,
   hoursGroups,
-  nameLanguage,
+  kindLine,
   rangesText,
+  sharedOf,
   whatsappShareLink,
 } from "./live-summary.ts";
-import { CopyIcon, QrIcon, ShareSheet, shareText, useCopyLink, WhatsAppIcon, type Shared } from "./share-sheet.tsx";
+import { CopyIcon, EyeIcon, QrIcon, ShareIcon, ShareSheet, shareText, useCopyLink, WhatsAppIcon } from "./share-sheet.tsx";
 import type { DayHours } from "./week.ts";
 
 /** Calendars named on the card before the rest are counted. */
@@ -41,22 +42,6 @@ export type OpenedBusiness = {
   readonly payBy: { readonly tomorrow: boolean; readonly time: string } | null;
   readonly failedPhotos: number;
 };
-
-const ShareIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="18" cy="5" r="3" />
-    <circle cx="6" cy="12" r="3" />
-    <circle cx="18" cy="19" r="3" />
-    <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
-  </svg>
-);
-
-const EyeIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
 
 const ClockIcon = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
@@ -100,12 +85,8 @@ export const BusinessLive = ({ business, onDone }: { business: OpenedBusiness; o
   const url = businessUrl(window.location.origin, business.id);
   const link = useCopyLink(url);
   const message = shareText(copy.shareMessage, url);
-  const cardLanguage = nameLanguage(business.name, language);
-  const kindIn = (inLanguage: "he" | "en") =>
-    [business.category === null ? null : categoryLabel(business.category, inLanguage), business.address]
-      .filter((part): part is string => part !== null && part.trim() !== "")
-      .join(" · ");
-  const shared: Shared = { url, name: business.name, cardLanguage, kind: kindIn(cardLanguage) };
+  const shared = sharedOf(business, window.location.origin, language);
+  const kindHere = kindLine(business.category, business.address, language);
 
   const owes = business.payBy !== null;
   const when = business.payBy?.tomorrow === true ? copy.tomorrow : copy.today;
@@ -174,7 +155,7 @@ export const BusinessLive = ({ business, onDone }: { business: OpenedBusiness; o
           {owes ? fillText(copy.badgeUntil, { when, time }) : copy.badgeLive}
         </span>
         <h1 className="live-name">{business.name}</h1>
-        {kindIn(language) !== "" && <span className="live-meta">{kindIn(language)}</span>}
+        {kindHere !== "" && <span className="live-meta">{kindHere}</span>}
         <div className="live-actions">
           {owes ? (
             <a className="booked-action on-navy pay" href={payHref} target="_blank" rel="noreferrer">

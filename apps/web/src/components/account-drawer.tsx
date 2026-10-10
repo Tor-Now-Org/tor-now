@@ -33,6 +33,12 @@ export type AccountPlace = {
   /** The place you are in now. Exactly one of them, marked and not offered. */
   current?: boolean;
   onClick: () => void;
+  /**
+   * One thing to do with the place, in the row itself rather than a row of its
+   * own — sharing the business you are in. Takes the check mark's spot: the
+   * filled row already says which place this is.
+   */
+  action?: { label: string; name: string; icon: ReactNode; onClick: () => void };
 };
 
 const ROW: CSSProperties = {
@@ -101,48 +107,68 @@ const CheckMark = () => (
  */
 export const PlaceList = ({ places }: { places: readonly AccountPlace[] }) => (
   <>
-    {places.map((place) => (
-      <button
-        key={place.key}
-        aria-current={place.current === true}
-        onClick={place.onClick}
-        style={{
-          ...ROW,
-          ...(place.current === true
-            ? { border: "2px solid var(--accent)", background: "var(--accent-soft)" }
-            : {}),
-        }}
-      >
+    {places.map((place) => {
+      const look: CSSProperties = {
+        ...ROW,
+        ...(place.current === true
+          ? { border: "2px solid var(--accent)", background: "var(--accent-soft)" }
+          : {}),
+      };
+      const content = <PlaceContent place={place} />;
+      if (place.action === undefined) {
+        return (
+          <button key={place.key} aria-current={place.current === true} onClick={place.onClick} style={look}>
+            {content}
+            {place.current === true && <CheckMark />}
+          </button>
+        );
+      }
+      // Two controls in one row, side by side rather than one inside the other.
+      return (
+        <div key={place.key} className="place-with-action" style={{ ...look, cursor: "default", paddingInlineEnd: 8 }}>
+          <button aria-current={place.current === true} onClick={place.onClick} className="place-main">
+            {content}
+          </button>
+          <button type="button" className="place-action" aria-label={place.action.name} onClick={place.action.onClick}>
+            {place.action.icon}
+            <span>{place.action.label}</span>
+          </button>
+        </div>
+      );
+    })}
+  </>
+);
+
+/** The badge, the name and the role: what a row says, whichever control it is. */
+const PlaceContent = ({ place }: { place: AccountPlace }) => (
+  <>
+    <span
+      style={{
+        ...BADGE,
+        background: place.current === true ? "var(--accent-strong)" : "var(--sunken)",
+        color: place.current === true ? "var(--on-accent)" : "var(--accent-strong)",
+      }}
+    >
+      {place.badge}
+    </span>
+    <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+      <span style={{ fontWeight: 600, fontSize: 15 }}>{place.title}</span>
+      {place.hint !== undefined && (
         <span
           style={{
-            ...BADGE,
-            background: place.current === true ? "var(--accent-strong)" : "var(--sunken)",
-            color: place.current === true ? "var(--on-accent)" : "var(--accent-strong)",
+            alignSelf: "flex-start",
+            fontSize: 11.5,
+            fontWeight: 500,
+            padding: "1px 7px",
+            borderRadius: 999,
+            background: place.current === true ? "var(--raised)" : "var(--sunken)",
+            color: place.current === true ? "var(--accent-strong)" : "var(--muted)",
           }}
         >
-          {place.badge}
+          {place.hint}
         </span>
-        <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-          <span style={{ fontWeight: 600, fontSize: 15 }}>{place.title}</span>
-          {place.hint !== undefined && (
-            <span
-              style={{
-                alignSelf: "flex-start",
-                fontSize: 11.5,
-                fontWeight: 500,
-                padding: "1px 7px",
-                borderRadius: 999,
-                background: place.current === true ? "var(--raised)" : "var(--sunken)",
-                color: place.current === true ? "var(--accent-strong)" : "var(--muted)",
-              }}
-            >
-              {place.hint}
-            </span>
-          )}
-        </span>
-        {place.current === true && <CheckMark />}
-      </button>
-    ))}
+      )}
+    </span>
   </>
 );
 

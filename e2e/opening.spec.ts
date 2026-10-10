@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   aBusinessWithOpenHours,
@@ -14,6 +13,7 @@ import {
   stubAddressSearch,
   uniquePhone,
 } from "./support.ts";
+import { aShareSheetOnTheDevice, noShareSheetOnTheDevice, readTheCard, sharedOnTheDevice } from "./share-support.ts";
 
 /**
  * ADR 0028: the screen a business opens on, at the end of the wizard. It says
@@ -21,7 +21,6 @@ import {
  * link, or paying, for an owner whose Trial was spent on an earlier business.
  */
 
-const JSQR = fileURLToPath(new URL("../node_modules/jsqr/dist/jsQR.js", import.meta.url));
 const A_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
   "base64",
@@ -110,66 +109,6 @@ const openedId = async (page: Page): Promise<string> => {
   const id = /\/business\/([^/?#]+)$/.exec(href ?? "")?.[1];
   expect(id, `a business link, not ${href}`).toBeDefined();
   return id ?? "";
-};
-
-const noShareSheetOnTheDevice = (page: Page) =>
-  page.addInitScript(() => {
-    delete (Navigator.prototype as { share?: unknown }).share;
-    delete (Navigator.prototype as { canShare?: unknown }).canShare;
-  });
-
-/** A device share sheet that records what it was handed, and can be cancelled. */
-const aShareSheetOnTheDevice = (page: Page, options: { cancels?: boolean; files?: boolean } = {}) =>
-  page.addInitScript(({ cancels, files }) => {
-    const shared: unknown[] = [];
-    (window as unknown as { __shared: unknown[] }).__shared = shared;
-    Object.defineProperty(Navigator.prototype, "share", {
-      configurable: true,
-      value: async (data: ShareData) => {
-        shared.push({
-          title: data.title,
-          text: data.text,
-          url: data.url,
-          files: (data.files ?? []).map((file) => ({ name: file.name, type: file.type, size: file.size })),
-        });
-        if (cancels) throw new DOMException("Share canceled", "AbortError");
-      },
-    });
-    Object.defineProperty(Navigator.prototype, "canShare", {
-      configurable: true,
-      value: (data: ShareData) => files || (data.files ?? []).length === 0,
-    });
-  }, { cancels: options.cancels ?? false, files: options.files ?? false });
-
-const sharedOnTheDevice = (page: Page) =>
-  page.evaluate(() => (window as unknown as { __shared: { title?: string; text?: string; url?: string; files: { name: string; type: string; size: number }[] }[] }).__shared);
-
-/** What a phone's camera would read off the card, decoded in the page. */
-const readTheCard = async (page: Page) => {
-  await page.addScriptTag({ path: JSQR });
-  return page.locator(".share-card img").evaluate(async (image: HTMLImageElement) => {
-    await image.decode();
-    const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    const context = canvas.getContext("2d");
-    if (context === null) return null;
-    context.drawImage(image, 0, 0);
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-    const decoded = (window as unknown as { jsQR: (d: Uint8ClampedArray, w: number, h: number) => { data: string } | null }).jsQR(
-      pixels.data,
-      pixels.width,
-      pixels.height,
-    );
-    const at = (x: number, y: number) => Array.from(context.getImageData(x, y, 1, 1).data.slice(0, 3));
-    return {
-      width: image.naturalWidth,
-      height: image.naturalHeight,
-      data: decoded?.data ?? null,
-      band: at(20, 20),
-      paper: at(20, Math.round(canvas.height / 2)),
-    };
-  });
 };
 
 const anyEditingControl = /עריכה|עריכת|שינוי|לשנות|הסרה|הסרת|מחיקה|מחיקת|למחוק|edit|remove|delete/i;
@@ -504,6 +443,9 @@ test.describe("sharing the link", () => {
     await expect(sheet.locator(".share-message")).toContainText("אפשר לקבוע אצלי תור כאן, בלי להתקשר:");
     const link = sheet.locator(".share-message a");
     await expect(link).toHaveAttribute("href", new RegExp(`/business/${id}$`));
+    // The page customers see is in the sheet too, and no "עוד…" without a device share sheet.
+    await expect(sheet.getByRole("link", { name: "צפייה כלקוח" })).toHaveAttribute("href", new RegExp(`/business/${id}$`));
+    await expect(sheet.getByRole("button", { name: "עוד…" })).toHaveCount(0);
     const url = (await link.getAttribute("href")) ?? "";
 
     // WhatsApp, saying it shares, with the message and the link written and nobody chosen.
@@ -540,6 +482,11 @@ test.describe("sharing the link", () => {
     expect(handed).toMatchObject({ title: name, text: "אפשר לקבוע אצלי תור כאן, בלי להתקשר:", files: [] });
     expect(handed?.url).toMatch(new RegExp(`/business/${id}$`));
     await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // The QR step opens this page's sheet, where "עוד…" hands the link to the device too.
+    await steps(page).getByRole("button", { name: "קוד QR" }).click();
+    await page.getByRole("dialog", { name: "שיתוף העסק" }).getByRole("button", { name: "עוד…" }).click();
+    await expect.poll(() => sharedOnTheDevice(page)).toHaveLength(2);
   });
 
   test("a cancelled device share sheet is not an error", async ({ page }) => {

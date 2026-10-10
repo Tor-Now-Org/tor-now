@@ -691,6 +691,22 @@ body {
 .live-step-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .live-step-actions .booked-action{min-height:38px;padding:0 12px;font-size:12.5px}
 .share-sheet{display:flex;flex-direction:column;gap:14px}
+.share-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.share-view{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border-radius:999px;
+  background:var(--accent-soft);color:var(--accent-strong);font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:13px;white-space:nowrap}
+.share-view:hover{background:oklch(92% 0.04 235)}
+.share-targets.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.share-targets.three .share-target{flex-direction:column;gap:4px;min-height:60px;font-size:12.5px;padding:6px}
+/* A drawer row with one thing to do in it: the row picks the place, the pill
+   acts on it. Two controls side by side, never one inside the other. */
+.place-with-action{gap:8px}
+.place-main{flex:1;min-width:0;display:flex;align-items:center;gap:10px;min-height:44px;padding:0;border:0;background:none;
+  color:inherit;font:inherit;text-align:start;cursor:pointer}
+.place-action{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 13px;border-radius:999px;
+  background:var(--raised);border:1px solid oklch(80% 0.05 235);color:var(--accent-strong);
+  font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:13.5px;cursor:pointer;
+  transition:background .13s ease, color .13s ease}
+.place-action:hover{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .share-sheet h2{font-size:19px}
 .share-message{margin:0;padding:12px 14px;border-radius:12px;background:var(--sunken);font-size:13.5px;line-height:1.6}
 .share-message a{color:var(--accent-strong);overflow-wrap:anywhere}
@@ -702,7 +718,9 @@ body {
 .share-target i{display:grid;place-items:center;font-style:normal;flex-shrink:0}
 .share-target.wa{background:oklch(95% 0.05 150);border-color:oklch(82% 0.08 150);color:oklch(38% 0.1 150)}
 .share-card{margin:0;display:grid;place-items:center;padding:12px;border-radius:14px;background:var(--sunken)}
-.share-card img{display:block;width:auto;height:auto;max-width:100%;max-height:min(44vh,340px);border-radius:6px;
+/* The card and its placeholder are the same height, so the sheet does not
+   grow under a finger when the picture arrives. */
+.share-card img{display:block;width:auto;height:min(44vh,340px);max-width:100%;object-fit:contain;border-radius:6px;
   box-shadow:0 6px 20px -8px oklch(25% 0.05 258 / .35)}
 .share-card-wait{display:grid;place-items:center;height:min(44vh,340px);aspect-ratio:1240/1748;max-width:100%;
   color:var(--muted);font-size:13px;text-align:center}
