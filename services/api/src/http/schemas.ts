@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  SERVICE_MINUTES,
   bareHandle,
   checkCategories,
   currentCategory,
@@ -310,7 +311,7 @@ export const registerBusinessSchema = z.object({
     .array(
       z.object({
         name: text(TEXT_RULES.serviceName),
-        durationMinutes: z.number().int().min(5).max(1440),
+        durationMinutes: z.number().int().min(SERVICE_MINUTES.min).max(SERVICE_MINUTES.max),
         priceMinor: z.number().int().min(0),
         bufferMinutes: z.number().int().min(0).max(240).nullable().default(null),
       }),
@@ -342,7 +343,7 @@ export const updateBusinessSchema = updateBusinessFields.transform(oneCategoryLi
 
 export const serviceSchema = z.object({
   name: text(TEXT_RULES.serviceName),
-  durationMinutes: z.number().int().min(5).max(1440),
+  durationMinutes: z.number().int().min(SERVICE_MINUTES.min).max(SERVICE_MINUTES.max),
   priceMinor: z.number().int().min(0),
   bufferMinutes: z.number().int().min(0).max(240).nullable().default(null),
 });

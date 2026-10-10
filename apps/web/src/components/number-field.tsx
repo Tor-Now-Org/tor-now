@@ -30,11 +30,12 @@ export const NumberField = ({
   onValue,
   fallback,
   min = 0,
+  max = Number.POSITIVE_INFINITY,
   decimals = false,
   ...rest
 }: Omit<
   InputHTMLAttributes<HTMLInputElement>,
-  "value" | "onChange" | "type" | "min"
+  "value" | "onChange" | "type" | "min" | "max"
 > & {
   id: string;
   label: string;
@@ -49,6 +50,8 @@ export const NumberField = ({
    */
   fallback: number | null;
   min?: number;
+  /** The largest number the field takes; past it, leaving the box puts back the last one it took. */
+  max?: number;
   /** Whether the number may have a fraction — a price in shekels and agorot. */
   decimals?: boolean;
 }) => {
@@ -67,6 +70,8 @@ export const NumberField = ({
   /** Set on focus, so the tap that focused does not collapse the selection it made. */
   const justFocused = useRef(false);
 
+  const inRange = (candidate: number) => Number.isFinite(candidate) && candidate >= min && candidate <= max;
+
   const say = (typed: string) => {
     const next = cleanNumberText(typed, decimals);
     setText(next);
@@ -84,7 +89,7 @@ export const NumberField = ({
     }
     // "12." is somebody still typing; the number it is on its way to is 12.
     const asNumber = Number(next.endsWith(".") ? next.slice(0, -1) : next);
-    if (!Number.isFinite(asNumber) || asNumber < min) return;
+    if (!inRange(asNumber)) return;
     setReported(asNumber);
     onValue(asNumber);
   };
@@ -116,10 +121,23 @@ export const NumberField = ({
         // Leaving an empty box means the fallback, and the box says so rather
         // than staying blank and reporting something else.
         justFocused.current = false;
-        if (text.trim() === "" && fallback !== null) {
-          setReported(fallback);
-          setText(String(fallback));
-          onValue(fallback);
+        if (text.trim() === "") {
+          if (fallback !== null) {
+            setReported(fallback);
+            setText(String(fallback));
+            onValue(fallback);
+          }
+        } else {
+          // A number the field does not take — "0" minutes, or a first digit
+          // on its way to a bigger one — is not left showing beside a value
+          // that is something else: the box goes back to what it holds.
+          const typed = Number(text.endsWith(".") ? text.slice(0, -1) : text);
+          if (!inRange(typed)) {
+            const kept = reported ?? fallback;
+            setText(kept === null ? "" : String(kept));
+          } else if (text.endsWith(".")) {
+            setText(String(typed));
+          }
         }
         rest.onBlur?.(event);
       }}

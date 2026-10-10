@@ -22,7 +22,7 @@ import { Customers } from "./customers.tsx";
 import { fillText } from "@/lib/i18n/fill.ts";
 import { formatPrice } from "@/lib/format.ts";
 import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
-import { leavesRoomToBook, TEXT_RULES } from "@tor-now/domain";
+import { leavesRoomToBook, SERVICE_MINUTES, TEXT_RULES } from "@tor-now/domain";
 import { spanOfDays, spanOfMinutes } from "@/lib/span-text.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import {
@@ -96,16 +96,6 @@ const MINOR_UNITS_PER_MAJOR = 100;
  * Everything about the Business itself: what it offers, whose calendars, the
  * rules it books by, and what it owes the platform.
  */
-/**
- * A service as the form edits it: a price of nought is no price, an empty box
- * with its example, rather than a nought somebody has to delete first.
- */
-const withoutZeroPrice = (service: ServiceDto): Partial<ServiceDto> => {
-  if (service.priceMinor !== 0) return service;
-  const { priceMinor: _none, ...rest } = service;
-  return rest;
-};
-
 export const BusinessPanel = ({
   token,
   business,
@@ -337,7 +327,7 @@ export const BusinessPanel = ({
               >
                 {service.active ? copy.hideService : copy.showService}
               </button>
-              <button className="chip" style={{ border: "1px solid var(--line)" }} onClick={() => setEditing(withoutZeroPrice(service))}>
+              <button className="chip" style={{ border: "1px solid var(--line)" }} onClick={() => setEditing(service)}>
                 {copy.editService}
               </button>
             </Card>
@@ -345,7 +335,7 @@ export const BusinessPanel = ({
           {/* Withdrawing a service never touches bookings already made — each
               keeps the name, duration and price it was booked at. */}
           <Note>{copy.serviceHiddenNote}</Note>
-          <Button intent="quiet" onClick={() => setEditing({ name: "", durationMinutes: 30, bufferMinutes: null })}>
+          <Button intent="quiet" onClick={() => setEditing({ name: "", durationMinutes: SERVICE_MINUTES.initial, priceMinor: 0, bufferMinutes: null })}>
             {copy.addService}
           </Button>
         </>
@@ -718,17 +708,15 @@ export const BusinessPanel = ({
               problem={problem.text(editing?.name ?? "", TEXT_RULES.serviceName)}
               value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             <NumberField id="svc-duration" label={copy.durationMinutes} hint={copy.durationHint}
-              value={editing.durationMinutes ?? 30} fallback={30} min={1}
-              onValue={(v) => setEditing({ ...editing, durationMinutes: v ?? 30 })} />
-            {/* Optional, as its hint says: no price is an empty box showing an
-                example, not a nought somebody has to delete before typing. */}
-            <NumberField id="svc-price" label={copy.price} placeholder={copy.pricePlaceholder} hint={copy.priceHint}
-              value={editing.priceMinor === undefined ? null : editing.priceMinor / MINOR_UNITS_PER_MAJOR}
-              fallback={null} decimals
-              onValue={(v) => {
-                const { priceMinor: _left, ...rest } = editing;
-                setEditing(v === null ? rest : { ...editing, priceMinor: Math.round(v * MINOR_UNITS_PER_MAJOR) });
-              }} />
+              value={editing.durationMinutes ?? SERVICE_MINUTES.initial} fallback={SERVICE_MINUTES.initial}
+              min={SERVICE_MINUTES.min} max={SERVICE_MINUTES.max}
+              onValue={(v) => setEditing({ ...editing, durationMinutes: v ?? SERVICE_MINUTES.initial })} />
+            {/* Nought is no price. The box selects itself when tapped and drops
+                a leading nought, so typing a price over it is one motion. */}
+            <NumberField id="svc-price" label={copy.price} hint={copy.priceHint}
+              value={(editing.priceMinor ?? 0) / MINOR_UNITS_PER_MAJOR}
+              fallback={0} decimals
+              onValue={(v) => setEditing({ ...editing, priceMinor: Math.round((v ?? 0) * MINOR_UNITS_PER_MAJOR) })} />
             <BufferChoice
               id="svc-buffer"
               durationMinutes={editing.durationMinutes ?? 30}

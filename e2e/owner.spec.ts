@@ -6384,7 +6384,7 @@ test.describe("typing a number into a number", () => {
     await expect(price).toHaveValue("");
   });
 
-  test("a new service's price starts empty, and typing never leaves a leading zero", async ({ page }) => {
+  test("a new service's price starts at nought, and typing over it never leaves a leading zero", async ({ page }) => {
     const shop = await aBusinessWithOpenHours({ name: `מחיר ${Date.now()}`, ownerPhone: uniquePhone() });
     await page.addInitScript(([k, v]) => window.localStorage.setItem(k as string, v as string), [
       "tor-now.session",
@@ -6397,10 +6397,14 @@ test.describe("typing a number into a number", () => {
     const sheet = page.getByRole("dialog");
     const price = sheet.getByLabel(/מחיר/);
 
-    // Optional, as its hint says: an empty box with an example in it, not a
-    // nought to be deleted first.
-    await expect(price).toHaveValue("");
-    await expect(price).toHaveAttribute("placeholder", "80");
+    // Nought, and the hint says what nought means.
+    await expect(price).toHaveValue("0");
+    await expect(sheet.getByText("במחיר 0 השירות יוצג בלי מחיר.")).toBeVisible();
+
+    // Tapped, the nought is selected, so typing replaces it.
+    await price.click();
+    await price.pressSequentially("65");
+    await expect(price).toHaveValue("65");
 
     // The caret after a nought, which is where a finger leaves it on a phone
     // when the selection does not survive the tap: still eighty, not "080".
@@ -6409,11 +6413,11 @@ test.describe("typing a number into a number", () => {
     await price.pressSequentially("80");
     await expect(price).toHaveValue("80");
 
-    // Left empty, the service is saved without a price.
+    // Emptied and left, it is nought again — never an empty box beside a price.
     await price.fill("");
     await sheet.getByLabel(/שם השירות/).fill("ייעוץ");
     await price.blur();
-    await expect(price).toHaveValue("");
+    await expect(price).toHaveValue("0");
     await sheet.getByRole("button", { name: "שמירה" }).click();
     await expect(sheet).toBeHidden({ timeout: 15_000 });
     const services = await call<{ name: string; priceMinor: number }[]>(`/businesses/${shop.business.id}/services`, {
@@ -6445,14 +6449,94 @@ test.describe("typing a number into a number", () => {
     await duration.pressSequentially("4-5e");
     await expect(duration).toHaveValue("45");
 
-    // A price may have agorot.
+    // A price may have agorot; tapped first, as a person does, which selects the nought.
     const price = sheet.getByLabel(/מחיר/);
+    await price.click();
     await price.pressSequentially("79.90");
     await expect(price).toHaveValue("79.90");
 
     // On a phone the keyboard that opens is the numbers one.
     await expect(duration).toHaveAttribute("inputmode", "numeric");
     await expect(price).toHaveAttribute("inputmode", "decimal");
+  });
+
+  test("a service's minutes take only a length the service can have, and go back when left at anything else", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({ name: `דקות ${Date.now()}`, ownerPhone: uniquePhone() });
+    await page.addInitScript(([k, v]) => window.localStorage.setItem(k as string, v as string), [
+      "tor-now.session",
+      shop.owner.token,
+    ]);
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.getByRole("button", { name: "הוספת שירות" }).click();
+    const sheet = page.getByRole("dialog");
+    const duration = sheet.getByLabel(/משך/);
+    const name = sheet.getByLabel(/שם השירות/);
+    await expect(duration).toHaveValue("30");
+
+    // Down to nought: the box can still be typed into, and a digit after the
+    // nought is the number, not "05".
+    await duration.fill("0");
+    await expect(duration).toHaveValue("0");
+    await duration.press("End");
+    await duration.pressSequentially("5");
+    await expect(duration).toHaveValue("5");
+
+    // Nought, under five, or more than a day is not a length: leaving the box
+    // puts back the last one it took.
+    for (const wrong of ["0", "4", "2000"]) {
+      await duration.fill("45");
+      await duration.fill(wrong);
+      await name.click();
+      await expect(duration, wrong).toHaveValue("45");
+    }
+    // Emptied and left, it is the half hour a new service starts at.
+    await duration.fill("");
+    await name.click();
+    await expect(duration).toHaveValue("30");
+
+    // Five minutes and a whole day are both lengths, and what is shown is what is saved.
+    await duration.fill("1440");
+    await name.click();
+    await expect(duration).toHaveValue("1440");
+    await duration.fill("5");
+    await name.fill("בדיקה קצרה");
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(sheet).toBeHidden({ timeout: 15_000 });
+    const services = await call<{ name: string; durationMinutes: number; priceMinor: number }[]>(
+      `/businesses/${shop.business.id}/services`,
+      { token: shop.owner.token },
+    );
+    expect(services.find((service) => service.name === "בדיקה קצרה")).toMatchObject({ durationMinutes: 5, priceMinor: 0 });
+  });
+
+  test("a free service opens for editing at nought, and a price typed over it is saved", async ({ page }) => {
+    const shop = await aBusinessWithOpenHours({ name: `חינם ${Date.now()}`, ownerPhone: uniquePhone() });
+    await call(`/businesses/${shop.business.id}/services/${shop.service.id}`, {
+      method: "PATCH",
+      token: shop.owner.token,
+      body: { priceMinor: 0 },
+    });
+    await page.addInitScript(([k, v]) => window.localStorage.setItem(k as string, v as string), [
+      "tor-now.session",
+      shop.owner.token,
+    ]);
+    await page.goto(`/manage?business=${shop.business.id}`);
+    await ready(page);
+    await page.getByRole("button", { name: "העסק" }).click();
+    await page.locator(".card", { hasText: shop.service.name }).getByRole("button", { name: "עריכת שירות" }).click();
+    const sheet = page.getByRole("dialog");
+    const price = sheet.getByLabel(/מחיר/);
+    await expect(price).toHaveValue("0");
+    await price.click();
+    await price.pressSequentially("95");
+    await sheet.getByRole("button", { name: "שמירה" }).click();
+    await expect(sheet).toBeHidden({ timeout: 15_000 });
+    const services = await call<{ id: string; priceMinor: number }[]>(`/businesses/${shop.business.id}/services`, {
+      token: shop.owner.token,
+    });
+    expect(services.find((service) => service.id === shop.service.id)?.priceMinor).toBe(9_500);
   });
 });
 

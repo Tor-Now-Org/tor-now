@@ -5,6 +5,7 @@ import type { LocalTime } from "../time/local-time.ts";
 import type { TimeZone } from "../time/zone.ts";
 import type { BusinessId, BusinessPhotoId, ResourceId, ServiceId } from "./ids.ts";
 import type { Money } from "./money.ts";
+import { MINUTES_PER_DAY } from "../shared/constants.ts";
 
 /**
  * Platform-wide defaults for a newly registered Business. ADR 0012 fixes the
@@ -17,6 +18,13 @@ export const BUSINESS_DEFAULTS = Object.freeze({
   cancellationWindowHours: 24,
   timeZone: "Asia/Jerusalem",
 });
+
+/**
+ * How long a Service may be: five minutes at the least, so a day is not cut
+ * into slivers nobody can book, and a whole day at the most. A new one starts
+ * at half an hour.
+ */
+export const SERVICE_MINUTES = Object.freeze({ min: 5, max: MINUTES_PER_DAY, initial: 30 });
 
 /** A tenant of the platform — the service provider a customer books with. */
 export type Business = {

@@ -10,7 +10,7 @@ import { useSession } from "@/lib/session.tsx";
 import { deactivationDeadline } from "@/lib/billing-alert.ts";
 import { useErrorText } from "@/lib/use-error-text.ts";
 import { AccountButton, AppHeader } from "@/components/app-header.tsx";
-import { BUSINESS_DEFAULTS, TEXT_RULES, TRIAL_DAYS, type BusinessCategory } from "@tor-now/domain";
+import { BUSINESS_DEFAULTS, SERVICE_MINUTES, TEXT_RULES, TRIAL_DAYS, type BusinessCategory } from "@tor-now/domain";
 import { BufferChoice } from "@/components/owner/buffer-choice.tsx";
 import { PhotoPicker, type ChosenPhoto } from "@/components/owner/photo-picker.tsx";
 import { AddressAutocomplete } from "@/components/owner/address-autocomplete.tsx";
@@ -67,22 +67,21 @@ const LocationPicker = dynamic(
 const STEPS = ["details", "photos", "resources", "services", "hours"] as const;
 type Step = (typeof STEPS)[number];
 
-const DEFAULT_SERVICE_MINUTES = 30;
+const DEFAULT_SERVICE_MINUTES = SERVICE_MINUTES.initial;
 /** Sunday to Thursday, the Israeli working week. */
 // test
 
 type DraftService = {
   name: string;
   durationMinutes: number;
-  /** Empty until a price is typed, rather than a nought to delete first; saved as free. */
-  priceMinor: number | null;
+  priceMinor: number;
   bufferMinutes: number | null;
 };
 
 const newService = (): DraftService => ({
   name: "",
   durationMinutes: DEFAULT_SERVICE_MINUTES,
-  priceMinor: null,
+  priceMinor: 0,
   bufferMinutes: null,
 });
 
@@ -232,7 +231,7 @@ function OnboardingWizard() {
       await api.acceptTerms(token);
       const named = services
         .filter((service) => service.name.trim().length > 0)
-        .map((service) => ({ ...service, name: service.name.trim(), priceMinor: service.priceMinor ?? 0 }));
+        .map((service) => ({ ...service, name: service.name.trim() }));
       const calendars = resources.map((r) => r.trim()).filter((r) => r.length > 0);
       const business = await api.registerBusiness(token, {
         name: name.trim(),
@@ -550,25 +549,26 @@ function OnboardingWizard() {
                   }
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <Field
+                  <NumberField
                     id={`service-minutes-${position}`}
                     label={copy.minutes}
                     required
-                    type="number"
-                    inputMode="numeric"
                     value={service.durationMinutes}
-                    onChange={(event) =>
-                      setServices(services.map((s, i) => (i === position ? { ...s, durationMinutes: Number(event.target.value) } : s)))
+                    fallback={DEFAULT_SERVICE_MINUTES}
+                    min={SERVICE_MINUTES.min}
+                    max={SERVICE_MINUTES.max}
+                    onValue={(minutes) =>
+                      setServices(services.map((s, i) => (i === position ? { ...s, durationMinutes: minutes ?? DEFAULT_SERVICE_MINUTES } : s)))
                     }
                   />
                   <NumberField
                     id={`service-price-${position}`}
                     label={copy.priceShekels}
                     decimals
-                    value={service.priceMinor === null ? null : service.priceMinor / 100}
-                    fallback={null}
+                    value={service.priceMinor / 100}
+                    fallback={0}
                     onValue={(shekels) =>
-                      setServices(services.map((s, i) => (i === position ? { ...s, priceMinor: shekels === null ? null : Math.round(shekels * 100) } : s)))
+                      setServices(services.map((s, i) => (i === position ? { ...s, priceMinor: Math.round((shekels ?? 0) * 100) } : s)))
                     }
                   />
                 </div>

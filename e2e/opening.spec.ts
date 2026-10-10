@@ -282,7 +282,7 @@ test.describe("the business is live", () => {
     );
   });
 
-  test("two services say one more, and a price left empty opens as free", async ({ page }) => {
+  test("two services say one more, and a price left at nought opens as free", async ({ page }) => {
     const owner = await anOwner(page);
     await openABusiness(page, owner.phone, {
       name: `חינם ${Date.now()}`,
@@ -295,7 +295,7 @@ test.describe("the business is live", () => {
     expect(profile.services.find((service) => service.name === "ייעוץ")?.priceMinor).toBe(12_000);
   });
 
-  test("the wizard's price box starts empty and takes a typed price without a leading nought", async ({ page }) => {
+  test("the wizard's price starts at nought and its minutes at half an hour, both typed over cleanly", async ({ page }) => {
     const owner = await anOwner(page);
     await page.goto("/onboarding?plan=SOLO");
     await ready(page);
@@ -309,14 +309,48 @@ test.describe("the business is live", () => {
     await page.getByRole("button", { name: "המשך" }).click();
 
     const price = page.locator("#service-price-0");
-    await expect(price).toHaveValue("");
-    await price.pressSequentially("080");
+    const minutes = page.locator("#service-minutes-0");
+    const name = page.locator("#service-name-0");
+    await expect(price).toHaveValue("0");
+    await expect(minutes).toHaveValue("30");
+
+    // Tapped, the nought is selected and typing replaces it.
+    await price.click();
+    await price.pressSequentially("80");
+    await expect(price).toHaveValue("80");
+    // With the caret after a nought, still no leading nought.
+    await price.fill("0");
+    await price.press("End");
+    await price.pressSequentially("80");
     await expect(price).toHaveValue("80");
     await price.fill("");
     await price.pressSequentially("0.5");
     await expect(price).toHaveValue("0.5");
+    // Emptied and left, nought again.
+    await price.fill("");
+    await name.click();
+    await expect(price).toHaveValue("0");
+
+    // Minutes: never a leading nought, and anything that is not a length goes back.
+    await minutes.click();
+    await minutes.pressSequentially("45");
+    await expect(minutes).toHaveValue("45");
+    await minutes.fill("0");
+    await minutes.press("End");
+    await minutes.pressSequentially("50");
+    await expect(minutes).toHaveValue("50");
+    for (const wrong of ["0", "3", "5000"]) {
+      await minutes.fill(wrong);
+      await name.click();
+      await expect(minutes, wrong).toHaveValue("50");
+    }
+    await minutes.fill("");
+    await name.click();
+    await expect(minutes).toHaveValue("30");
+
     await page.getByRole("button", { name: "הוספת שירות" }).click();
-    await expect(page.locator("#service-price-1")).toHaveValue("");
+    await expect(page.locator("#service-price-1")).toHaveValue("0");
+    await expect(page.locator("#service-minutes-1")).toHaveValue("30");
   });
 
   test("a photo that did not upload is said once, quietly, and the business is open anyway", async ({ page }) => {
