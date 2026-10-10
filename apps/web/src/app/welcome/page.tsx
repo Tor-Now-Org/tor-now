@@ -182,7 +182,6 @@ export default function Welcome() {
         <Feats
           items={[
             ["📍", copy.g1t, copy.g1b],
-            ["🌙", copy.g2t, copy.g2b],
             ["🔗", copy.g3t, copy.g3b],
             ["🔔", copy.g4t, copy.g4b],
           ]}
@@ -291,11 +290,10 @@ export default function Welcome() {
       </section>
 
       <footer className="lp-foot">
-        {/* Wraps where the header row does not: three links beside the note
+        {/* Wraps where the header row does not: three links beside the logo
             do not fit a phone's width. */}
         <div className="lp-wrap lp-navrow" style={{ flexWrap: "wrap", paddingBlock: 8 }}>
           <Logo />
-          <span>{copy.footNote}</span>
           <LegalLinks style={{ marginInlineStart: "auto" }} />
         </div>
       </footer>

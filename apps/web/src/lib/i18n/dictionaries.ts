@@ -2071,8 +2071,6 @@ const landing = {
     gSub: "פותחים יומן, מגדירים שירותים ושעות פעילות, ומאותו רגע אפשר למצוא אתכם ולקבוע תור.",
     g1t: "מופיעים בחיפוש באזור",
     g1b: "מי שמחפש מספרה, קוסמטיקאית או מאמן בסביבה יראה אתכם בחיפוש ועל המפה.",
-    g2t: "תורים גם אחרי שעות העבודה",
-    g2b: "בערב, בסופ״ש או כשאתם עם לקוח, אפשר לקבוע תור בלי לחכות שתענו לטלפון.",
     g3t: "קישור לעסק שלכם",
     g3b: "שתפו אותו בוואטסאפ, באינסטגרם או בביו. לקוחות לוחצים ומגיעים ישר לקביעת תור.",
     g4t: "פחות לקוחות שלא מגיעים",
@@ -2125,7 +2123,6 @@ const landing = {
     ctMail: "מייל",
     ctHours: "שעות פעילות",
     ctHoursValue: "א׳–ה׳, 09:00–18:00",
-    footNote: "עברית ואנגלית",
   },
   en: {
     navHow: "How it works",
@@ -2149,9 +2146,6 @@ const landing = {
     g1t: "Show up in local searches",
     g1b:
       "Anyone nearby looking for a barber, a beautician or a trainer sees you in search and on the map.",
-    g2t: "Appointments after hours",
-    g2b:
-      "In the evening, at the weekend or while you're with a customer, people book without waiting for you to pick up.",
     g3t: "A link to your business",
     g3b:
       "Share it on WhatsApp, Instagram or in your bio. Customers tap it and go straight to booking.",
@@ -2209,7 +2203,6 @@ const landing = {
     ctMail: "Email",
     ctHours: "Hours",
     ctHoursValue: "Sun–Thu, 09:00–18:00",
-    footNote: "Hebrew and English",
   },
 } as const;
 
