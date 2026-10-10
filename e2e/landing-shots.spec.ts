@@ -435,10 +435,6 @@ for (const tongue of TONGUES) {
 
   const fakePhone = (n: number) => `${tongue.dial}${String(n).padStart(2, "0")}`;
 
-  /** A stretch of free time on the day timeline — the word and its separator. */
-  const aFreeStretch = (page: Page) =>
-    page.getByRole("button").filter({ hasText: new RegExp(`${words.free}\\s*·`) });
-
   const showEveryCalendar = async (page: Page): Promise<void> => {
     await page.getByRole("button", { name: new RegExp(`^${words.calendarsWord}:`) }).click();
     await page
@@ -826,61 +822,8 @@ for (const tongue of TONGUES) {
       );
     });
 
-    test("an owner booking somebody in, filmed", async ({ browser }) => {
-      const first = street.day[0]!;
-      await film(
-        browser,
-        tongue,
-        "o3-booking",
-        async (page) => {
-          await page.goto(`/manage?business=${barber.id}`);
-          await ready(page);
-          await openTheDay(page, day);
-          await expect(
-            page.getByText(`${first.who.givenName} ${first.who.familyName}`).first(),
-          ).toBeVisible({ timeout: 15_000 });
-        },
-        async (page) => {
-          await page.mouse.move(195, 600);
-          await page.mouse.wheel(0, 500);
-          await page.waitForTimeout(900);
-
-          await aFreeStretch(page).first().click();
-          await page.waitForTimeout(900);
-          await page.getByRole("button", { name: words.appointmentForCustomer }).click();
-          const sheet = page.getByRole("dialog");
-          await expect(sheet).toBeVisible({ timeout: 15_000 });
-          await page.waitForTimeout(1300);
-
-          // Somebody the shop already knows, found by name. Not chosen off the
-          // top of the list: everybody in that list is already in this day, and
-          // the sheet would rightly answer with its "they have one of these
-          // today" warning — true, and not what the clip is about.
-          await sheet
-            .getByPlaceholder(words.searchCustomer)
-            .pressSequentially(street.newcomer.givenName, { delay: 180 });
-          await page.waitForTimeout(800);
-          await sheet
-            .getByText(`${street.newcomer.givenName} ${street.newcomer.familyName}`)
-            .first()
-            .click();
-          await page.waitForTimeout(900);
-          await sheet
-            .getByRole("button", { name: new RegExp(`^${street.cuts[0]!}`) })
-            .click();
-          await page.waitForTimeout(1000);
-          await sheet.getByRole("button", { name: /^\d\d:\d\d$/ }).first().click();
-          await page.waitForTimeout(900);
-          await sheet.getByRole("button", { name: words.bookFor }).click();
-          await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
-          await page.waitForTimeout(700);
-        },
-        barber.token,
-      );
-    });
-
     /**
-     * Ten captions, ten different screens.
+     * Nine captions, nine different screens.
      *
      * A click that misses is silent — the screen simply stays where it was, the
      * next capture photographs it again, and the page ends up showing the same
@@ -890,7 +833,7 @@ for (const tongue of TONGUES) {
     test("every screen is a different screen", async () => {
       const stills = ["c2-map", "c5-mine", "o1-month", "o2-day",
                       "o4-customers", "o5-panel", "o6-stats"];
-      const films = ["c1-search", "c4-book", "o3-booking"];
+      const films = ["c1-search", "c4-book"];
 
       const seen = new Map<string, string>();
       const distinct = (name: string, file: string) => {

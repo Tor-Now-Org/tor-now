@@ -83,14 +83,9 @@ export type Words = {
   /** The name the customer's days go by (ADR 0026). */
   dayStrip: string;
   nextMonth: string;
-  free: string;
-  appointmentForCustomer: string;
   /** The way into the month from the customer's days (ADR 0026). */
   wholeMonth: string;
   nextMonthOfDays: string;
-  searchCustomer: string;
-  /** The sheet's final button, which carries the hour it is booking. */
-  bookFor: RegExp;
 };
 
 export type Tongue = {
@@ -376,10 +371,6 @@ export const HEBREW: Tongue = {
     wholeMonth: "כל החודש",
     nextMonthOfDays: "החודש הבא",
     nextMonth: "החודש הבא",
-    free: "פנוי",
-    appointmentForCustomer: "תור ללקוח בשעה שנבחרה",
-    searchCustomer: "חיפוש לפי שם או טלפון",
-    bookFor: /^קביעה ל־/,
   },
 };
 
@@ -407,10 +398,6 @@ export const ENGLISH: Tongue = {
     wholeMonth: "Whole month",
     nextMonthOfDays: "Next month",
     nextMonth: "Next month",
-    free: "Free",
-    appointmentForCustomer: "Book a customer at this time",
-    searchCustomer: "Search by name or phone",
-    bookFor: /^Book for/,
   },
 };
 

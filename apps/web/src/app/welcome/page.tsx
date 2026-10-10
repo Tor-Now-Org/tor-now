@@ -10,7 +10,12 @@ import { SUPPORT, whatsappLink } from "@/lib/support.ts";
 import { LegalLinks } from "@/components/legal.tsx";
 
 /**
- * The front door.
+ * The front door, for business owners.
+ *
+ * Customers arrive because a business sends them, so the page sells the
+ * business on getting them: the customer's screens are shown as what the
+ * owner's customers will see. Somebody who came to book gets one line, in the
+ * hero, pointing them at the app.
  *
  * Every screen shown here is a photograph of the running product, taken against
  * a seeded shop rather than drawn: the claim is that booking takes three
@@ -24,17 +29,16 @@ import { LegalLinks } from "@/components/legal.tsx";
  */
 
 const CUSTOMER_STEPS = ["c1", "c2", "c4", "c5"] as const;
-const OWNER_STEPS = ["o1", "o2", "o3", "o4", "o5", "o6"] as const;
+const OWNER_STEPS = ["o1", "o2", "o4", "o5", "o6"] as const;
 
 /**
  * What the hero cycles.
  *
- * Not simply the first few of the tour: two steps of one journey can be the
- * same screen scrolled, which reads as a slideshow that is broken rather than
- * as a product with range. These three share nothing — searching, a map, the
- * appointments somebody already has.
+ * The page speaks to an owner, so the hero tells an owner's story in three
+ * screens that share nothing: a customer finding the business on the map,
+ * picking an hour from its calendar, and the month that adds up to.
  */
-const HERO_STEPS = ["c1", "c2", "c5"] as const;
+const HERO_STEPS = ["c2", "c4", "o6"] as const;
 
 /**
  * Every screen, and how it is shown.
@@ -59,7 +63,6 @@ const screens = (language: Language) => {
     c5: { still: of("c5-mine.jpg") },
     o1: { still: of("o1-month.jpg") },
     o2: { still: of("o2-day.jpg") },
-    o3: { film: of("o3-booking.mp4"), poster: of("o3-booking-poster.jpg") },
     o4: { still: of("o4-customers.jpg") },
     o5: { still: of("o5-panel.jpg") },
     o6: { still: of("o6-stats.jpg") },
@@ -106,7 +109,8 @@ export default function Welcome() {
             <Logo />
           </Link>
           <span className="lp-links">
-            <a href="#how">{copy.navHow}</a>
+            <a href="#grow">{copy.navHow}</a>
+            <a href="#how">{copy.navCustomers}</a>
             <a href="#owners">{copy.navOwners}</a>
             <a href="#pricing">{copy.navPricing}</a>
             <a href="#contact">{copy.navContact}</a>
@@ -115,7 +119,7 @@ export default function Welcome() {
             <button className="lp-lang" onClick={toggleLanguage}>
               {language === "he" ? "EN" : "עב"}
             </button>
-            <Link className="lp-btn lp-glow lp-sm" href="/">
+            <Link className="lp-btn lp-glow lp-sm" href="/pricing">
               {copy.navCta}
             </Link>
           </span>
@@ -132,13 +136,16 @@ export default function Welcome() {
             </h1>
             <p className="lp-lede">{copy.heroLede}</p>
             <div className="lp-actions">
-              <Link className="lp-btn lp-glow lp-lg" href="/">
+              <Link className="lp-btn lp-glow lp-lg" href="/pricing">
                 {copy.heroCta1}
               </Link>
-              <a className="lp-btn lp-ghost lp-lg" href="#owners">
+              <a className="lp-btn lp-ghost lp-lg" href="#grow">
                 {copy.heroCta2}
               </a>
             </div>
+            <p className="lp-book">
+              {copy.heroBookQ} <Link href="/">{copy.heroBookA}</Link>
+            </p>
           </div>
 
           <div className="lp-stage">
@@ -168,6 +175,20 @@ export default function Welcome() {
         </div>
       </header>
 
+      <section id="grow" className="lp-wrap lp-section lp-grow">
+        <span className="lp-kicker">{copy.kGrow}</span>
+        <h2 className="lp-h2">{copy.gTitle}</h2>
+        <p className="lp-sub">{copy.gSub}</p>
+        <Feats
+          items={[
+            ["📍", copy.g1t, copy.g1b],
+            ["🌙", copy.g2t, copy.g2b],
+            ["🔗", copy.g3t, copy.g3b],
+            ["🔔", copy.g4t, copy.g4b],
+          ]}
+        />
+      </section>
+
       <section id="how" className="lp-wrap lp-section">
         <span className="lp-kicker">{copy.kHow}</span>
         <h2 className="lp-h2">{copy.hTitle}</h2>
@@ -194,8 +215,8 @@ export default function Welcome() {
             onPick={setOwnerAt}
             steps={OWNER_STEPS.map((step, i) => ({
               key: step,
-              title: [copy.o1t, copy.o2t, copy.o3t, copy.o4t, copy.o5t, copy.o6t][i] ?? "",
-              body: [copy.o1b, copy.o2b, copy.o3b, copy.o4b, copy.o5b, copy.o6b][i] ?? "",
+              title: [copy.o1t, copy.o2t, copy.o4t, copy.o5t, copy.o6t][i] ?? "",
+              body: [copy.o1b, copy.o2b, copy.o4b, copy.o5b, copy.o6b][i] ?? "",
               shot: SHOT[step],
             }))}
           />
@@ -212,21 +233,13 @@ export default function Welcome() {
 
       <section className="lp-wrap lp-section lp-why">
         <span className="lp-kicker">{copy.kWhy}</span>
-        <div className="lp-feats">
-          {[
-            ["📍", copy.f1t, copy.f1b],
-            ["⚡", copy.f2t, copy.f2b],
+        <Feats
+          items={[
+            ["₪", copy.f1t, copy.f1b],
+            ["📱", copy.f2t, copy.f2b],
             ["🔔", copy.f3t, copy.f3b],
-          ].map(([icon, title, body]) => (
-            <div className="lp-feat" key={title}>
-              <span className="lp-ico" aria-hidden="true">
-                {icon}
-              </span>
-              <h3>{title}</h3>
-              <p>{body}</p>
-            </div>
-          ))}
-        </div>
+          ]}
+        />
       </section>
 
       <section id="pricing" className="lp-wrap lp-section lp-centred">
@@ -289,6 +302,21 @@ export default function Welcome() {
     </div>
   );
 }
+
+/** A row of cards: an icon, a title and a line under it. */
+const Feats = ({ items }: { items: readonly (readonly [string, string, string])[] }) => (
+  <div className="lp-feats">
+    {items.map(([icon, title, body]) => (
+      <div className="lp-feat" key={title}>
+        <span className="lp-ico" aria-hidden="true">
+          {icon}
+        </span>
+        <h3>{title}</h3>
+        <p>{body}</p>
+      </div>
+    ))}
+  </div>
+);
 
 /**
  * One screen of the product, in the shell every screen here wears.

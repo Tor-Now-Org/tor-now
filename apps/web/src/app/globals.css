@@ -1029,7 +1029,7 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
 .lp{background:var(--paper);color:var(--ink);overflow-x:hidden}
 .lp-wrap{width:min(1180px,100% - 40px);margin-inline:auto}
 .lp-section{padding-block:clamp(56px,7vw,100px)}
-.lp-why{padding-block-end:0}
+.lp-why,.lp-grow{padding-block-end:0}
 .lp-centred{display:flex;flex-direction:column;align-items:center;text-align:center}
 
 /* White, like the application's own header: the page and the product should not
@@ -1075,6 +1075,10 @@ body:has(.lp){display:block;padding:0;align-items:stretch}
   -webkit-background-clip:text;background-clip:text;color:transparent}
 .lp-lede{color:oklch(100% 0 0/.74);font-size:clamp(16px,1.6vw,19px);margin-block-start:20px;max-width:46ch;font-weight:300}
 .lp-actions{display:flex;gap:12px;flex-wrap:wrap;margin-block-start:30px}
+/* The one line for somebody who came to book rather than to sell. */
+.lp-book{margin-block-start:22px;font-size:15px;color:oklch(100% 0 0/.7)}
+.lp-book a{color:var(--brand-cyan);font-weight:500;text-decoration:underline;text-underline-offset:3px}
+.lp-book a:hover{color:#9fe8f2}
 
 .lp-stage{position:relative;display:grid;place-items:center}
 .lp-glowring{position:absolute;width:420px;height:420px;border-radius:999px;

@@ -9,14 +9,16 @@ import { ready } from "./support.ts";
  * in is a landing page nobody lands on.
  */
 test.describe("the welcome page", () => {
-  test("says what the product is, in Hebrew, to a stranger", async ({ page }) => {
+  test("says what the product is, in Hebrew, to a business owner", async ({ page }) => {
     await page.goto("/welcome");
     await ready(page);
 
-    await expect(page.getByRole("heading", { name: /התור הבא שלך/ })).toBeVisible();
-    // Both ways in, from the top.
-    await expect(page.getByRole("link", { name: "נסו עכשיו" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "יש לי עסק" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /יותר לקוחות/ })).toBeVisible();
+    // The owner's two ways in, and the one line for somebody who came to book.
+    const hero = page.locator(".lp-hero");
+    await expect(hero.getByRole("link", { name: "התחילו לקבל תורים" })).toBeVisible();
+    await expect(hero.getByRole("link", { name: "איך זה עובד" })).toBeVisible();
+    await expect(hero.getByRole("link", { name: "חפשו עסק" })).toBeVisible();
 
     // The screens are the product's own, served as files rather than drawn —
     // pictures where a picture will do, and short films of the rest.
@@ -62,7 +64,7 @@ test.describe("the welcome page", () => {
       }
     }
 
-    expect(shown).toHaveLength(10);
+    expect(shown).toHaveLength(9);
     expect(new Set(shown).size, `two steps share a screen: ${shown.join(", ")}`)
       .toBe(shown.length);
   });
@@ -78,12 +80,12 @@ test.describe("the welcome page", () => {
     await expect(page.locator("#how .lp-phone img")).toHaveAttribute("src", /c5-mine/);
 
     const owner = page.locator("#owners .lp-step");
-    await expect(owner).toHaveCount(6);
-    await owner.nth(4).click();
+    await expect(owner).toHaveCount(5);
+    await owner.nth(3).click();
     await expect(page.locator("#owners .lp-phone img")).toHaveAttribute("src", /o5-panel/);
     // The month in numbers, last: the statistics page, photographed.
-    await owner.nth(5).click();
-    await expect(owner.nth(5)).toContainText("החודש במספרים");
+    await owner.nth(4).click();
+    await expect(owner.nth(4)).toContainText("החודש במספרים");
     await expect(page.locator("#owners .lp-phone img")).toHaveAttribute("src", /o6-stats/);
   });
 
@@ -94,8 +96,8 @@ test.describe("the welcome page", () => {
 
     await page.getByRole("button", { name: "EN" }).click();
     await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
-    await expect(page.getByRole("heading", { name: /without a single call/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Try it now" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /fewer phone calls/ })).toBeVisible();
+    await expect(page.locator(".lp-hero").getByRole("link", { name: "Open your calendar" })).toBeVisible();
 
     await page.getByRole("button", { name: "עב" }).click();
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
@@ -104,7 +106,7 @@ test.describe("the welcome page", () => {
   /**
    * The screens turn with the page.
    *
-   * A page that says "Try it now" above a column of Hebrew screenshots is a
+   * A page that says "Open your calendar" above a column of Hebrew screenshots is a
    * page admitting its English is a veneer over a product that only works in
    * one language. Both sets are recorded by the capture suite; what this holds
    * is that the page actually reaches for the right one, and that the files are
@@ -121,7 +123,7 @@ test.describe("the welcome page", () => {
     for (const src of await shown()) expect(src).toMatch(/^\/landing\/he\//);
 
     await page.getByRole("button", { name: "EN" }).click();
-    await expect(page.getByRole("link", { name: "Try it now" })).toBeVisible();
+    await expect(page.locator(".lp-hero").getByRole("link", { name: "Open your calendar" })).toBeVisible();
     const english = await shown();
     expect(english.length).toBeGreaterThan(0);
     for (const src of english) expect(src).toMatch(/^\/landing\/en\//);
@@ -143,7 +145,7 @@ test.describe("the welcome page", () => {
     await expect(pricing.getByText(/₪\d+/)).toBeVisible();
     const said = (await pricing.getByText(/₪\d+/).innerText()).replace(/\D/g, "");
 
-    await pricing.getByRole("link", { name: "לכל התוכניות" }).click();
+    await pricing.getByRole("link", { name: "לכל המסלולים" }).click();
     await ready(page);
     await expect(page).toHaveURL(/\/pricing/);
     expect(await page.getByText(new RegExp(`₪\\s*${said}`)).first().isVisible()).toBe(true);
@@ -167,9 +169,9 @@ test.describe("the welcome page", () => {
       }
     }
 
-    await page.getByRole("link", { name: "נסו עכשיו" }).click();
+    await page.locator(".lp-hero").getByRole("link", { name: "חפשו עסק" }).click();
     await ready(page);
-    // The app itself, which is what the page is selling.
+    // The app itself, for somebody who came to book rather than to sell.
     await expect(page.getByPlaceholder("מספרה, קליניקה, מאמן אישי…")).toBeVisible({ timeout: 15_000 });
   });
 });
