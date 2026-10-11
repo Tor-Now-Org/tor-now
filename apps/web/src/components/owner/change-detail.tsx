@@ -13,7 +13,12 @@ import { markOf, mayChange, sentenceOf, type Who } from "./change-model.ts";
 import { ChangeSentence } from "./change-sheet.tsx";
 
 export type OpenedChange =
-  | { readonly change: ChangeDto; readonly date: string | null }
+  | {
+      readonly change: ChangeDto;
+      readonly date: string | null;
+      /** Opened from a calendar's list, where the business's changes are read, and edited under the business. */
+      readonly fromCalendar?: boolean;
+    }
   | { readonly error: string };
 
 /**
@@ -30,6 +35,7 @@ export const ChangeDetail = ({
   onClose,
   onEdit,
   onChanged,
+  onShowBusiness,
 }: {
   opened: OpenedChange | null;
   token: string;
@@ -38,8 +44,11 @@ export const ChangeDetail = ({
   onClose: () => void;
   onEdit: (change: ChangeDto) => void;
   onChanged: () => void;
+  /** Shows the business's own changes, where one read from a calendar's list is edited. */
+  onShowBusiness?: () => void;
 }) => {
   const copy = useCopy("change");
+  const words = useCopy("schedule");
   const { language } = useLanguage();
   const errorText = useErrorText();
   const [busy, setBusy] = useState(false);
@@ -79,6 +88,8 @@ export const ChangeDetail = ({
       : sentenceOf({ ...change, usual: [], calendars: who.calendars.length }, copy, language, names);
   const days = change?.days.length ?? 0;
   const focus = opened !== null && "change" in opened ? opened.date : null;
+  const seenFromCalendar =
+    opened !== null && "change" in opened && opened.fromCalendar === true && change?.scope.kind === "BUSINESS";
   const oneOf = change !== null && days > 1 && focus !== null && change.days.some((day) => day.date === focus);
   const scopeName =
     change === null
@@ -100,7 +111,16 @@ export const ChangeDetail = ({
           </p>
           {sentence !== null && <ChangeSentence sentence={sentence} />}
           {error !== null && <Critical>{error}</Critical>}
-          {mayChange(change, who) ? (
+          {seenFromCalendar && who.manages ? (
+            <>
+              <Note>{words.fromBusiness}</Note>
+              {onShowBusiness !== undefined && (
+                <Button intent="quiet" onClick={onShowBusiness}>
+                  {words.goToBusiness}
+                </Button>
+              )}
+            </>
+          ) : mayChange(change, who) ? (
             <>
               <Button intent="quiet" disabled={busy} onClick={() => onEdit(change)}>
                 {copy.edit}

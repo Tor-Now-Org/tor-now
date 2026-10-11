@@ -1,10 +1,11 @@
 "use client";
 
 import { mergedRanges, type TimeRange } from "@tor-now/domain";
+import { fillText } from "@/lib/i18n/fill.ts";
 import { useCopy } from "@/lib/i18n/index.tsx";
 import { openPicker } from "../ui.tsx";
+import { mergedWithPrevious, withBreak } from "./schedule-model.ts";
 import { breakBetween, collidesWithPrevious, isClock, isUsable } from "./usual-week.ts";
-import { DEFAULT_OPENING } from "./week.ts";
 
 /**
  * The stretches of one day, and the controls for saying them.
@@ -16,8 +17,6 @@ import { DEFAULT_OPENING } from "./week.ts";
  * moment the second screen needed it.
  */
 
-/** A new stretch starts an hour after the last one ends, so it lands as a break. */
-const AFTER_THE_LAST = 60;
 /** Wide enough for "09:00", so a label can be centred on its mark. */
 const LABEL_WIDTH = 40;
 
@@ -32,13 +31,6 @@ const clockOf = (minutes: number): string => {
   return `${hour}:${String(held % 60).padStart(2, "0")}`;
 };
 
-/**
- * The day drawn as a bar: where it is open, and where the breaks fall.
- *
- * Three stretches are six times in a column, which nobody reads as a shape. The
- * bar is what makes a day with two breaks legible at a glance, and it costs no
- * interaction — it is a picture of what the fields already say.
- */
 /**
  * The day drawn as a bar: where it is open, and where the breaks fall.
  *
@@ -161,6 +153,7 @@ export const Stretches = ({
   namesTheGap?: boolean;
 }) => {
   const copy = useCopy("owner");
+  const words = useCopy("schedule");
 
   const at = (position: number, change: (range: TimeRange) => TimeRange) =>
     setRanges(ranges.map((range, index) => (index === position ? change(range) : range)));
@@ -201,10 +194,10 @@ export const Stretches = ({
                 <Rule />
                 <span className="tab">
                   {collidesWithPrevious(ranges, position)
-                    ? copy.rangesOverlap
+                    ? overlapText(ranges, position, words.overlaps)
                     : gap === null
-                      ? copy.breakOf
-                      : `${copy.breakOf} · ${gap.start}–${gap.end}`}
+                      ? words.breakOf
+                      : `${words.breakOf} · ${gap.start}–${gap.end}`}
                 </span>
                 <Rule />
               </div>
@@ -263,21 +256,11 @@ export const Stretches = ({
       <DayBar ranges={ranges} />
 
       <button
-        className="chip tap"
-        style={{ alignSelf: "flex-start" }}
-        onClick={() => {
-          const last = ranges[ranges.length - 1];
-          const start =
-            last === undefined
-              ? minutesOf(DEFAULT_OPENING.start)
-              : Math.min(minutesOf(last.end) + AFTER_THE_LAST, 23 * 60);
-          setRanges([
-            ...ranges,
-            { start: clockOf(start), end: clockOf(Math.min(start + 120, 24 * 60)) },
-          ]);
-        }}
+        type="button"
+        className="add-break"
+        onClick={() => setRanges(withBreak(ranges))}
       >
-        {copy.addRange}
+        {words.addBreak}
       </button>
     </>
   );
@@ -377,6 +360,12 @@ export const Clock = ({
       </span>
     </span>
   );
+};
+
+/** "Saved as one range, 09:00–18:00": the one range two overlapping ones become. */
+const overlapText = (ranges: readonly TimeRange[], position: number, template: string): string => {
+  const merged = mergedWithPrevious(ranges, position);
+  return fillText(template, { range: merged === null ? "" : `${merged.start}–${merged.end}` });
 };
 
 const Rule = () => (

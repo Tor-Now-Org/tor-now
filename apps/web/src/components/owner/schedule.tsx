@@ -5,23 +5,27 @@ import { api } from "@/lib/api/client.ts";
 import { isApiError } from "@/lib/api/errors.ts";
 import type { BusinessDto, ChangeDto, ResourceDto, WorkingHoursDto } from "@/lib/api/types.ts";
 import { addDaysTo, todayIn } from "@/lib/format.ts";
-import { useCopy, useLanguage } from "@/lib/i18n/index.tsx";
+import { fillText } from "@/lib/i18n/fill.ts";
+import { useCopy } from "@/lib/i18n/index.tsx";
 import { useErrorText } from "@/lib/use-error-text.ts";
-import { Button, Critical, Empty, Spinner } from "../ui.tsx";
+import { Button, Critical, Sheet, Spinner } from "../ui.tsx";
 import { useCalendarChanges } from "./change-host.tsx";
-import { calendarPhrase, rowOf } from "./change-model.ts";
-import { WithClocks } from "./clock-text.tsx";
+import { calendarPhrase } from "./change-model.ts";
+import { Mark } from "./lane-mark.tsx";
+import { ScheduleChanges } from "./schedule-changes.tsx";
+import { changesIn, weekDiffers, weekIsSaveable, nothingSet, type ChangeView } from "./schedule-model.ts";
 import { emptyWeek, rangesFor, weekFromRanges, WeeklyHours, type DayHours } from "./weekly-hours.tsx";
-import { weekIsUsable } from "./usual-week.ts";
 
 /**
  * The schedule: the usual week, and the changes to it.
  *
- * "שעות קבועות" is ADR 0002's recurring layer, edited as a week. "שינויים" is
- * every change to a day — a day off, some hours off, other hours — for one
- * calendar or for the whole business, in one list, each row the same sentence
- * shortened. A calendar shows only its own changes; the business's are under
- * "כל העסק", where a worker reads them and an owner or manager also makes them.
+ * "שעות קבועות" is ADR 0002's recurring layer, edited as a week, with one save
+ * pinned under it. "שינויים" is every change to a day — a day off, some hours
+ * off, other hours — for one calendar or for the whole business. A calendar's
+ * list carries the business's changes too, marked, since they change its hours
+ * as well; they are made and edited under "כל העסק", where a worker reads them
+ * and an owner or manager also makes them. Each tab says in one line what it
+ * is for.
  */
 type Tab = "usual" | "changes";
 
@@ -29,6 +33,9 @@ type Tab = "usual" | "changes";
 const CHANGES_AHEAD_DAYS = 365;
 
 const BUSINESS = "BUSINESS";
+
+/** Where the owner asked to go while the week on screen was unsaved. */
+type Leaving = { readonly tab: Tab; readonly scope: string };
 
 export const Schedule = ({
   token,
@@ -42,9 +49,8 @@ export const Schedule = ({
   /** A calendar asked for by name, from the calendars panel's edit control. */
   openOn?: string;
 }) => {
-  const copy = useCopy("owner");
+  const words = useCopy("schedule");
   const changeCopy = useCopy("change");
-  const { language } = useLanguage();
   const errorText = useErrorText();
 
   const [tab, setTab] = useState<Tab>("usual");
@@ -57,11 +63,14 @@ export const Schedule = ({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [freshness, setFreshness] = useState(0);
+  const [leaving, setLeaving] = useState<Leaving | null>(null);
 
   const onOffer = resources.filter((resource) => resource.active !== false);
   const many = onOffer.length > 1;
   const resource =
     scope === null || scope === BUSINESS ? null : (onOffer.find((one) => one.id === scope) ?? null);
+  const savedWeek = hours === null ? null : weekFromRanges(hours);
+  const unsaved = tab === "usual" && savedWeek !== null && weekDiffers(week, savedWeek);
 
   // Resources arrive after this mounts, so the selection follows the list.
   // `openOn` is the calendar somebody asked for by name, and wins.
@@ -80,6 +89,7 @@ export const Schedule = ({
     business,
     resources: onOffer,
     onChanged: () => setFreshness((key) => key + 1),
+    onShowBusiness: () => setScope(BUSINESS),
   });
 
   /**
@@ -91,6 +101,7 @@ export const Schedule = ({
       if (resource === null) return;
       setHours(null);
       setWeek(emptyWeek);
+      setSaved(false);
       try {
         const loaded = await api.listWorkingHours(token, business.id, resource.id);
         if (isStale()) return;
@@ -129,68 +140,118 @@ export const Schedule = ({
     };
   }, [token, business.id, business.timeZone, freshness, errorText]);
 
-  /** The week as edited, in place of the week that was there. */
-  const saveWeek = async () => {
-    if (resource === null || hours === null) return;
+  /** The week as edited, in place of the week that was there. Whether it went through. */
+  const saveWeek = async (): Promise<boolean> => {
+    if (resource === null || hours === null) return false;
     setBusy(true);
     setError(null);
     try {
-      await api.replaceWorkingHours(token, business.id, resource.id, week.flatMap((day, dayOfWeek) => rangesFor(day, dayOfWeek)));
+      const written = await api.replaceWorkingHours(
+        token,
+        business.id,
+        resource.id,
+        week.flatMap((day, dayOfWeek) => rangesFor(day, dayOfWeek)),
+      );
+      // What the store keeps is now what is on screen: merged as it was written.
+      setHours(written);
+      setWeek(weekFromRanges(written));
       setSaved(true);
+      return true;
     } catch (cause) {
       setError(errorText(isApiError(cause) ? cause.code : "INTERNAL"));
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
+  /**
+   * Moving to another tab or calendar. Another calendar loads its own week;
+   * the edits on this one were saved, dropped or never made before this runs.
+   */
+  const go = (next: Leaving) => {
+    if (next.tab === tab && next.scope === scope) return;
+    if (next.scope !== scope) setError(null);
+    setTab(next.tab);
+    setScope(next.scope);
+    setSaved(false);
+  };
+
+  const ask = (next: Leaving) => (unsaved ? setLeaving(next) : go(next));
+
+  const chooseTab = (candidate: Tab) =>
+    ask({
+      tab: candidate,
+      // The usual week is a calendar's; the business has none of its own.
+      scope: candidate === "usual" && scope === BUSINESS ? (onOffer[0]?.id ?? BUSINESS) : (scope ?? BUSINESS),
+    });
+
   if (scope === null) return <Spinner />;
 
-  const shown = (changes ?? []).filter((change) =>
-    scope === BUSINESS ? change.scope.kind === "BUSINESS" : change.scope.kind === "CALENDAR" && change.scope.resourceId === scope,
-  );
+  const view: ChangeView = scope === BUSINESS ? { kind: "BUSINESS" } : { kind: "CALENDAR", resourceId: scope };
+  const phrase = resource === null ? "" : calendarPhrase(resource.name, changeCopy);
+  const shown = changesIn(changes ?? [], view);
   const mayAdd = scope !== BUSINESS || sheets.who.manages;
+  const explain =
+    tab === "usual"
+      ? fillText(words.explainUsual, { calendar: phrase })
+      : scope === BUSINESS
+        ? words.explainChangesBusiness
+        : many
+          ? fillText(words.explainChangesCalendar, { calendar: phrase })
+          : words.explainChanges;
 
   return (
-    <div style={{ padding: "16px 18px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="schedule">
       {/* What, then whose: the two views first, and the calendars under them —
           "כל העסק" is one of those only where the business has something of
           its own, its changes; the usual week is always a calendar's. */}
-      <div role="tablist" style={{ display: "flex", gap: 6 }}>
+      <div role="tablist" className="schedule-tabs">
         {(["usual", "changes"] as const).map((candidate) => (
           <button
             key={candidate}
+            type="button"
             role="tab"
             aria-selected={tab === candidate}
-            className="chip"
-            onClick={() => {
-              setTab(candidate);
-              // The usual week is a calendar's; the business has none of its own.
-              if (candidate === "usual" && scope === BUSINESS) setScope(onOffer[0]?.id ?? null);
-            }}
-            style={{
-              flex: 1,
-              background: tab === candidate ? "var(--accent-soft)" : "transparent",
-              color: tab === candidate ? "var(--accent-strong)" : "var(--muted)",
-              border: `1px solid ${tab === candidate ? "var(--accent)" : "var(--line)"}`,
-            }}
+            onClick={() => chooseTab(candidate)}
           >
             {candidate === "usual" ? changeCopy.tabUsual : changeCopy.tabChanges}
           </button>
         ))}
       </div>
 
+      <p className="week-explain">{explain}</p>
+
       {many && (
-        <div role="group" aria-label={tab === "changes" ? changeCopy.scopeLabel : changeCopy.calendarLabel} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div
+          role="group"
+          aria-label={tab === "changes" ? changeCopy.scopeLabel : changeCopy.calendarLabel}
+          className="calendar-chips"
+        >
           {tab === "changes" && (
-            <ScopeChip chosen={scope === BUSINESS} business onClick={() => setScope(BUSINESS)}>
+            <button
+              type="button"
+              className="business"
+              aria-pressed={scope === BUSINESS}
+              onClick={() => ask({ tab, scope: BUSINESS })}
+            >
               {changeCopy.wholeBusiness}
-            </ScopeChip>
+            </button>
           )}
           {onOffer.map((candidate) => (
-            <ScopeChip key={candidate.id} chosen={candidate.id === scope} onClick={() => setScope(candidate.id)}>
+            <button
+              key={candidate.id}
+              type="button"
+              aria-pressed={candidate.id === scope}
+              onClick={() => ask({ tab, scope: candidate.id })}
+            >
+              <Mark
+                name={candidate.name}
+                index={resources.findIndex((one) => one.id === candidate.id)}
+                size={22}
+              />
               {candidate.name}
-            </ScopeChip>
+            </button>
           ))}
         </div>
       )}
@@ -204,16 +265,22 @@ export const Schedule = ({
           <>
             {/* Keyed on the calendar: which days were pulled out of the usual
                 belongs to the week in front of the owner. */}
-            <WeeklyHours key={resource.id} hours={week} setHours={setWeek} />
-            {saved && (
-              <p className="hint" role="status" style={{ margin: 0 }}>
-                {copy.settingsSaved}
-              </p>
-            )}
-            {!weekIsUsable(week) && <p className="warn" style={{ margin: 0 }}>{copy.fixTheHours}</p>}
-            <Button busy={busy} disabled={!weekIsUsable(week)} onClick={() => void saveWeek()}>
-              {copy.save}
-            </Button>
+            <WeeklyHours key={resource.id} hours={week} setHours={setWeek} calendar={resource.name} />
+            <div className="week-save">
+              {!nothingSet(week) && !weekIsSaveable(week) && (
+                <p className="warn" style={{ margin: 0 }}>
+                  {words.fixTheHours}
+                </p>
+              )}
+              <Button busy={busy} disabled={!weekIsSaveable(week)} onClick={() => void saveWeek()}>
+                {words.save}
+              </Button>
+              {saved && !unsaved && (
+                <p className="week-saved" role="status">
+                  {words.saved}
+                </p>
+              )}
+            </div>
           </>
         ))}
 
@@ -221,74 +288,88 @@ export const Schedule = ({
         (changes === null ? (
           <Spinner />
         ) : (
-          <>
-            {shown.length === 0 ? (
-              <Empty title={changeCopy.noChanges} />
-            ) : (
-              <ul aria-label={changeCopy.listLabel} style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                {shown.map((change) => {
-                  const row = rowOf(change, changeCopy, language);
-                  return (
-                    <li key={change.id}>
-                      <button className="change-row" onClick={() => sheets.showChange(change, null)}>
-                        <span className="when">{row.when}</span>
-                        <span className="what">
-                          <b>
-                            <WithClocks text={row.what} />
-                          </b>
-                          {row.note !== null && <small>{row.note}</small>}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {mayAdd && (
-              <Button
-                intent="quiet"
-                onClick={() =>
-                  sheets.openSheet({
-                    kind: "typed",
-                    date: todayIn(business.timeZone),
-                    scope: scope === BUSINESS ? { kind: "BUSINESS" } : { kind: "CALENDAR", resourceId: scope },
-                  })
-                }
-              >
-                {scope === BUSINESS
-                  ? changeCopy.addForBusiness
-                  : changeCopy.addFor.replace("{calendar}", calendarPhrase(resource?.name ?? "", changeCopy))}
-              </Button>
-            )}
-          </>
+          <ScheduleChanges
+            changes={shown}
+            view={view}
+            addLabel={
+              !mayAdd
+                ? null
+                : scope === BUSINESS
+                  ? words.addForBusiness
+                  : fillText(words.addFor, { name: resource?.name ?? "" })
+            }
+            showWorkerFoot={!sheets.who.manages && shown.some((change) => change.scope.kind === "BUSINESS")}
+            // With one calendar there is no "כל העסק" to send a business's
+            // change to, so it is edited where it is.
+            onOpen={(change) => sheets.showChange(change, null, view.kind === "CALENDAR" && many)}
+            onAdd={() =>
+              sheets.openSheet({
+                kind: "typed",
+                date: todayIn(business.timeZone),
+                scope: scope === BUSINESS ? { kind: "BUSINESS" } : { kind: "CALENDAR", resourceId: scope },
+              })
+            }
+          />
         ))}
+
+      <LeaveSheet
+        open={leaving !== null}
+        calendar={phrase}
+        busy={busy}
+        onSave={async () => {
+          const next = leaving;
+          if (next === null) return;
+          setLeaving(null);
+          if (await saveWeek()) go(next);
+        }}
+        onDrop={() => {
+          const next = leaving;
+          setLeaving(null);
+          if (next !== null) {
+            if (savedWeek !== null) setWeek(savedWeek);
+            go(next);
+          }
+        }}
+        onStay={() => setLeaving(null)}
+      />
 
       {sheets.sheets}
     </div>
   );
 };
 
-const ScopeChip = ({
-  chosen,
-  business = false,
-  onClick,
-  children,
+/** Asked before unsaved hours are left behind, rather than dropping them silently. */
+const LeaveSheet = ({
+  open,
+  calendar,
+  busy,
+  onSave,
+  onDrop,
+  onStay,
 }: {
-  chosen: boolean;
-  business?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) => (
-  <button
-    className={business ? "chip change-business" : "chip"}
-    onClick={onClick}
-    aria-pressed={chosen}
-    style={{
-      background: chosen ? "var(--accent)" : "var(--raised)",
-      color: chosen ? "var(--on-accent)" : "var(--ink)",
-      border: `1px solid ${chosen ? "var(--accent)" : "var(--line)"}`,
-    }}
-  >
-    {children}
-  </button>
-);
+  open: boolean;
+  calendar: string;
+  busy: boolean;
+  onSave: () => Promise<void>;
+  onDrop: () => void;
+  onStay: () => void;
+}) => {
+  const words = useCopy("schedule");
+  return (
+    <Sheet open={open} onClose={onStay} labelledBy="leave-title">
+      <div className="day-sheet">
+        <h2 id="leave-title">{fillText(words.leaveTitle, { calendar })}</h2>
+        <p className="week-explain">{words.leaveBody}</p>
+        <Button busy={busy} onClick={() => void onSave()}>
+          {words.leaveSave}
+        </Button>
+        <Button intent="quiet" onClick={onDrop}>
+          {words.leaveDrop}
+        </Button>
+        <button type="button" className="text-link centred" onClick={onStay}>
+          {words.leaveStay}
+        </button>
+      </div>
+    </Sheet>
+  );
+};

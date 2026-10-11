@@ -98,8 +98,11 @@ export const runTheDailyBillingJob = (): Promise<{ noticed: number }> =>
  * oldest changes first, and the suite's database holds every change any
  * journey made, so one run may not reach this one's yet.
  */
+/** Enough runs to get through every week the suite saves before this one. */
+const WAITING_LIST_RUNS = 60;
+
 export const runTheWaitingListJobFor = async (resourceId: string): Promise<void> => {
-  for (let runs = 0; runs < 20; runs += 1) {
+  for (let runs = 0; runs < WAITING_LIST_RUNS; runs += 1) {
     await runTheJob("waiting-list");
     const [left] = await database()<{ count: number }[]>`
       select count(*)::int as count from waiting_recheck where resource_id = ${resourceId}`;

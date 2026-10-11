@@ -13,6 +13,7 @@ import {
   stubAddressSearch,
   uniquePhone,
 } from "./support.ts";
+import { confirmDay, openDay, times, usualCard } from "./schedule-support.ts";
 import { aShareSheetOnTheDevice, noShareSheetOnTheDevice, readTheCard, sharedOnTheDevice } from "./share-support.ts";
 
 /**
@@ -82,12 +83,15 @@ const openABusiness = async (page: Page, phone: string, wizard: Wizard): Promise
 
   await expect(page.getByText("מתי אתם פתוחים")).toBeVisible();
   if (wizard.shortFriday === true) {
-    const usual = page.locator(".card", { hasText: "רוב הימים" }).first();
+    const usual = usualCard(page);
     // Friday joins the usual week, then goes its own way with a shorter day.
-    await usual.getByRole("button", { name: "שישי" }).click();
-    await usual.getByRole("button", { name: "שישי" }).click();
-    const friday = page.locator(".card", { hasText: "שישי" }).filter({ hasNotText: "רוב הימים" }).first();
-    await friday.locator('input[type="time"]').nth(1).fill("13:00");
+    await usual.getByRole("button", { name: "שישי", exact: true }).click();
+    await usual.getByRole("button", { name: "שישי", exact: true }).click();
+    const friday = await openDay(page, "שישי");
+    // The wizard has no calendar to name yet.
+    await expect(friday.getByText("השעות בכל יום שישי.")).toBeVisible();
+    await times(friday).nth(1).fill("13:00");
+    await confirmDay(page);
   }
   await page.getByRole("checkbox", { name: /קראתי ואני מסכים/ }).check();
   await page.getByRole("button", { name: "סיום" }).click();

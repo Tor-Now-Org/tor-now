@@ -1716,3 +1716,51 @@ input[type="time"]::selection{background:transparent;color:transparent}
 /* The header's switch (context-switch.tsx): the short word on a narrow phone. */
 .switch-short{display:none}
 @media (max-width:419px){.switch-long{display:none}.switch-short{display:inline}}
+
+/* The schedule, in the one list design: two tabs under a line, a line saying
+   what each is for, the calendars in their colours, the usual hours as one
+   card with its timeline, the days that differ as rows, one pinned save. */
+.schedule{display:flex;flex-direction:column;gap:14px;padding:12px 18px 0;min-height:100%}
+.schedule-tabs{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--line)}
+.schedule-tabs button{min-height:44px;padding:0 6px;margin-bottom:-1px;border-bottom:2px solid transparent;
+  font-family:var(--font-rubik),sans-serif;font-weight:600;font-size:14.5px;color:var(--muted)}
+.schedule-tabs button[aria-selected="true"]{color:var(--accent-strong);border-bottom-color:var(--accent)}
+.schedule-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.week-explain{margin:0;font-size:13px;line-height:1.6;color:var(--muted)}
+.calendar-chips{display:flex;gap:8px;flex-wrap:wrap}
+.calendar-chips button{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 14px 0 8px;border-radius:999px;
+  border:1px solid var(--line);background:var(--raised);font-size:13.5px;font-weight:600;color:var(--ink)}
+.calendar-chips button.business{padding:0 14px;border-style:dashed}
+.calendar-chips button[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent-strong)}
+.week-card{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--raised);border:1px solid var(--line);
+  border-radius:18px;box-shadow:var(--shadow)}
+.week-card > header{display:flex;flex-direction:column;gap:2px}
+.week-card > header h3{margin:0;font-size:16px}
+.week-card > header p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.5}
+.week-card > .list-card{box-shadow:none}
+.week-days{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.week-label{font-size:12.5px;font-weight:500;color:var(--muted)}
+.week-hint{margin:0;font-size:12.5px;color:var(--muted)}
+.day-dots{display:flex;gap:6px;flex-wrap:wrap}
+.day-dots button{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);
+  background:var(--raised);font-size:13px;font-weight:600;color:var(--muted)}
+.day-dots button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.day-dots button:focus-visible,.calendar-chips button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.add-break,.text-link{align-self:flex-start;min-height:36px;padding:0 2px;font-size:13.5px;font-weight:600;color:var(--accent-strong)}
+.add-break:hover,.text-link:hover{text-decoration:underline}
+.text-link.centred{align-self:center}
+.week-many{display:flex;flex-direction:column;gap:6px}
+.week-save{position:sticky;bottom:0;margin:auto -18px 0;padding:10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
+  display:flex;flex-direction:column;gap:8px;background:var(--raised);border-top:1px solid var(--line);z-index:2}
+.week-saved{margin:0;text-align:center;font-size:12.5px;font-weight:600;color:var(--positive)}
+.day-sheet{display:flex;flex-direction:column;gap:12px}
+.day-sheet h2{font-size:19px}
+.day-choice{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.day-choice button{min-height:44px;border-radius:14px;border:1px solid var(--line);background:var(--raised);font-size:14px;font-weight:600;color:var(--ink)}
+.day-choice button[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent-strong)}
+.change-item .date-block{width:40px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;line-height:1.1}
+.change-item .date-block b{font-family:var(--font-rubik),sans-serif;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.change-item .date-block small{font-size:11px;color:var(--muted)}
+.schedule > .list-foot{text-align:center}
+.schedule > .primary{width:100%}
+@media (min-width:900px){.schedule{max-width:720px;margin-inline:auto;width:100%}}

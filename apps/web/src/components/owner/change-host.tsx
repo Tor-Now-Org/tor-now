@@ -26,16 +26,20 @@ export const useCalendarChanges = ({
   business,
   resources,
   onChanged,
+  onShowBusiness,
 }: {
   token: string;
   business: BusinessDto;
   resources: readonly ResourceDto[];
   onChanged: () => void;
+  /** Where a business's change seen from a calendar's list points to be edited. */
+  onShowBusiness?: () => void;
 }): {
   who: Who;
   openSheet: (door: Door) => void;
   openChange: (id: string, date: string | null) => void;
-  showChange: (change: ChangeDto, date: string | null) => void;
+  /** `fromCalendar`: opened from a calendar's list, where the business's changes are only read. */
+  showChange: (change: ChangeDto, date: string | null, fromCalendar?: boolean) => void;
   sheets: ReactNode;
 } => {
   const errorText = useErrorText();
@@ -80,6 +84,14 @@ export const useCalendarChanges = ({
           setOpened(null);
           onChanged();
         }}
+        {...(onShowBusiness === undefined
+          ? {}
+          : {
+              onShowBusiness: () => {
+                setOpened(null);
+                onShowBusiness();
+              },
+            })}
       />
     </>
   );
@@ -88,7 +100,7 @@ export const useCalendarChanges = ({
     who,
     openSheet: setDoor,
     openChange,
-    showChange: (change, date) => setOpened({ change, date }),
+    showChange: (change, date, fromCalendar = false) => setOpened({ change, date, fromCalendar }),
     sheets,
   };
 };

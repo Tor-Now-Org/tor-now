@@ -23,6 +23,18 @@ import {
   uniquePhone,
 } from "./support.ts";
 import { anAdministrator } from "./cost-support.ts";
+import {
+  confirmDay,
+  dayRow,
+  openDay,
+  openTheSchedule,
+  otherDays,
+  saveButton,
+  saveTheHours,
+  storedWeekOf,
+  times,
+  usualCard,
+} from "./schedule-support.ts";
 
 /**
  * The owner artboards: onboarding, the day, the three schedule layers, the
@@ -298,23 +310,23 @@ test.describe("the schedule layers", () => {
 
     // Hours: the week as a person describes it, showing the times this
     // business actually keeps.
-    await expect(page.getByText("רוב הימים")).toBeVisible();
-    const usual = page.locator(".card", { hasText: "רוב הימים" }).first();
-    await expect(usual.locator('input[type="time"]').first()).toHaveValue("08:00");
-    await expect(usual.locator('input[type="time"]').nth(1)).toHaveValue("20:00");
+    const usual = usualCard(page);
+    await expect(usual).toBeVisible({ timeout: 15_000 });
+    await expect(times(usual).first()).toHaveValue("08:00");
+    await expect(times(usual).nth(1)).toHaveValue("20:00");
     // Open the same hours every day, so every day is on the usual and nothing
     // is listed as an exception.
-    await expect(usual.getByRole("button", { name: "שני" })).toHaveAttribute(
+    await expect(usual.getByRole("button", { name: "שני", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    await expect(page.getByText("ימים אחרים")).toHaveCount(0);
+    await expect(otherDays(page)).toHaveCount(0);
 
     // Other hours for one day replace the weekday entirely: "שינויים", then
     // the same sheet every door opens, with the dates typed.
     await page.getByRole("tab", { name: "שינויים" }).click();
-    await expect(page.getByText("אין שינויים קרובים")).toBeVisible();
-    await page.getByRole("button", { name: "שינוי ביומן א" }).click();
+    await expect(page.getByText("אין שינויים בשנה הקרובה")).toBeVisible();
+    await page.getByRole("button", { name: "הוספת שינוי ליומן א" }).click();
     const sheet = page.getByRole("dialog");
     // Tomorrow, not today: late in the evening today is already empty because
     // the minimum notice has run past closing, and the shorter day under test
@@ -374,47 +386,20 @@ test.describe("the week a calendar keeps", () => {
     return { shop, ownerPhone };
   };
 
-  const openTheWeek = async (page: Page, shop: { business: { id: string }; owner: { token: string } }) => {
-    await page.addInitScript(
-      ([key, token]) => window.localStorage.setItem(key as string, token as string),
-      ["tor-now.session", shop.owner.token],
-    );
-    await page.goto(`/manage?business=${shop.business.id}`);
-    await ready(page);
-    await page.getByRole("button", { name: "לוח זמנים" }).click();
-    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
-    return page.locator(".card", { hasText: "רוב הימים" }).first();
-  };
+  const openTheWeek = (page: Page, shop: { business: { id: string }; owner: { token: string } }) =>
+    openTheSchedule(page, shop.owner.token, shop.business.id);
 
   /** What the store holds for this calendar, by day, as the screen would say it. */
-  const storedWeek = async (shop: {
-    business: { id: string };
-    resource: { id: string };
-    owner: { token: string };
-  }) => {
-    const week = await call<{ dayOfWeek: number; start: string; end: string }[]>(
-      `/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`,
-      { token: shop.owner.token },
-    );
-    return (dayOfWeek: number) =>
-      week
-        .filter((entry) => entry.dayOfWeek === dayOfWeek)
-        .map((entry) => `${entry.start}-${entry.end}`)
-        .sort();
-  };
+  const storedWeek = (shop: { business: { id: string }; resource: { id: string }; owner: { token: string } }) =>
+    storedWeekOf(shop, shop.resource.id);
 
-  const save = async (page: Page) => {
-    // Waited for at the request, not at the banner: the banner from the last
-    // save is still on screen, so asserting it passes instantly and the store
-    // is then read before the new week has landed.
-    const written = page.waitForResponse(
-      (response) =>
-        response.url().includes("working-hours") && response.request().method() === "PUT",
-      { timeout: 15_000 },
-    );
-    await page.getByRole("button", { name: "שמירה" }).last().click();
-    expect((await written).status()).toBe(200);
-    await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
+  /** Back on the schedule after a reload, the usual card loaded. */
+  const reopen = async (page: Page) => {
+    await page.reload();
+    await ready(page);
+    await page.getByRole("button", { name: "לוח זמנים" }).click();
+    await expect(usualCard(page)).toBeVisible({ timeout: 15_000 });
+    return usualCard(page);
   };
 
   test("a day taken off the usual keeps its hours instead of closing", async ({ page }) => {
@@ -424,17 +409,16 @@ test.describe("the week a calendar keeps", () => {
     // "Thursday is different" is not "Thursday is off". Taking the day out
     // used to shut it, so an owner separating a day to move it by half an hour
     // lost the day instead.
-    await usual.getByRole("button", { name: "חמישי" }).click();
+    await usual.getByRole("button", { name: "חמישי", exact: true }).click();
+    await expect(dayRow(page, "חמישי")).toContainText("09:00–17:00");
 
-    const thursday = page.locator(".card", { hasText: "חמישי" }).first();
-    await expect(thursday.getByRole("button", { name: "שעות אחרות" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await expect(thursday.locator('input[type="time"]').first()).toHaveValue("09:00");
-    await expect(thursday.locator('input[type="time"]').nth(1)).toHaveValue("17:00");
+    const thursday = await openDay(page, "חמישי");
+    await expect(thursday.getByRole("button", { name: "שעות אחרות" })).toHaveAttribute("aria-pressed", "true");
+    await expect(times(thursday).first()).toHaveValue("09:00");
+    await expect(times(thursday).nth(1)).toHaveValue("17:00");
+    await confirmDay(page);
 
-    await save(page);
+    await saveTheHours(page);
     expect((await storedWeek(shop))(4)).toEqual(["09:00-17:00"]);
   });
 
@@ -442,15 +426,16 @@ test.describe("the week a calendar keeps", () => {
     const { shop } = await anOwnerAt("יום סגור", { start: "09:00", end: "17:00" });
     const usual = await openTheWeek(page, shop);
 
-    await usual.getByRole("button", { name: "שבת" }).click();
-    const saturday = page.locator(".card", { hasText: "שבת" }).first();
-    await saturday.getByRole("button", { name: "סגור", exact: true }).click();
-    await save(page);
+    await usual.getByRole("button", { name: "שבת", exact: true }).click();
+    await (await openDay(page, "שבת")).getByRole("button", { name: "לא עובדים" }).click();
+    await confirmDay(page);
+    await expect(dayRow(page, "שבת")).toContainText("לא עובדים");
+    await saveTheHours(page);
     expect((await storedWeek(shop))(6)).toEqual([]);
 
     // And back again, on the hours the rest of the week keeps.
-    await saturday.getByRole("button", { name: "חזרה לרגיל" }).click();
-    await save(page);
+    await (await openDay(page, "שבת")).getByRole("button", { name: "להחזיר לשעות הרגילות" }).click();
+    await saveTheHours(page);
     expect((await storedWeek(shop))(6)).toEqual(["09:00-17:00"]);
   });
 
@@ -461,18 +446,19 @@ test.describe("the week a calendar keeps", () => {
     const usual = await openTheWeek(page, shop);
 
     // Out, with hours of its own, saved.
-    await usual.getByRole("button", { name: "רביעי" }).click();
-    const wednesday = page.locator(".card", { hasText: "רביעי" }).first();
-    await wednesday.locator('input[type="time"]').first().fill("10:00");
-    await wednesday.locator('input[type="time"]').nth(1).fill("14:00");
-    await save(page);
+    await usual.getByRole("button", { name: "רביעי", exact: true }).click();
+    const wednesday = await openDay(page, "רביעי");
+    await times(wednesday).first().fill("10:00");
+    await times(wednesday).nth(1).fill("14:00");
+    await confirmDay(page);
+    await saveTheHours(page);
     expect((await storedWeek(shop))(3)).toEqual(["10:00-14:00"]);
 
     // Back on the usual by its chip, saved again. This is where it came back
     // as a day off.
-    await usual.getByRole("button", { name: "רביעי" }).click();
-    await expect(page.locator(".card", { hasText: "רביעי" })).toHaveCount(0);
-    await save(page);
+    await usual.getByRole("button", { name: "רביעי", exact: true }).click();
+    await expect(dayRow(page, "רביעי")).toHaveCount(0);
+    await saveTheHours(page);
     expect((await storedWeek(shop))(3)).toEqual(["09:00-17:00"]);
   });
 
@@ -480,23 +466,20 @@ test.describe("the week a calendar keeps", () => {
     const { shop } = await anOwnerAt("הלוך ושוב אחרי טעינה", { start: "09:00", end: "17:00" });
     const usual = await openTheWeek(page, shop);
 
-    await usual.getByRole("button", { name: "רביעי" }).click();
-    const wednesday = page.locator(".card", { hasText: "רביעי" }).first();
-    await wednesday.locator('input[type="time"]').first().fill("10:00");
-    await wednesday.locator('input[type="time"]').nth(1).fill("14:00");
-    await save(page);
+    await usual.getByRole("button", { name: "רביעי", exact: true }).click();
+    const wednesday = await openDay(page, "רביעי");
+    await times(wednesday).first().fill("10:00");
+    await times(wednesday).nth(1).fill("14:00");
+    await confirmDay(page);
+    await saveTheHours(page);
 
     // Coming back to it fresh, which is what an owner actually does: the day is
     // an exception now because its hours differ, not because anything on this
     // page remembers that it was pulled out.
-    await page.reload();
-    await ready(page);
-    await page.getByRole("button", { name: "לוח זמנים" }).click();
-    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
-    const reopened = page.locator(".card", { hasText: "רוב הימים" }).first();
-
-    await reopened.getByRole("button", { name: "רביעי" }).click();
-    await save(page);
+    const reopened = await reopen(page);
+    await expect(dayRow(page, "רביעי")).toContainText("10:00–14:00");
+    await reopened.getByRole("button", { name: "רביעי", exact: true }).click();
+    await saveTheHours(page);
     expect((await storedWeek(shop))(3)).toEqual(["09:00-17:00"]);
   });
 
@@ -504,20 +487,15 @@ test.describe("the week a calendar keeps", () => {
     const { shop } = await anOwnerAt("פתיחה מחדש", { start: "09:00", end: "17:00" });
     const usual = await openTheWeek(page, shop);
 
-    await usual.getByRole("button", { name: "שלישי" }).click();
-    const tuesday = page.locator(".card", { hasText: "שלישי" }).first();
-    await tuesday.getByRole("button", { name: "סגור", exact: true }).click();
-    await save(page);
+    await usual.getByRole("button", { name: "שלישי", exact: true }).click();
+    await (await openDay(page, "שלישי")).getByRole("button", { name: "לא עובדים" }).click();
+    await confirmDay(page);
+    await saveTheHours(page);
     expect((await storedWeek(shop))(2)).toEqual([]);
 
-    await page.reload();
-    await ready(page);
-    await page.getByRole("button", { name: "לוח זמנים" }).click();
-    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
-    const reopened = page.locator(".card", { hasText: "רוב הימים" }).first();
-
-    await reopened.getByRole("button", { name: "שלישי" }).click();
-    await save(page);
+    const reopened = await reopen(page);
+    await reopened.getByRole("button", { name: "שלישי", exact: true }).click();
+    await saveTheHours(page);
     expect((await storedWeek(shop))(2)).toEqual(["09:00-17:00"]);
   });
 
@@ -528,17 +506,18 @@ test.describe("the week a calendar keeps", () => {
     const usual = await openTheWeek(page, shop);
 
     // Friday goes its own way first: 09:00–13:00.
-    await usual.getByRole("button", { name: "שישי" }).click();
-    const friday = page.locator(".card", { hasText: "שישי" }).first();
-    await friday.locator('input[type="time"]').nth(1).fill("13:00");
+    await usual.getByRole("button", { name: "שישי", exact: true }).click();
+    const friday = await openDay(page, "שישי");
+    await times(friday).nth(1).fill("13:00");
+    await confirmDay(page);
 
     // Then the usual moves to 10:00–16:00. Friday must not follow it, and must
     // not be swallowed back into the group on the way.
-    await usual.locator('input[type="time"]').first().fill("10:00");
-    await usual.locator('input[type="time"]').nth(1).fill("16:00");
-    await expect(page.getByText("ימים אחרים")).toBeVisible();
+    await times(usual).first().fill("10:00");
+    await times(usual).nth(1).fill("16:00");
+    await expect(dayRow(page, "שישי")).toContainText("09:00–13:00");
 
-    await save(page);
+    await saveTheHours(page);
     const said = await storedWeek(shop);
     expect(said(0)).toEqual(["10:00-16:00"]);
     expect(said(4)).toEqual(["10:00-16:00"]);
@@ -549,16 +528,16 @@ test.describe("the week a calendar keeps", () => {
     const { shop } = await anOwnerAt("שעה חסרה", { start: "09:00", end: "17:00" });
     const usual = await openTheWeek(page, shop);
 
-    await usual.locator('input[type="time"]').nth(1).fill("");
+    await times(usual).nth(1).fill("");
 
     // Merging drops what it cannot read, so saving this would have stored a
     // day with no hours and said nothing about it.
     await expect(page.getByText(/שעה שלא הושלמה/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "שמירה" }).last()).toBeDisabled();
+    await expect(saveButton(page)).toBeDisabled();
 
-    await usual.locator('input[type="time"]').nth(1).fill("18:00");
-    await expect(page.getByRole("button", { name: "שמירה" }).last()).toBeEnabled();
-    await save(page);
+    await times(usual).nth(1).fill("18:00");
+    await expect(saveButton(page)).toBeEnabled();
+    await saveTheHours(page);
     expect((await storedWeek(shop))(0)).toEqual(["09:00-18:00"]);
   });
 
@@ -580,7 +559,7 @@ test.describe("the week a calendar keeps", () => {
       await route.continue();
     });
 
-    await page.getByRole("button", { name: "יומן ב" }).click();
+    await page.getByRole("group", { name: "איזה יומן" }).getByRole("button", { name: "יומן ב" }).click();
 
     // While that answer is outstanding the week is nobody's: the hours of the
     // calendar just left must not be sitting there to be read or typed into.
@@ -588,7 +567,7 @@ test.describe("the week a calendar keeps", () => {
     await expect(page.locator(".spinner")).toBeVisible();
 
     // And when it lands, it is this calendar's own week.
-    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
+    await expect(usualCard(page)).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('input[type="time"]').first()).toBeVisible();
   });
 
@@ -602,18 +581,17 @@ test.describe("the week a calendar keeps", () => {
     );
 
     const usual = await openTheWeek(page, shop);
-    await usual.getByRole("button", { name: "רביעי" }).click();
-    await save(page);
+    await usual.getByRole("button", { name: "רביעי", exact: true }).click();
+    await saveTheHours(page);
 
     // The second calendar opens on its own week — the day pulled out of the
     // first one is not pulled out of this one.
-    await page.getByRole("button", { name: "יומן ב" }).click();
-    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("ימים אחרים")).toHaveCount(0);
+    await page.getByRole("group", { name: "איזה יומן" }).getByRole("button", { name: "יומן ב" }).click();
+    await expect(usualCard(page)).toBeVisible({ timeout: 15_000 });
+    await expect(otherDays(page)).toHaveCount(0);
 
-    const usualB = page.locator(".card", { hasText: "רוב הימים" }).first();
-    await usualB.locator('input[type="time"]').first().fill("11:00");
-    await save(page);
+    await times(usualCard(page)).first().fill("11:00");
+    await saveTheHours(page);
 
     const secondWeek = await call<{ dayOfWeek: number; start: string }[]>(
       `/businesses/${shop.business.id}/resources/${second.id}/working-hours`,
@@ -627,7 +605,7 @@ test.describe("the week a calendar keeps", () => {
   test("saves the whole week in one request", async ({ page }) => {
     const { shop } = await anOwnerAt("שמירה מהירה", { start: "09:00", end: "17:00" });
     const usual = await openTheWeek(page, shop);
-    await usual.locator('input[type="time"]').first().fill("08:00");
+    await times(usual).first().fill("08:00");
 
     // It used to be a delete for every range and a create for every range,
     // one after another. Counting the requests is the only way a test can
@@ -640,53 +618,26 @@ test.describe("the week a calendar keeps", () => {
       writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
     });
 
-    await save(page);
+    await saveTheHours(page);
     expect(writes).toHaveLength(1);
     expect(writes[0]).toContain("PUT");
     expect((await storedWeek(shop))(0)).toEqual(["08:00-17:00"]);
-  });
-
-  test("says the pattern has stopped helping once five days go their own way", async ({
-    page,
-  }) => {
-    const { shop } = await anOwnerAt("כל יום שונה", { start: "09:00", end: "17:00" });
-    const usual = await openTheWeek(page, shop);
-
-    for (const day of ["ראשון", "שני", "שלישי", "רביעי", "חמישי"]) {
-      await usual.getByRole("button", { name: day }).click();
-    }
-
-    await expect(page.getByText(/כבר לא מתאר את השבוע/)).toBeVisible();
-    await page.getByRole("button", { name: "מעבר לעריכה יום־יום" }).click();
-
-    // The day-by-day list is the whole week — seven days, each with its own
-    // switch — and it saves the same way.
-    await expect(page.locator(".card", { hasText: "רוב הימים" })).toHaveCount(0);
-    await expect(page.getByRole("checkbox")).toHaveCount(7);
-    await save(page);
-    expect((await storedWeek(shop))(0)).toEqual(["09:00-17:00"]);
   });
 
   test("the week that was saved is the week that comes back", async ({ page }) => {
     const { shop } = await anOwnerAt("טעינה מחדש", { start: "09:00", end: "17:00" });
     const usual = await openTheWeek(page, shop);
 
-    await usual.getByRole("button", { name: "הוספת טווח שעות" }).click();
-    await usual.locator('input[type="time"]').nth(2).fill("19:00");
-    await usual.locator('input[type="time"]').nth(3).fill("22:00");
-    await save(page);
+    await usual.getByRole("button", { name: "+ הוספת הפסקה" }).click();
+    await times(usual).nth(1).fill("12:30");
+    await saveTheHours(page);
 
-    await page.reload();
-    await ready(page);
-    await page.getByRole("button", { name: "לוח זמנים" }).click();
-    const reopened = page.locator(".card", { hasText: "רוב הימים" }).first();
-    await expect(reopened.locator('input[type="time"]').first()).toHaveValue("09:00", {
-      timeout: 15_000,
-    });
-    await expect(reopened.locator('input[type="time"]').nth(1)).toHaveValue("17:00");
-    await expect(reopened.locator('input[type="time"]').nth(2)).toHaveValue("19:00");
-    await expect(reopened.locator('input[type="time"]').nth(3)).toHaveValue("22:00");
-    await expect(reopened.getByText(/הפסקה · 17:00–19:00/)).toBeVisible();
+    const reopened = await reopen(page);
+    await expect(times(reopened).first()).toHaveValue("09:00");
+    await expect(times(reopened).nth(1)).toHaveValue("12:30");
+    await expect(times(reopened).nth(2)).toHaveValue("13:00");
+    await expect(times(reopened).nth(3)).toHaveValue("17:00");
+    await expect(reopened.getByText(/הפסקה · 12:30–13:00/)).toBeVisible();
   });
 });
 
@@ -1484,7 +1435,7 @@ test.describe("special days and blockages", () => {
     await ready(page);
     await page.getByRole("button", { name: "לוח זמנים" }).click();
     await page.getByRole("tab", { name: "שינויים" }).click();
-    await page.getByRole("button", { name: "שינוי ביומן א" }).click();
+    await page.getByRole("button", { name: "הוספת שינוי ליומן א" }).click();
     return page.getByRole("dialog");
   };
 
@@ -1733,43 +1684,22 @@ test.describe("the business panel", () => {
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
-    await page.addInitScript(
-      ([key, token]) => window.localStorage.setItem(key as string, token as string),
-      ["tor-now.session", shop.owner.token],
-    );
+    const usual = await openTheSchedule(page, shop.owner.token, shop.business.id);
 
-    await page.goto("/manage");
-    await ready(page);
-    await page.getByRole("button", { name: "לוח זמנים" }).click();
-    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
-
-    // 09:00–17:00 already, plus a stretch that overlaps it and a third that
-    // stands apart. The overlap is one stretch however it is typed.
-    const usual = page.locator(".card", { hasText: "רוב הימים" }).first();
-    await usual.getByRole("button", { name: "הוספת טווח שעות" }).click();
-    await usual.locator('input[type="time"]').nth(2).fill("16:00");
-    await usual.locator('input[type="time"]').nth(3).fill("18:00");
-    await usual.getByRole("button", { name: "הוספת טווח שעות" }).click();
-    await usual.locator('input[type="time"]').nth(4).fill("20:00");
-    await usual.locator('input[type="time"]').nth(5).fill("22:00");
+    // A break cut out of 09:00–17:00, then the stretch after it moved to run
+    // into the one before, then another break: three stretches typed, the
+    // first two of them one stretch however they are typed.
+    await usual.getByRole("button", { name: "+ הוספת הפסקה" }).click();
+    await times(usual).nth(2).fill("11:00");
+    await usual.getByRole("button", { name: "+ הוספת הפסקה" }).click();
 
     // What sits between two stretches is named, and what runs into the one
     // before it says so rather than vanishing under the hand that typed it.
-    await expect(usual.getByText("חופף — יישמר כטווח אחד")).toBeVisible();
-    await expect(usual.getByText(/הפסקה · 18:00–20:00/)).toBeVisible();
+    await expect(usual.getByText("חופף לטווח הקודם. יישמר כטווח אחד, 09:00–13:00.")).toBeVisible();
+    await expect(usual.getByText(/הפסקה · 13:00–14:00/)).toBeVisible();
 
-    await page.getByRole("button", { name: "שמירה" }).last().click();
-    await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
-
-    const week = await call<{ dayOfWeek: number; start: string; end: string }[]>(
-      `/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`,
-      { token: shop.owner.token },
-    );
-    const mondayRanges = week
-      .filter((entry) => entry.dayOfWeek === 1)
-      .map((entry) => `${entry.start}-${entry.end}`)
-      .sort();
-    expect(mondayRanges).toEqual(["09:00-18:00", "20:00-22:00"]);
+    await saveTheHours(page);
+    expect((await storedWeekOf(shop, shop.resource.id))(1)).toEqual(["09:00-13:00", "14:00-17:00"]);
   });
 
   test("a calendar's week is edited in the words the wizard used", async ({ page }) => {
@@ -1778,34 +1708,22 @@ test.describe("the business panel", () => {
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
-    await page.addInitScript(
-      ([key, token]) => window.localStorage.setItem(key as string, token as string),
-      ["tor-now.session", shop.owner.token],
-    );
-
-    await page.goto("/manage");
-    await ready(page);
-    await page.getByRole("button", { name: "לוח זמנים" }).click();
 
     // The wizard's editor: the hours most days keep, and the days that keep
     // them — not seven identical cards.
-    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
+    const usual = await openTheSchedule(page, shop.owner.token, shop.business.id);
 
     // Sunday off the usual, then shut — two taps, because "this day is
     // different" and "this day is off" are different sentences and only the
     // owner says the second one.
-    const usual = page.locator(".card", { hasText: "רוב הימים" }).first();
-    await usual.getByRole("button", { name: "ראשון" }).click();
-    await expect(page.getByText("ימים אחרים")).toBeVisible();
-    const sunday = page.locator(".card", { hasText: "ראשון" }).first();
-    await sunday.getByRole("button", { name: "סגור", exact: true }).click();
-    await expect(sunday.getByRole("button", { name: "סגור", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await usual.getByRole("button", { name: "ראשון", exact: true }).click();
+    await expect(otherDays(page)).toBeVisible();
+    const sunday = await openDay(page, "ראשון");
+    await sunday.getByRole("button", { name: "לא עובדים" }).click();
+    await expect(sunday.getByRole("button", { name: "לא עובדים" })).toHaveAttribute("aria-pressed", "true");
+    await confirmDay(page);
 
-    await page.getByRole("button", { name: "שמירה" }).last().click();
-    await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
+    await saveTheHours(page);
 
     // What a customer is offered follows from it.
     const week = await call<{ dayOfWeek: number }[]>(
@@ -1822,35 +1740,17 @@ test.describe("the business panel", () => {
       ownerPhone: uniquePhone(),
       hours: { start: "09:00", end: "17:00" },
     });
-    await page.addInitScript(
-      ([key, token]) => window.localStorage.setItem(key as string, token as string),
-      ["tor-now.session", shop.owner.token],
-    );
-
-    await page.goto("/manage");
-    await ready(page);
-    await page.getByRole("button", { name: "לוח זמנים" }).click();
-    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
+    const usual = await openTheSchedule(page, shop.owner.token, shop.business.id);
 
     // "Nine to five, Friday till one" — the sentence the screen is built for.
-    const usual = page.locator(".card", { hasText: "רוב הימים" }).first();
-    await usual.getByRole("button", { name: "שישי" }).click();
-
-    const friday = page.locator(".card", { hasText: "שישי" }).first();
+    await usual.getByRole("button", { name: "שישי", exact: true }).click();
+    const friday = await openDay(page, "שישי");
     await friday.getByRole("button", { name: "שעות אחרות" }).click();
-    await friday.locator('input[type="time"]').nth(1).fill("13:00");
+    await times(friday).nth(1).fill("13:00");
+    await confirmDay(page);
 
-    await page.getByRole("button", { name: "שמירה" }).last().click();
-    await expect(page.getByText("ההגדרות נשמרו")).toBeVisible({ timeout: 15_000 });
-
-    const week = await call<{ dayOfWeek: number; start: string; end: string }[]>(
-      `/businesses/${shop.business.id}/resources/${shop.resource.id}/working-hours`,
-      { token: shop.owner.token },
-    );
-    const said = (dayOfWeek: number) =>
-      week
-        .filter((entry) => entry.dayOfWeek === dayOfWeek)
-        .map((entry) => `${entry.start}-${entry.end}`);
+    await saveTheHours(page);
+    const said = await storedWeekOf(shop, shop.resource.id);
 
     // The one day moved, and the days on the usual did not.
     expect(said(5)).toEqual(["09:00-13:00"]);
@@ -3481,14 +3381,17 @@ test.describe("a day the shop keeps its own hours", () => {
     await page.getByRole("button", { name: "לוח זמנים" }).click();
     await page.getByRole("tab", { name: "שינויים" }).click();
 
-    // A calendar's list does not carry the shop's day; the business's does.
-    await expect(page.getByText("אין שינויים קרובים")).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("group", { name: "של מי השינויים" }).getByRole("button", { name: "כל העסק" }).click();
+    // A calendar's list carries the shop's day, marked as the business's, and
+    // sends it to the business's own list to be changed.
+    const row = page.getByRole("list", { name: "השינויים" }).getByRole("button").first();
+    await expect(row).toContainText("כל העסק", { timeout: 15_000 });
+    await row.click();
+    await page.getByRole("dialog").getByRole("button", { name: "לשינויים של כל העסק" }).click();
     await page.getByRole("list", { name: "השינויים" }).getByRole("button").first().click();
     await page.getByRole("dialog").getByRole("button", { name: "מחיקה · היום חוזר לשעות הרגילות" }).click();
 
     // Gone for every calendar, in one go — and gone from this list with it.
-    await expect(page.getByText("אין שינויים קרובים")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("אין שינויים בשנה הקרובה")).toBeVisible({ timeout: 15_000 });
     const resources = await call<{ id: string }[]>(
       `/businesses/${shop.business.id}/resources`,
       { token: shop.owner.token },
@@ -4502,7 +4405,7 @@ test.describe("the calendar, altogether", () => {
     // straight away.
     await row.click();
     await page.getByRole("dialog").getByRole("button", { name: "מחיקה · היום חוזר לשעות הרגילות" }).click();
-    await expect(page.getByText("אין שינויים קרובים")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("אין שינויים בשנה הקרובה")).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "היומן" }).click();
     await expect(page.getByRole("button", { name: "שעות אחרות", exact: true })).toHaveCount(0, { timeout: 15_000 });
   });

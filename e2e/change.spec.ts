@@ -210,15 +210,15 @@ test.describe("every door opens the complete sheet", () => {
     expect(await changesOf(shop, first, last)).toMatchObject([{ scope: { kind: "BUSINESS" }, fromDate: first, toDate: last }]);
   });
 
-  test("the schedule, with dates typed, leaves its row under the business and not under a calendar", async ({ page }) => {
+  test("the schedule, with dates typed, leaves its row under the business, and marked under each calendar", async ({ page }) => {
     const shop = await aTwoCalendarShop("לוח");
     const [first, last] = daysInOneMonth(2, 3) as [string, string];
     await openTheCalendar(page, shop.owner.token, shop.business.id);
     await page.getByRole("button", { name: "לוח זמנים" }).click();
     await page.getByRole("tab", { name: "שינויים" }).click();
     await page.getByRole("group", { name: "של מי השינויים" }).getByRole("button", { name: "כל העסק" }).click();
-    await expect(page.getByText("אין שינויים קרובים")).toBeVisible();
-    await page.getByRole("button", { name: "שינוי לכל העסק" }).click();
+    await expect(page.getByText("אין שינויים בשנה הקרובה")).toBeVisible();
+    await page.getByRole("button", { name: "הוספת שינוי לכל העסק" }).click();
 
     const sheet = await theSheet(page);
     await expect(forWhom(sheet).getByRole("button", { name: "כל העסק" })).toHaveAttribute("aria-pressed", "true");
@@ -233,9 +233,10 @@ test.describe("every door opens the complete sheet", () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText("עובדים 09:00–13:00");
     await expect(rows.first()).toContainText("ערב חג");
-    // A calendar shows only its own changes.
+    // A calendar shows it too, among its own, marked as the business's.
     await page.getByRole("group", { name: "של מי השינויים" }).getByRole("button", { name: "יומן א" }).click();
-    await expect(page.getByText("אין שינויים קרובים")).toBeVisible();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first().locator(".list-tag")).toHaveText("כל העסק");
     expect(await offered(shop, shop.resource.id, first)).toEqual(WHOLE_DAY.filter((time) => time < "13:00"));
   });
 });
@@ -630,31 +631,35 @@ test.describe("other hours that are the usual ones", () => {
 });
 
 test.describe("the schedule's layout", () => {
-  test("the two views come first, and the calendars under them", async ({ page }) => {
+  test("the two views come first, a line saying what each is for, and the calendars under them", async ({ page }) => {
     const shop = await aTwoCalendarShop("סדר");
     await openTheCalendar(page, shop.owner.token, shop.business.id);
     await page.getByRole("button", { name: "לוח זמנים" }).click();
 
     const tabs = page.getByRole("tablist");
     const calendars = page.getByRole("group", { name: "איזה יומן" });
+    const line = page.locator(".week-explain").first();
     await expect(tabs.getByRole("tab", { name: "שעות קבועות" })).toHaveAttribute("aria-selected", "true");
     await expect(calendars).toBeVisible();
-    expect((await tabs.boundingBox())!.y).toBeLessThan((await calendars.boundingBox())!.y);
+    expect((await tabs.boundingBox())!.y).toBeLessThan((await line.boundingBox())!.y);
+    expect((await line.boundingBox())!.y).toBeLessThan((await calendars.boundingBox())!.y);
     // The usual week is always a calendar's: there is no business choice here.
-    await expect(calendars.getByRole("button")).toHaveText(["יומן א", "שימי"]);
+    await expect(calendars.getByRole("button")).toHaveCount(2);
+    await expect(calendars.getByRole("button", { name: "כל העסק" })).toHaveCount(0);
 
     // Changes: the same place, and the whole business first among them.
     await tabs.getByRole("tab", { name: "שינויים" }).click();
     const whose = page.getByRole("group", { name: "של מי השינויים" });
     expect((await tabs.boundingBox())!.y).toBeLessThan((await whose.boundingBox())!.y);
-    await expect(whose.getByRole("button")).toHaveText(["כל העסק", "יומן א", "שימי"]);
+    await expect(whose.getByRole("button")).toHaveCount(3);
+    await expect(whose.getByRole("button").first()).toHaveText("כל העסק");
     await whose.getByRole("button", { name: "כל העסק" }).click();
-    await expect(page.getByRole("button", { name: "שינוי לכל העסק" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "הוספת שינוי לכל העסק" })).toBeVisible();
 
     // Back to the usual week from the whole business: the first calendar's, not nobody's.
     await tabs.getByRole("tab", { name: "שעות קבועות" }).click();
     await expect(calendars.getByRole("button", { name: "יומן א" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByText("רוב הימים")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "השעות הרגילות" })).toBeVisible({ timeout: 15_000 });
   });
 
   test("a business with one calendar has nothing to choose between", async ({ page }) => {
@@ -665,7 +670,7 @@ test.describe("the schedule's layout", () => {
     await expect(page.getByRole("group", { name: "איזה יומן" })).toHaveCount(0);
     await page.getByRole("tab", { name: "שינויים" }).click();
     await expect(page.getByRole("group", { name: "של מי השינויים" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "שינוי ביומן א" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "הוספת שינוי ליומן א" })).toBeVisible();
   });
 });
 

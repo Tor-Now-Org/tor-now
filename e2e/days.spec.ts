@@ -80,7 +80,11 @@ const opensWord = (date: string, horizonDays: number): string => {
 const showInTheSheet = async (page: Page, date: string) => {
   const sheet = page.getByRole("dialog");
   for (let step = 0; step < 3 && (await sheet.locator(`[data-date="${date}"]`).count()) === 0; step += 1) {
-    await sheet.getByRole("button", { name: "החודש הבא" }).click();
+    const next = sheet.getByRole("button", { name: "החודש הבא" });
+    // Past the window's last month the sheet goes no further, and the date is
+    // simply not drawn: the caller decides what that means.
+    if (await next.isDisabled()) break;
+    await next.click();
   }
   return sheet.locator(`[data-date="${date}"]`);
 };
